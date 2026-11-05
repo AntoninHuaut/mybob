@@ -379,6 +379,11 @@
   gap: 12px;
   margin-bottom: 12px;
 }
+.furniture-dialog-heading h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
 .furniture-dialog h2 {
   margin-bottom: 12px;
 }
