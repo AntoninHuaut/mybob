@@ -1,18 +1,22 @@
 import type { Scene } from '@babylonjs/core/scene';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
+import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
+import earcut from 'earcut';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Plane } from '@babylonjs/core/Maths/math.plane';
+import { Camera } from '@babylonjs/core/Cameras/camera';
 import { PointerEventTypes, type PointerInfo } from '@babylonjs/core/Events/pointerEvents';
 import type { Observer } from '@babylonjs/core/Misc/observable';
 import { floorElevationAt } from '../model/geometry';
 import type { Level, Point2 } from '../model/types';
-import type { FurnitureItem } from './model';
+import { footprintParts, televisionDimensions, type FurnitureItem } from './model';
 import { furnitureDistances } from './checks';
-import { constrainFurnitureDrag } from './placement';
+import { constrainGroupDrag, groupMembers } from './groups';
 
 export interface FurnitureOverlays {
   distances: boolean;
@@ -35,6 +39,7 @@ interface Drag {
 /** Metres throughout. Furniture front is local +Z; yaw follows Babylon rotation.y. */
 export class FurnitureLayer {
   onSelect?: (id: string) => void;
+  onEdit?: (id: string) => void;
   onChange?: (items: FurnitureItem[], final: boolean) => void;
   onDragState?: (dragging: boolean) => void;
   private items: FurnitureItem[] = [];
@@ -78,6 +83,7 @@ export class FurnitureLayer {
         item.height,
         item.color,
         item.sofa,
+        item.tvDiagonalInches,
       ]);
       let visual = this.visuals.get(item.id);
       if (visual?.signature !== signature) {
@@ -85,6 +91,11 @@ export class FurnitureLayer {
         visual = this.build(item, signature);
         this.visuals.set(item.id, visual);
       }
+      for (const material of visual.materials)
+        material.clipPlane =
+          this.mode === 'plan' || this.scene.activeCamera?.mode === Camera.ORTHOGRAPHIC_CAMERA
+            ? new Plane(0, 1, 0, -10000)
+            : null;
       visual.root.position.set(
         item.position[0],
         floorElevationAt(this.level, item.position) + (item.elevation ?? 0),
@@ -95,7 +106,7 @@ export class FurnitureLayer {
     }
     if (
       this.drag &&
-      (!ids.has(this.drag.id) || this.items.find((item) => item.id === this.drag?.id)?.locked)
+      (!ids.has(this.drag.id) || groupMembers(this.items, this.drag.id).some((item) => item.locked))
     )
       this.finishDrag();
     if (this.selected && !ids.has(this.selected)) this.selected = undefined;
@@ -110,6 +121,12 @@ export class FurnitureLayer {
   setMode(mode: 'overview' | 'plan' | 'walk'): void {
     this.finishDrag();
     this.mode = mode;
+    for (const visual of this.visuals.values())
+      for (const material of visual.materials)
+        material.clipPlane =
+          mode === 'plan' || this.scene.activeCamera?.mode === Camera.ORTHOGRAPHIC_CAMERA
+            ? new Plane(0, 1, 0, -10000)
+            : null;
     this.drawOverlays();
   }
 
@@ -195,13 +212,94 @@ export class FurnitureLayer {
       };
       regionalLegs(w, seatDepth, 0, rowZ);
       regionalLegs(returnWidth, returnDepth, returnX, returnZ);
-      box(w, h * 0.28, seatDepth, 0, h * 0.26, rowZ);
-      box(returnWidth, h * 0.28, returnDepth, returnX, h * 0.26, returnZ);
-      box(w * 0.84, h * 0.16, seatDepth * 0.77, 0, h * 0.48, rowZ + seatDepth * 0.06, soft);
-      box(returnWidth * 0.92, h * 0.16, returnDepth * 0.98, returnX, h * 0.48, returnZ, soft);
+      const join = -d / 2 + seatDepth;
+      const outline = (inset: number): Point2[] =>
+        [
+          [-w / 2 + inset, -d / 2 + inset],
+          [w / 2 - inset, -d / 2 + inset],
+          [w / 2 - inset, join - inset],
+          [-w / 2 + returnWidth - inset, join - inset],
+          [-w / 2 + returnWidth - inset, d / 2 - inset],
+          [-w / 2 + inset, d / 2 - inset],
+        ].map(([x, z]) => [side === 'left' ? x : -x, z] as Point2);
+      // One closed prism per upholstery layer: no internal seam or empty slit at the elbow.
+      const upholstery = (
+        name: string,
+        polygon: Point2[],
+        bottom: number,
+        thickness: number,
+        mat: StandardMaterial,
+      ) => {
+        const positions: number[] = [],
+          indices: number[] = [],
+          count = polygon.length;
+        for (const y of [bottom, bottom + thickness])
+          for (const [x, z] of polygon) positions.push(x, y, z);
+        const caps = earcut(polygon.flat());
+        const capNormals: number[] = [];
+        VertexData.ComputeNormals(
+          polygon.flatMap(([x, z]) => [x, 0, z]),
+          caps,
+          capNormals,
+        );
+        if (capNormals[1] < 0)
+          for (let i = 0; i < caps.length; i += 3)
+            [caps[i + 1], caps[i + 2]] = [caps[i + 2], caps[i + 1]];
+        for (let i = 0; i < caps.length; i += 3) {
+          indices.push(caps[i] + count, caps[i + 1] + count, caps[i + 2] + count);
+          indices.push(caps[i], caps[i + 2], caps[i + 1]);
+        }
+        const signedArea = polygon.reduce((area, p, i) => {
+          const q = polygon[(i + 1) % count];
+          return area + p[0] * q[1] - q[0] * p[1];
+        }, 0);
+        for (let i = 0; i < count; i++) {
+          const a = polygon[i],
+            b = polygon[(i + 1) % count],
+            start = positions.length / 3;
+          positions.push(
+            a[0],
+            bottom,
+            a[1],
+            b[0],
+            bottom,
+            b[1],
+            b[0],
+            bottom + thickness,
+            b[1],
+            a[0],
+            bottom + thickness,
+            a[1],
+          );
+          const faces = signedArea > 0 ? [0, 1, 2, 0, 2, 3] : [0, 2, 1, 0, 3, 2];
+          indices.push(...faces.map((index) => start + index));
+        }
+        const normals: number[] = [];
+        VertexData.ComputeNormals(positions, indices, normals);
+        const data = new VertexData();
+        data.positions = positions;
+        data.indices = indices;
+        data.normals = normals;
+        const mesh = new Mesh(`furniture:${item.id}:${name}`, this.scene);
+        data.applyToMesh(mesh);
+        mesh.parent = root;
+        mesh.material = mat;
+        mesh.checkCollisions = true;
+        mesh.receiveShadows = true;
+        mesh.metadata = { kind: 'furniture', id: item.id };
+      };
+      upholstery('continuous-base', outline(0), h * 0.12, h * 0.28, main);
+      upholstery(
+        'continuous-seat',
+        outline(Math.min(0.015, seatDepth * 0.02, returnWidth * 0.02, returnDepth * 0.02)),
+        h * 0.4,
+        h * 0.16,
+        soft,
+      );
       box(w, h * 0.6, seatDepth * 0.18, 0, h * 0.7, -d / 2 + seatDepth * 0.09);
       const arm = Math.min(w * 0.08, returnWidth * 0.15);
-      for (const sx of [-1, 1])
+      for (const sx of [-1, 1]) {
+        if (shape === 'corner' && sx === sideSign) continue;
         box(
           arm,
           h * 0.37,
@@ -210,8 +308,16 @@ export class FurnitureLayer {
           h * 0.585,
           rowZ + seatDepth * 0.085,
         );
+      }
       if (shape === 'corner')
-        box(arm, h * 0.6, returnDepth, sideSign * (w / 2 - arm / 2), h * 0.7, returnZ);
+        box(
+          arm,
+          h * 0.6,
+          d - seatDepth * 0.18,
+          sideSign * (w / 2 - arm / 2),
+          h * 0.7,
+          seatDepth * 0.09,
+        );
     } else if (item.kind === 'sofa') {
       legs(h * 0.12);
       box(w, h * 0.28, d, 0, h * 0.26, 0);
@@ -269,10 +375,39 @@ export class FurnitureLayer {
       const frame = material('screen-frame', new Color3(0.055, 0.06, 0.065));
       const screen = material('screen', new Color3(0.1, 0.14, 0.18));
       screen.specularColor = new Color3(0.25, 0.28, 0.3);
-      box(w * 0.45, h * 0.035, d, 0, h * 0.0175, 0, frame);
-      box(w * 0.08, h * 0.09, d * 0.18, 0, h * 0.08, 0, frame);
-      box(w, h * 0.9, d * 0.2, 0, h * 0.55, -d * 0.1, frame);
-      box(w * 0.96, h * 0.84, d * 0.015, 0, h * 0.55, d * 0.0075, screen);
+      if (item.tvDiagonalInches !== undefined) {
+        const display = televisionDimensions(item.tvDiagonalInches);
+        // The quoted diagonal describes the visible 16:9 screen, excluding frame and feet.
+        const baseHeight = Math.min(0.06, Math.max(0, h - display.screenHeight));
+        const screenBottom = Math.min(0.07, Math.max(0, h - display.screenHeight));
+        const footHeight = Math.min(0.015, h * 0.1);
+        box(w * 0.45, footHeight, d, 0, footHeight / 2, 0, frame);
+        box(
+          w * 0.08,
+          Math.max(0.005, baseHeight - footHeight),
+          d * 0.18,
+          0,
+          Math.max(footHeight, baseHeight / 2 + footHeight / 2),
+          0,
+          frame,
+        );
+        box(w, h - baseHeight, d * 0.2, 0, baseHeight + (h - baseHeight) / 2, -d * 0.1, frame);
+        box(
+          display.screenWidth,
+          display.screenHeight,
+          d * 0.015,
+          0,
+          screenBottom + display.screenHeight / 2,
+          d * 0.0075,
+          screen,
+        );
+      } else {
+        // Preserve the appearance of imported TVs entered directly in metres.
+        box(w * 0.45, h * 0.035, d, 0, h * 0.0175, 0, frame);
+        box(w * 0.08, h * 0.09, d * 0.18, 0, h * 0.08, 0, frame);
+        box(w, h * 0.9, d * 0.2, 0, h * 0.55, -d * 0.1, frame);
+        box(w * 0.96, h * 0.84, d * 0.015, 0, h * 0.55, d * 0.0075, screen);
+      }
     } else if (item.kind === 'wardrobe' || item.kind === 'cabinet') {
       box(w, h, d * 0.95, 0, h / 2, -d * 0.025);
       for (const side of [-1, 1]) {
@@ -293,6 +428,11 @@ export class FurnitureLayer {
 
   private pointer(event: PointerInfo): void {
     if (this.mode === 'walk' || this.disposed) return;
+    if (event.type === PointerEventTypes.POINTERDOUBLETAP) {
+      const mesh = event.pickInfo?.pickedMesh;
+      if (mesh?.metadata?.kind === 'furniture') this.onEdit?.(mesh.metadata.id);
+      return;
+    }
     if (event.type === PointerEventTypes.POINTERUP) {
       this.finishDrag();
       return;
@@ -306,7 +446,7 @@ export class FurnitureLayer {
       if (!item) return;
       this.select(item.id);
       this.onSelect?.(item.id);
-      if (item.locked) return;
+      if (groupMembers(this.items, item.id).some((member) => member.locked)) return;
       const floor = floorElevationAt(this.level, item.position);
       const point = this.groundPoint(floor);
       if (!point) return;
@@ -328,22 +468,28 @@ export class FurnitureLayer {
         Math.hypot(position[0] - this.drag.start[0], position[1] - this.drag.start[1]) < 0.015
       )
         return;
-      const constrained = constrainFurnitureDrag(item, { ...item, position }, this.level);
+      if (groupMembers(this.items, item.id).some((member) => member.locked)) {
+        this.finishDrag();
+        return;
+      }
+      const constrained = constrainGroupDrag(this.items, item.id, position, this.level);
+      const anchor = constrained.find((member) => member.id === item.id)!;
       if (
-        Math.hypot(
-          constrained.position[0] - item.position[0],
-          constrained.position[1] - item.position[1],
-        ) < 0.00001
+        Math.hypot(anchor.position[0] - item.position[0], anchor.position[1] - item.position[1]) <
+        0.00001
       )
         return;
       this.drag.moved = true;
-      item.position = constrained.position;
-      const visual = this.visuals.get(item.id);
-      visual?.root.position.set(
-        item.position[0],
-        floorElevationAt(this.level, item.position) + (item.elevation ?? 0),
-        item.position[1],
-      );
+      this.items = constrained;
+      for (const member of groupMembers(this.items, item.id)) {
+        const visual = this.visuals.get(member.id);
+        visual?.root.position.set(
+          member.position[0],
+          floorElevationAt(this.level, member.position) + (member.elevation ?? 0),
+          member.position[1],
+        );
+        visual?.root.computeWorldMatrix(true);
+      }
       this.drawOverlays();
       this.onChange?.(structuredClone(this.items), false);
     }
@@ -418,6 +564,17 @@ export class FurnitureLayer {
     const hw = item.width / 2,
       hd = item.depth / 2;
     rectangle('furniture:selection', -hw, hw, -hd, hd);
+    for (const member of groupMembers(this.items, item.id)) {
+      if (member.id === item.id) continue;
+      const memberY = floorElevationAt(this.level, member.position) + 0.04;
+      for (const footprint of footprintParts(member)) {
+        line(
+          `furniture:group-selection:${member.id}`,
+          [...footprint, footprint[0]].map(([x, z]) => new Vector3(x, memberY, z)),
+          new Color3(0.2, 0.68, 0.55),
+        );
+      }
+    }
     if (this.overlays.clearances && item.clearances) {
       const gap = item.clearances;
       rectangle(

@@ -231,3 +231,38 @@ test('drag stops a sofa at a thin wall in plan and overview even after a large p
     engine.dispose();
   }
 });
+
+test('double-click on a furniture item requests its editor in plan and overview', () => {
+  const { scene, layer, cleanup } = setup();
+  layer.setItems([item()]);
+  const pick = new PickingInfo();
+  pick.pickedMesh = scene.meshes.find((mesh) => mesh.metadata?.kind === 'furniture')!;
+  const edited: string[] = [];
+  layer.onEdit = (id) => edited.push(id);
+  for (const mode of ['plan', 'overview', 'walk'] as const) {
+    layer.setMode(mode);
+    scene.onPointerObservable.notifyObservers(
+      new PointerInfo(PointerEventTypes.POINTERDOUBLETAP, { button: 0 } as PointerEvent, pick),
+    );
+  }
+  assert.deepEqual(edited, ['f', 'f']);
+  cleanup();
+});
+
+test('plan wall cut keeps the tops of tall furniture visible and restores section clipping in 3D', () => {
+  const { scene, layer, cleanup } = setup();
+  layer.setItems([{ ...item('wardrobe'), height: 2 }]);
+  layer.setMode('plan');
+  for (const mesh of scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture')) {
+    const mat = mesh.material!;
+    assert.ok(mat.clipPlane);
+    assert.ok(mat.clipPlane.signedDistanceTo(new Vector3(2, 4, 2)) < 0);
+  }
+  layer.setMode('overview');
+  assert.ok(
+    scene.meshes
+      .filter((mesh) => mesh.metadata?.kind === 'furniture')
+      .every((mesh) => mesh.material!.clipPlane === null),
+  );
+  cleanup();
+});

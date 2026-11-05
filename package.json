@@ -21,6 +21,7 @@
   "devDependencies": {
     "@types/earcut": "^3.0.0",
     "@types/node": "^26.6.6",
+    "happy-dom": "^21.0.4",
     "prettier": "^3.9.10",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",

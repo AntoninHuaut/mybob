@@ -31,6 +31,8 @@ import {
   walkDisplacement,
 } from './walkCamera';
 import { fitOverview, fitPlan, siteOverviewLevel } from './framing';
+import { panOrbitWithKeys } from './orbitNavigation';
+import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
 import {
   applyEyeHeight,
   findVisitDestination,
@@ -58,6 +60,7 @@ export interface Measurement {
 /** Babylon scales pan deltas by the inverse of this value, in world metres. */
 export function configureOrbitInteractions(camera: ArcRotateCamera) {
   camera.panningSensibility = 1000;
+  camera.inputs.removeByType('ArcRotateCameraKeyboardMoveInput');
 }
 
 export class HouseViewer {
@@ -86,6 +89,7 @@ export class HouseViewer {
   private lookSensitivity = 1;
   private cutaway = false;
   private sectionHeight?: number;
+  private planOpenings?: PlanOpenings;
   private exteriorMeshes: {
     wall: Level['walls'][number];
     meshes: { mesh: AbstractMesh; visibility: number; pickable: boolean }[];
@@ -128,6 +132,7 @@ export class HouseViewer {
   }
 
   load(project: HouseProject, levelId?: string) {
+    this.planOpenings?.dispose();
     this.scene?.dispose();
     this.exterior = undefined;
     this.exteriorFrame = undefined;
@@ -215,6 +220,7 @@ export class HouseViewer {
           pickable: mesh.isPickable,
         })),
       }));
+    this.planOpenings = buildPlanOpenings(scene, level);
     this.buildDimensions();
     this.setMode('overview');
     scene.onPointerObservable.add((event) => {
@@ -331,14 +337,10 @@ export class HouseViewer {
 
   /** A previous interrupted furniture gesture must not strand the orbit controls. */
   private recoverOrbitControls(event: PointerEvent) {
-    if (
-      !this.scene ||
-      this.mode === 'walk' ||
-      this.paused ||
-      ![0, 2].includes(event.button) ||
-      this.orbit.inputs.attachedToElement
-    )
+    if (!this.scene || this.mode === 'walk' || this.paused || ![0, 2].includes(event.button))
       return;
+    this.canvas.focus({ preventScroll: true });
+    if (this.orbit.inputs.attachedToElement) return;
     const rect = this.canvas.getBoundingClientRect();
     const hit = this.scene.pick(event.clientX - rect.left, event.clientY - rect.top);
     if (hit?.pickedMesh?.metadata?.kind === 'furniture') return;
@@ -509,10 +511,12 @@ export class HouseViewer {
   }
 
   private updateSection() {
+    const height =
+      this.sectionHeight ??
+      (this.mode === 'plan' ? Math.min(1.2, this.level.ceilingHeight - 0.1) : undefined);
     this.scene.clipPlane =
-      this.mode === 'walk' || this.exteriorView
-        ? null
-        : sectionPlane(this.level, this.sectionHeight);
+      this.mode === 'walk' || this.exteriorView ? null : sectionPlane(this.level, height);
+    this.planOpenings?.setVisible(this.mode === 'plan' && !this.exteriorView, height);
   }
 
   private updateCutaway() {
@@ -657,6 +661,30 @@ export class HouseViewer {
         locked: document.pointerLockElement === this.canvas,
       });
     } else {
+      if (
+        !this.paused &&
+        document.activeElement === this.canvas &&
+        this.orbit.inputs.attachedToElement
+      ) {
+        const forward =
+          Number(
+            this.keyState.has('KeyW') || this.keyState.has('KeyZ') || this.keyState.has('ArrowUp'),
+          ) - Number(this.keyState.has('KeyS') || this.keyState.has('ArrowDown'));
+        const side =
+          Number(this.keyState.has('KeyD') || this.keyState.has('ArrowRight')) -
+          Number(
+            this.keyState.has('KeyA') ||
+              this.keyState.has('KeyQ') ||
+              this.keyState.has('ArrowLeft'),
+          );
+        panOrbitWithKeys(
+          this.orbit,
+          forward,
+          side,
+          dt,
+          this.keyState.has('ShiftLeft') || this.keyState.has('ShiftRight'),
+        );
+      }
       this.onFrame?.({
         position: [this.walk.position.x, this.walk.position.z],
         headingDegrees: planHeading(this.walk),
@@ -669,14 +697,16 @@ export class HouseViewer {
 
   private keydown = (event: KeyboardEvent) => {
     if (
-      this.mode !== 'walk' ||
       this.paused ||
+      event.ctrlKey ||
+      event.metaKey ||
+      event.altKey ||
       (document.activeElement !== this.canvas && document.pointerLockElement !== this.canvas)
     )
       return;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code))
       event.preventDefault();
-    if (event.code === 'KeyE' && !event.repeat) {
+    if (this.mode === 'walk' && event.code === 'KeyE' && !event.repeat) {
       const hit = this.scene.pickWithRay(this.walk.getForwardRay(2.4));
       if (hit?.pickedMesh?.metadata?.kind === 'door') this.toggleDoor(hit.pickedMesh.metadata.id);
     }
@@ -769,6 +799,7 @@ export class HouseViewer {
   }
 
   dispose() {
+    this.planOpenings?.dispose();
     window.removeEventListener('keydown', this.keydown);
     window.removeEventListener('keyup', this.keyup);
     window.removeEventListener('blur', this.clearKeys);

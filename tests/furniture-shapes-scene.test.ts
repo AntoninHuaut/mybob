@@ -127,3 +127,34 @@ test('changing sofa side rebuilds its actual mesh while moving or elevating reus
   assert.notEqual(scene.getTransformNodeByName(`furniture:${item.id}`), original);
   cleanup();
 });
+
+test('the L upholstery is continuous across the elbow with one base and one seat mesh', () => {
+  const { scene, layer, cleanup } = setup();
+  for (const side of ['left', 'right'] as const)
+    for (const shape of ['corner', 'chaise'] as const) {
+      const item = createFurniture({
+        kind: 'sofa',
+        position: [4, 4],
+        width: 3,
+        depth: 2,
+        height: 0.9,
+        sofa: { side, shape, seatDepth: 0.9, returnWidth: 1 },
+      });
+      layer.setItems([item]);
+      const seat = scene.getMeshByName(`furniture:${item.id}:continuous-seat`)!;
+      const base = scene.getMeshByName(`furniture:${item.id}:continuous-base`)!;
+      assert.ok(seat && base);
+      seat.computeWorldMatrix(true);
+      base.computeWorldMatrix(true);
+      const x = 4 + (side === 'left' ? -1 : 1);
+      const joinZ = 4 - 1 + 0.9;
+      for (const delta of [-0.02, -0.001, 0, 0.001, 0.02]) {
+        const ray = new Ray(new Vector3(x, 2.54, joinZ + delta), new Vector3(0, -1, 0), 0.1);
+        assert.ok(ray.intersectsMesh(seat).hit, `${side}/${shape} gap at ${delta}m`);
+      }
+      // The closed upholstery also has a solid visible front face.
+      const sideRay = new Ray(new Vector3(x, 2.45, 5.5), new Vector3(0, 0, -1), 1);
+      assert.ok(sideRay.intersectsMesh(seat).hit);
+    }
+  cleanup();
+});

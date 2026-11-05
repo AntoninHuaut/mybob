@@ -20,6 +20,7 @@ import {
 import { checkFurniture, snapFurniture } from './furniture/checks';
 import { findFurniturePlacement, getBuildingPlacementIssues } from './furniture/placement';
 import { deliveryChecks } from './furniture/delivery';
+import { applyFurnitureTransform, linkFurniture, unlinkFurniture } from './furniture/groups';
 
 const STORAGE = 'maison-atelier:projects:v1';
 const el = <T extends HTMLElement = HTMLElement>(selector: string) =>
@@ -41,6 +42,7 @@ const furnitureHistory = new FurnitureHistory();
 let furnitureLayer: FurnitureLayer | undefined;
 let furniturePanel: FurniturePanel | undefined;
 let selectedFurnitureId: string | undefined;
+let editingFurnitureId: string | undefined;
 let furnitureContextItem: FurnitureItem | undefined;
 let previewFurniture: FurnitureItem[] | undefined;
 let draggingFurniture = false;
@@ -82,7 +84,7 @@ el('#app').innerHTML = `
       <button id="resume-walk" class="resume-walk" hidden>${icon('mouse', 17)} Reprendre la visite</button>
       <div class="orientation" title="Direction du haut du document de référence"><span>HAUT DU PLAN</span><svg id="orientation-arrow" width="23" height="23" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 6 18-6-4-6 4Z" fill="currentColor"/></svg></div>
       <div class="mini-card"><div class="mini-heading"><span>VOUS REPÉRER</span><button id="mini-plan" aria-label="Ouvrir la vue en plan" title="Vue en plan">${icon('plan', 15)}</button></div><div id="minimap"></div><div class="mini-caption" id="mini-caption">Rez-de-chaussée</div></div>
-      <div class="bottom-controls"><div class="control-hint" id="control-hint">${icon('mouse-left', 17)}<span>Glisser gauche pour tourner</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span><i></i>${icon('mouse-wheel', 17)}<span>Molette pour zoomer</span></div><div class="scale-note"><span class="scale-line"></span> Dimensions en mètres</div></div>
+      <div class="bottom-controls"><div class="control-hint" id="control-hint"><kbd>ZQSD</kbd><span>Déplacer la vue</span><i></i>${icon('mouse-left', 17)}<span>Glisser gauche pour tourner</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span></div><div class="scale-note"><span class="scale-line"></span> Dimensions en mètres</div></div>
       <div id="layout-status" class="layout-status" role="status">Aménagement sauvegardé sur cet ordinateur</div>
       <div class="loading" id="loading"><div class="loading-mark">${icon('house', 35)}</div><span>Votre maison prend forme…</span></div>
       <div id="fatal-error" class="fatal-error" hidden></div>
@@ -165,16 +167,19 @@ function commitFurniture(items: FurnitureItem[]): boolean {
   return true;
 }
 
+function updateFurniture(item: FurnitureItem) {
+  try {
+    return commitFurniture(applyFurnitureTransform(currentFurniture(), item));
+  } catch (error) {
+    toast(error instanceof Error ? error.message : 'Déplacement de l’ensemble impossible.');
+    return false;
+  }
+}
+
 function rotateSelectedFurniture(degrees: number) {
   const item = currentFurniture().find((candidate) => candidate.id === selectedFurnitureId);
   if (!item || item.locked || mode === 'walk' || exteriorView) return;
-  commitFurniture(
-    currentFurniture().map((candidate) =>
-      candidate.id === item.id
-        ? { ...candidate, rotation: candidate.rotation + (degrees * Math.PI) / 180 }
-        : candidate,
-    ),
-  );
+  updateFurniture({ ...item, rotation: item.rotation + (degrees * Math.PI) / 180 });
 }
 function updateFurnitureContext() {
   const toolbar = el('#furniture-context-toolbar');
@@ -208,13 +213,20 @@ function updateFurnitureContext() {
   toolbar.style.top = `${Math.max(12, Math.min(maxY, point.y - toolbar.offsetHeight - 12))}px`;
 }
 
-function selectFurniture(id: string | undefined) {
+function selectFurniture(id: string | undefined, edit = false) {
   if (id && exteriorView) setMode('overview');
-  if (id) setSidebarTab('furniture');
+  editingFurnitureId = edit ? id : undefined;
+  if (edit) setSidebarTab('furniture');
   selectedFurnitureId = id;
   furnitureContextItem = id ? currentFurniture().find((item) => item.id === id) : undefined;
   furnitureLayer?.select(id);
   furniturePanel?.render();
+}
+
+function openFurnitureEditor(id: string) {
+  selectFurniture(id, true);
+  setSidebar(true);
+  furniturePanel?.focusDimensions();
 }
 
 function mountFurniture() {
@@ -233,6 +245,7 @@ function mountFurniture() {
   furnitureLayer.setItems(items);
   furnitureLayer.setOverlays(overlays);
   furnitureLayer.onSelect = selectFurniture;
+  furnitureLayer.onEdit = openFurnitureEditor;
   furnitureLayer.onDragState = (dragging) => {
     draggingFurniture = dragging;
     if (dragging) viewer.orbit.detachControl();
@@ -254,7 +267,7 @@ function mountFurniture() {
           ?.name,
       canUndo: () => furnitureHistory.canUndo,
       canRedo: () => furnitureHistory.canRedo,
-      onAdd: (item) => {
+      onAdd: (item, linkedTo) => {
         if (exteriorView) setMode('overview');
         const room =
           viewer.level.rooms.find((room) => pointInPolygon(item.position, room.polygon)) ??
@@ -264,15 +277,31 @@ function mountFurniture() {
           throw new Error(
             'Aucune place disponible pour ces dimensions dans cette pièce. Choisissez une autre pièce ou ajustez les dimensions.',
           );
-        if (!commitFurniture([...currentFurniture(), placed]))
+        if (
+          linkedTo &&
+          Math.hypot(placed.position[0] - item.position[0], placed.position[1] - item.position[1]) >
+            0.001
+        )
+          throw new Error('Pas de place sur ce meuble : retirez ou déplacez l’objet déjà présent.');
+        const next = [...currentFurniture(), placed];
+        if (!commitFurniture(linkedTo ? linkFurniture(next, placed.id, linkedTo) : next))
           throw new Error('Ce meuble ne peut pas être placé ici. Vérifiez ses dimensions.');
         selectFurniture(placed.id);
         if (!matchMedia('(min-width: 761px)').matches) setSidebar(false);
       },
-      onUpdate: (item) =>
-        commitFurniture(
-          currentFurniture().map((previous) => (previous.id === item.id ? item : previous)),
-        ),
+      onUpdate: updateFurniture,
+      onLink: (id, other) => {
+        try {
+          if (commitFurniture(linkFurniture(currentFurniture(), id, other)))
+            toast('Meubles liés : déplacez ou tournez l’un pour déplacer l’ensemble.');
+        } catch (error) {
+          toast(error instanceof Error ? error.message : 'Liaison impossible.');
+        }
+      },
+      onUnlink: (id) => {
+        if (commitFurniture(unlinkFurniture(currentFurniture(), id)))
+          toast('Les meubles sont maintenant indépendants.');
+      },
       onDelete: (id) => commitFurniture(currentFurniture().filter((item) => item.id !== id)),
       onDuplicate: (id) => {
         const item = currentFurniture().find((candidate) => candidate.id === id);
@@ -280,6 +309,7 @@ function mountFurniture() {
         const copy = createFurniture({
           ...item,
           id: undefined,
+          groupId: undefined,
           name: `${item.name} (copie)`,
           locked: false,
           position: [item.position[0] + 0.2, item.position[1] + 0.2],
@@ -293,6 +323,8 @@ function mountFurniture() {
         if (commitFurniture([...currentFurniture(), placed])) selectFurniture(placed.id);
       },
       onSelect: selectFurniture,
+      onEdit: openFurnitureEditor,
+      isEditing: () => !!selectedFurnitureId && editingFurnitureId === selectedFurnitureId,
       onUndo: () => {
         if (furnitureHistory.undo()) syncFurniture();
       },
@@ -311,7 +343,7 @@ function mountFurniture() {
           ) < 0.001
         )
           toast('Rapprochez le meuble du mur (moins de 30 cm), puis réessayez.');
-        commitFurniture(items.map((candidate) => (candidate.id === id ? snapped : candidate)));
+        updateFurniture(snapped);
       },
       onOverlays: (options) => {
         overlays = options;
@@ -632,9 +664,10 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
     next === 'walk'
       ? `<kbd>ZQSD</kbd><span>ou flèches</span><i></i><kbd>E</kbd><span>Portes</span><i></i><kbd>Échap</kbd><span>Libérer la souris</span>`
       : next === 'plan'
-        ? `${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span><i></i><span>Cliquer sur une pièce pour la sélectionner</span>`
-        : `${icon('mouse-left', 17)}<span>Glisser gauche pour tourner</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span><i></i>${icon('mouse-wheel', 17)}<span>Molette pour zoomer</span>`;
+        ? `<kbd>ZQSD</kbd><span>Déplacer la vue · Maj pour accélérer</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span><i></i>${icon('mouse-wheel', 17)}<span>Molette pour zoomer</span>`
+        : `<kbd>ZQSD</kbd><span>Déplacer la vue</span><i></i>${icon('mouse-left', 17)}<span>Glisser gauche pour tourner</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span><i></i>${icon('mouse-wheel', 17)}<span>Molette pour zoomer</span>`;
   syncDisplayControls();
+  if (next !== 'walk' && !fromViewer) viewer.canvas.focus({ preventScroll: true });
   el('#measure-instructions').hidden = true;
   el('#measure-label').hidden = true;
   el('#width-label').hidden = !showDimensions || next === 'walk';
@@ -878,31 +911,16 @@ function wireEvents() {
         event.preventDefault();
         event.stopImmediatePropagation();
         const d = delta[event.code];
-        commitFurniture(
-          currentFurniture().map((candidate) =>
-            candidate.id === item.id
-              ? {
-                  ...candidate,
-                  position: [candidate.position[0] + d[0], candidate.position[1] + d[1]],
-                }
-              : candidate,
-          ),
-        );
+        updateFurniture({ ...item, position: [item.position[0] + d[0], item.position[1] + d[1]] });
       } else if (event.code === 'Delete' || event.code === 'Backspace') {
         event.preventDefault();
         commitFurniture(currentFurniture().filter((candidate) => candidate.id !== item.id));
       } else if (event.code === 'KeyR' && !modifier) {
         event.preventDefault();
-        commitFurniture(
-          currentFurniture().map((candidate) =>
-            candidate.id === item.id
-              ? {
-                  ...candidate,
-                  rotation: candidate.rotation + ((event.shiftKey ? -1 : 1) * Math.PI) / 12,
-                }
-              : candidate,
-          ),
-        );
+        updateFurniture({
+          ...item,
+          rotation: item.rotation + ((event.shiftKey ? -1 : 1) * Math.PI) / 12,
+        });
       }
     },
     true,
@@ -1016,7 +1034,7 @@ function wireEvents() {
   el('#help').addEventListener('click', () =>
     openDialog(
       'PRENDRE EN MAIN L’ATELIER',
-      `<h2>Faites comme chez vous.</h2><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>Glissez avec le bouton gauche pour tourner. Utilisez la molette pour zoomer et le bouton droit pour déplacer la vue.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau, puis glissez-le dans la scène. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
+      `<h2>Faites comme chez vous.</h2><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>ZQSD ou WASD pour déplacer la vue, Maj pour accélérer. Glissez avec le bouton gauche pour tourner, le bouton droit pour déplacer ; utilisez la molette pour zoomer. Les flèches déplacent aussi la vue quand aucun meuble n’est sélectionné.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau, puis glissez-le dans la scène. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
     ),
   );
   el('#source-info').addEventListener('click', () => {

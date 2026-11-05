@@ -56,7 +56,10 @@ test('left drag rotates without moving the target', () => {
 
 test('an empty-floor gesture restores detached orbit input but furniture and visits retain control', () => {
   const { engine, camera } = cameraScene();
-  const canvas = { getBoundingClientRect: () => ({ left: 10, top: 20 }) } as HTMLCanvasElement;
+  const canvas = {
+    focus: () => {},
+    getBoundingClientRect: () => ({ left: 10, top: 20 }),
+  } as HTMLCanvasElement;
   let kind = 'floor',
     attachments = 0;
   const picks: number[][] = [];

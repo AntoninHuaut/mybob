@@ -495,3 +495,56 @@
     min-height: 42px;
   }
 }
+
+.sofa-diagram svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+}
+.furniture-group-controls {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #f2f6ed;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.furniture-group-controls p {
+  margin: 0 0 10px;
+}
+.furniture-group-controls button {
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #b3c6a9;
+  border-radius: 5px;
+  font-size: 13px;
+  background: white;
+}
+.furniture-linker summary {
+  cursor: pointer;
+  padding: 6px 0;
+  min-height: 36px;
+  font-weight: 550;
+}
+
+.furniture-tv-fields {
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.furniture-tv-fields legend {
+  font-size: 14px;
+  font-weight: 550;
+}
+.furniture-dimensions {
+  margin-top: 10px;
+}
+.furniture-dimensions > summary {
+  cursor: pointer;
+  min-height: 36px;
+  padding: 8px 0;
+  font-size: 13px;
+}

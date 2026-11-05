@@ -25,3 +25,21 @@ La hauteur de pose est relative au sol fini. Le bouton Ajouter une TV dessus d�
 Les commandes flottantes sur le meuble sélectionné tournent de −90°, +90° ou +15°, en plan et en 3D. Les mêmes contraintes et l’historique s’appliquent : une rotation qui pénètre un mur est refusée.
 
 La navigation utilise le glisser gauche pour tourner, le glisser droit pour déplacer et la molette pour zoomer. Chaque commande possède une icône qui distingue le bouton concerné. La sensibilité du déplacement droit a été ramenée à la valeur normale Babylon après la régression de la passe précédente.
+
+## Navigation et édition
+
+ZQSD / WASD déplace la vue 3D ou Plan dans les directions de l’écran, à vitesse adaptée au zoom. Maj accélère. Cliquer dans la vue lui donne le clavier ; les champs de formulaire et les menus conservent leurs touches. Les flèches déplacent un meuble sélectionné, ou la vue sans sélection.
+
+Le simple clic sélectionne et propose les rotations rapides. Le double-clic dans la scène ouvre le panneau complet et les dimensions. Le bouton Modifier fournit le même accès au clavier. Le panneau ne se reconstruit plus sur un clic de configuration, sur Passage et ouverture, ou quand il perd le focus : les saisies et volets restent stables.
+
+Les profondeurs des canapés sont saisies depuis le dos : profondeur du corps principal puis profondeur totale côté allongé. Aucune soustraction n’est demandée. Le schéma local indique ces deux longueurs et la largeur du retour. Les assises et bases en L utilisent des volumes continus, sans trou à la jonction.
+
+La TV se renseigne d’abord par diagonale en pouces, au format 16:9. Le boîtier et les pieds sont estimés ; Dimensions exactes permet de corriger largeur, profondeur et hauteur. Une modification manuelle de largeur/hauteur retire la diagonale associée, pour ne pas conserver une indication devenue fausse. Les anciens téléviseurs aux dimensions personnalisées restent compatibles.
+
+## Ensembles de meubles
+
+Dans les réglages d’un meuble, Lier à un autre meuble permet de choisir son partenaire. La liaison conserve les positions actuelles. Déplacer ou tourner un membre transforme tout le groupe, avec un arrêt commun contre les murs et une seule action Annuler. Un membre verrouillé bloque les transformations qui le déplaceraient. Séparer les meubles rend l’ensemble indépendant. Les dimensions restent individuelles. Ajouter une TV dessus crée et lie automatiquement le téléviseur au meuble TV.
+
+La vue Plan coupe les murs à 1,20 m par défaut et dessine les fenêtres et baies en cyan à leurs positions réelles. Les meubles gardent leur volume visible, y compris armoires et TV ; la coupe explicite choisie dans les réglages reste prioritaire pour les murs.
+
+Les tests du contrôleur DOM utilisent Happy DOM (sans navigateur graphique) pour vérifier la stabilité des menus et des saisies, les conversions du formulaire, les pouces et l’ouverture de l’éditeur. Les tests Babylon NullEngine couvrent géométrie, groupes et navigation ; ils ne valident pas le rendu GPU sur le poste de l’utilisateur.

@@ -1,4 +1,6 @@
 import type { Point2 } from '../model/types';
+import { televisionDimensions } from './television';
+export { televisionDimensions };
 
 export type FurnitureKind =
   | 'sofa'
@@ -32,19 +34,31 @@ export interface FurnitureItem {
   /** Height of the object's base above the finished floor, in metres. */
   elevation?: number;
   sofa?: SofaConfiguration;
+  /** Display diagonal only; chassis dimensions remain editable approximations. */
+  tvDiagonalInches?: number;
   position: Point2;
   /** Babylon Y rotation, in radians; front is local +Z. */
   rotation: number;
   locked: boolean;
+  /** Linked objects share transformations, without changing individual dimensions. */
+  groupId?: string;
   color: string;
   source?: { url?: string; image?: string; note?: string };
   clearances?: { front: number; back: number; left: number; right: number };
   opening?: { kind: 'hinged' | 'drawer'; reach: number };
 }
 
+const DEFAULT_TELEVISION = televisionDimensions(55);
 export const FURNITURE_PRESETS: Record<
   FurnitureKind,
-  { name: string; width: number; depth: number; height: number; elevation?: number }
+  {
+    name: string;
+    width: number;
+    depth: number;
+    height: number;
+    elevation?: number;
+    tvDiagonalInches?: number;
+  }
 > = {
   sofa: { name: 'Canapé', width: 2.1, depth: 0.9, height: 0.85 },
   table: { name: 'Table', width: 1.6, depth: 0.9, height: 0.75 },
@@ -55,7 +69,14 @@ export const FURNITURE_PRESETS: Record<
   cabinet: { name: 'Commode', width: 0.9, depth: 0.45, height: 0.9 },
   custom: { name: 'Meuble sur mesure', width: 1, depth: 0.6, height: 0.8 },
   'tv-stand': { name: 'Meuble TV', width: 1.6, depth: 0.4, height: 0.55 },
-  tv: { name: 'Téléviseur', width: 1.23, depth: 0.12, height: 0.75, elevation: 0.6 },
+  tv: {
+    name: 'Téléviseur',
+    width: DEFAULT_TELEVISION.width,
+    depth: DEFAULT_TELEVISION.depth,
+    height: DEFAULT_TELEVISION.height,
+    elevation: 0.6,
+    tvDiagonalInches: 55,
+  },
   'coffee-table': { name: 'Table basse', width: 1.1, depth: 0.6, height: 0.4 },
   bookcase: { name: 'Bibliothèque', width: 0.8, depth: 0.3, height: 1.8 },
   ottoman: { name: 'Pouf', width: 0.65, depth: 0.65, height: 0.42 },
@@ -83,6 +104,11 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
       fail('Identifiant de meuble manquant ou dupliqué.');
     ids.add(item.id);
     if (
+      item.groupId !== undefined &&
+      (typeof item.groupId !== 'string' || !item.groupId.trim() || item.groupId.length > 160)
+    )
+      fail('L’identifiant du groupe de meubles est invalide.');
+    if (
       typeof item.name !== 'string' ||
       !item.name.trim() ||
       item.name.length > 160 ||
@@ -92,6 +118,25 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
       fail('Nom ou type de meuble invalide.');
     if (![item.width, item.depth, item.height].every((v) => finite(v) && v >= 0.05 && v <= 20))
       fail('Les dimensions du meuble doivent être comprises entre 5 cm et 20 m.');
+    if (item.tvDiagonalInches !== undefined) {
+      if (
+        item.kind !== 'tv' ||
+        !finite(item.tvDiagonalInches) ||
+        item.tvDiagonalInches < 5 ||
+        item.tvDiagonalInches > 300
+      )
+        fail(
+          'La diagonale est réservée aux téléviseurs et doit être comprise entre 5 et 300 pouces.',
+        );
+      const screen = televisionDimensions(item.tvDiagonalInches);
+      if (
+        screen.screenWidth > item.width + 0.000001 ||
+        screen.screenHeight > item.height + 0.000001
+      )
+        fail(
+          'L’écran indiqué ne tient pas dans les dimensions du téléviseur. Corrigez les mesures ou retirez la diagonale.',
+        );
+    }
     if (
       item.elevation !== undefined &&
       (!finite(item.elevation) || item.elevation < 0 || item.elevation > 20)
@@ -112,7 +157,7 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
         sofa.returnWidth > item.width - 0.05
       )
         fail(
-          'Le canapé en L doit avoir une profondeur d’assise et une largeur de retour inférieures à ses dimensions hors tout.',
+          'Vérifiez les mesures : la profondeur totale du côté allongé doit dépasser celle du corps du canapé, et la largeur du retour doit être inférieure à la largeur totale.',
         );
     }
     if (
@@ -202,6 +247,20 @@ export function createFurniture(input: FurnitureInput = {}): FurnitureItem {
     color: '#a5a18a',
     ...supplied,
   } as FurnitureItem;
+  if (kind === 'tv') {
+    if (input.tvDiagonalInches !== undefined) {
+      const dimensions = televisionDimensions(input.tvDiagonalInches);
+      if (input.width === undefined) item.width = dimensions.width;
+      if (input.depth === undefined) item.depth = dimensions.depth;
+      if (input.height === undefined) item.height = dimensions.height;
+      if (
+        dimensions.screenWidth > item.width + 0.000001 ||
+        dimensions.screenHeight > item.height + 0.000001
+      )
+        delete item.tvDiagonalInches;
+    } else if (input.width !== undefined || input.height !== undefined)
+      delete item.tvDiagonalInches;
+  }
   if (input.sofa)
     item.sofa = {
       shape: 'corner',
