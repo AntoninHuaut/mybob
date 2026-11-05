@@ -1,22 +1,141 @@
 {
-  "schemaVersion":1,"id":"studio-demo","name":"Un autre projet","description":"Studio de démonstration · modèle indépendant","units":"m",
-  "finishes":{"wallColor":"#f0eee9","floorTint":"#f0f5ef","joineryColor":"#f7f6f1"},
-  "source":{"title":"Exemple de projet paramétrique","status":"Démonstration","notes":["Ce studio fictif montre que le moteur accepte une autre géométrie sans modification du code.","Les projets sont importables et exportables au format JSON. Un PDF doit d’abord être transcrit dans ce format."]},
-  "levels":[{
-    "id":"studio-rdc","name":"Rez-de-chaussée","elevation":0,"ceilingHeight":2.7,
-    "outline":[[0,0],[8,0],[8,6],[0,6]],"spawn":{"position":[4,4.2],"yaw":3.14},
-    "walls":[
-      {"id":"studio-n","start":[0,0.15],"end":[8,0.15],"thickness":0.3,"exterior":true,"openings":[{"id":"studio-fen","kind":"window","offset":3.5,"width":2.5,"height":1.3,"sill":0.9}]},
-      {"id":"studio-e","start":[7.85,0.15],"end":[7.85,5.85],"thickness":0.3,"exterior":true},
-      {"id":"studio-s","start":[0,5.85],"end":[8,5.85],"thickness":0.3,"exterior":true,"openings":[{"id":"studio-baie","kind":"sliding","offset":4,"width":2.4,"height":2.2,"exterior":true}]},
-      {"id":"studio-w","start":[0.15,0.15],"end":[0.15,5.85],"thickness":0.3,"exterior":true,"openings":[{"id":"studio-entree","kind":"door","offset":3.7,"width":0.9,"height":2.1,"exterior":true}]},
-      {"id":"studio-sdb-e","start":[2.35,0.3],"end":[2.35,2.65],"thickness":0.1},
-      {"id":"studio-sdb-s","start":[0.3,2.65],"end":[2.35,2.65],"thickness":0.1,"openings":[{"id":"studio-porte-sdb","kind":"door","offset":0.9,"width":0.8,"height":2.04}]}
-    ],
-    "rooms":[
-      {"id":"studio-vie","name":"Espace de vie","kind":"living","polygon":[[2.4,0.3],[7.7,0.3],[7.7,5.7],[0.3,5.7],[0.3,2.7],[2.4,2.7]],"label":[4.8,3.6],"viewpoint":[4.8,3.6]},
-      {"id":"studio-sdb","name":"Salle d’eau","kind":"bathroom","polygon":[[0.3,0.3],[2.3,0.3],[2.3,2.6],[0.3,2.6]],"label":[1.3,1.5],"viewpoint":[1.3,1.5]}
-    ],
-    "lights":[{"id":"studio-lum-vie","position":[4.8,3.6],"provisional":true},{"id":"studio-lum-sdb","position":[1.3,1.5],"provisional":true}]
-  }]
+  "schemaVersion": 1,
+  "id": "studio-demo",
+  "name": "Un autre projet",
+  "description": "Studio de démonstration · modèle indépendant",
+  "units": "m",
+  "finishes": { "wallColor": "#f0eee9", "floorTint": "#f0f5ef", "joineryColor": "#f7f6f1" },
+  "source": {
+    "title": "Exemple de projet paramétrique",
+    "status": "Démonstration",
+    "notes": [
+      "Ce studio fictif montre que le moteur accepte une autre géométrie sans modification du code.",
+      "Les projets sont importables et exportables au format JSON. Un PDF doit d’abord être transcrit dans ce format."
+    ]
+  },
+  "levels": [
+    {
+      "id": "studio-rdc",
+      "name": "Rez-de-chaussée",
+      "elevation": 0,
+      "ceilingHeight": 2.7,
+      "outline": [
+        [0, 0],
+        [8, 0],
+        [8, 6],
+        [0, 6]
+      ],
+      "spawn": { "position": [4, 4.2], "yaw": 3.14 },
+      "walls": [
+        {
+          "id": "studio-n",
+          "start": [0, 0.15],
+          "end": [8, 0.15],
+          "thickness": 0.3,
+          "exterior": true,
+          "openings": [
+            {
+              "id": "studio-fen",
+              "kind": "window",
+              "offset": 3.5,
+              "width": 2.5,
+              "height": 1.3,
+              "sill": 0.9
+            }
+          ]
+        },
+        {
+          "id": "studio-e",
+          "start": [7.85, 0.15],
+          "end": [7.85, 5.85],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "studio-s",
+          "start": [0, 5.85],
+          "end": [8, 5.85],
+          "thickness": 0.3,
+          "exterior": true,
+          "openings": [
+            {
+              "id": "studio-baie",
+              "kind": "sliding",
+              "offset": 4,
+              "width": 2.4,
+              "height": 2.2,
+              "exterior": true
+            }
+          ]
+        },
+        {
+          "id": "studio-w",
+          "start": [0.15, 0.15],
+          "end": [0.15, 5.85],
+          "thickness": 0.3,
+          "exterior": true,
+          "openings": [
+            {
+              "id": "studio-entree",
+              "kind": "door",
+              "offset": 3.7,
+              "width": 0.9,
+              "height": 2.1,
+              "exterior": true
+            }
+          ]
+        },
+        { "id": "studio-sdb-e", "start": [2.35, 0.3], "end": [2.35, 2.65], "thickness": 0.1 },
+        {
+          "id": "studio-sdb-s",
+          "start": [0.3, 2.65],
+          "end": [2.35, 2.65],
+          "thickness": 0.1,
+          "openings": [
+            {
+              "id": "studio-porte-sdb",
+              "kind": "door",
+              "offset": 0.9,
+              "width": 0.8,
+              "height": 2.04
+            }
+          ]
+        }
+      ],
+      "rooms": [
+        {
+          "id": "studio-vie",
+          "name": "Espace de vie",
+          "kind": "living",
+          "polygon": [
+            [2.4, 0.3],
+            [7.7, 0.3],
+            [7.7, 5.7],
+            [0.3, 5.7],
+            [0.3, 2.7],
+            [2.4, 2.7]
+          ],
+          "label": [4.8, 3.6],
+          "viewpoint": [4.8, 3.6]
+        },
+        {
+          "id": "studio-sdb",
+          "name": "Salle d’eau",
+          "kind": "bathroom",
+          "polygon": [
+            [0.3, 0.3],
+            [2.3, 0.3],
+            [2.3, 2.6],
+            [0.3, 2.6]
+          ],
+          "label": [1.3, 1.5],
+          "viewpoint": [1.3, 1.5]
+        }
+      ],
+      "lights": [
+        { "id": "studio-lum-vie", "position": [4.8, 3.6], "provisional": true },
+        { "id": "studio-lum-sdb", "position": [1.3, 1.5], "provisional": true }
+      ]
+    }
+  ]
 }

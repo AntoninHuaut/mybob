@@ -27,6 +27,8 @@ export interface Room {
   polygon: Point2[];
   label: Point2;
   viewpoint: Point2;
+  /** Finished floor elevation relative to the level datum (metres). */
+  floorOffset?: number;
   planArea?: number;
   note?: string;
 }
@@ -47,7 +49,12 @@ export interface HouseProject {
   name: string;
   description: string;
   units: 'm';
-  finishes?: { wallColor?: string; floorTint?: string; garageColor?: string; joineryColor?: string };
+  finishes?: {
+    wallColor?: string;
+    floorTint?: string;
+    garageColor?: string;
+    joineryColor?: string;
+  };
   source: { title: string; date?: string; status: string; notes: string[] };
   levels: Level[];
 }

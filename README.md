@@ -16,6 +16,7 @@ Ouvrir l’adresse indiquée par Vite. L’application nécessite WebGL et l’a
 ```sh
 npm test
 npm run build
+npm run format:check
 ```
 
 Le dossier `dist/` contient la version statique déployable. Les dépendances et les données de maison sont intégrées ou servies localement ; Google Fonts est facultatif et possède des polices de repli système.
@@ -58,6 +59,10 @@ Rez-de-chaussée, garage, finitions simples, visite, portes, vue en plan, mesure
 **La reconstruction n’est pas encore un relevé exact de l’existant.** Plusieurs cotes principales sont reprises du plan, mais les raccords de l’entrée de la chambre 1, du dégagement et du hall restent à confirmer. Les surfaces au plan et celles calculées sur les contours du modèle sont affichées séparément. Voir `docs/MODEL-NOTES.md`.
 
 Les plans et photos fournis par le propriétaire ne sont pas inclus dans les sources ni dans le site. L’hébergement Sites et le dépôt GitHub `AntoninHuaut/mybob` sont privés.
+
+Les corrections issues des revues indépendantes sont résumées dans [docs/REVIEW.md](docs/REVIEW.md). Le détail des cotes vérifiées et des écarts d’origine est conservé dans [docs/GEOMETRY-AUDIT.md](docs/GEOMETRY-AUDIT.md).
+
+Le téléphone permet de consulter la vue 3D et le plan en pleine largeur, avec un panneau des pièces repliable. La visite en déplacement reste destinée à l’ordinateur avec clavier et souris. Les textes, le focus et les dialogues ont été repris lors de la revue d’accessibilité.
 
 ## Extensions prévues
 

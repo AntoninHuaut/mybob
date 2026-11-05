@@ -7,6 +7,7 @@ Le contrat TypeScript est dans `src/model/types.ts` ; `validateProject()` est ex
 - Une unité vaut **un mètre**, à tous les niveaux.
 - Les points `[x, z]` décrivent le plan horizontal. `x` augmente vers la droite du plan et `z` vers le bas.
 - L’axe vertical est `y`. `elevation` est la hauteur du sol fini du niveau par rapport à l’origine du projet.
+- Le rendu utilise un repère droit pour garder la même disposition que le PDF et le plan miniature. Le contrat `spawn.yaw` des fichiers v1 reste inchangé : 0 regarde vers le bas du plan, π vers le haut ; la conversion vers la caméra est interne.
 - Un mur est défini par son axe, ses deux extrémités, sa hauteur et son épaisseur finie. L’épaisseur est répartie de chaque côté de l’axe.
 - Les ouvertures sont mesurées le long de l’axe du mur, depuis `start`, dans la direction de `end`.
 
@@ -24,26 +25,77 @@ Le contrat TypeScript est dans `src/model/types.ts` ; `validateProject()` est ex
     "status": "À vérifier",
     "notes": ["Origine et précision des dimensions."]
   },
-  "levels": [{
-    "id": "niveau-rdc",
-    "name": "Rez-de-chaussée",
-    "elevation": 0,
-    "ceilingHeight": 2.5,
-    "outline": [[0,0],[6,0],[6,5],[0,5]],
-    "spawn": {"position":[3,3],"yaw":3.14159},
-    "walls": [
-      {"id":"mur-nord","start":[0,0.15],"end":[6,0.15],"thickness":0.3,"exterior":true},
-      {"id":"mur-est","start":[5.85,0.15],"end":[5.85,4.85],"thickness":0.3,"exterior":true},
-      {"id":"mur-sud","start":[0,4.85],"end":[6,4.85],"thickness":0.3,"exterior":true,"openings":[
-        {"id":"porte-1","kind":"door","offset":2.5,"width":0.9,"height":2.1,"exterior":true}
-      ]},
-      {"id":"mur-ouest","start":[0.15,0.15],"end":[0.15,4.85],"thickness":0.3,"exterior":true}
-    ],
-    "rooms":[
-      {"id":"piece-1","name":"Pièce principale","kind":"living","polygon":[[0.3,0.3],[5.7,0.3],[5.7,4.7],[0.3,4.7]],"label":[3,2.5],"viewpoint":[3,3]}
-    ],
-    "lights":[{"id":"plafonnier-1","position":[3,2.5],"provisional":true}]
-  }]
+  "levels": [
+    {
+      "id": "niveau-rdc",
+      "name": "Rez-de-chaussée",
+      "elevation": 0,
+      "ceilingHeight": 2.5,
+      "outline": [
+        [0, 0],
+        [6, 0],
+        [6, 5],
+        [0, 5]
+      ],
+      "spawn": { "position": [3, 3], "yaw": 3.14159 },
+      "walls": [
+        {
+          "id": "mur-nord",
+          "start": [0, 0.15],
+          "end": [6, 0.15],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "mur-est",
+          "start": [5.85, 0.15],
+          "end": [5.85, 4.85],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "mur-sud",
+          "start": [0, 4.85],
+          "end": [6, 4.85],
+          "thickness": 0.3,
+          "exterior": true,
+          "openings": [
+            {
+              "id": "porte-1",
+              "kind": "door",
+              "offset": 2.5,
+              "width": 0.9,
+              "height": 2.1,
+              "exterior": true
+            }
+          ]
+        },
+        {
+          "id": "mur-ouest",
+          "start": [0.15, 0.15],
+          "end": [0.15, 4.85],
+          "thickness": 0.3,
+          "exterior": true
+        }
+      ],
+      "rooms": [
+        {
+          "id": "piece-1",
+          "name": "Pièce principale",
+          "kind": "living",
+          "polygon": [
+            [0.3, 0.3],
+            [5.7, 0.3],
+            [5.7, 4.7],
+            [0.3, 4.7]
+          ],
+          "label": [3, 2.5],
+          "viewpoint": [3, 3]
+        }
+      ],
+      "lights": [{ "id": "plafonnier-1", "position": [3, 2.5], "provisional": true }]
+    }
+  ]
 }
 ```
 
@@ -66,6 +118,8 @@ Une pièce est un contour intérieur fini indépendant des murs. `polygon` sert 
 `label` et `viewpoint` sont des positions à l’intérieur de la pièce. Le point de visite doit laisser une marge d’au moins 17 cm autour du visiteur, et ne pas se trouver dans le débattement d’une porte.
 
 Les catégories sont `living`, `bedroom`, `bathroom`, `circulation`, `garage`, `storage`. Le garage reçoit un sol gris ; les autres pièces utilisent le carrelage imitation parquet. Le projet peut fournir un objet facultatif `finishes` avec les couleurs hexadécimales `wallColor`, `floorTint`, `garageColor` et `joineryColor`. Les textures différentes par pièce et leur édition visuelle sont des extensions à venir.
+
+Une pièce peut déclarer `floorOffset`, entre −1 et 0 m, pour un sol plus bas que le niveau. La surface de référence est alors réellement découpée, puis remplacée par un sol à cette cote ; les collisions et le point de vue suivent ce sol. Le plafond conserve sa cote de niveau : le garage à [cote retirée] bénéficie donc de [cote retirée] libres sous un plafond à [cote retirée]. Les seuils jusqu’à 20 cm disposent d’une aide locale au franchissement si aucune porte ou aucun mur ne barre le passage. Cela ne remplace pas un modèle d’escalier pour les différences plus importantes.
 
 ## Ajouter et sauvegarder
 
