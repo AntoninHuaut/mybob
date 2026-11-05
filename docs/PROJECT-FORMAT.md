@@ -1,6 +1,6 @@
 # Format d’un projet de maison
 
-Le contrat TypeScript est dans `src/model/types.ts` ; `validateProject()` est exécuté au chargement et à l’import. Le projet est un fichier JSON UTF-8, de moins de 5 Mo pour l’import depuis l’interface.
+Le contrat TypeScript est dans `src/model/types.ts` ; `validateProject()` est exécuté au chargement et à l’import. Le projet est un fichier JSON UTF-8, de moins de 32 Mo pour l’import depuis l’interface.
 
 ## Repère et unités
 
@@ -126,3 +126,5 @@ Une pièce peut déclarer `floorOffset`, entre −1 et 0 m, pour un sol plus bas
 Importer le fichier avec le bouton **Importer une autre maison**. Un import ayant le même identifiant remplace sa version importée précédente et peut masquer la version fournie du même projet. Retirer ce projet importé restaure la version fournie, lorsqu’elle existe.
 
 La sauvegarde est locale au navigateur : pas de synchronisation entre appareils. Exporter le projet conserve les dimensions et les hypothèses, pas la caméra courante. Les niveaux multiples sont sélectionnables, mais aucune circulation par escalier n’est développée dans cette version.
+
+L’export peut inclure `furnishing: {version: 1, levels: {...}}`, avec les meubles par identifiant de niveau. Ces données sont validées et sauvegardées séparément à l’import pour éviter de dupliquer les photos dans le stockage des plans.

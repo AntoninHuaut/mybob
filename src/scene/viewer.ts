@@ -23,6 +23,13 @@ import { createMaterials } from './materials';
 import { createWalkCamera, EYE_HEIGHT, prepareWalkStep } from './walkCamera';
 import { fitOverview, fitPlan } from './framing';
 import {
+  applyEyeHeight,
+  findVisitDestination,
+  isSceneVisitDestination,
+  sectionPlane,
+  wallFacesCamera,
+} from './navigation';
+import {
   cameraYaw,
   planHeading,
   setPlanView,
@@ -60,6 +67,17 @@ export class HouseViewer {
   onFrame?: (frame: FrameInfo) => void;
   onMeasure?: (measurement?: Measurement) => void;
   onPointerLockError?: () => void;
+  onModeChange?: (mode: ViewMode) => void;
+  onDestination?: (point: Point2) => void;
+  onDestinationRejected?: () => void;
+  goToMode = false;
+  private eyeHeight = EYE_HEIGHT;
+  private cutaway = false;
+  private sectionHeight?: number;
+  private exteriorMeshes: {
+    wall: Level['walls'][number];
+    meshes: { mesh: AbstractMesh; visibility: number; pickable: boolean }[];
+  }[] = [];
   private dimensions: LinesMesh[] = [];
   private measureMeshes: AbstractMesh[] = [];
   private keyState = new Set<string>();
@@ -135,6 +153,7 @@ export class HouseViewer {
     this.orbit.attachControl(this.canvas, true);
 
     this.walk = createWalkCamera(scene, level);
+    this.eyeHeight = applyEyeHeight(this.walk, level, this.eyeHeight);
     this.hemispheric = new HemisphericLight('sky', new Vector3(0.3, 1, -0.1), scene);
     this.hemispheric.intensity = 0.9;
     this.hemispheric.groundColor = Color3.FromHexString('#b6b4a2');
@@ -153,6 +172,18 @@ export class HouseViewer {
     shadow.normalBias = 0.025;
     shadow.setDarkness(0.2);
     this.house = buildHouse(level, scene, createMaterials(scene, project.finishes), shadow);
+    this.exteriorMeshes = level.walls
+      .filter((wall) => wall.exterior)
+      .map((wall) => ({
+        wall,
+        meshes: (scene.getTransformNodeByName(`wall:${wall.id}`)?.getChildMeshes() ?? []).map(
+          (mesh) => ({
+            mesh,
+            visibility: mesh.visibility,
+            pickable: mesh.isPickable,
+          }),
+        ),
+      }));
     this.buildDimensions();
     this.setMode('overview');
     scene.onPointerObservable.add((event) => {
@@ -171,7 +202,19 @@ export class HouseViewer {
         if (hit?.pickedPoint) this.addMeasurement([hit.pickedPoint.x, hit.pickedPoint.z]);
         return;
       }
+      if (this.goToMode) {
+        const hit = scene.pick(
+          scene.pointerX,
+          scene.pointerY,
+          (mesh) => mesh.metadata?.kind === 'floor',
+        );
+        if (hit?.pickedPoint) {
+          if (!this.goTo([hit.pickedPoint.x, hit.pickedPoint.z])) this.onDestinationRejected?.();
+        }
+        return;
+      }
       const hit = event.pickInfo;
+      if (hit?.pickedMesh?.metadata?.kind === 'furniture') return;
       if (hit?.pickedMesh?.metadata?.kind === 'door') {
         this.toggleDoor(hit.pickedMesh.metadata.id);
         return;
@@ -188,12 +231,28 @@ export class HouseViewer {
 
   setMode(mode: ViewMode) {
     if (!this.scene) return;
+    if (mode === 'walk') {
+      const point = findVisitDestination(this.scene, this.level, [
+        this.walk.position.x,
+        this.walk.position.z,
+      ]);
+      if (!point) {
+        this.onDestinationRejected?.();
+        return;
+      }
+      this.walk.position.set(
+        point[0],
+        floorElevationAt(this.level, point) + this.eyeHeight,
+        point[1],
+      );
+    }
     this.clearKeys();
     stopOrbit(this.orbit);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
     this.orbit.detachControl();
     this.walk.detachControl();
     this.mode = mode;
+    this.setGoToMode(false);
     this.setMeasureMode(false);
     if (mode === 'walk') {
       this.scene.activeCamera = this.walk;
@@ -217,6 +276,9 @@ export class HouseViewer {
     }
     this.updateLighting();
     this.dimensions.forEach((mesh) => mesh.setEnabled(this.dimensionOn && mode !== 'walk'));
+    this.updateSection();
+    this.updateCutaway();
+    this.onModeChange?.(mode);
   }
 
   captureMouse() {
@@ -234,10 +296,15 @@ export class HouseViewer {
     const room = this.level.rooms.find((r) => r.id === id);
     if (!room) return;
     if (enter || this.mode === 'walk') {
+      const point = findVisitDestination(this.scene, this.level, room.viewpoint);
+      if (!point) {
+        this.onDestinationRejected?.();
+        return;
+      }
       this.walk.position.set(
-        room.viewpoint[0],
-        floorElevationAt(this.level, room.viewpoint) + EYE_HEIGHT,
-        room.viewpoint[1],
+        point[0],
+        floorElevationAt(this.level, point) + this.eyeHeight,
+        point[1],
       );
       this.walk.rotation.set(
         0,
@@ -252,10 +319,16 @@ export class HouseViewer {
 
   reset() {
     stopOrbit(this.orbit);
+    const destination = findVisitDestination(this.scene, this.level, this.level.spawn.position);
+    if (!destination && this.mode === 'walk') {
+      this.setMode('overview');
+      this.onDestinationRejected?.();
+    }
+    const point = destination ?? this.level.spawn.position;
     this.walk.position.set(
-      this.level.spawn.position[0],
-      floorElevationAt(this.level, this.level.spawn.position) + EYE_HEIGHT,
-      this.level.spawn.position[1],
+      point[0],
+      floorElevationAt(this.level, point) + this.eyeHeight,
+      point[1],
     );
     this.walk.rotation.set(0, cameraYaw(this.level.spawn.yaw, this.scene.useRightHandedSystem), 0);
     this.walk.cameraDirection.setAll(0);
@@ -312,8 +385,66 @@ export class HouseViewer {
     this.clearKeys();
   }
 
+  setEyeHeight(heightMeters: number) {
+    this.eyeHeight = applyEyeHeight(this.walk, this.level, heightMeters);
+    return this.eyeHeight;
+  }
+
+  setGoToMode(enabled: boolean) {
+    this.goToMode = enabled && this.mode !== 'walk';
+    if (this.goToMode) this.setMeasureMode(false);
+    this.canvas.classList.toggle('going-to', this.goToMode);
+    this.canvas.style.cursor = this.goToMode ? 'crosshair' : '';
+  }
+
+  /** Start a visit at a clear floor point; this is a viewpoint change, not an automatic walk. */
+  goTo(point: Point2) {
+    if (!isSceneVisitDestination(this.scene, this.level, point)) return false;
+    this.walk.position.set(
+      point[0],
+      floorElevationAt(this.level, point) + this.eyeHeight,
+      point[1],
+    );
+    this.walk.cameraDirection.setAll(0);
+    this.setMode('walk');
+    this.canvas.focus();
+    const room = this.level.rooms.find((r) => pointInPolygon(point, r.polygon));
+    if (room) this.onSelectRoom?.(room.id);
+    this.onDestination?.(point);
+    return true;
+  }
+
+  setCutaway(enabled: boolean) {
+    this.cutaway = enabled;
+    this.updateCutaway();
+  }
+
+  setSectionHeight(height: number | undefined) {
+    this.sectionHeight = height;
+    this.updateSection();
+  }
+
+  private updateSection() {
+    this.scene.clipPlane =
+      this.mode === 'walk' ? null : sectionPlane(this.level, this.sectionHeight);
+  }
+
+  private updateCutaway() {
+    const camera: Point2 = [this.orbit.position.x, this.orbit.position.z];
+    for (const { wall, meshes } of this.exteriorMeshes) {
+      const hidden =
+        this.cutaway && this.mode === 'overview' && wallFacesCamera(this.level, wall, camera);
+      // Visibility is independent of Babylon's collision flag. Restore completely in a visit.
+      for (const { mesh, visibility, pickable } of meshes) {
+        mesh.visibility = hidden ? 0 : visibility;
+        mesh.isPickable = hidden ? false : pickable;
+      }
+    }
+  }
+
   setMeasureMode(enabled: boolean) {
     this.measureMode = enabled && this.mode !== 'walk';
+    if (this.measureMode) this.setGoToMode(false);
     this.canvas.classList.toggle('measuring', this.measureMode);
     if (!this.measureMode) {
       this.measurement = undefined;
@@ -380,6 +511,7 @@ export class HouseViewer {
   }
 
   private beforeFrame() {
+    this.updateCutaway();
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.045);
     // Match the collision displacement to frame time, including the garage step.
     this.scene.gravity.y = -15 * dt;

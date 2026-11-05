@@ -38,7 +38,9 @@ export function prepareWalkStep(camera: UniversalCamera, level: Level, movement:
     .getScene()
     .pickWithRay(ray, (mesh) => mesh.checkCollisions && mesh.isEnabled());
   if (obstruction?.hit) return;
-  camera.position.y = Math.max(camera.position.y, nextFloor + EYE_HEIGHT + 0.008);
+  const eyeHeight =
+    typeof camera.metadata?.eyeHeight === 'number' ? camera.metadata.eyeHeight : EYE_HEIGHT;
+  camera.position.y = Math.max(camera.position.y, nextFloor + eyeHeight + 0.008);
   camera.applyGravity = false;
 }
 

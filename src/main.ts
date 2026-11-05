@@ -6,6 +6,19 @@ import { bounds, floorElevationAt, polygonArea } from './model/geometry';
 import { icon } from './ui/icons';
 import { area, escapeHtml as esc, number } from './ui/format';
 import { minimap } from './ui/minimap';
+import { FurnitureLayer, type FurnitureOverlays } from './furniture/layer';
+import { FurniturePanel } from './furniture/panel';
+import {
+  FurnitureHistory,
+  createFurniture,
+  loadLayout,
+  saveLayout,
+  layoutStorageKey,
+  validateFurnitureList,
+  type FurnitureItem,
+} from './furniture/model';
+import { checkFurniture, snapFurniture } from './furniture/checks';
+import { deliveryChecks } from './furniture/delivery';
 
 const STORAGE = 'maison-atelier:projects:v1';
 const el = <T extends HTMLElement = HTMLElement>(selector: string) =>
@@ -22,6 +35,14 @@ let ceiling = false;
 let lights = true;
 let mode: ViewMode = 'overview';
 let toastTimer: ReturnType<typeof setTimeout>;
+const furnitureHistory = new FurnitureHistory();
+let furnitureLayer: FurnitureLayer | undefined;
+let furniturePanel: FurniturePanel | undefined;
+let selectedFurnitureId: string | undefined;
+let previewFurniture: FurnitureItem[] | undefined;
+let draggingFurniture = false;
+let overlays: FurnitureOverlays = { distances: true, clearances: false, openings: false };
+let syncingViewerMode = false;
 
 el('#app').innerHTML = `
   <header class="app-header">
@@ -34,6 +55,8 @@ el('#app').innerHTML = `
     <button class="sidebar-backdrop" aria-label="Fermer le panneau des pièces" hidden></button>
     <aside class="sidebar" id="project-sidebar" aria-label="Projets et pièces">
       <section class="project-section"><div class="eyebrow">VOTRE PROJET <span>01</span></div><label for="project-select" class="sr-only">Choisir une maison</label><div class="select-wrap"><span class="select-icon">${icon('house', 20)}</span><select id="project-select"></select>${icon('down', 15)}</div><p id="project-description" class="muted"></p><button id="import-project" class="import-button">${icon('plus', 16)} Importer une autre maison</button><input type="file" id="import-file" accept="application/json,.json" hidden/><button id="remove-project" class="remove-project" hidden>${icon('trash', 14)} Retirer ce projet importé</button></section>
+      <section id="furniture-panel" aria-label="Aménager la maison"></section>
+      <details class="navigation-settings"><summary>Déplacement et vue</summary><div class="navigation-settings-body"><button id="go-to" class="visit-room" aria-pressed="false">Cliquer pour entrer ici</button><p>Choisissez un point libre du sol, puis explorez au clavier.</p><label>Hauteur du regard<select id="eye-height"><option value="1.65">Debout · 1,65 m</option><option value="1.15">Assis · 1,15 m</option><option value="0.95">À 0,95 m</option><option value="1.80">À 1,80 m</option></select></label><label class="navigation-check"><input type="checkbox" id="cutaway"> Masquer les façades gênantes</label><label class="navigation-check"><input type="checkbox" id="section-enable"> Vue en coupe</label><label>Hauteur de coupe <output id="section-value">1,20 m</output><input id="section-height" type="range" min="0.4" max="2.5" step="0.05" value="1.2" disabled></label><small>La coupe et les façades masquées servent aux vues de dessus. La visite conserve les volumes complets.</small></div></details>
       <section class="level-section"><div class="eyebrow">EXPLORER LES ESPACES <span id="room-count"></span></div><label for="level-select" class="sr-only">Choisir le niveau</label><div class="level-selector">${icon('layers', 17)}<select id="level-select"></select><span class="level-dot"></span></div><div id="room-list" class="room-list"></div></section>
       <section class="room-detail" id="room-detail"></section>
       <div class="sidebar-bottom"><button class="source-button" id="source-info">${icon('info', 17)}<span>Plans & précision du modèle<small>Cotes, hypothèses et points à vérifier</small></span>${icon('chevron', 15)}</button><div class="sidebar-footnote">Un espace pour se projeter.</div></div>
@@ -53,6 +76,7 @@ el('#app').innerHTML = `
       <div class="orientation" title="Direction du haut du document de référence"><span>HAUT DU PLAN</span><svg id="orientation-arrow" width="23" height="23" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 6 18-6-4-6 4Z" fill="currentColor"/></svg></div>
       <div class="mini-card"><div class="mini-heading"><span>VOUS REPÉRER</span><button id="mini-plan" aria-label="Ouvrir la vue en plan" title="Vue en plan">${icon('plan', 15)}</button></div><div id="minimap"></div><div class="mini-caption" id="mini-caption">Rez-de-chaussée</div></div>
       <div class="bottom-controls"><div class="control-hint" id="control-hint">${icon('mouse', 17)}<span>Glisser pour tourner</span><i></i><span>Molette pour zoomer</span><i></i><span>Clic droit pour déplacer</span></div><div class="scale-note"><span class="scale-line"></span> Dimensions en mètres</div></div>
+      <div id="layout-status" class="layout-status" role="status">Aménagement sauvegardé sur cet ordinateur</div>
       <div class="loading" id="loading"><div class="loading-mark">${icon('house', 35)}</div><span>Votre maison prend forme…</span></div>
       <div id="fatal-error" class="fatal-error" hidden></div>
     </main>
@@ -75,6 +99,148 @@ function activeButton(selector: string, active: boolean) {
   el(selector).setAttribute('aria-pressed', String(active));
 }
 
+function currentFurniture() {
+  return previewFurniture ?? furnitureHistory.items;
+}
+
+function persistFurniture() {
+  try {
+    saveLayout(current.id, viewer.level.id, furnitureHistory.items);
+    el('#layout-status').textContent = 'Aménagement sauvegardé sur cet ordinateur';
+    el('#layout-status').classList.remove('unsaved');
+  } catch (error) {
+    el('#layout-status').textContent = 'Non sauvegardé · exportez le projet';
+    el('#layout-status').classList.add('unsaved');
+    toast(error instanceof Error ? error.message : 'Sauvegarde indisponible.');
+  }
+}
+
+function syncFurniture(save = true) {
+  previewFurniture = undefined;
+  if (!furnitureHistory.items.some((item) => item.id === selectedFurnitureId))
+    selectedFurnitureId = undefined;
+  furnitureLayer?.setItems(furnitureHistory.items);
+  furnitureLayer?.select(selectedFurnitureId);
+  furniturePanel?.render();
+  if (save) persistFurniture();
+}
+
+function commitFurniture(items: FurnitureItem[]) {
+  try {
+    furnitureHistory.commit(items);
+  } catch (error) {
+    previewFurniture = undefined;
+    furnitureLayer?.setItems(furnitureHistory.items);
+    toast(error instanceof Error ? error.message : 'Modification invalide.');
+    return;
+  }
+  syncFurniture();
+}
+
+function selectFurniture(id: string | undefined) {
+  selectedFurnitureId = id;
+  furnitureLayer?.select(id);
+  furniturePanel?.render();
+}
+
+function mountFurniture() {
+  let items: FurnitureItem[] = [];
+  let restoreError = false;
+  try {
+    items = loadLayout(current.id, viewer.level.id);
+  } catch (error) {
+    restoreError = true;
+    toast(error instanceof Error ? error.message : 'Aménagement illisible.');
+  }
+  furnitureHistory.reset(items);
+  selectedFurnitureId = undefined;
+  previewFurniture = undefined;
+  furnitureLayer = new FurnitureLayer(viewer.scene, viewer.level);
+  furnitureLayer.setItems(items);
+  furnitureLayer.setOverlays(overlays);
+  furnitureLayer.onSelect = selectFurniture;
+  furnitureLayer.onDragState = (dragging) => {
+    draggingFurniture = dragging;
+    if (dragging) viewer.orbit.detachControl();
+    else if (mode !== 'walk') viewer.orbit.attachControl(viewer.canvas, true);
+  };
+  furnitureLayer.onChange = (next, final) => {
+    if (final) commitFurniture(next);
+    else previewFurniture = next;
+  };
+  if (!furniturePanel)
+    furniturePanel = new FurniturePanel(el('#furniture-panel'), {
+      getItems: currentFurniture,
+      getSelectedId: () => selectedFurnitureId,
+      getLevel: () => viewer.level,
+      getAddPosition: () => selectedRoom?.viewpoint ?? viewer.level.spawn.position,
+      canUndo: () => furnitureHistory.canUndo,
+      canRedo: () => furnitureHistory.canRedo,
+      onAdd: (item) => {
+        selectedFurnitureId = item.id;
+        commitFurniture([...currentFurniture(), item]);
+        setSidebar(false);
+      },
+      onUpdate: (item) =>
+        commitFurniture(
+          currentFurniture().map((previous) => (previous.id === item.id ? item : previous)),
+        ),
+      onDelete: (id) => commitFurniture(currentFurniture().filter((item) => item.id !== id)),
+      onDuplicate: (id) => {
+        const item = currentFurniture().find((candidate) => candidate.id === id);
+        if (!item) return;
+        const copy = createFurniture({
+          ...item,
+          id: undefined,
+          name: `${item.name} (copie)`,
+          locked: false,
+          position: [item.position[0] + 0.2, item.position[1] + 0.2],
+        });
+        selectedFurnitureId = copy.id;
+        commitFurniture([...currentFurniture(), copy]);
+      },
+      onSelect: selectFurniture,
+      onUndo: () => {
+        if (furnitureHistory.undo()) syncFurniture();
+      },
+      onRedo: () => {
+        if (furnitureHistory.redo()) syncFurniture();
+      },
+      onSnap: (id) => {
+        const items = currentFurniture(),
+          item = items.find((candidate) => candidate.id === id);
+        if (!item || item.locked) return;
+        const snapped = snapFurniture(item, viewer.level, items, 0.3);
+        if (
+          Math.hypot(
+            snapped.position[0] - item.position[0],
+            snapped.position[1] - item.position[1],
+          ) < 0.001
+        )
+          toast('Rapprochez le meuble du mur (moins de 30 cm), puis réessayez.');
+        commitFurniture(items.map((candidate) => (candidate.id === id ? snapped : candidate)));
+      },
+      onOverlays: (options) => {
+        overlays = options;
+        furnitureLayer?.setOverlays(options);
+      },
+      getChecks: () => [
+        ...checkFurniture(currentFurniture(), viewer.level),
+        ...deliveryChecks(currentFurniture(), viewer.level),
+      ],
+      onToast: toast,
+      onDialogState: (open) => {
+        if (open && document.pointerLockElement) document.exitPointerLock();
+        viewer.setPaused(open);
+      },
+    });
+  furniturePanel.render();
+  el('#layout-status').textContent = restoreError
+    ? 'Aménagement non restauré · importez une sauvegarde'
+    : 'Aménagement sauvegardé sur cet ordinateur';
+  el('#layout-status').classList.toggle('unsaved', restoreError);
+}
+
 function setSidebar(open: boolean) {
   el('.workspace').classList.toggle('sidebar-open', open);
   el('#toggle-sidebar').setAttribute('aria-expanded', String(open));
@@ -87,8 +253,15 @@ function setSidebar(open: boolean) {
 
 function syncDisplayControls() {
   const measuring = viewer.measureMode;
+  activeButton('#go-to', viewer.goToMode);
   el('#scene-labels').hidden =
-    mode === 'walk' || !showLabels || measuring || (ceiling && mode === 'overview');
+    mode === 'walk' ||
+    !showLabels ||
+    measuring ||
+    viewer.goToMode ||
+    (ceiling && mode === 'overview');
+  el<HTMLButtonElement>('#go-to').disabled = mode === 'walk';
+  furnitureLayer?.setMode(mode === 'walk' || measuring || viewer.goToMode ? 'walk' : mode);
   el('#measure-instructions').hidden = !measuring;
   activeButton('#tool-measure', measuring);
   activeButton('#tool-labels', showLabels);
@@ -128,6 +301,8 @@ function renderProjectOptions() {
 function loadProject(id: string, levelId?: string) {
   const p = projects.find((p) => p.id === id) ?? projects[0];
   if (!p) return;
+  furnitureLayer?.dispose();
+  furnitureLayer = undefined;
   current = p;
   viewer.load(p, levelId);
   selectedRoom = undefined;
@@ -136,6 +311,15 @@ function loadProject(id: string, levelId?: string) {
   viewer.setCeiling(false);
   viewer.setLights(lights);
   viewer.setDimensions(showDimensions);
+  mountFurniture();
+  viewer.setEyeHeight(Number(el<HTMLSelectElement>('#eye-height').value));
+  viewer.setCutaway(el<HTMLInputElement>('#cutaway').checked);
+  el<HTMLInputElement>('#section-height').max = String(viewer.level.ceilingHeight);
+  viewer.setSectionHeight(
+    el<HTMLInputElement>('#section-enable').checked
+      ? Number(el<HTMLInputElement>('#section-height').value)
+      : undefined,
+  );
   el<HTMLSelectElement>('#project-select').value = p.id;
   el('#header-project').textContent = p.name;
   el('#project-description').textContent = p.description;
@@ -187,10 +371,10 @@ function renderRooms() {
     .forEach((button) => button.addEventListener('click', () => selectRoom(button.dataset.room!)));
 }
 
-function selectRoom(id: string) {
+function selectRoom(id: string, move = true) {
   selectedRoom = viewer.level.rooms.find((r) => r.id === id);
   if (!selectedRoom) return;
-  viewer.focusRoom(id);
+  if (move) viewer.focusRoom(id);
   syncSelection();
   renderRoomDetail();
 }
@@ -260,7 +444,7 @@ function renderMinimap() {
   el('#mini-caption').textContent = viewer.level.name;
 }
 
-function setMode(next: ViewMode): boolean {
+function setMode(next: ViewMode, fromViewer = false): boolean {
   if (
     next === 'walk' &&
     matchMedia('(pointer: coarse)').matches &&
@@ -273,8 +457,17 @@ function setMode(next: ViewMode): boolean {
     return false;
   }
   mode = next;
-  viewer.setMode(next);
-  if (selectedRoom) viewer.focusRoom(selectedRoom.id);
+  if (viewer.mode !== next) {
+    syncingViewerMode = true;
+    viewer.setMode(next);
+    syncingViewerMode = false;
+  }
+  if (viewer.mode !== next) {
+    mode = viewer.mode;
+    return false;
+  }
+  furnitureLayer?.setMode(next);
+  if (selectedRoom && !fromViewer) viewer.focusRoom(selectedRoom.id);
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {
     b.classList.toggle('active', b.dataset.view === next);
     b.setAttribute('aria-pressed', String(b.dataset.view === next));
@@ -291,7 +484,11 @@ function setMode(next: ViewMode): boolean {
       'Chaque mètre compte.',
       'Retrouvez la disposition et les proportions des pièces.',
     ],
-    walk: ['À HAUTEUR DE REGARD', 'Entrez chez vous.', 'Une visite à 1,65 m du sol.'],
+    walk: [
+      'À HAUTEUR DE REGARD',
+      'Entrez chez vous.',
+      `Une visite à ${number(Number(el<HTMLSelectElement>('#eye-height').value))} m du sol.`,
+    ],
   };
   const title = titles[next];
   el('#view-eyebrow').textContent = title[0];
@@ -325,7 +522,22 @@ function openDialog(title: string, content: string) {
 }
 
 function downloadProject() {
-  const blob = new Blob([JSON.stringify(current, null, 2)], { type: 'application/json' });
+  let levels: Record<string, FurnitureItem[]>;
+  try {
+    levels = Object.fromEntries(
+      current.levels.map((level) => [
+        level.id,
+        level.id === viewer.level.id ? currentFurniture() : loadLayout(current.id, level.id),
+      ]),
+    );
+  } catch (error) {
+    toast(error instanceof Error ? error.message : 'Export indisponible.');
+    return;
+  }
+  const blob = new Blob(
+    [JSON.stringify({ ...current, furnishing: { version: 1, levels } }, null, 2)],
+    { type: 'application/json' },
+  );
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -337,14 +549,46 @@ function downloadProject() {
 
 async function importProject(file: File) {
   try {
-    if (file.size > 5 * 1024 * 1024) throw new Error('Le projet doit peser moins de 5 Mo.');
+    if (file.size > 32 * 1024 * 1024) throw new Error('Le projet doit peser moins de 32 Mo.');
     const project = validateProject(JSON.parse(await file.text()));
+    const furnishing = (
+      project as HouseProject & {
+        furnishing?: { version: number; levels: Record<string, unknown> };
+      }
+    ).furnishing;
+    const staged: [string, FurnitureItem[]][] = [];
+    if (furnishing !== undefined) {
+      if (
+        !furnishing ||
+        furnishing.version !== 1 ||
+        !furnishing.levels ||
+        typeof furnishing.levels !== 'object' ||
+        Array.isArray(furnishing.levels)
+      )
+        throw new Error('Aménagement exporté invalide.');
+      for (const level of project.levels)
+        if (Object.hasOwn(furnishing.levels, level.id))
+          staged.push([level.id, validateFurnitureList(furnishing.levels[level.id])]);
+    }
+    delete (project as HouseProject & { furnishing?: unknown }).furnishing;
     const previous = imported;
     const next = [...imported.filter((p) => p.id !== project.id), project];
     if (next.length > 10) throw new Error('Vous pouvez conserver jusqu’à 10 projets importés.');
+    const backups = staged.map(
+      ([levelId]) =>
+        [
+          layoutStorageKey(project.id, levelId),
+          localStorage.getItem(layoutStorageKey(project.id, levelId)),
+        ] as const,
+    );
     try {
+      for (const [levelId, items] of staged) saveLayout(project.id, levelId, items);
       localStorage.setItem(STORAGE, JSON.stringify(next));
     } catch {
+      for (const [key, value] of backups) {
+        if (value === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+      }
       throw new Error(
         'La mémoire locale est indisponible ou pleine. Exportez vos projets avant de libérer de la place.',
       );
@@ -367,6 +611,104 @@ async function importProject(file: File) {
 }
 
 function wireEvents() {
+  el('#go-to').addEventListener('click', () => {
+    if (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) {
+      setMode('walk');
+      return;
+    }
+    const enabled = !el('#go-to').classList.contains('active');
+    viewer.setGoToMode(enabled);
+    activeButton('#go-to', enabled);
+    syncDisplayControls();
+    if (enabled) {
+      setSidebar(false);
+      toast('Cliquez sur un point libre du sol pour y commencer la visite.');
+    }
+  });
+  el<HTMLSelectElement>('#eye-height').addEventListener('change', (event) => {
+    const height = viewer.setEyeHeight(Number((event.target as HTMLSelectElement).value));
+    if (mode === 'walk')
+      el('#view-subtitle').textContent = `Une visite à ${number(height)} m du sol.`;
+  });
+  el<HTMLInputElement>('#cutaway').addEventListener('change', (event) =>
+    viewer.setCutaway((event.target as HTMLInputElement).checked),
+  );
+  const updateSection = () => {
+    const enabled = el<HTMLInputElement>('#section-enable').checked,
+      height = Number(el<HTMLInputElement>('#section-height').value);
+    el<HTMLInputElement>('#section-height').disabled = !enabled;
+    el('#section-value').textContent = `${number(height)} m`;
+    viewer.setSectionHeight(enabled ? height : undefined);
+  };
+  el('#section-enable').addEventListener('change', updateSection);
+  el('#section-height').addEventListener('input', updateSection);
+  window.addEventListener(
+    'keydown',
+    (event) => {
+      if (
+        mode === 'walk' ||
+        draggingFurniture ||
+        document.querySelector('dialog[open]') ||
+        (event.target instanceof HTMLElement &&
+          (event.target.matches('input,textarea,select') || event.target.isContentEditable))
+      )
+        return;
+      const modifier = event.ctrlKey || event.metaKey;
+      if (modifier && ['KeyZ', 'KeyY'].includes(event.code)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (event.code === 'KeyY' || event.shiftKey) furnitureHistory.redo();
+        else furnitureHistory.undo();
+        syncFurniture();
+        return;
+      }
+      const item = currentFurniture().find((candidate) => candidate.id === selectedFurnitureId);
+      if (!item) return;
+      if (event.code === 'Escape') {
+        selectFurniture(undefined);
+        return;
+      }
+      if (item.locked) return;
+      const step = event.shiftKey ? 0.1 : 0.01;
+      const delta: Record<string, [number, number]> = {
+        ArrowLeft: [-step, 0],
+        ArrowRight: [step, 0],
+        ArrowUp: [0, -step],
+        ArrowDown: [0, step],
+      };
+      if (delta[event.code]) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        const d = delta[event.code];
+        commitFurniture(
+          currentFurniture().map((candidate) =>
+            candidate.id === item.id
+              ? {
+                  ...candidate,
+                  position: [candidate.position[0] + d[0], candidate.position[1] + d[1]],
+                }
+              : candidate,
+          ),
+        );
+      } else if (event.code === 'Delete' || event.code === 'Backspace') {
+        event.preventDefault();
+        commitFurniture(currentFurniture().filter((candidate) => candidate.id !== item.id));
+      } else if (event.code === 'KeyR' && !modifier) {
+        event.preventDefault();
+        commitFurniture(
+          currentFurniture().map((candidate) =>
+            candidate.id === item.id
+              ? {
+                  ...candidate,
+                  rotation: candidate.rotation + ((event.shiftKey ? -1 : 1) * Math.PI) / 12,
+                }
+              : candidate,
+          ),
+        );
+      }
+    },
+    true,
+  );
   el('#toggle-sidebar').addEventListener('click', () =>
     setSidebar(!el('.workspace').classList.contains('sidebar-open')),
   );
@@ -470,7 +812,7 @@ function wireEvents() {
   el('#help').addEventListener('click', () =>
     openDialog(
       'PRENDRE EN MAIN L’ATELIER',
-      `<h2>Faites comme chez vous.</h2><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>Glissez avec le bouton gauche pour tourner. Utilisez la molette pour zoomer et le bouton droit pour déplacer la vue.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Le placement des meubles viendra dans une prochaine étape.</p>`,
+      `<h2>Faites comme chez vous.</h2><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>Glissez avec le bouton gauche pour tourner. Utilisez la molette pour zoomer et le bouton droit pour déplacer la vue.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau, puis glissez-le dans la scène. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Les photos et liens sont des références à dimensions vérifiées, pas une reconstruction automatique.</p>`,
     ),
   );
   el('#source-info').addEventListener('click', () => {
@@ -529,7 +871,18 @@ async function start() {
       storageWarning = true;
     }
     viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'));
-    viewer.onSelectRoom = selectRoom;
+    viewer.onModeChange = (next) => {
+      if (!syncingViewerMode && current) setMode(next, true);
+    };
+    viewer.onDestination = () => {
+      activeButton('#go-to', false);
+      el('#walk-start').hidden = true;
+      el<HTMLCanvasElement>('#scene').focus();
+      toast('Vous êtes à cet endroit. Glissez pour regarder ou cliquez sur Reprendre la visite.');
+    };
+    viewer.onDestinationRejected = () =>
+      toast('Choisissez un point libre, à distance des murs et des meubles.');
+    viewer.onSelectRoom = (id) => selectRoom(id, false);
     viewer.onPointerLockError = () => {
       toast(
         'Capture indisponible : cliquez dans la vue, puis glissez pour regarder autour de vous.',

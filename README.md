@@ -54,7 +54,7 @@ docs/MODEL-NOTES.md             Sources, précision et limites
 
 ## Périmètre de cette version
 
-Rez-de-chaussée, garage, finitions simples, visite, portes, vue en plan, mesures au sol et projets multiples. Pas de mobilier, d’extérieur ou de combles. La structure permet d’ajouter ensuite un module de mobilier et des sauvegardes d’aménagement sans modifier le format des murs.
+Rez-de-chaussée, garage, visite, portes, plan, mesures et projets multiples. L’atelier permet maintenant d’ajouter des meubles paramétriques cotés, de les déplacer, de vérifier leurs espaces et de sauvegarder/exporter l’aménagement. Les photos et liens sont des références, sans reconstruction automatique exacte. Voir [docs/FURNITURE.md](docs/FURNITURE.md). L’extérieur et les combles restent hors périmètre.
 
 **La reconstruction n’est pas encore un relevé exact de l’existant.** Plusieurs cotes principales sont reprises du plan, mais les raccords de l’entrée de la chambre 1, du dégagement et du hall restent à confirmer. Les surfaces au plan et celles calculées sur les contours du modèle sont affichées séparément. Voir `docs/MODEL-NOTES.md`.
 
@@ -66,6 +66,6 @@ Le téléphone permet de consulter la vue 3D et le plan en pleine largeur, avec 
 
 ## Extensions prévues
 
-Le mobilier pourra former une collection séparée contenant un identifiant, une référence GLB éventuelle, des dimensions en mètres et une transformation. Les aménagements seront liés à l’identifiant d’un projet et d’un niveau. La sélection, le déplacement au sol, l’annulation et la sauvegarde pourront être ajoutés indépendamment du générateur de maison.
+Le mobilier forme une collection indépendante, liée au projet et au niveau, avec identifiants, dimensions en mètres et transformations. Le rendu, les contrôles de placement, l’historique et les sauvegardes sont isolés dans `src/furniture/`. Un futur test de livraison complet nécessiterait une simulation du trajet et des rotations ; le contrôle actuel est une vérification théorique de passage debout.
 
 Les identifiants sont stables et le format porte `schemaVersion: 1`, afin de permettre des migrations ultérieures. Aucun outil d’analyse automatique de PDF n’est inclus.
