@@ -6,7 +6,13 @@ import {
   validateFurnitureList,
   type FurnitureItem,
 } from './model';
-import { applyFurnitureTransform, linkFurniture, unlinkFurniture } from './groups';
+import {
+  applyFurnitureTransform,
+  constrainGroupDrag,
+  linkFurniture,
+  unlinkFurniture,
+} from './groups';
+import { fitFurnitureResize } from './resize';
 import { checkFurniture, snapFurniture } from './checks';
 import { findFurniturePlacement, getBuildingPlacementIssues } from './placement';
 
@@ -68,7 +74,33 @@ export class FurnitureEditorDraft {
     const selected = this.requireSelected();
     if (item.id !== selected.id)
       throw new Error('Le meuble modifié ne correspond pas à la sélection du brouillon.');
-    this.stage(applyFurnitureTransform(this.current, item));
+    const adjusted = fitFurnitureResize(selected, item, this.level, (candidate) => {
+      try {
+        const moved = constrainGroupDrag(
+          this.current,
+          selected.id,
+          candidate.position,
+          this.level,
+        ).find((member) => member.id === selected.id)!;
+        if (
+          Math.hypot(
+            moved.position[0] - candidate.position[0],
+            moved.position[1] - candidate.position[1],
+          ) > 0.00001
+        )
+          return false;
+        return applyFurnitureTransform(this.current, candidate).every(
+          (member) =>
+            !geometryChanged(
+              this.current.find((old) => old.id === member.id),
+              member,
+            ) || !getBuildingPlacementIssues(member, this.level).length,
+        );
+      } catch {
+        return false;
+      }
+    });
+    this.stage(applyFurnitureTransform(this.current, adjusted));
   }
 
   link(otherId: string): void {

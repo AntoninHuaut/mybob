@@ -1,7 +1,97 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { createFurniture } from '../src/furniture/model';
 
 // Only exercise the compiled public demo through its UI; each test gets fresh storage.
+test('agrandir un canapé contre un mur conserve le bord bloqué et reste annulable', async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  const demo = JSON.parse(await readFile('public/projects/studio-demo.json', 'utf8'));
+  const level = {
+    id: 'resize-level',
+    name: 'Pièce test',
+    elevation: 0,
+    ceilingHeight: 2.5,
+    outline: [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ],
+    walls: [{ id: 'wall', start: [0.1, 0], end: [0.1, 6], thickness: 0.2 }],
+    rooms: [
+      {
+        id: 'room',
+        name: 'Pièce test',
+        kind: 'living',
+        polygon: [
+          [0, 0],
+          [8, 0],
+          [8, 6],
+          [0, 6],
+        ],
+        label: [4, 3],
+        viewpoint: [4, 3],
+      },
+    ],
+    lights: [],
+    spawn: { position: [4, 3], yaw: 0 },
+  };
+  const sofa = createFurniture({
+    id: 'resize-sofa',
+    kind: 'sofa',
+    name: 'Canapé au mur',
+    width: 2,
+    depth: 1,
+    position: [1.2, 3],
+  });
+  const project = {
+    ...demo,
+    id: 'resize-demo',
+    name: 'Test redimensionnement',
+    levels: [level],
+    furnishing: { version: 1, levels: { [level.id]: [sofa] } },
+  };
+  const menu = page.locator('#toggle-sidebar');
+  if ((await menu.getAttribute('aria-expanded')) !== 'true') await menu.click();
+  await page.locator('#import-file').setInputFiles({
+    name: 'resize-demo.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify(project)),
+  });
+  await expect(page.locator('#project-select option:checked')).toHaveText('Test redimensionnement');
+  await furnishings(page);
+  const edit = page.getByRole('button', { name: 'Modifier Canapé au mur', exact: true });
+  await edit.click();
+  const dialog = page.getByRole('dialog', { name: 'Modifier Canapé au mur', exact: true });
+  await dialog
+    .getByLabel(/Largeur/)
+    .first()
+    .fill('300');
+  await dialog.getByRole('button', { name: 'Annuler', exact: true }).click();
+  await edit.click();
+  await expect(dialog.getByLabel(/Largeur/).first()).toHaveValue('200');
+  await dialog
+    .getByLabel(/Largeur/)
+    .first()
+    .fill('300');
+  await dialog.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await furnishings(page);
+  await edit.click();
+  await expect(dialog.getByLabel(/Largeur/).first()).toHaveValue('300');
+  await dialog.getByText('Placement et options', { exact: true }).click();
+  const x = Number(await dialog.locator('[name=x]').inputValue());
+  expect(x).toBeGreaterThan(169);
+  expect(x).toBeLessThanOrEqual(170.1);
+  await dialog.getByRole('button', { name: 'Annuler', exact: true }).click();
+  await page.screenshot({ path: testInfo.outputPath('resized-sofa.png') });
+  await page.keyboard.press('ControlOrMeta+z');
+  await edit.click();
+  await expect(dialog.getByLabel(/Largeur/).first()).toHaveValue('200');
+});
+
 async function furnishings(page: Page) {
   const menu = page.locator('#toggle-sidebar');
   if (await menu.isVisible()) {

@@ -25,7 +25,7 @@ npm run format:check
 
 Le dossier `dist/` contient la version statique déployable. Les dépendances et les données de maison sont intégrées ou servies localement ; Google Fonts est facultatif et possède des polices de repli système.
 
-Tests navigateur automatisés : `pnpm exec playwright install chromium`, puis `pnpm run test:e2e`. Douze exécutions couvrent les parcours essentiels en Chromium ordinateur et mobile simulé. Voir [le guide E2E](docs/E2E.md) pour les scénarios, rapports et limites.
+Tests navigateur automatisés : `pnpm exec playwright install chromium`, puis `pnpm run test:e2e`. Quatorze exécutions couvrent les parcours essentiels en Chromium ordinateur et mobile simulé. Voir [le guide E2E](docs/E2E.md) pour les scénarios, rapports et limites.
 
 Le build normal est **public et limité à la démonstration**. La commande `npm run ci` exécute tous les contrôles et vérifie qu’aucun plan personnel n’est présent dans l’artefact. Configuration Cloudflare Pages et GitHub Actions : [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 

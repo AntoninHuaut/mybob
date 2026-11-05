@@ -95,6 +95,34 @@ function translated(item: FurnitureItem, movement: Point2, time: number): Furnit
   };
 }
 
+/** Critical translation contacts, including narrow fits between two walls. */
+export function buildingTranslationTimes(
+  item: FurnitureItem,
+  movement: Point2,
+  level: Level,
+): number[] {
+  const parts = footprintParts(item),
+    times = [0, 1];
+  for (const solid of wallSolids(level))
+    for (const part of parts) {
+      const interval = sweptInterval(part, solid.polygon, movement);
+      if (interval) times.push(...interval);
+    }
+  for (let i = 0; i < level.outline.length; i++) {
+    const a = level.outline[i],
+      b = level.outline[(i + 1) % level.outline.length];
+    for (const part of parts) {
+      for (const point of part) contactTimes(point, movement, a, b, times);
+      for (let j = 0; j < part.length; j++)
+        contactTimes(a, [-movement[0], -movement[1]], part[j], part[(j + 1) % part.length], times);
+    }
+  }
+  const ordered = [...new Set(times)].sort((a, b) => a - b);
+  return [...ordered, ...ordered.slice(1).map((t, i) => (ordered[i] + t) / 2)].sort(
+    (a, b) => a - b,
+  );
+}
+
 /**
  * Sweep a dragged footprint across the building. Endpoint-only checks would let
  * a fast pointer jump through a thin partition into another valid room.
