@@ -1,0 +1,298 @@
+import './style.css';
+import { HouseViewer, type ViewMode } from './scene/viewer';
+import type { HouseProject, Room } from './model/types';
+import { validateProject } from './model/validate';
+import { bounds, polygonArea } from './model/geometry';
+import { icon } from './ui/icons';
+import { area, escapeHtml as esc, number } from './ui/format';
+import { minimap } from './ui/minimap';
+
+const STORAGE = 'maison-atelier:projects:v1';
+const el = <T extends HTMLElement = HTMLElement>(selector: string) => document.querySelector<T>(selector)!;
+let viewer: HouseViewer;
+let projects: HouseProject[] = [];
+let imported: HouseProject[] = [];
+let builtins: HouseProject[] = [];
+let current: HouseProject;
+let selectedRoom: Room | undefined;
+let showLabels = true;
+let showDimensions = false;
+let ceiling = false;
+let lights = true;
+let mode: ViewMode = 'overview';
+let toastTimer: ReturnType<typeof setTimeout>;
+
+el('#app').innerHTML = `
+  <header class="app-header">
+    <a class="brand" href="#" aria-label="Maison, revenir à la vue d’ensemble"><span class="brand-mark">${icon('house', 23)}</span><span>maison<span class="brand-dot">.</span><small>ATELIER 3D</small></span></a>
+    <div class="header-separator"></div><div class="project-breadcrumb"><span id="header-project">Votre espace</span>${icon('chevron', 13)}<span id="header-level">Rez-de-chaussée</span></div>
+    <div class="header-actions"><span class="version-badge"><i></i> Première version</span><button class="text-button" id="export-project" title="Exporter les données du projet">${icon('export',17)}<span>Exporter le projet</span></button><button class="icon-button" id="help" title="Aide et commandes" aria-label="Aide et commandes">${icon('help')}</button></div>
+  </header>
+  <div class="workspace">
+    <aside class="sidebar">
+      <section class="project-section"><div class="eyebrow">VOTRE PROJET <span>01</span></div><label for="project-select" class="sr-only">Choisir une maison</label><div class="select-wrap"><span class="select-icon">${icon('house',20)}</span><select id="project-select"></select>${icon('down',15)}</div><p id="project-description" class="muted"></p><button id="import-project" class="import-button">${icon('plus',16)} Importer une autre maison</button><input type="file" id="import-file" accept="application/json,.json" hidden/><button id="remove-project" class="remove-project" hidden>${icon('trash',14)} Retirer ce projet importé</button></section>
+      <section class="level-section"><div class="eyebrow">EXPLORER LES ESPACES <span id="room-count"></span></div><label for="level-select" class="sr-only">Choisir le niveau</label><div class="level-selector">${icon('layers',17)}<select id="level-select"></select><span class="level-dot"></span></div><div id="room-list" class="room-list"></div></section>
+      <section class="room-detail" id="room-detail"></section>
+      <div class="sidebar-bottom"><button class="source-button" id="source-info">${icon('info',17)}<span>Plans & précision du modèle<small>Cotes, hypothèses et points à vérifier</small></span>${icon('chevron',15)}</button><div class="sidebar-footnote">Un espace pour se projeter.</div></div>
+    </aside>
+    <main class="viewport" id="viewport" aria-label="Atelier de visite 3D">
+      <canvas id="scene" tabindex="0" aria-label="Vue 3D de la maison. Utilisez le bouton Visite pour vous déplacer au clavier."></canvas>
+      <div class="viewport-top"><div class="view-heading"><span class="eyebrow" id="view-eyebrow">VOTRE MAISON, EN PERSPECTIVE</span><h1 id="view-title">Prenez de la hauteur.</h1><p id="view-subtitle">Explorez les volumes, à votre rythme.</p></div><div class="view-switch" role="group" aria-label="Mode de visualisation"><button data-view="overview" class="active" aria-pressed="true">${icon('cube',17)}Vue 3D</button><button data-view="plan" aria-pressed="false">${icon('plan',17)}Plan</button><button data-view="walk" aria-pressed="false">${icon('walk',17)}Visite</button></div></div>
+      <div class="floating-tools" role="group" aria-label="Options d’affichage"><button class="tool-button" id="tool-measure" aria-pressed="false" title="Mesurer une distance au sol">${icon('ruler')}<span>Mesurer</span></button><div class="tool-divider"></div><button class="tool-button active" id="tool-labels" aria-pressed="true" title="Afficher les noms des pièces">${icon('label')}<span>Pièces</span></button><button class="tool-button" id="tool-dimensions" aria-pressed="false" title="Afficher les dimensions extérieures">${icon('plan')}<span>Cotes</span></button><button class="tool-button active" id="tool-lights" aria-pressed="true" title="Allumer les éclairages intérieurs">${icon('sun')}<span>Lumière</span></button><button class="tool-button" id="tool-ceiling" aria-pressed="false" title="Afficher le plafond en vue 3D">${icon('roof')}<span>Plafond</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-reset" title="Recentrer la vue">${icon('reset')}<span>Recentrer</span></button></div>
+      <div id="scene-labels" class="scene-labels"></div>
+      <div class="dimension-label" id="width-label" hidden></div><div class="dimension-label" id="depth-label" hidden></div>
+      <div id="measure-label" class="measurement-label" hidden></div>
+      <div id="measure-instructions" class="measure-instructions" hidden>${icon('ruler',17)}<span>Cliquez sur deux points du sol.</span><button id="end-measure" aria-label="Quitter la mesure">${icon('close',15)}</button></div>
+      <div id="crosshair" class="crosshair" hidden></div>
+      <div id="door-prompt" class="door-prompt" hidden><kbd>E</kbd> Ouvrir / fermer la porte</div>
+      <div id="walk-start" class="walk-start" hidden><div class="walk-start-icon">${icon('walk',25)}</div><h2>Bienvenue chez vous.</h2><p>Avancez avec <strong>ZQSD</strong> ou les <strong>flèches</strong>.<br>Regardez autour de vous avec la souris.</p><button class="primary-button" id="capture-mouse">Entrer dans la visite ${icon('arrow',17)}</button><small>Échap pour libérer la souris · E pour une porte</small></div>
+      <button id="resume-walk" class="resume-walk" hidden>${icon('mouse',17)} Reprendre la visite</button>
+      <div class="orientation" title="Le haut du plan correspond au haut du document de référence"><span>PLAN</span>${icon('compass',23)}</div>
+      <div class="mini-card"><div class="mini-heading"><span>VOUS REPÉRER</span><button id="mini-plan" aria-label="Ouvrir la vue en plan" title="Vue en plan">${icon('plan',15)}</button></div><div id="minimap"></div><div class="mini-caption" id="mini-caption">Rez-de-chaussée</div></div>
+      <div class="bottom-controls"><div class="control-hint" id="control-hint">${icon('mouse',17)}<span>Glisser pour tourner</span><i></i><span>Molette pour zoomer</span><i></i><span>Clic droit pour déplacer</span></div><div class="scale-note"><span class="scale-line"></span> Dimensions en mètres</div></div>
+      <div class="loading" id="loading"><div class="loading-mark">${icon('house',35)}</div><span>Votre maison prend forme…</span></div>
+      <div id="fatal-error" class="fatal-error" hidden></div>
+    </main>
+  </div>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <dialog id="info-dialog"><div class="dialog-heading"><span class="eyebrow" id="dialog-eyebrow"></span><button id="close-dialog" class="icon-button" aria-label="Fermer">${icon('close')}</button></div><div id="dialog-content"></div></dialog>
+`;
+
+function toast(message: string) {
+  clearTimeout(toastTimer); el('#toast').textContent = message; el('#toast').hidden = false;
+  toastTimer = setTimeout(() => { el('#toast').hidden = true; }, 5000);
+}
+
+function activeButton(selector: string, active: boolean) {
+  el(selector).classList.toggle('active', active); el(selector).setAttribute('aria-pressed', String(active));
+}
+
+function renderProjectOptions() {
+  const importedIds = new Set(imported.map(p => p.id));
+  projects = [...builtins.filter(p => !importedIds.has(p.id)), ...imported];
+  el<HTMLSelectElement>('#project-select').innerHTML = projects.map(p => `<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+}
+
+function loadProject(id: string, levelId?: string) {
+  const p = projects.find(p => p.id === id) ?? projects[0];
+  if (!p) return;
+  current = p;
+  viewer.load(p, levelId);
+  selectedRoom = undefined;
+  mode = 'overview'; ceiling = false;
+  viewer.setCeiling(false); viewer.setLights(lights); viewer.setDimensions(showDimensions);
+  el<HTMLSelectElement>('#project-select').value = p.id;
+  el('#header-project').textContent = p.name;
+  el('#project-description').textContent = p.description;
+  el<HTMLSelectElement>('#level-select').innerHTML = p.levels.map(l => `<option value="${esc(l.id)}">${esc(l.name)}</option>`).join('');
+  el<HTMLSelectElement>('#level-select').value = viewer.level.id;
+  el('#header-level').textContent = viewer.level.name;
+  el('#room-count').textContent = String(viewer.level.rooms.length).padStart(2, '0');
+  el('#remove-project').hidden = !imported.some(project => project.id === current.id);
+  renderRooms(); renderLabels(); renderMinimap(); renderRoomDetail(); setMode('overview');
+  try { localStorage.setItem('maison-atelier:last-project', p.id); } catch { /* browser storage may be unavailable */ }
+}
+
+const roomIcon = (room: Room) => room.kind === 'garage' ? 'door' : room.kind === 'circulation' ? 'walk' : room.kind === 'storage' ? 'layers' : 'plan';
+function renderRooms() {
+  el('#room-list').innerHTML = viewer.level.rooms.map(r => `<button class="room-row${r.id === selectedRoom?.id ? ' selected' : ''}" data-room="${esc(r.id)}"><span class="room-icon">${icon(roomIcon(r),17)}</span><span class="room-name">${esc(r.name)}</span><span class="room-area">${number(r.planArea ?? polygonArea(r.polygon))}<small>m²</small></span>${icon('chevron',13)}</button>`).join('');
+  document.querySelectorAll<HTMLButtonElement>('[data-room]').forEach(button => button.addEventListener('click', () => selectRoom(button.dataset.room!)));
+}
+
+function selectRoom(id: string) {
+  selectedRoom = viewer.level.rooms.find(r => r.id === id);
+  if (!selectedRoom) return;
+  viewer.focusRoom(id); renderRooms(); renderRoomDetail(); renderMinimap();
+  document.querySelectorAll<HTMLButtonElement>('[data-label]').forEach(b => b.classList.toggle('selected', b.dataset.label === id));
+}
+
+function renderRoomDetail() {
+  const room = selectedRoom;
+  if (!room) {
+    const living = viewer.level.rooms.filter(r => r.kind !== 'garage').reduce((sum, r) => sum + (r.planArea ?? polygonArea(r.polygon)), 0);
+    const garage = viewer.level.rooms.filter(r => r.kind === 'garage').reduce((sum, r) => sum + (r.planArea ?? polygonArea(r.polygon)), 0);
+    el('#room-detail').innerHTML = `<div class="eyebrow">LE PROJET EN UN REGARD</div><div class="project-stats"><div><strong>${number(living)}</strong><span>m² habitables${current.id === 'private-project' ? ' au plan' : ''}</span></div><div><strong>${number(viewer.level.ceilingHeight)}</strong><span>m sous plafond</span></div></div>${garage ? `<div class="garage-stat">${icon('door',15)} Garage <span>${area(garage)}</span></div>` : ''}<p class="detail-hint">Sélectionnez une pièce pour la découvrir.</p>`;
+    return;
+  }
+  const computed = polygonArea(room.polygon);
+  const difference = room.planArea !== undefined && Math.abs(computed - room.planArea) > .1;
+  el('#room-detail').innerHTML = `<div class="eyebrow">ESPACE SÉLECTIONNÉ <button id="clear-room" aria-label="Désélectionner la pièce">${icon('close',14)}</button></div><h2>${esc(room.name)}</h2><div class="room-detail-area">${area(room.planArea ?? computed)} <span>${room.planArea !== undefined ? 'au plan' : 'calculés'}</span></div><div class="detail-data"><span>Surface reconstruite</span><strong>${area(computed)}</strong></div>${difference ? '<p class="precision-note">Raccords à vérifier : les deux surfaces diffèrent.</p>' : ''}<p class="room-note">${esc(room.note ?? 'Dimensions en mètres, entre les faces intérieures des murs finis.')}</p><button id="visit-room" class="visit-room">Visiter cette pièce ${icon('arrow',16)}</button>`;
+  el('#visit-room').addEventListener('click', () => { viewer.focusRoom(room.id, true); setMode('walk'); el('#walk-start').hidden = false; });
+  el('#clear-room').addEventListener('click', () => { selectedRoom = undefined; viewer.house.highlights.forEach(m => m.setEnabled(false)); renderRooms(); renderRoomDetail(); renderMinimap(); });
+}
+
+function renderLabels() {
+  el('#scene-labels').innerHTML = viewer.level.rooms.map(r => `<button class="scene-label${r.id === selectedRoom?.id ? ' selected' : ''}" data-label="${esc(r.id)}"><span>${esc(r.name)}</span><small>${area(r.planArea ?? polygonArea(r.polygon))}</small></button>`).join('');
+  document.querySelectorAll<HTMLButtonElement>('[data-label]').forEach(b => b.addEventListener('click', () => selectRoom(b.dataset.label!)));
+}
+
+function renderMinimap() {
+  el('#minimap').innerHTML = minimap(viewer.level, selectedRoom?.id);
+  document.querySelectorAll<SVGElement>('[data-map-room]').forEach(item => {
+    const select = () => selectRoom(item.dataset.mapRoom!);
+    item.addEventListener('click', select);
+    item.addEventListener('keydown', event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); select(); } });
+  });
+  el('#mini-caption').textContent = viewer.level.name;
+}
+
+function setMode(next: ViewMode) {
+  mode = next;
+  viewer.setMode(next);
+  if (selectedRoom) viewer.focusRoom(selectedRoom.id);
+  document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b => { b.classList.toggle('active', b.dataset.view === next); b.setAttribute('aria-pressed', String(b.dataset.view === next)); });
+  el('#viewport').classList.toggle('walking', next === 'walk');
+  const titles = { overview: ['VOTRE MAISON, EN PERSPECTIVE', 'Prenez de la hauteur.', 'Explorez les volumes, à votre rythme.'], plan: ['LES VOLUMES, À L’ÉCHELLE', 'Chaque mètre compte.', 'Retrouvez la disposition et les proportions des pièces.'], walk: ['À HAUTEUR DE REGARD', 'Entrez chez vous.', 'Une visite à 1,65 m du sol.'] };
+  const title = titles[next];
+  el('#view-eyebrow').textContent = title[0]; el('#view-title').textContent = title[1]; el('#view-subtitle').textContent = title[2];
+  el('#walk-start').hidden = next !== 'walk'; el('#resume-walk').hidden = true;
+  el('#crosshair').hidden = next !== 'walk'; el('#scene-labels').hidden = next === 'walk' || !showLabels || (ceiling && next === 'overview');
+  el('#control-hint').innerHTML = next === 'walk' ? `<kbd>ZQSD</kbd><span>ou flèches</span><i></i><kbd>E</kbd><span>Portes</span><i></i><kbd>Échap</kbd><span>Libérer la souris</span>` : next === 'plan' ? `${icon('mouse',17)}<span>Clic droit pour déplacer</span><i></i><span>Cliquer sur une pièce pour la sélectionner</span>` : `${icon('mouse',17)}<span>Glisser pour tourner</span><i></i><span>Molette pour zoomer</span><i></i><span>Clic droit pour déplacer</span>`;
+  for (const id of ['tool-measure', 'tool-labels', 'tool-dimensions', 'tool-ceiling']) el<HTMLButtonElement>(`#${id}`).disabled = next === 'walk' || (id === 'tool-ceiling' && next === 'plan');
+  activeButton('#tool-measure', false); activeButton('#tool-ceiling', ceiling && next === 'overview');
+  el('#measure-instructions').hidden = true; el('#measure-label').hidden = true;
+  el('#width-label').hidden = !showDimensions || next === 'walk'; el('#depth-label').hidden = !showDimensions || next === 'walk';
+  el('#door-prompt').hidden = true;
+}
+
+function openDialog(title: string, content: string) {
+  if (document.pointerLockElement) document.exitPointerLock();
+  viewer.setPaused(true);
+  el('#dialog-eyebrow').textContent = title; el('#dialog-content').innerHTML = content;
+  el<HTMLDialogElement>('#info-dialog').showModal();
+}
+
+function downloadProject() {
+  const blob = new Blob([JSON.stringify(current, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url;
+  a.download = `${current.id.replace(/[^a-zA-Z0-9_-]/g, '-')}.json`; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+  toast('Les données de votre maison ont été exportées.');
+}
+
+async function importProject(file: File) {
+  try {
+    if (file.size > 5 * 1024 * 1024) throw new Error('Le projet doit peser moins de 5 Mo.');
+    const project = validateProject(JSON.parse(await file.text()));
+    const previous = imported;
+    const next = [...imported.filter(p => p.id !== project.id), project];
+    if (next.length > 10) throw new Error('Vous pouvez conserver jusqu’à 10 projets importés.');
+    try { localStorage.setItem(STORAGE, JSON.stringify(next)); } catch { throw new Error('La mémoire locale est indisponible ou pleine. Exportez vos projets avant de libérer de la place.'); }
+    imported = next;
+    try { renderProjectOptions(); loadProject(project.id); } catch (error) {
+      imported = previous; localStorage.setItem(STORAGE, JSON.stringify(previous)); renderProjectOptions(); loadProject(builtins[0].id); throw error;
+    }
+    toast('Maison importée et conservée dans ce navigateur.');
+  } catch (error) { toast(error instanceof Error ? error.message : 'Impossible de lire ce projet.'); }
+}
+
+function wireEvents() {
+  el('.brand').addEventListener('click', event => { event.preventDefault(); setMode('overview'); viewer.reset(); });
+  document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach(b => b.addEventListener('click', () => setMode(b.dataset.view as ViewMode)));
+  el<HTMLSelectElement>('#project-select').addEventListener('change', event => loadProject((event.target as HTMLSelectElement).value));
+  el<HTMLSelectElement>('#level-select').addEventListener('change', event => loadProject(current.id, (event.target as HTMLSelectElement).value));
+  el('#export-project').addEventListener('click', downloadProject);
+  el('#import-project').addEventListener('click', () => openDialog('UNE AUTRE MAISON', `<h2>Un atelier, plusieurs projets.</h2><p>Importez une maison au format de données de l’atelier. Vous pourrez passer d’un projet à l’autre et conserver leurs dimensions et leurs ouvertures séparément.</p><div class="dialog-callout">Un plan PDF ou une photo doit d’abord être interprété et converti en projet. Cette version n’effectue pas de reconstruction automatique à partir d’une image.</div><p>Les projets importés sont conservés dans ce navigateur. Exportez-les pour les sauvegarder ou les utiliser sur un autre ordinateur.</p><button class="primary-button" id="choose-file">${icon('plus',17)} Choisir un fichier JSON</button>`));
+  el('#dialog-content').addEventListener('click', event => { if ((event.target as HTMLElement).closest('#choose-file')) { el<HTMLDialogElement>('#info-dialog').close(); el<HTMLInputElement>('#import-file').click(); } });
+  el<HTMLInputElement>('#import-file').addEventListener('change', event => { const input = event.target as HTMLInputElement; if (input.files?.[0]) void importProject(input.files[0]); input.value = ''; });
+  el('#remove-project').addEventListener('click', () => {
+    const next = imported.filter(p => p.id !== current.id);
+    try { localStorage.setItem(STORAGE, JSON.stringify(next)); imported = next; renderProjectOptions(); loadProject(projects[0].id); toast('Projet importé retiré de ce navigateur.'); } catch { toast('Impossible de modifier la mémoire locale.'); }
+  });
+  el('#tool-reset').addEventListener('click', () => { viewer.reset(); toast('Vue recentrée.'); });
+  el('#tool-labels').addEventListener('click', () => { showLabels = !showLabels; activeButton('#tool-labels', showLabels); el('#scene-labels').hidden = !showLabels || (ceiling && mode === 'overview'); });
+  el('#tool-dimensions').addEventListener('click', () => { showDimensions = !showDimensions; activeButton('#tool-dimensions', showDimensions); viewer.setDimensions(showDimensions); el('#width-label').hidden = !showDimensions; el('#depth-label').hidden = !showDimensions; });
+  el('#tool-lights').addEventListener('click', () => { lights = !lights; activeButton('#tool-lights', lights); viewer.setLights(lights); });
+  el('#tool-ceiling').addEventListener('click', () => { ceiling = !ceiling; activeButton('#tool-ceiling', ceiling); viewer.setCeiling(ceiling); el('#scene-labels').hidden = !showLabels || ceiling; });
+  const endMeasure = () => { viewer.setMeasureMode(false); activeButton('#tool-measure', false); el('#measure-instructions').hidden = true; el('#scene-labels').hidden = !showLabels || mode === 'walk' || (ceiling && mode === 'overview'); };
+  el('#end-measure').addEventListener('click', endMeasure);
+  el('#tool-measure').addEventListener('click', () => {
+    if (ceiling && mode === 'overview') { ceiling = false; viewer.setCeiling(false); activeButton('#tool-ceiling', false); el('#scene-labels').hidden = !showLabels; }
+    viewer.setMeasureMode(!viewer.measureMode); activeButton('#tool-measure', viewer.measureMode); el('#measure-instructions').hidden = !viewer.measureMode;
+    el('#scene-labels').hidden = viewer.measureMode || !showLabels;
+    el('#measure-instructions span').textContent = 'Cliquez sur deux points du sol.';
+  });
+  el('#mini-plan').addEventListener('click', () => setMode('plan'));
+  el('#capture-mouse').addEventListener('click', () => { el('#walk-start').hidden = true; viewer.captureMouse(); });
+  el('#resume-walk').addEventListener('click', () => { viewer.captureMouse(); });
+  el('#help').addEventListener('click', () => openDialog('PRENDRE EN MAIN L’ATELIER', `<h2>Faites comme chez vous.</h2><div class="help-grid"><div>${icon('cube',24)}<h3>Vue 3D</h3><p>Glissez avec le bouton gauche pour tourner. Utilisez la molette pour zoomer et le bouton droit pour déplacer la vue.</p></div><div>${icon('walk',24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte. Échap libère la souris.</p></div><div>${icon('ruler',24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan',24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Le placement des meubles viendra dans une prochaine étape.</p>`));
+  el('#source-info').addEventListener('click', () => {
+    const rooms = viewer.level.rooms;
+    openDialog('PLANS & PRÉCISION', `<h2>Les dimensions d’abord.</h2><p class="source-title">${esc(current.source.title)}${current.source.date ? ` · ${esc(current.source.date)}` : ''}</p><span class="status-pill">${esc(current.source.status)}</span><ul class="source-notes">${current.source.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul><h3>Surfaces : plan et reconstruction</h3><p>Les surfaces calculées concernent les contours de pièces enregistrés. Elles permettent de repérer les écarts ; elles ne constituent pas un relevé sur chantier.</p><table class="area-table"><thead><tr><th>Pièce</th><th>Au plan</th><th>Reconstruite</th></tr></thead><tbody>${rooms.map(r => `<tr${r.planArea && Math.abs(r.planArea - polygonArea(r.polygon)) > .1 ? ' class="area-warning"' : ''}><td>${esc(r.name)}</td><td>${r.planArea === undefined ? '—' : area(r.planArea)}</td><td>${area(polygonArea(r.polygon))}</td></tr>`).join('')}</tbody></table>`);
+  });
+  const dialog = el<HTMLDialogElement>('#info-dialog');
+  el('#close-dialog').addEventListener('click', () => dialog.close());
+  dialog.addEventListener('close', () => viewer.setPaused(false));
+  dialog.addEventListener('click', event => { if (event.target === dialog) { const r = dialog.getBoundingClientRect(); if (event.clientX < r.left || event.clientX > r.right || event.clientY < r.top || event.clientY > r.bottom) dialog.close(); } });
+  document.addEventListener('keydown', event => { if (event.code === 'Escape' && viewer.measureMode) endMeasure(); });
+}
+
+async function start() {
+  try {
+    const loaded = await Promise.all(['/projects/private-project.json', '/projects/studio-demo.json'].map(async path => {
+      const response = await fetch(path); if (!response.ok) throw new Error('Impossible de charger les données de la maison.');
+      return validateProject(await response.json());
+    }));
+    builtins = loaded;
+    let storageWarning = false;
+    try {
+      const saved: unknown = JSON.parse(localStorage.getItem(STORAGE) ?? '[]');
+      if (Array.isArray(saved)) for (const p of saved.slice(0, 10)) { try { imported.push(validateProject(p)); } catch { storageWarning = true; } }
+    } catch { storageWarning = true; }
+    viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'));
+    viewer.onSelectRoom = selectRoom;
+    viewer.onPointerLockError = () => { toast('Capture indisponible : cliquez dans la vue, puis glissez pour regarder autour de vous.'); el('#resume-walk').hidden = true; el<HTMLCanvasElement>('#scene').focus(); };
+    viewer.onMeasure = measurement => {
+      el('#measure-label').hidden = !measurement?.b;
+      if (measurement?.distance !== undefined) { el('#measure-label').textContent = `${number(measurement.distance)} m`; el('#measure-instructions span').textContent = 'Un nouveau clic commence une autre mesure.'; }
+      else if (measurement) el('#measure-instructions span').textContent = 'Choisissez le deuxième point.';
+    };
+    viewer.onFrame = frame => {
+      if (!current) return;
+      const labelsVisible = mode !== 'walk' && showLabels && !(ceiling && mode === 'overview');
+      for (const room of viewer.level.rooms) {
+        const label = document.querySelector<HTMLButtonElement>(`[data-label="${CSS.escape(room.id)}"]`);
+        if (!label) continue;
+        if (labelsVisible) {
+          const p = viewer.project(room.label);
+          label.hidden = !p.visible || (mode === 'overview' && (room.planArea ?? polygonArea(room.polygon)) < 3 && selectedRoom?.id !== room.id);
+          label.style.left = `${p.x}px`; label.style.top = `${p.y}px`;
+        }
+      }
+      if (showDimensions && mode !== 'walk') {
+        const b = bounds(viewer.level.outline);
+        for (const [id, point, value] of [['width-label', [b.center[0], b.maxZ + .6], b.width], ['depth-label', [b.maxX + .6, b.center[1]], b.depth]] as [string, [number, number], number][]) {
+          const pos = viewer.project(point); const element = el(`#${id}`);
+          element.textContent = `${number(value)} m`; element.hidden = !pos.visible; element.style.left = `${pos.x}px`; element.style.top = `${pos.y}px`;
+        }
+      }
+      if (viewer.measurement?.b) {
+        const { a, b } = viewer.measurement; const p = viewer.project([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], .1);
+        el('#measure-label').style.left = `${p.x}px`; el('#measure-label').style.top = `${p.y}px`; el('#measure-label').hidden = !p.visible;
+      }
+      if (mode === 'walk') {
+        el('#door-prompt').hidden = !frame.nearDoor || !el('#walk-start').hidden;
+        el('#resume-walk').hidden = frame.locked || !el('#walk-start').hidden;
+        const marker = document.querySelector<SVGGElement>('#map-marker');
+        if (marker) { marker.setAttribute('visibility', 'visible'); marker.setAttribute('transform', `translate(${frame.position[0]} ${frame.position[1]}) rotate(${180 - frame.yaw * 180 / Math.PI})`); }
+        const name = viewer.level.rooms.find(r => r.id === frame.roomId)?.name ?? viewer.level.name;
+        if (el('#mini-caption').textContent !== name) el('#mini-caption').textContent = name;
+      } else {
+        document.querySelector('#map-marker')?.setAttribute('visibility', 'hidden');
+      }
+    };
+    renderProjectOptions();
+    let initial = builtins[0].id;
+    try { initial = localStorage.getItem('maison-atelier:last-project') ?? initial; } catch { /* optional persistence */ }
+    loadProject(initial); wireEvents();
+    el('#loading').hidden = true;
+    if (storageWarning) toast('Certains projets locaux n’ont pas pu être restaurés. Les projets fournis restent disponibles.');
+  } catch (error) {
+    el('#loading').hidden = true;
+    el('#fatal-error').hidden = false;
+    el('#fatal-error').innerHTML = `${icon('info',30)}<h2>La vue 3D n’a pas pu démarrer.</h2><p>${esc(error instanceof Error ? error.message : 'Erreur de chargement.')}</p><p>Utilisez une version récente de Chrome, Firefox ou Edge, avec l’accélération graphique activée.</p><button class="primary-button" id="reload">Réessayer</button>`;
+    el('#reload').addEventListener('click', () => location.reload());
+    console.error(error);
+  }
+}
+
+void start();
