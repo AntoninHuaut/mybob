@@ -14,6 +14,10 @@ import { buildHouse, poseDoor, polygonMesh } from '../src/scene/buildHouse';
 import type { Materials } from '../src/scene/materials';
 import type { HouseProject } from '../src/model/types';
 import { createWalkCamera, EYE_HEIGHT } from '../src/scene/walkCamera';
+import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
+import { Matrix } from '@babylonjs/core/Maths/math.vector';
+import { Viewport } from '@babylonjs/core/Maths/math.viewport';
+import { fitOverview, frameInsets } from '../src/scene/framing';
 
 const load = async (name: string) => validateProject(JSON.parse(await readFile(new URL(`../public/projects/${name}.json`, import.meta.url), 'utf8')));
 const main = await load('private-project');
@@ -178,4 +182,23 @@ test('triangulation preserves concave footprint area', () => {
   }
   near(total, polygonArea(points));
   scene.dispose(); engine.dispose();
+});
+
+test('the whole house stays inside the visible frame in wide, narrow, and resized viewports', () => {
+  for (const project of [main, studio]) for (const [width, height] of [[1020, 642], [764, 690], [640, 642], [450, 650], [1000, 500], [280, 600]]) {
+    const engine = new NullEngine({ renderWidth: width, renderHeight: height, textureSize: 512, deterministicLockstep: false, lockstepMaxSteps: 4 });
+    const scene = new Scene(engine), level = project.levels[0];
+    const camera = new ArcRotateCamera('frame', Math.PI * .66, .66, 24, Vector3.Zero(), scene);
+    camera.fov = .66;
+    // Refit after zooming and panning, as the reset and resize controls do.
+    camera.radius = 3; camera.target.set(20, 0, 20);
+    fitOverview(camera, level, width, height);
+    const transform = camera.getViewMatrix(true).multiply(camera.getProjectionMatrix(true));
+    const inset = frameInsets(width, height), viewport = new Viewport(0, 0, width, height);
+    for (const [x, z] of level.outline) for (const y of [level.elevation - .17, level.elevation + level.ceilingHeight]) {
+      const p = Vector3.Project(new Vector3(x, y, z), Matrix.IdentityReadOnly, transform, viewport);
+      assert.ok(p.x >= inset.left && p.x <= width - inset.right && p.y >= inset.top && p.y <= height - inset.bottom, `${project.id} at ${width}×${height}: (${p.x}, ${p.y})`);
+    }
+    scene.dispose(); engine.dispose();
+  }
 });

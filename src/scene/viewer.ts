@@ -21,6 +21,7 @@ import { bounds, pointInPolygon } from '../model/geometry';
 import { buildHouse, poseDoor, type HouseScene } from './buildHouse';
 import { createMaterials } from './materials';
 import { createWalkCamera, EYE_HEIGHT } from './walkCamera';
+import { fitOverview, frameInsets } from './framing';
 
 export type ViewMode = 'overview' | 'plan' | 'walk';
 export interface FrameInfo {
@@ -161,11 +162,12 @@ export class HouseViewer {
         this.orbit.alpha = Math.PI / 2; this.orbit.beta = .001;
         this.orbit.lowerBetaLimit = .001; this.orbit.upperBetaLimit = .001;
         const extent = bounds(this.level.outline);
-        this.orbit.setTarget(new Vector3(extent.center[0], this.level.elevation, extent.center[1]));
+        this.orbit.setTarget(new Vector3(extent.center[0], this.level.elevation, extent.center[1]), false, true, true);
         this.setOrthoSize();
       } else {
         this.orbit.lowerBetaLimit = .03; this.orbit.upperBetaLimit = Math.PI * .48;
         this.orbit.beta = .66; this.orbit.alpha = Math.PI * .66;
+        fitOverview(this.orbit, this.level, this.canvas.clientWidth, this.canvas.clientHeight);
       }
     }
     this.updateLighting();
@@ -197,10 +199,13 @@ export class HouseViewer {
     this.walk.rotation.set(0, this.level.spawn.yaw, 0);
     this.walk.cameraDirection.setAll(0);
     const extent = bounds(this.level.outline);
-    this.orbit.setTarget(new Vector3(extent.center[0], this.level.elevation + .35, extent.center[1]));
+    this.orbit.setTarget(new Vector3(extent.center[0], this.level.elevation + .35, extent.center[1]), false, true, true);
     this.orbit.radius = Math.max(extent.width, extent.depth) * 1.9;
     if (this.mode === 'plan') { this.planZoom = 1; this.setOrthoSize(); }
-    else if (this.mode === 'overview') { this.orbit.alpha = Math.PI * .66; this.orbit.beta = .66; }
+    else if (this.mode === 'overview') {
+      this.orbit.alpha = Math.PI * .66; this.orbit.beta = .66;
+      fitOverview(this.orbit, this.level, this.canvas.clientWidth, this.canvas.clientHeight);
+    }
     this.clearKeys();
   }
 
@@ -245,8 +250,10 @@ export class HouseViewer {
 
   private setOrthoSize() {
     const extent = bounds(this.level.outline);
-    const aspect = this.canvas.clientWidth / Math.max(1, this.canvas.clientHeight);
-    const halfHeight = Math.max(extent.depth * .63, extent.width * .63 / aspect) * this.planZoom;
+    const width = Math.max(1, this.canvas.clientWidth), height = Math.max(1, this.canvas.clientHeight);
+    const inset = frameInsets(width, height);
+    const aspect = width / height;
+    const halfHeight = Math.max((extent.depth + 1.4) * height / (height - 2 * Math.max(inset.top, inset.bottom)), (extent.width + 1.4) * height / (width - 2 * Math.max(inset.left, inset.right))) / 2 * this.planZoom;
     this.orbit.orthoTop = halfHeight; this.orbit.orthoBottom = -halfHeight;
     this.orbit.orthoLeft = -halfHeight * aspect; this.orbit.orthoRight = halfHeight * aspect;
   }
@@ -254,6 +261,7 @@ export class HouseViewer {
   private resize() {
     this.engine.resize();
     if (this.mode === 'plan' && this.level) this.setOrthoSize();
+    else if (this.mode === 'overview' && this.level && this.orbit) fitOverview(this.orbit, this.level, this.canvas.clientWidth, this.canvas.clientHeight);
   }
 
   private beforeFrame() {

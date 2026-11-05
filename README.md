@@ -23,6 +23,7 @@ Le dossier `dist/` contient la version statique déployable. Les dépendances et
 ## Utilisation
 
 - **Vue 3D** : glisser avec le bouton gauche pour tourner ; molette pour zoomer ; bouton droit pour déplacer.
+- Le cadrage s’adapte à la fenêtre et réserve une marge pour l’interface. **Recentrer** réaffiche la maison entière après un zoom ou un déplacement.
 - **Plan** : vue orthographique, sélection des pièces et des dimensions extérieures.
 - **Visite** : ZQSD, WASD ou flèches pour marcher, souris pour regarder, Maj pour accélérer, E pour ouvrir ou fermer une porte proche. Échap libère la souris.
 - En cas de refus de capture de souris, cliquer dans la scène et glisser avec le bouton gauche pour regarder.
