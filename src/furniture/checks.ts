@@ -83,7 +83,7 @@ export function openingFootprint(item: FurnitureItem): Point2[] | undefined {
   ];
 }
 
-function wallSolids(level: Level) {
+export function wallSolids(level: Level) {
   return level.walls.flatMap((wall) => {
     const base = openingBase(
       wall,

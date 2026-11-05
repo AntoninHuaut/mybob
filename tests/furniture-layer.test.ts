@@ -179,3 +179,49 @@ test('drag emits live positions and exactly one final commit, respecting lock an
   assert.equal(changes.length, 3);
   cleanup();
 });
+
+test('drag stops a sofa at a thin wall in plan and overview even after a large pointer jump', () => {
+  for (const mode of ['plan', 'overview'] as const) {
+    const engine = new NullEngine();
+    const scene = new Scene(engine);
+    scene.useRightHandedSystem = true;
+    const divided: Level = {
+      ...level,
+      walls: [...level.walls, { id: 'partition', start: [5, 0], end: [5, 10], thickness: 0.07 }],
+    };
+    const layer = new FurnitureLayer(scene, divided);
+    scene.activeCamera = new UniversalCamera('test', new Vector3(0, 10, 0), scene);
+    let x = 2;
+    scene.createPickingRay = () => new Ray(new Vector3(x, 10, 5), new Vector3(0, -1, 0));
+    layer.setItems([{ ...item(), position: [2, 5] }]);
+    layer.setMode(mode);
+    const pick = new PickingInfo();
+    pick.pickedMesh = scene.meshes.find((mesh) => mesh.metadata?.kind === 'furniture')!;
+    pick.hit = true;
+    const emit = (type: number) =>
+      scene.onPointerObservable.notifyObservers(
+        new PointerInfo(type, { button: 0 } as PointerEvent, pick),
+      );
+    const changes: { position: number[]; final: boolean }[] = [];
+    layer.onChange = (items, final) => changes.push({ position: items[0].position, final });
+    emit(PointerEventTypes.POINTERDOWN);
+    x = 8;
+    emit(PointerEventTypes.POINTERMOVE);
+    assert.ok(changes.length > 0);
+    const stopped = changes.at(-1)!.position;
+    assert.ok(
+      stopped[0] > 3.9 && stopped[0] <= 3.968,
+      `${mode}: sofa must touch the partition without crossing it: ${stopped[0]}`,
+    );
+    for (const mesh of scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture')) {
+      mesh.computeWorldMatrix(true);
+      assert.ok(mesh.getBoundingInfo().boundingBox.maximumWorld.x <= 4.968);
+    }
+    emit(PointerEventTypes.POINTERUP);
+    assert.equal(changes.filter((change) => change.final).length, 1);
+    assert.deepEqual(changes.at(-1)!.position, stopped);
+    layer.dispose();
+    scene.dispose();
+    engine.dispose();
+  }
+});

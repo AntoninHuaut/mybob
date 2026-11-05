@@ -12,6 +12,7 @@ import { floorElevationAt } from '../model/geometry';
 import type { Level, Point2 } from '../model/types';
 import type { FurnitureItem } from './model';
 import { furnitureDistances } from './checks';
+import { constrainFurnitureDrag } from './placement';
 
 export interface FurnitureOverlays {
   distances: boolean;
@@ -258,10 +259,22 @@ export class FurnitureLayer {
         Math.hypot(position[0] - this.drag.start[0], position[1] - this.drag.start[1]) < 0.015
       )
         return;
+      const constrained = constrainFurnitureDrag(item, { ...item, position }, this.level);
+      if (
+        Math.hypot(
+          constrained.position[0] - item.position[0],
+          constrained.position[1] - item.position[1],
+        ) < 0.00001
+      )
+        return;
       this.drag.moved = true;
-      item.position = position;
+      item.position = constrained.position;
       const visual = this.visuals.get(item.id);
-      visual?.root.position.set(position[0], floorElevationAt(this.level, position), position[1]);
+      visual?.root.position.set(
+        item.position[0],
+        floorElevationAt(this.level, item.position),
+        item.position[1],
+      );
       this.drawOverlays();
       this.onChange?.(structuredClone(this.items), false);
     }
