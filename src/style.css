@@ -620,17 +620,42 @@ button svg {
   display: none;
 }
 .navigation-settings {
-  padding: 15px 16px;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
+  padding: 18px;
   font-size: 13px;
-  color: #4c6942;
+  color: #36423c;
 }
-.navigation-settings summary {
-  cursor: pointer;
-  min-height: 24px;
-  font-size: 14px;
-  font-weight: 550;
+.navigation-panel {
+  position: absolute;
+  z-index: 8;
+  top: 88px;
+  right: 80px;
+  width: 300px;
+  max-width: calc(100% - 100px);
+  max-height: calc(100% - 140px);
+  overflow-y: auto;
+  border: 1px solid #d8ded8;
+  border-radius: 10px;
+  background: #fffefa;
+  box-shadow: 0 8px 30px #203b2b20;
+}
+.navigation-panel > header,
+.navigation-panel .navigation-panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.navigation-panel h2,
+.navigation-panel h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+}
+.navigation-panel > button,
+.navigation-panel .navigation-panel-heading button,
+.navigation-panel > header button {
+  min-width: 32px;
+  min-height: 32px;
 }
 .navigation-settings-body {
   display: flex;
@@ -1027,27 +1052,30 @@ button svg {
 .furniture-context-toolbar {
   position: absolute;
   z-index: 8;
+  bottom: 60px;
+  left: 50%;
+  transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 4px;
-  max-width: calc(100% - 24px);
-  padding: 5px;
-  border: 1px solid #c9d9bf;
+  gap: 3px;
+  max-width: calc(100% - 160px);
+  padding: 4px;
+  border: 1px solid #d3dbd2;
   border-radius: 8px;
-  background: #fcfff7f5;
-  box-shadow: 0 5px 18px #26452b20;
+  background: #fffefaf5;
+  box-shadow: 0 3px 12px #26452b18;
   backdrop-filter: blur(7px);
   pointer-events: auto;
   white-space: nowrap;
 }
 #furniture-context-name {
   min-width: 0;
-  max-width: 120px;
+  max-width: 100px;
   overflow: hidden;
-  padding: 0 7px;
-  color: #3e6033;
+  padding: 0 6px;
+  color: #3b493e;
   font-size: 12px;
-  font-weight: 550;
+  font-weight: 500;
   text-overflow: ellipsis;
 }
 .furniture-context-toolbar .readout {
@@ -1059,24 +1087,24 @@ button svg {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   flex: 0 0 auto;
-  min-width: 48px;
-  min-height: 40px;
-  padding: 8px;
-  border: 1px solid #d4e1c9;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 5px 7px;
+  border: 1px solid transparent;
   border-radius: 5px;
-  background: #eef5e6;
-  color: #3d6831;
-  font-size: 13px;
+  background: transparent;
+  color: #355840;
+  font-size: 12px;
   font-weight: 500;
 }
 .furniture-context-toolbar button:hover {
-  border-color: #96b783;
-  background: #e0edd3;
+  border-color: #d2dcd0;
+  background: #edf2e9;
 }
 .furniture-context-toolbar button:active {
-  background: #d2e5c0;
+  background: #e0e9dc;
 }
 .measure-instructions {
   position: absolute;
@@ -1596,6 +1624,15 @@ dialog p {
   }
   .view-switch button > svg {
     display: none;
+  }
+  .navigation-panel {
+    top: 64px;
+    right: 12px;
+    max-width: calc(100% - 24px);
+    max-height: calc(100% - 130px);
+  }
+  .furniture-context-toolbar {
+    max-width: calc(100% - 24px);
   }
   .floating-tools {
     top: 13px;

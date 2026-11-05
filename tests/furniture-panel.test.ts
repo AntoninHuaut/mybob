@@ -14,7 +14,6 @@ registerHooks({
 const { FurniturePanel } = await import('../src/furniture/panel');
 
 function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa') {
-  let editing = initialEditing;
   const window = new Window({ url: 'http://localhost' });
   const names = [
     'document',
@@ -39,6 +38,8 @@ function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa
   let items = [createFurniture({ kind: initialKind, id: 'sofa', position: [3, 3] })];
   let selected: string | undefined = 'sofa';
   const added: FurnitureItem[] = [];
+  let rejectUpdates = false;
+  const dialogStates: boolean[] = [];
   const panel = new FurniturePanel(container as unknown as HTMLElement, {
     getItems: () => structuredClone(items),
     getSelectedId: () => selected,
@@ -63,6 +64,7 @@ function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa
       added.push(item);
     },
     onUpdate: (item) => {
+      if (rejectUpdates) return false;
       items = items.map((old) => (old.id === item.id ? item : old));
     },
     onDelete: () => {},
@@ -74,11 +76,8 @@ function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa
     onRedo: () => {},
     canUndo: () => false,
     canRedo: () => false,
-    onEdit: () => {
-      editing = true;
-      panel.render();
-    },
-    isEditing: () => editing,
+    onEdit: (id) => panel.openEdit(id),
+    onDialogState: (open) => dialogStates.push(open),
     onOverlays: () => {},
     onSnap: () => {},
     getChecks: () => [],
@@ -86,9 +85,17 @@ function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa
     onLink: () => {},
     onUnlink: () => {},
   });
+  if (initialEditing) panel.openEdit('sofa');
+  const editor = window.document.querySelector('.furniture-edit-dialog')!;
   return {
     window,
     container,
+    editor,
+    dialogStates,
+    getItems: () => structuredClone(items),
+    setRejectUpdates: (reject: boolean) => {
+      rejectUpdates = reject;
+    },
     panel,
     added,
     cleanup: () => {
@@ -104,7 +111,7 @@ function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa
 }
 
 test('clicking a native configuration control or summary does not rebuild the editing form', () => {
-  const { window, container, cleanup } = setup();
+  const { window, editor: container, cleanup } = setup();
   try {
     const form = container.querySelector('form')!;
     const name = container.querySelector<DOMInput>('input[name=name]')!;
@@ -130,7 +137,7 @@ test('clicking a native configuration control or summary does not rebuild the ed
 });
 
 test('leaving the panel keeps unapplied input and open sections intact', async () => {
-  const { window, container, panel, cleanup } = setup();
+  const { window, editor: container, panel, cleanup } = setup();
   try {
     const name = container.querySelector<DOMInput>('input[name=name]')!;
     name.focus();
@@ -195,7 +202,7 @@ test('the addition dialog accepts body depth and extended total depth as display
 });
 
 test('single selection stays compact and a double-click opens the dimensional editor', () => {
-  const { window, container, cleanup } = setup(false);
+  const { window, container, editor, cleanup } = setup(false);
   try {
     assert.equal(container.querySelector('.furniture-edit-form'), null);
     container
@@ -205,8 +212,10 @@ test('single selection stays compact and a double-click opens the dimensional ed
     container
       .querySelector('[data-furniture-select]')!
       .dispatchEvent(new window.MouseEvent('dblclick', { bubbles: true }));
-    assert.ok(container.querySelector('.furniture-edit-form'));
-    assert.ok(container.querySelector('input[name=width]'));
+    assert.equal(container.querySelector('.furniture-edit-form'), null);
+    assert.ok(editor.hasAttribute('open'));
+    assert.ok(editor.querySelector('.furniture-edit-form'));
+    assert.ok(editor.querySelector('input[name=width]'));
   } finally {
     cleanup();
   }
@@ -238,7 +247,7 @@ test('TV creation asks for inches and keeps raw dimensions collapsed', () => {
 });
 
 test('editing TV inches keeps the diagonal control visible and updates its dimensions', () => {
-  const { window, container, cleanup } = setup(true, 'tv');
+  const { window, editor: container, cleanup } = setup(true, 'tv');
   try {
     const inches = container.querySelector<DOMInput>('input[name=tvDiagonal]')!;
     assert.equal(inches.value, '55');
@@ -249,6 +258,52 @@ test('editing TV inches keeps the diagonal control visible and updates its dimen
     const width = Number(container.querySelector<DOMInput>('input[name=width]')!.value);
     assert.ok(width > 145 && width < 147);
     assert.equal(inches.value, '65');
+  } finally {
+    cleanup();
+  }
+});
+
+test('editing popup saves explicitly and cancellation leaves the furniture unchanged', async () => {
+  const { window, container, editor, panel, getItems, dialogStates, cleanup } = setup();
+  try {
+    assert.equal(container.querySelector('form'), null);
+    const name = editor.querySelector<DOMInput>('input[name=name]')!;
+    name.value = 'Brouillon annulé';
+    editor
+      .querySelector('[data-edit-close]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await Promise.resolve();
+    assert.equal(getItems()[0].name, 'Canapé');
+    assert.ok(!editor.hasAttribute('open'));
+    assert.equal(dialogStates.at(-1), false);
+    panel.openEdit('sofa');
+    editor.querySelector<DOMInput>('input[name=name]')!.value = 'Mon canapé';
+    const form = editor.querySelector<DOMForm>('form')!;
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+    assert.equal(getItems()[0].name, 'Mon canapé');
+    assert.ok(!editor.hasAttribute('open'));
+    assert.equal(dialogStates.at(-1), false);
+  } finally {
+    cleanup();
+  }
+});
+
+test('rejected edits keep the popup and draft open without empty group boxes or favorites', () => {
+  const { window, editor, setRejectUpdates, getItems, cleanup } = setup();
+  try {
+    assert.equal(editor.querySelector('.furniture-group-controls'), null);
+    assert.equal(editor.querySelector('[data-furniture-action=favorite]'), null);
+    const form = editor.querySelector<DOMForm>('form')!;
+    form.reportValidity = () => true;
+    editor.querySelector<DOMInput>('input[name=name]')!.value = 'À ajuster';
+    setRejectUpdates(true);
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.ok(editor.hasAttribute('open'));
+    assert.equal(editor.querySelector<DOMInput>('input[name=name]')!.value, 'À ajuster');
+    assert.equal(getItems()[0].name, 'Canapé');
+    assert.ok(editor.querySelector('.furniture-edit-status')!.textContent);
   } finally {
     cleanup();
   }

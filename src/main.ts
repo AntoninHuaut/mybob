@@ -42,7 +42,6 @@ const furnitureHistory = new FurnitureHistory();
 let furnitureLayer: FurnitureLayer | undefined;
 let furniturePanel: FurniturePanel | undefined;
 let selectedFurnitureId: string | undefined;
-let editingFurnitureId: string | undefined;
 let furnitureContextItem: FurnitureItem | undefined;
 let previewFurniture: FurnitureItem[] | undefined;
 let draggingFurniture = false;
@@ -66,20 +65,21 @@ el('#app').innerHTML = `
       <section class="room-detail" id="room-detail"></section>
       </section>
       <section id="furniture-workspace-panel" role="tabpanel" aria-labelledby="sidebar-furniture-tab" tabindex="0" hidden><section id="furniture-panel" aria-label="Aménager la maison"></section></section>
-      <details class="navigation-settings"><summary>Déplacement et vue</summary><div class="navigation-settings-body"><button id="go-to" class="visit-room" aria-pressed="false">Cliquer pour entrer ici</button><p>Choisissez un point libre du sol, puis explorez au clavier.</p><label>Vitesse de marche <output id="walk-speed-value">2,8 m/s</output><input id="walk-speed" type="range" min="1" max="5" step="0.2" value="2.8"></label><label>Sensibilité de la souris <output id="look-sensitivity-value">100 %</output><input id="look-sensitivity" type="range" min="50" max="200" step="10" value="100"></label><small>Maj pour marcher plus vite. Ces réglages sont conservés sur cet ordinateur.</small><label>Hauteur du regard<select id="eye-height"><option value="1.65">Debout · 1,65 m</option><option value="1.15">Assis · 1,15 m</option><option value="0.95">À 0,95 m</option><option value="1.80">À 1,80 m</option></select></label><label class="navigation-check"><input type="checkbox" id="cutaway"> Masquer les façades gênantes</label><label class="navigation-check"><input type="checkbox" id="section-enable"> Vue en coupe</label><label>Hauteur de coupe <output id="section-value">1,20 m</output><input id="section-height" type="range" min="0.4" max="2.5" step="0.05" value="1.2" disabled></label><small>La coupe et les façades masquées servent aux vues de dessus. La visite conserve les volumes complets.</small></div></details>
+
       <div class="sidebar-bottom"><button class="source-button" id="source-info">${icon('info', 17)}<span>Plans et précision<small>Cotes, hypothèses et points à vérifier</small></span>${icon('chevron', 15)}</button></div>
     </aside>
     <main class="viewport" id="viewport" aria-label="Atelier de visite 3D">
       <canvas id="scene" tabindex="0" aria-label="Vue 3D de la maison. Utilisez le bouton Visite pour vous déplacer au clavier."></canvas>
       <div class="viewport-top"><div class="view-heading"><span class="eyebrow" id="view-eyebrow">VOTRE MAISON, EN PERSPECTIVE</span><h1 id="view-title">Vue 3D</h1><p id="view-subtitle">Explorez les volumes, à votre rythme.</p></div><div class="view-switch" role="group" aria-label="Mode de visualisation"><button data-view="overview" class="active" aria-pressed="true">${icon('cube', 17)}Vue 3D</button><button id="view-exterior" aria-pressed="false" hidden>${icon('house', 17)}Extérieur</button><button data-view="plan" aria-pressed="false">${icon('plan', 17)}Plan</button><button data-view="walk" aria-pressed="false">${icon('walk', 17)}Visite</button></div></div>
-      <div class="floating-tools" role="group" aria-label="Options d’affichage"><button class="tool-button" id="tool-measure" aria-pressed="false" title="Mesurer une distance au sol">${icon('ruler')}<span>Mesurer</span></button><div class="tool-divider"></div><button class="tool-button active" id="tool-labels" aria-pressed="true" title="Afficher les noms des pièces">${icon('label')}<span>Pièces</span></button><button class="tool-button" id="tool-dimensions" aria-pressed="false" title="Afficher les dimensions extérieures">${icon('plan')}<span>Cotes</span></button><button class="tool-button active" id="tool-lights" aria-pressed="true" title="Allumer les éclairages intérieurs">${icon('sun')}<span>Lumière</span></button><button class="tool-button" id="tool-ceiling" aria-pressed="false" title="Afficher le plafond en vue 3D">${icon('roof')}<span>Plafond</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-reset" title="Recentrer la vue">${icon('reset')}<span>Recentrer</span></button></div>
+      <div class="floating-tools" role="group" aria-label="Options d’affichage"><button class="tool-button" id="tool-navigation" title="Réglages de navigation" aria-controls="navigation-panel" aria-expanded="false">${icon('compass')}<span>Navigation</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-measure" aria-pressed="false" title="Mesurer une distance au sol">${icon('ruler')}<span>Mesurer</span></button><div class="tool-divider"></div><button class="tool-button active" id="tool-labels" aria-pressed="true" title="Afficher les noms des pièces">${icon('label')}<span>Pièces</span></button><button class="tool-button" id="tool-dimensions" aria-pressed="false" title="Afficher les dimensions extérieures">${icon('plan')}<span>Cotes</span></button><button class="tool-button active" id="tool-lights" aria-pressed="true" title="Allumer les éclairages intérieurs">${icon('sun')}<span>Lumière</span></button><button class="tool-button" id="tool-ceiling" aria-pressed="false" title="Afficher le plafond en vue 3D">${icon('roof')}<span>Plafond</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-reset" title="Recentrer la vue">${icon('reset')}<span>Recentrer</span></button></div>
+      <section class="navigation-settings navigation-panel" id="navigation-panel" aria-label="Navigation et caméra" hidden><div class="navigation-panel-heading"><strong>Navigation</strong><button type="button" id="close-navigation" class="icon-button" aria-label="Fermer les réglages de navigation">${icon('close', 18)}</button></div><div class="navigation-settings-body"><button id="go-to" class="visit-room" aria-pressed="false">Cliquer pour entrer ici</button><p>Choisissez un point libre du sol, puis explorez au clavier.</p><label>Vitesse de marche <output id="walk-speed-value">2,8 m/s</output><input id="walk-speed" type="range" min="1" max="5" step="0.2" value="2.8"></label><label>Sensibilité de la souris <output id="look-sensitivity-value">100 %</output><input id="look-sensitivity" type="range" min="50" max="200" step="10" value="100"></label><small>Maj pour marcher plus vite. Ces réglages sont conservés sur cet ordinateur.</small><label>Hauteur du regard<select id="eye-height"><option value="1.65">Debout · 1,65 m</option><option value="1.15">Assis · 1,15 m</option><option value="0.95">À 0,95 m</option><option value="1.80">À 1,80 m</option></select></label><label class="navigation-check"><input type="checkbox" id="cutaway"> Masquer les façades gênantes</label><label class="navigation-check"><input type="checkbox" id="section-enable"> Vue en coupe</label><label>Hauteur de coupe <output id="section-value">1,20 m</output><input id="section-height" type="range" min="0.4" max="2.5" step="0.05" value="1.2" disabled></label><small>La coupe et les façades masquées servent aux vues de dessus. La visite conserve les volumes complets.</small></div></section>
       <div id="scene-labels" class="scene-labels"></div>
-      <div id="furniture-context-toolbar" class="furniture-context-toolbar" role="group" aria-label="Actions du meuble sélectionné" hidden><span id="furniture-context-name"></span><button type="button" data-rotate-selected="-90" aria-label="Tourner le meuble de 90 degrés vers la gauche" title="Tourner de 90° vers la gauche">↶ 90°</button><button type="button" data-rotate-selected="90" aria-label="Tourner le meuble de 90 degrés vers la droite" title="Tourner de 90° vers la droite">↷ 90°</button><button type="button" data-rotate-selected="15" aria-label="Tourner le meuble de 15 degrés" title="Rotation précise de 15°">+15°</button></div>
+      <div id="furniture-context-toolbar" class="furniture-context-toolbar" role="group" aria-label="Actions du meuble sélectionné" hidden><span id="furniture-context-name"></span><button type="button" id="edit-selected-furniture" aria-label="Modifier le meuble sélectionné" title="Modifier le meuble">${icon('edit', 16)}</button><button type="button" data-rotate-selected="-90" aria-label="Tourner le meuble de 90 degrés vers la gauche" title="Tourner de 90° vers la gauche">↶ 90°</button><button type="button" data-rotate-selected="90" aria-label="Tourner le meuble de 90 degrés vers la droite" title="Tourner de 90° vers la droite">↷ 90°</button><button type="button" data-rotate-selected="15" aria-label="Tourner le meuble de 15 degrés" title="Rotation précise de 15°">+15°</button></div>
       <div class="dimension-label" id="width-label" hidden></div><div class="dimension-label" id="depth-label" hidden></div>
       <div id="measure-label" class="measurement-label" hidden></div>
       <div id="measure-instructions" class="measure-instructions" hidden>${icon('ruler', 17)}<span>Cliquez sur deux points du sol.</span><button id="end-measure" aria-label="Quitter la mesure">${icon('close', 15)}</button></div>
       <div id="crosshair" class="crosshair" hidden></div>
-      <div id="door-prompt" class="door-prompt" hidden><kbd>E</kbd> Ouvrir / fermer la porte</div>
+      <div id="door-prompt" class="door-prompt" hidden><kbd>E</kbd> Ouvrir / fermer la porte</div><div id="furniture-edit-prompt" class="door-prompt" hidden><kbd>F</kbd> Modifier le meuble</div>
       <div id="walk-start" class="walk-start" hidden><div class="walk-start-icon">${icon('walk', 25)}</div><h2>Bienvenue chez vous.</h2><p>Avancez avec <strong>ZQSD</strong> ou les <strong>flèches</strong>.<br>Regardez autour de vous avec la souris.</p><button class="primary-button" id="capture-mouse">Entrer dans la visite ${icon('arrow', 17)}</button><small>Échap pour libérer la souris · E pour une porte</small></div>
       <button id="resume-walk" class="resume-walk" hidden>${icon('mouse', 17)} Reprendre la visite</button>
       <div class="orientation" title="Direction du haut du document de référence"><span>HAUT DU PLAN</span><svg id="orientation-arrow" width="23" height="23" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 6 18-6-4-6 4Z" fill="currentColor"/></svg></div>
@@ -197,26 +197,15 @@ function updateFurnitureContext() {
     toolbar.hidden = true;
     return;
   }
-  const point = viewer.project(item.position, (item.elevation ?? 0) + item.height + 0.12);
-  if (!point.visible) {
-    toolbar.hidden = true;
-    return;
-  }
   el('#furniture-context-name').textContent = item.name;
   toolbar
-    .querySelectorAll<HTMLButtonElement>('button')
+    .querySelectorAll<HTMLButtonElement>('[data-rotate-selected]')
     .forEach((button) => (button.disabled = item.locked));
   toolbar.hidden = false;
-  const maxX = Math.max(12, viewer.canvas.clientWidth - toolbar.offsetWidth - 12);
-  const maxY = Math.max(12, viewer.canvas.clientHeight - toolbar.offsetHeight - 74);
-  toolbar.style.left = `${Math.max(12, Math.min(maxX, point.x - toolbar.offsetWidth / 2))}px`;
-  toolbar.style.top = `${Math.max(12, Math.min(maxY, point.y - toolbar.offsetHeight - 12))}px`;
 }
 
-function selectFurniture(id: string | undefined, edit = false) {
+function selectFurniture(id: string | undefined) {
   if (id && exteriorView) setMode('overview');
-  editingFurnitureId = edit ? id : undefined;
-  if (edit) setSidebarTab('furniture');
   selectedFurnitureId = id;
   furnitureContextItem = id ? currentFurniture().find((item) => item.id === id) : undefined;
   furnitureLayer?.select(id);
@@ -224,9 +213,8 @@ function selectFurniture(id: string | undefined, edit = false) {
 }
 
 function openFurnitureEditor(id: string) {
-  selectFurniture(id, true);
-  setSidebar(true);
-  furniturePanel?.focusDimensions();
+  selectFurniture(id);
+  furniturePanel?.openEdit(id);
 }
 
 function mountFurniture() {
@@ -324,7 +312,6 @@ function mountFurniture() {
       },
       onSelect: selectFurniture,
       onEdit: openFurnitureEditor,
-      isEditing: () => !!selectedFurnitureId && editingFurnitureId === selectedFurnitureId,
       onUndo: () => {
         if (furnitureHistory.undo()) syncFurniture();
       },
@@ -673,6 +660,7 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
   el('#width-label').hidden = !showDimensions || next === 'walk';
   el('#depth-label').hidden = !showDimensions || next === 'walk';
   el('#door-prompt').hidden = true;
+  el('#furniture-edit-prompt').hidden = true;
   return true;
 }
 
@@ -810,7 +798,31 @@ function updateNavigationPreferences(save = true) {
   }
 }
 
+function setNavigationPanel(open: boolean) {
+  const focusInside = el('#navigation-panel').contains(document.activeElement);
+  el('#navigation-panel').hidden = !open;
+  el('#tool-navigation').setAttribute('aria-expanded', String(open));
+  if (open) el('#go-to').focus({ preventScroll: true });
+  else if (focusInside) el('#tool-navigation').focus({ preventScroll: true });
+}
+
 function wireEvents() {
+  el('#edit-selected-furniture').addEventListener('click', () => {
+    if (selectedFurnitureId) openFurnitureEditor(selectedFurnitureId);
+  });
+  el('#tool-navigation').addEventListener('click', () =>
+    setNavigationPanel(el('#navigation-panel').hidden),
+  );
+  el('#close-navigation').addEventListener('click', () => setNavigationPanel(false));
+  document.addEventListener('pointerdown', (event) => {
+    const target = event.target as Node;
+    if (
+      !el('#navigation-panel').hidden &&
+      !el('#navigation-panel').contains(target) &&
+      !el('#tool-navigation').contains(target)
+    )
+      setNavigationPanel(false);
+  });
   document
     .querySelectorAll<HTMLButtonElement>('[data-rotate-selected]')
     .forEach((button) =>
@@ -850,6 +862,7 @@ function wireEvents() {
     activeButton('#go-to', enabled);
     syncDisplayControls();
     if (enabled) {
+      setNavigationPanel(false);
       setSidebar(false);
       toast('Cliquez sur un point libre du sol pour y commencer la visite.');
     }
@@ -880,7 +893,7 @@ function wireEvents() {
         document.querySelector('dialog[open]') ||
         (event.target instanceof HTMLElement &&
           (event.target.matches('input,textarea,select') ||
-            event.target.closest('[role=tab]') ||
+            event.target.closest('[role=tab],#navigation-panel') ||
             event.target.isContentEditable))
       )
         return;
@@ -1034,7 +1047,7 @@ function wireEvents() {
   el('#help').addEventListener('click', () =>
     openDialog(
       'PRENDRE EN MAIN L’ATELIER',
-      `<h2>Faites comme chez vous.</h2><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>ZQSD ou WASD pour déplacer la vue, Maj pour accélérer. Glissez avec le bouton gauche pour tourner, le bouton droit pour déplacer ; utilisez la molette pour zoomer. Les flèches déplacent aussi la vue quand aucun meuble n’est sélectionné.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau, puis glissez-le dans la scène. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
+      `<h2>Faites comme chez vous.</h2><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>ZQSD ou WASD pour déplacer la vue, Maj pour accélérer. Glissez avec le bouton gauche pour tourner, le bouton droit pour déplacer ; utilisez la molette pour zoomer. Les flèches déplacent aussi la vue quand aucun meuble n’est sélectionné.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte, F pour modifier le meuble visé. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau, puis glissez-le dans la scène. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
     ),
   );
   el('#source-info').addEventListener('click', () => {
@@ -1060,6 +1073,7 @@ function wireEvents() {
     }
   });
   document.addEventListener('keydown', (event) => {
+    if (event.code === 'Escape') setNavigationPanel(false);
     if (event.code === 'Escape' && viewer.measureMode) endMeasure();
     if (event.code === 'Escape' && el('.workspace').classList.contains('sidebar-open')) {
       setSidebar(false);
@@ -1108,6 +1122,7 @@ async function start() {
     viewer.onDestinationRejected = () =>
       toast('Choisissez un point libre, à distance des murs et des meubles.');
     viewer.onSelectRoom = (id) => selectRoom(id, false);
+    viewer.onEditFurniture = openFurnitureEditor;
     viewer.onPointerLockError = () => {
       toast(
         'Capture indisponible : cliquez dans la vue, puis glissez pour regarder autour de vous.',
@@ -1172,6 +1187,10 @@ async function start() {
       }
       if (mode === 'walk') {
         el('#door-prompt').hidden = !frame.nearDoor || !el('#walk-start').hidden;
+        el('#furniture-edit-prompt').hidden =
+          !frame.nearFurnitureId ||
+          !el('#walk-start').hidden ||
+          !!document.querySelector('dialog[open]');
         el('#resume-walk').hidden = frame.locked || !el('#walk-start').hidden;
         const marker = document.querySelector<SVGGElement>('#map-marker');
         if (marker) {

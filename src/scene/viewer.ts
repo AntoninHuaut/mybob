@@ -13,6 +13,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { LinesMesh } from '@babylonjs/core/Meshes/linesMesh';
+import type { PickingInfo } from '@babylonjs/core/Collisions/pickingInfo';
 // Side effects required for picking, shadows, and collision coordination.
 import '@babylonjs/core/Culling/ray';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
@@ -49,6 +50,7 @@ export interface FrameInfo {
   planUpDegrees: number;
   roomId?: string;
   nearDoor: boolean;
+  nearFurnitureId?: string;
   locked: boolean;
 }
 export interface Measurement {
@@ -61,6 +63,18 @@ export interface Measurement {
 export function configureOrbitInteractions(camera: ArcRotateCamera) {
   camera.panningSensibility = 1000;
   camera.inputs.removeByType('ArcRotateCameraKeyboardMoveInput');
+}
+
+function editableFurnitureId(hit: PickingInfo | null | undefined) {
+  const metadata = hit?.pickedMesh?.metadata;
+  return metadata?.kind === 'furniture' && typeof metadata.id === 'string' && metadata.id
+    ? (metadata.id as string)
+    : undefined;
+}
+
+/** Keep the first hit, so walls and closed doors occlude furniture editing. */
+export function findEditableFurniture(camera: UniversalCamera, scene: Scene, distance = 3) {
+  return editableFurnitureId(scene.pickWithRay(camera.getForwardRay(distance)));
 }
 
 export class HouseViewer {
@@ -83,6 +97,7 @@ export class HouseViewer {
   onModeChange?: (mode: ViewMode) => void;
   onDestination?: (point: Point2) => void;
   onDestinationRejected?: () => void;
+  onEditFurniture?: (id: string) => void;
   goToMode = false;
   private eyeHeight = EYE_HEIGHT;
   private walkSpeed = DEFAULT_WALK_SPEED;
@@ -651,13 +666,14 @@ export class HouseViewer {
       prepareWalkStep(this.walk, this.level, movement);
       this.walk.cameraDirection.addInPlace(movement);
       const room = this.level.rooms.find((r) => pointInPolygon([p.x, p.z], r.polygon));
-      const hit = this.scene.pickWithRay(this.walk.getForwardRay(2.4));
+      const hit = this.scene.pickWithRay(this.walk.getForwardRay(3));
       this.onFrame?.({
         position: [p.x, p.z],
         headingDegrees: planHeading(this.walk),
         planUpDegrees: this.planUpDegrees(),
         roomId: room?.id,
-        nearDoor: hit?.pickedMesh?.metadata?.kind === 'door',
+        nearDoor: hit?.pickedMesh?.metadata?.kind === 'door' && hit.distance <= 2.4,
+        nearFurnitureId: this.paused ? undefined : editableFurnitureId(hit),
         locked: document.pointerLockElement === this.canvas,
       });
     } else {
@@ -695,7 +711,9 @@ export class HouseViewer {
     }
   }
 
-  private keydown = (event: KeyboardEvent) => {
+  private keydown = (event: KeyboardEvent) => this.handleKeydown(event);
+
+  private handleKeydown(event: KeyboardEvent) {
     if (
       this.paused ||
       event.ctrlKey ||
@@ -710,8 +728,18 @@ export class HouseViewer {
       const hit = this.scene.pickWithRay(this.walk.getForwardRay(2.4));
       if (hit?.pickedMesh?.metadata?.kind === 'door') this.toggleDoor(hit.pickedMesh.metadata.id);
     }
+    if (this.mode === 'walk' && event.code === 'KeyF') {
+      if (!event.repeat) {
+        const id = findEditableFurniture(this.walk, this.scene);
+        if (id) {
+          event.preventDefault();
+          this.onEditFurniture?.(id);
+        }
+      }
+      return;
+    }
     this.keyState.add(event.code);
-  };
+  }
   private planUpDegrees() {
     const center = bounds(this.level.outline).center;
     const origin = this.project(center),

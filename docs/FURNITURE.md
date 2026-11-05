@@ -10,9 +10,9 @@ Les anciennes positions invalides importées ne sont pas déplacées silencieuse
 
 Les distances partent des centres des quatre faces. Les enveloppes de passage et d’ouverture sont réglables ; les alertes d’intersection et de débattement sont des aides géométriques conservatrices, sans certification réglementaire. Le contrôle de livraison vérifie uniquement un volume debout face à une porte d’entrée modélisée : ni l’inclinaison, ni l’emballage, ni les virages du trajet ne sont simulés.
 
-Les aménagements sont sauvegardés localement par maison et par niveau. L’export du projet inclut les meubles ; les favoris sont facultatifs et séparés. Les références déjà présentes dans les anciens fichiers restent compatibles, mais ne sont plus proposées dans l’interface. Une erreur de sauvegarde est signalée si la mémoire locale est indisponible ou pleine. Conserver un export pour transférer ou sauvegarder le travail.
+Les aménagements sont sauvegardés localement par maison et par niveau. L’export du projet inclut les meubles. Les références déjà présentes dans les anciens fichiers restent compatibles, mais ne sont plus proposées dans l’interface. Une erreur de sauvegarde est signalée si la mémoire locale est indisponible ou pleine. Conserver un export pour transférer ou sauvegarder le travail.
 
-Dans **Déplacement et vue**, régler le regard assis/debout, masquer les façades gênantes, activer une coupe, ou choisir un point libre du sol pour commencer une visite à cet endroit. Ce changement de point de vue ne simule pas une marche automatique au travers des pièces. Les volumes complets et leurs collisions sont restaurés en visite.
+Dans **Navigation**, accessible près des outils de vue, régler le regard assis/debout, masquer les façades gênantes, activer une coupe, ou choisir un point libre du sol pour commencer une visite à cet endroit. Ce changement de point de vue ne simule pas une marche automatique au travers des pièces. Les volumes complets et leurs collisions sont restaurés en visite.
 
 Les zones de maison encore incertaines restent signalées dans les notes du modèle. Les meubles n’améliorent pas la précision des plans d’origine.
 
@@ -30,7 +30,7 @@ La navigation utilise le glisser gauche pour tourner, le glisser droit pour dép
 
 ZQSD / WASD déplace la vue 3D ou Plan dans les directions de l’écran, à vitesse adaptée au zoom. Maj accélère. Cliquer dans la vue lui donne le clavier ; les champs de formulaire et les menus conservent leurs touches. Les flèches déplacent un meuble sélectionné, ou la vue sans sélection.
 
-Le simple clic sélectionne et propose les rotations rapides. Le double-clic dans la scène ouvre le panneau complet et les dimensions. Le bouton Modifier fournit le même accès au clavier. Le panneau ne se reconstruit plus sur un clic de configuration, sur Passage et ouverture, ou quand il perd le focus : les saisies et volets restent stables.
+Le simple clic sélectionne et propose les rotations rapides. Le double-clic dans la scène ouvre une popup d’édition, comme pour l’ajout. Aucun formulaire de modification ne reste dans le panneau latéral. Le bouton Modifier fournit le même accès au clavier. Le panneau ne se reconstruit plus sur un clic de configuration, sur Passage et ouverture, ou quand il perd le focus : les saisies et volets restent stables.
 
 Les profondeurs des canapés sont saisies depuis le dos : profondeur du corps principal puis profondeur totale côté allongé. Aucune soustraction n’est demandée. Le schéma local indique ces deux longueurs et la largeur du retour. Les assises et bases en L utilisent des volumes continus, sans trou à la jonction.
 
@@ -43,3 +43,11 @@ Dans les réglages d’un meuble, Lier à un autre meuble permet de choisir son 
 La vue Plan coupe les murs à 1,20 m par défaut et dessine les fenêtres et baies en cyan à leurs positions réelles. Les meubles gardent leur volume visible, y compris armoires et TV ; la coupe explicite choisie dans les réglages reste prioritaire pour les murs.
 
 Les tests du contrôleur DOM utilisent Happy DOM (sans navigateur graphique) pour vérifier la stabilité des menus et des saisies, les conversions du formulaire, les pouces et l’ouverture de l’éditeur. Les tests Babylon NullEngine couvrent géométrie, groupes et navigation ; ils ne valident pas le rendu GPU sur le poste de l’utilisateur.
+
+## Popup et commandes discrètes
+
+Modifier ouvre une fenêtre modale avec Annuler et Enregistrer. Fermer, Annuler ou Échap laisse les champs non validés sans effet. Un placement refusé conserve la popup et la saisie pour correction. Les groupes et actions explicites restent disponibles dans la popup ; les actions secondaires sont regroupées sous Autres actions et Favori est retiré. Un bloc de liaison sans contenu n’est plus rendu.
+
+La barre de sélection est désormais compacte et dockée en bas de la vue ; elle ne suit plus le meuble et ne masque pas son déplacement. Navigation est un panneau distinct, près des outils de vue, pour les réglages de caméra.
+
+En visite, viser un meuble à moins de trois mètres puis appuyer sur F ouvre sa popup. Les murs et portes arrêtent la visée ; E conserve le contrôle des portes. La visite est pausée et la souris libérée pendant l’édition. Après fermeture, Reprendre la visite permet de capturer de nouveau la souris.
