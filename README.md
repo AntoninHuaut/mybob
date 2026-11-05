@@ -55,7 +55,7 @@ Rez-de-chaussée, garage, finitions simples, visite, portes, vue en plan, mesure
 
 **La reconstruction n’est pas encore un relevé exact de l’existant.** Plusieurs cotes principales sont reprises du plan, mais les raccords de l’entrée de la chambre 1, du dégagement et du hall restent à confirmer. Les surfaces au plan et celles calculées sur les contours du modèle sont affichées séparément. Voir `docs/MODEL-NOTES.md`.
 
-Les plans et photos fournis par le propriétaire ne sont pas inclus dans les sources ni dans le site. L’hébergement Sites est privé. Le dépôt GitHub personnel n’a pas pu être créé avec les droits actuels de l’intégration.
+Les plans et photos fournis par le propriétaire ne sont pas inclus dans les sources ni dans le site. L’hébergement Sites et le dépôt GitHub `AntoninHuaut/mybob` sont privés.
 
 ## Extensions prévues
 
