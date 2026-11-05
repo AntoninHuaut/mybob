@@ -129,6 +129,8 @@ La sauvegarde est locale au navigateur : pas de synchronisation entre appareils.
 
 L’export peut inclure `furnishing: {version: 1, levels: {...}}`, avec les meubles par identifiant de niveau. Ces données sont validées et sauvegardées séparément à l’import pour éviter de dupliquer les photos dans le stockage des plans.
 
+`furnishing.variants` est facultatif et contient `{version: 1, activeId, variants: [{id, name, levels: {...}}]}`. Il accepte une à dix variantes, des identifiants uniques, des noms de 1 à 60 caractères et uniquement les niveaux du projet. Chaque liste de meubles est validée. Quand cet objet est fourni, il constitue le jeu complet à restaurer ; `furnishing.levels` reste un miroir de sa variante active pour la compatibilité. Un ancien fichier sans `variants` met à jour les niveaux fournis dans la variante active et conserve les autres variantes nommées. Le nom d’une variante n’est pas un identifiant. Un export complet des anciens niveaux peut également servir à restaurer un stockage local de variantes illisible.
+
 ## Soleil facultatif
 
 `solar` peut contenir `latitude` (−90 à 90), `longitude` (−180 à 180), `northAngleDeg` (sens horaire depuis le haut du plan), et facultativement `timeZone` (IANA, par exemple `Europe/Paris`), `label` et `instant`. Ce dernier conserve la date et l’heure choisies sous forme UTC ISO canonique (`2026-07-01T10:30:00.000Z`). Les anciens fichiers sans `instant` utilisent l’heure actuelle. Aucun lieu n’est fourni par défaut. L’import valide ces champs ; les angles sont normalisés sur [0,360). Le calcul utilise un instant absolu, la date et l’heure locale étant converties avec le fuseau choisi.

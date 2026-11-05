@@ -1329,6 +1329,61 @@ kbd {
   background: #b16754;
 }
 
+.variants-panel {
+  padding: 16px;
+  border-bottom: 1px solid var(--line);
+}
+.variants-panel label {
+  display: grid;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--secondary);
+}
+.variants-panel select,
+.variants-panel input {
+  width: 100%;
+  min-height: 36px;
+  padding: 7px 9px;
+  color: #263b31;
+  background: #fffef9;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  font: inherit;
+}
+.variant-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.variant-actions button {
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: #355c43;
+  background: #edf2e8;
+  font-size: 12px;
+}
+.variant-name-form {
+  margin-top: 12px;
+}
+.variants-panel p {
+  margin: 8px 0 0;
+  color: var(--secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+.image-export-options {
+  display: grid;
+  gap: 12px;
+  margin-block: 20px;
+}
+.image-export-options label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
 /* Dialogs and clear feedback use the same type scale as the workspace. */
 .loading {
   position: absolute;
@@ -1574,6 +1629,9 @@ dialog p {
   }
 }
 @media (max-width: 760px) {
+  .viewport:has(.solar-timeline:not([hidden])) .mini-card {
+    display: none;
+  }
   :root {
     --sidebar: 320px;
   }

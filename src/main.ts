@@ -11,11 +11,15 @@ import { area, escapeHtml as esc, number } from './ui/format';
 import { minimap } from './ui/minimap';
 import { FurnitureLayer, type FurnitureOverlays } from './furniture/layer';
 import { FurniturePanel } from './furniture/panel';
-import { LayoutSession } from './furniture/layoutSession';
+import { VariantSession, variantsStorageKey, type VariantBook } from './furniture/variants';
+import { VariantsPanel } from './ui/variantsPanel';
+import { ArrangementPanel } from './ui/arrangementPanel';
+import { snapDraggedFurniture, defaultSnapSettings } from './furniture/arrangement';
+import { layoutLabels, type LabelBox } from './ui/labelLayout';
+import { exportSceneImage } from './ui/imageExport';
 import {
   FurnitureHistory,
   createFurniture,
-  saveLayout,
   layoutStorageKey,
   validateFurnitureList,
   type FurnitureItem,
@@ -42,8 +46,13 @@ let exteriorView = false;
 let lights = true;
 let mode: ViewMode = 'overview';
 let toastTimer: ReturnType<typeof setTimeout>;
-const furnitureHistory = new FurnitureHistory();
-const layoutSession = new LayoutSession();
+let furnitureHistory = new FurnitureHistory();
+const furnitureHistories = new Map<string, FurnitureHistory>();
+const layoutSession = new VariantSession();
+let variantsPanel: VariantsPanel | undefined;
+let arrangementPanel: ArrangementPanel | undefined;
+let arrangedIds: string[] = [];
+let snapSettings = { ...defaultSnapSettings };
 let furnitureLayer: FurnitureLayer | undefined;
 let furniturePanel: FurniturePanel | undefined;
 let selectedFurnitureId: string | undefined;
@@ -58,7 +67,7 @@ el('#app').innerHTML = `
     <button id="toggle-sidebar" class="mobile-menu-button" aria-controls="project-sidebar" aria-expanded="false" aria-label="Afficher les pièces et projets">${icon('layers', 20)}</button>
     <a class="brand" href="#" aria-label="Maison, revenir à la vue d’ensemble"><span class="brand-mark">${icon('house', 23)}</span><span>maison<span class="brand-dot">.</span><small>ATELIER 3D</small></span></a>
     <div class="header-separator"></div><div class="project-breadcrumb"><span id="header-project">Votre espace</span>${icon('chevron', 13)}<span id="header-level">Rez-de-chaussée</span></div>
-    <div class="header-actions"><span id="layout-status" class="layout-status" role="status" title="Aménagement sauvegardé sur cet ordinateur" aria-label="Aménagement sauvegardé sur cet ordinateur">Sauvegardé</span><button class="text-button" id="export-project" title="Exporter les données du projet">${icon('export', 17)}<span>Exporter</span></button><button class="icon-button" id="help" title="Aide et commandes" aria-label="Aide et commandes">${icon('help')}</button></div>
+    <div class="header-actions"><span id="layout-status" class="layout-status" role="status" title="Aménagement sauvegardé sur cet ordinateur" aria-label="Aménagement sauvegardé sur cet ordinateur">Sauvegardé</span><button class="text-button" id="export-project" title="Exporter les données du projet">${icon('export', 17)}<span>Exporter</span></button><button class="text-button" id="export-image" title="Exporter une image de la vue" aria-label="Exporter une image de la vue">${icon('image', 17)}<span>Image</span></button><button class="icon-button" id="help" title="Aide et commandes" aria-label="Aide et commandes">${icon('help')}</button></div>
   </header>
   <div class="workspace">
     <button class="sidebar-backdrop" aria-label="Fermer le panneau des pièces" hidden></button>
@@ -69,7 +78,7 @@ el('#app').innerHTML = `
 <section class="level-section"><div class="eyebrow">Pièces <span id="room-count"></span></div><label for="level-select" class="sr-only">Choisir le niveau</label><div class="level-selector">${icon('layers', 17)}<select id="level-select"></select><span class="level-dot"></span></div><div id="room-list" class="room-list"></div></section>
       <section class="room-detail" id="room-detail"></section>
       </section>
-      <section id="furniture-workspace-panel" role="tabpanel" aria-labelledby="sidebar-furniture-tab" tabindex="0" hidden><section id="furniture-panel" aria-label="Aménager la maison"></section></section>
+      <section id="furniture-workspace-panel" role="tabpanel" aria-labelledby="sidebar-furniture-tab" tabindex="0" hidden><section id="variants-panel" aria-label="Variantes d’aménagement"></section><section id="furniture-panel" aria-label="Aménager la maison"></section><section id="arrangement-panel" aria-label="Placement précis"></section></section>
 
       <div class="sidebar-bottom"><button class="source-button" id="source-info">${icon('info', 17)}<span>Plans et précision<small>Cotes, hypothèses et points à vérifier</small></span>${icon('chevron', 15)}</button></div>
     </aside>
@@ -152,11 +161,15 @@ function syncFurniture(save = true) {
   furnitureContextItem = furnitureHistory.items.find((item) => item.id === selectedFurnitureId);
   furniturePanel?.render();
   el('#furniture-tab-count').textContent = String(furnitureHistory.items.length);
+  arrangedIds = arrangedIds.filter((id) => furnitureHistory.items.some((item) => item.id === id));
+  arrangementPanel?.render();
   if (save) persistFurniture();
 }
 
 function commitFurniture(items: FurnitureItem[]): boolean {
   try {
+    // An unreadable saved book must be restored by import before editing an empty fallback.
+    layoutSession.active(current.id);
     const previousItems = new Map(furnitureHistory.items.map((item) => [item.id, item]));
     for (const item of items) {
       const previous = previousItems.get(item.id);
@@ -245,7 +258,16 @@ function mountFurniture() {
     restoreError = true;
     toast(error instanceof Error ? error.message : 'Aménagement illisible.');
   }
-  furnitureHistory.reset(items);
+  const historyKey = JSON.stringify([
+    current.id,
+    restoreError ? '' : layoutSession.active(current.id).id,
+    viewer.level.id,
+  ]);
+  furnitureHistory = furnitureHistories.get(historyKey) ?? new FurnitureHistory(items);
+  if (JSON.stringify(furnitureHistory.items) !== JSON.stringify(items))
+    furnitureHistory.reset(items);
+  if (!restoreError) furnitureHistories.set(historyKey, furnitureHistory);
+  arrangedIds = [];
   selectedFurnitureId = undefined;
   previewFurniture = undefined;
   furnitureLayer = new FurnitureLayer(viewer.scene, viewer.level);
@@ -253,6 +275,8 @@ function mountFurniture() {
   furnitureLayer.setOverlays(overlays);
   furnitureLayer.onSelect = selectFurniture;
   furnitureLayer.onEdit = openFurnitureEditor;
+  furnitureLayer.snapPlacement = (item, candidates) =>
+    snapDraggedFurniture(item, viewer.level, candidates, snapSettings);
   furnitureLayer.onDragState = (dragging) => {
     draggingFurniture = dragging;
     if (dragging) viewer.orbit.detachControl();
@@ -372,9 +396,56 @@ function mountFurniture() {
       },
     });
   furniturePanel.render();
+  if (!arrangementPanel)
+    arrangementPanel = new ArrangementPanel(el('#arrangement-panel'), {
+      getItems: currentFurniture,
+      getSelectedIds: () => arrangedIds,
+      getLevel: () => viewer.level,
+      onApply: commitFurniture,
+      onSelection: (ids) => {
+        arrangedIds = ids;
+      },
+      onSnapSettings: (settings) => {
+        snapSettings = settings;
+      },
+    });
+  arrangementPanel.render();
+  if (!variantsPanel)
+    variantsPanel = new VariantsPanel(el('#variants-panel'), {
+      getBook: () => layoutSession.book(current.id),
+      onSelect: (id) => changeVariant(() => layoutSession.select(current.id, id), true),
+      onDuplicate: (name) => changeVariant(() => layoutSession.duplicate(current.id, name), true),
+      onRename: (name) => changeVariant(() => layoutSession.rename(current.id, name), false),
+      onError: toast,
+    });
+  variantsPanel.render();
   el('#furniture-tab-count').textContent = String(items.length);
   if (restoreError) setLayoutStatus('Aménagement non restauré · importez une sauvegarde', true);
   else refreshLayoutStatus();
+}
+
+function changeVariant(action: () => void, remount: boolean) {
+  const before = JSON.stringify(layoutSession.book(current.id));
+  try {
+    action();
+  } catch (error) {
+    toast(error instanceof Error ? error.message : 'Variante indisponible.');
+  }
+  const changed = JSON.stringify(layoutSession.book(current.id)) !== before;
+  if (changed) {
+    variantsPanel?.finishEditing();
+    if (remount) {
+      furnitureLayer?.dispose();
+      mountFurniture();
+      syncDisplayControls();
+    }
+  }
+  refreshLayoutStatus();
+}
+
+function clearProjectHistories(projectId: string) {
+  for (const key of furnitureHistories.keys())
+    if (JSON.parse(key)[0] === projectId) furnitureHistories.delete(key);
 }
 
 function setSidebarTab(tab: 'house' | 'furniture', focus = false) {
@@ -468,6 +539,10 @@ function loadProject(id: string, levelId?: string) {
   furnitureLayer?.dispose();
   furnitureLayer = undefined;
   current = p;
+  layoutSession.register(
+    p.id,
+    p.levels.map((level) => level.id),
+  );
   viewer.load(p, levelId);
   solarPanel.load(p);
   selectedRoom = undefined;
@@ -702,6 +777,7 @@ function openDialog(title: string, content: string) {
 
 function downloadProject() {
   let levels: Record<string, FurnitureItem[]>;
+  let variants: VariantBook;
   try {
     levels = Object.fromEntries(
       current.levels.map((level) => [
@@ -711,6 +787,7 @@ function downloadProject() {
           : layoutSession.load(current.id, level.id),
       ]),
     );
+    variants = layoutSession.book(current.id);
   } catch (error) {
     toast(error instanceof Error ? error.message : 'Export indisponible.');
     return;
@@ -718,7 +795,7 @@ function downloadProject() {
   const blob = new Blob(
     [
       JSON.stringify(
-        { ...current, solar: solarPanel.settings, furnishing: { version: 1, levels } },
+        { ...current, solar: solarPanel.settings, furnishing: { version: 1, levels, variants } },
         null,
         2,
       ),
@@ -740,7 +817,7 @@ async function importProject(file: File) {
     const project = validateProject(JSON.parse(await file.text()));
     const furnishing = (
       project as HouseProject & {
-        furnishing?: { version: number; levels: Record<string, unknown> };
+        furnishing?: { version: number; levels: Record<string, unknown>; variants?: unknown };
       }
     ).furnishing;
     const staged: [string, FurnitureItem[]][] = [];
@@ -758,6 +835,18 @@ async function importProject(file: File) {
           staged.push([level.id, validateFurnitureList(furnishing.levels[level.id])]);
     }
     const existing = projects.find((candidate) => candidate.id === project.id);
+    if (existing)
+      layoutSession.register(
+        existing.id,
+        existing.levels.map((level) => level.id),
+      );
+    const previousVariantEntry = layoutSession.capture(project.id);
+    const nextVariants = layoutSession.prepareImport(
+      project.id,
+      project.levels.map((level) => level.id),
+      staged,
+      furnishing?.variants,
+    );
     if (
       existing &&
       !(await confirmImportReplacement(
@@ -776,15 +865,11 @@ async function importProject(file: File) {
     const previousLevelId = viewer.level.id;
     const next = [...imported.filter((p) => p.id !== project.id), project];
     if (next.length > 10) throw new Error('Vous pouvez conserver jusqu’à 10 projets importés.');
-    const backups = staged.map(
-      ([levelId]) =>
-        [
-          layoutStorageKey(project.id, levelId),
-          localStorage.getItem(layoutStorageKey(project.id, levelId)),
-        ] as const,
-    );
+    const backups = [
+      [variantsStorageKey(project.id), localStorage.getItem(variantsStorageKey(project.id))],
+    ] as const;
     try {
-      for (const [levelId, items] of staged) saveLayout(project.id, levelId, items);
+      localStorage.setItem(variantsStorageKey(project.id), JSON.stringify(nextVariants));
       localStorage.setItem(STORAGE, JSON.stringify(next));
     } catch {
       for (const [key, value] of backups) {
@@ -796,22 +881,14 @@ async function importProject(file: File) {
       );
     }
     imported = next;
-    const replacedLevelIds = new Set([
-      ...staged.map(([levelId]) => levelId),
-      ...(existing?.levels ?? [])
-        .filter((level) => !project.levels.some((nextLevel) => nextLevel.id === level.id))
-        .map((level) => level.id),
-    ]);
-    const replacedPending = [...replacedLevelIds].map(
-      (levelId) => [levelId, layoutSession.forget(project.id, levelId)] as const,
-    );
+    layoutSession.install(project.id, nextVariants);
+    clearProjectHistories(project.id);
     try {
       renderProjectOptions();
       loadProject(project.id);
     } catch (error) {
       imported = previous;
-      for (const [levelId, items] of replacedPending)
-        if (items) layoutSession.retain(project.id, levelId, items);
+      layoutSession.restore(project.id, previousVariantEntry);
       for (const [key, value] of backups) {
         if (value === null) localStorage.removeItem(key);
         else localStorage.setItem(key, value);
@@ -1040,6 +1117,31 @@ function wireEvents() {
     loadProject(current.id, (event.target as HTMLSelectElement).value),
   );
   el('#export-project').addEventListener('click', downloadProject);
+  el('#export-image').addEventListener('click', () => {
+    openDialog(
+      'EXPORTER UNE IMAGE',
+      `<h2>Garder cette vue</h2><p>Image PNG de la caméra actuelle, sans les panneaux de l’interface. Le fichier est généré sur cet ordinateur.</p><div class="image-export-options"><label><input id="image-labels" type="checkbox" ${showLabels && mode !== 'walk' ? 'checked' : ''}> Noms et surfaces des pièces</label><label><input id="image-dimensions" type="checkbox" ${showDimensions && mode !== 'walk' ? 'checked' : ''} ${mode === 'walk' ? 'disabled' : ''}> Dimensions extérieures</label></div><p id="image-export-status" role="status"></p><button id="download-scene-image" class="primary-button">Télécharger le PNG</button>`,
+    );
+    el<HTMLButtonElement>('#download-scene-image').addEventListener('click', async (event) => {
+      const button = event.currentTarget as HTMLButtonElement;
+      button.disabled = true;
+      try {
+        await exportSceneImage(viewer, {
+          labels: el<HTMLInputElement>('#image-labels').checked,
+          dimensions: el<HTMLInputElement>('#image-dimensions').checked,
+          projectName: current.name,
+          levelName: viewer.level.name,
+          variantName: layoutSession.active(current.id).name,
+        });
+        el<HTMLDialogElement>('#info-dialog').close();
+        toast('Image PNG exportée.');
+      } catch (error) {
+        el('#image-export-status').textContent =
+          error instanceof Error ? error.message : 'Export image impossible.';
+        button.disabled = false;
+      }
+    });
+  });
   el('#import-project').addEventListener('click', () =>
     el<HTMLInputElement>('#import-file').click(),
   );
@@ -1063,6 +1165,7 @@ function wireEvents() {
       const next = imported.filter((candidate) => candidate.id !== project.id);
       const keys = [
         STORAGE,
+        variantsStorageKey(project.id),
         `maison-atelier:solar:${project.id}`,
         ...project.levels.map((level) => layoutStorageKey(project.id, level.id)),
       ];
@@ -1086,7 +1189,8 @@ function wireEvents() {
         return;
       }
       imported = next;
-      for (const level of project.levels) layoutSession.forget(project.id, level.id);
+      layoutSession.forgetProject(project.id);
+      clearProjectHistories(project.id);
       el<HTMLDialogElement>('#info-dialog').close();
       renderProjectOptions();
       try {
@@ -1232,6 +1336,7 @@ async function start() {
         viewer.setPaused(open);
       },
     });
+    solarPanel.mountTimeline(el('#viewport'));
     viewer.onModeChange = (next) => {
       if (!syncingViewerMode && current) setMode(next, true);
     };
@@ -1267,6 +1372,7 @@ async function start() {
         mode !== 'walk' && showLabels && !viewer.measureMode && !(ceiling && mode === 'overview');
       el('#orientation-arrow').style.transform =
         `rotate(${frame.planUpDegrees + (solarPanel.settings?.northAngleDeg ?? 0)}deg)`;
+      const labelBoxes: LabelBox[] = [];
       for (const room of viewer.level.rooms) {
         const label = document.querySelector<HTMLButtonElement>(
           `[data-label="${CSS.escape(room.id)}"]`,
@@ -1281,6 +1387,51 @@ async function start() {
               selectedRoom?.id !== room.id);
           label.style.left = `${p.x}px`;
           label.style.top = `${p.y}px`;
+          if (mode === 'plan' && !label.hidden)
+            labelBoxes.push({
+              id: room.id,
+              x: p.x,
+              y: p.y,
+              width: label.offsetWidth,
+              height: label.offsetHeight,
+              priority: selectedRoom?.id === room.id ? 10 : 0,
+            });
+        }
+      }
+      if (mode === 'plan' && labelBoxes.length) {
+        const viewport = el('#viewport');
+        const origin = viewport.getBoundingClientRect();
+        const obstacles =
+          furnitureLayer?.getLabelObstacles((point, height) => viewer.project(point, height)) ?? [];
+        for (const selector of [
+          '.viewport-top',
+          '.floating-tools',
+          '.mini-card',
+          '.bottom-controls',
+          '.solar-timeline',
+          '#furniture-context-toolbar',
+          '#navigation-panel',
+        ]) {
+          const element = viewport.querySelector<HTMLElement>(selector);
+          if (!element || element.hidden || !element.offsetWidth || !element.offsetHeight) continue;
+          const rect = element.getBoundingClientRect();
+          obstacles.push({
+            x: rect.left - origin.left,
+            y: rect.top - origin.top,
+            width: rect.width,
+            height: rect.height,
+          });
+        }
+        for (const placed of layoutLabels(labelBoxes, obstacles, {
+          width: viewport.clientWidth,
+          height: viewport.clientHeight,
+        })) {
+          const label = document.querySelector<HTMLElement>(
+            `[data-label="${CSS.escape(placed.id)}"]`,
+          )!;
+          label.hidden = !placed.visible;
+          label.style.left = `${placed.x}px`;
+          label.style.top = `${placed.y}px`;
         }
       }
       if (showDimensions && mode !== 'walk') {

@@ -1,5 +1,13 @@
 # Essayer un aménagement
 
+## Variantes et placement précis
+
+Dans Meubles, Dupliquer crée une variante indépendante de tous les niveaux ; Renommer lui donne un nom. Le sélecteur permet de comparer jusqu’à dix dispositions avec la caméra en place. Chaque variante/niveau garde son historique Annuler/Rétablir pendant la session. Les exports JSON contiennent toutes les variantes, y compris celle active pour les versions précédentes de l’application. Les anciennes sauvegardes locales sont reprises sans effacer leurs clés d’origine.
+
+Le volet Placement précis possède une sélection multiple distincte du meuble édité. Cochez des meubles, choisissez X (horizontal) ou Z (vertical) et alignez leurs bords ou centres sur le premier coché. Espacements égaux répartit au moins trois meubles/ensembles entre les deux extrêmes, conservés en place. Tous les membres d’un ensemble lié doivent être cochés ; un verrouillage ou une collision avec le bâtiment refuse l’opération complète. Une opération correspond à une seule action Annuler.
+
+Les cases Grille et Murs proches activent séparément un accrochage au glisser. Le pas de grille est saisi en centimètres. Les deux sont désactivés au départ et restent des aides facultatives ; ils ne permettent pas de traverser les murs et ne modifient jamais les mesures des meubles.
+
 Dans l’onglet **Meubles**, ajouter un meuble par sa catégorie et ses dimensions en centimètres. L’ajout utilise les dimensions saisies et une configuration paramétrique. Les anciens onglets Photo et Lien marchand ont été retirés : ils ne généraient pas de géométrie.
 
 Sélectionner un meuble dans la scène ou dans la liste des objets présents. Le déplacer en glissant, saisir une rotation, ou utiliser les flèches (1 cm, Maj : 10 cm). R tourne de 15°, Supprimer retire, Ctrl Z annule et Ctrl Maj Z rétablit. Un glisser complet forme une seule action d’historique. Le verrouillage protège le placement.

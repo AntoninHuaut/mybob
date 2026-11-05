@@ -41,6 +41,10 @@ La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable e
 - **Mesurer** : deux clics sur le sol donnent une distance ; le troisième commence une nouvelle mesure. La mesure ne s’accroche pas automatiquement aux arêtes : ce n’est pas un outil de cotation d’exécution.
 - Les portes intérieures sont ouvertes au départ. En vue 3D, un clic sur une porte la manipule également.
 - Les projets peuvent être exportés et importés en JSON. Les projets importés sont conservés dans le stockage local du navigateur, sur cet ordinateur. Exporter les fichiers pour les sauvegarder ou les transférer.
+- **Variantes** : dans Meubles, dupliquer et nommer plusieurs aménagements, puis basculer entre eux avec la même caméra. L’export JSON conserve toutes les variantes et tous les niveaux.
+- **Placement précis** : sélectionner plusieurs meubles pour les aligner ou répartir leurs espacements ; activer séparément l’accrochage à une grille réglable ou aux murs pendant le glisser.
+- **Soleil** : après localisation, le panneau dans la scène propose un curseur horaire, Été/Hiver et lever/coucher approximatifs, sans déplacer la caméra.
+- **Image** : télécharger un PNG du Plan ou de la 3D sans panneaux, avec noms/surfaces et dimensions facultatifs.
 
 ## Fichiers importants
 

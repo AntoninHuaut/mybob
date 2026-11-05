@@ -4,6 +4,7 @@ import { validateSolarSettings } from '../model/solarSettings';
 import { localDateTimeToInstant } from '../scene/solar';
 import { escapeHtml as esc } from './format';
 import { icon } from './icons';
+import { SolarTimeline } from './solarTimeline';
 
 interface SolarCallbacks {
   onApply(settings: SolarSettings | undefined, instant: Date): void;
@@ -18,6 +19,7 @@ export class SolarPanel {
   private value?: SolarSettings;
   private instant = new Date();
   private searchController?: AbortController;
+  private timeline?: SolarTimeline;
   private candidates: { name: string; latitude: number; longitude: number; timezone: string }[] =
     [];
   constructor(private callbacks: SolarCallbacks) {
@@ -69,6 +71,25 @@ export class SolarPanel {
   get settings() {
     return this.value ? { ...this.value } : undefined;
   }
+  mountTimeline(host: HTMLElement) {
+    this.timeline?.element.remove();
+    this.timeline = new SolarTimeline(
+      host,
+      (instant) => {
+        if (this.value) this.commit(this.value, instant);
+      },
+      () => this.open(),
+    );
+    this.timeline.update(this.settings, this.instant);
+  }
+  private commit(settings: SolarSettings, instant: Date) {
+    const next = { ...settings, instant: instant.toISOString() };
+    localStorage.setItem(key(this.project!.id), JSON.stringify(next));
+    this.value = next;
+    this.instant = instant;
+    this.callbacks.onApply(this.settings, instant);
+    this.timeline?.update(this.settings, instant);
+  }
   load(project: HouseProject) {
     this.project = project;
     this.value = project.solar;
@@ -83,6 +104,7 @@ export class SolarPanel {
     }
     this.instant = this.value?.instant ? new Date(this.value.instant) : new Date();
     this.callbacks.onApply(this.settings, this.instant);
+    this.timeline?.update(this.settings, this.instant);
   }
   open() {
     this.searchController?.abort();
@@ -148,11 +170,7 @@ export class SolarPanel {
         this.input('time').value,
         settings.timeZone!,
       );
-      settings.instant = instant.toISOString();
-      localStorage.setItem(key(this.project!.id), JSON.stringify(settings));
-      this.value = settings;
-      this.instant = instant;
-      this.callbacks.onApply(this.settings, instant);
+      this.commit(settings, instant);
       this.dialog.close();
     } catch (error) {
       this.status(error instanceof Error ? error.message : 'Réglages impossibles à appliquer.');
@@ -164,6 +182,7 @@ export class SolarPanel {
       localStorage.setItem(key(this.project!.id), 'null');
       this.value = undefined;
       this.callbacks.onApply(undefined, this.instant);
+      this.timeline?.update(undefined, this.instant);
       this.dialog.close();
     } catch {
       this.status('Sauvegarde locale indisponible.');

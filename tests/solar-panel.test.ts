@@ -405,3 +405,123 @@ test('a delayed town result cannot populate a reopened dialog after its search w
     ctx.cleanup();
   }
 });
+
+test('scene timeline stays hidden without an explicit location and tracks real DST instants', () => {
+  const ctx = setup();
+  try {
+    const host = document.createElement('div');
+    document.body.append(host);
+    ctx.panel.mountTimeline(host);
+    ctx.panel.load({ ...structuredClone(fixture), id: 'no-timeline-location' });
+    assert.equal(host.querySelector<HTMLDetailsElement>('.solar-timeline')!.hidden, true);
+    assert.equal(ctx.requests.length, 0);
+    const project = {
+      ...structuredClone(fixture),
+      id: 'timeline-dst',
+      solar: { ...location, instant: '2026-03-29T00:30:00.000Z' },
+    };
+    ctx.panel.load(project);
+    const slider = host.querySelector<HTMLInputElement>('[data-solar-timeline-slider]')!;
+    assert.equal(host.querySelector<HTMLDetailsElement>('.solar-timeline')!.hidden, false);
+    assert.equal(slider.max, '1379');
+    slider.value = '150';
+    slider.dispatchEvent(new ctx.window.Event('input', { bubbles: true }) as unknown as Event);
+    assert.equal(ctx.applications.at(-1)!.instant.toISOString(), '2026-03-29T01:30:00.000Z');
+    assert.match(slider.getAttribute('aria-valuetext')!, /03:30/);
+    assert.equal(host.querySelector('[data-solar-timeline-slider]'), slider);
+    assert.equal(
+      JSON.parse(ctx.window.localStorage.getItem(preferenceKey(project.id))!).instant,
+      '2026-03-29T01:30:00.000Z',
+    );
+    assert.equal(ctx.panel.dialog.open, false);
+    assert.deepEqual(ctx.dialogStates, []);
+    ctx.panel.load({
+      ...project,
+      id: 'timeline-repeat',
+      solar: { ...location, instant: '2026-10-24T23:30:00.000Z' },
+    });
+    assert.equal(slider.max, '1499');
+    slider.value = '150';
+    slider.dispatchEvent(new ctx.window.Event('input', { bubbles: true }) as unknown as Event);
+    const firstOccurrence = slider.getAttribute('aria-valuetext');
+    assert.equal(ctx.applications.at(-1)!.instant.toISOString(), '2026-10-25T00:30:00.000Z');
+    slider.value = '210';
+    slider.dispatchEvent(new ctx.window.Event('input', { bubbles: true }) as unknown as Event);
+    const secondOccurrence = slider.getAttribute('aria-valuetext');
+    assert.equal(ctx.applications.at(-1)!.instant.toISOString(), '2026-10-25T01:30:00.000Z');
+    assert.match(firstOccurrence!, /02:30/);
+    assert.match(secondOccurrence!, /02:30/);
+    assert.notEqual(firstOccurrence, secondOccurrence);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('season shortcuts preserve local clock time and use the configured hemisphere', () => {
+  const ctx = setup();
+  try {
+    const host = document.createElement('div');
+    document.body.append(host);
+    ctx.panel.mountTimeline(host);
+    const project = {
+      ...structuredClone(fixture),
+      id: 'timeline-seasons',
+      solar: { ...location, instant: '2026-07-01T10:30:00.000Z' },
+    };
+    ctx.panel.load(project);
+    const clickSeason = (season: string) =>
+      host.querySelector<HTMLButtonElement>(`[data-solar-season=${season}]`)!.click();
+    clickSeason('winter');
+    assert.equal(ctx.applications.at(-1)!.instant.toISOString(), '2026-12-21T11:30:00.000Z');
+    clickSeason('summer');
+    assert.equal(ctx.applications.at(-1)!.instant.toISOString(), '2026-06-21T10:30:00.000Z');
+    ctx.panel.load({
+      ...project,
+      id: 'south-seasons',
+      solar: { ...project.solar, latitude: -33.9, longitude: 151.2, timeZone: 'Australia/Sydney' },
+    });
+    clickSeason('summer');
+    assert.equal(
+      host.querySelector<HTMLInputElement>('[data-solar-timeline-date]')!.value,
+      '2026-12-21',
+    );
+    const original = ctx.panel.settings;
+    ctx.panel.open();
+    ctx.input('latitude', '0');
+    ctx.click('footer [data-solar-close]');
+    assert.deepEqual(ctx.panel.settings, original);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('timeline reports storage failures without applying an unsaved instant', () => {
+  const ctx = setup();
+  try {
+    const host = document.createElement('div');
+    document.body.append(host);
+    ctx.panel.mountTimeline(host);
+    ctx.panel.load({
+      ...structuredClone(fixture),
+      solar: { ...location, instant: '2026-07-01T10:30:00.000Z' },
+    });
+    const before = ctx.applications.length;
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        setItem() {
+          throw new Error('Quota local dépassé');
+        },
+      },
+    });
+    const slider = host.querySelector<HTMLInputElement>('[data-solar-timeline-slider]')!;
+    const oldValue = slider.value;
+    slider.value = '100';
+    slider.dispatchEvent(new ctx.window.Event('input', { bubbles: true }) as unknown as Event);
+    assert.equal(ctx.applications.length, before);
+    assert.equal(slider.value, oldValue);
+    assert.match(host.querySelector('[data-solar-timeline-status]')!.textContent!, /Quota/);
+  } finally {
+    ctx.cleanup();
+  }
+});

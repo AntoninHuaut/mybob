@@ -120,6 +120,7 @@ export class HouseViewer {
   private ceilingOn = false;
   private dimensionOn = false;
   private paused = false;
+  private capturing = false;
   private planZoom = 1;
   private resizeObserver: ResizeObserver;
   private pointerLockError = () => this.onPointerLockError?.();
@@ -634,6 +635,37 @@ export class HouseViewer {
     };
   }
 
+  /** Copy WebGL synchronously before the browser discards its drawing buffer. */
+  captureCanvas(dimensions = false): HTMLCanvasElement {
+    const output = document.createElement('canvas');
+    output.width = this.engine.getRenderWidth();
+    output.height = this.engine.getRenderHeight();
+    const context = output.getContext('2d');
+    if (!context) throw new Error('Export image indisponible dans ce navigateur.');
+    const changed = new Map<AbstractMesh, boolean>();
+    const set = (mesh: AbstractMesh, enabled: boolean) => {
+      changed.set(mesh, mesh.isEnabled(false));
+      mesh.setEnabled(enabled);
+    };
+    try {
+      this.capturing = true;
+      for (const mesh of this.dimensions) set(mesh, dimensions && this.mode !== 'walk');
+      for (const mesh of this.measureMeshes) if (!dimensions) set(mesh, false);
+      for (const mesh of this.scene.meshes) {
+        if (mesh.metadata?.kind !== 'furniture-overlay') continue;
+        const dimension = !!mesh.metadata.label || mesh.name === 'furniture:dimension-label';
+        set(mesh, dimensions && dimension);
+      }
+      // Freeze camera input and animations for this extra render: exporting is not navigation.
+      this.scene.render(false, true);
+      context.drawImage(this.canvas, 0, 0);
+      return output;
+    } finally {
+      for (const [mesh, enabled] of changed) if (!mesh.isDisposed()) mesh.setEnabled(enabled);
+      this.capturing = false;
+    }
+  }
+
   private updateLighting() {
     const interior = this.mode === 'walk';
     const plan = this.mode === 'plan';
@@ -710,6 +742,7 @@ export class HouseViewer {
   }
 
   private beforeFrame() {
+    if (this.capturing) return;
     this.updateCutaway();
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.045);
     // Match the collision displacement to frame time, including the garage step.

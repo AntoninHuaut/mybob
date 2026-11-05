@@ -130,6 +130,30 @@ test('dragging either linked member moves the whole assembly with a single final
   }
 });
 
+test('drag snapping moves a linked assembly atomically and never runs on a selection click', () => {
+  const { layer, changes, down, move, up, cleanup } = setup(assembly(), 'stand');
+  let snapped = 0;
+  layer.snapPlacement = (item) => {
+    snapped++;
+    return {
+      ...item,
+      position: item.position.map((value) => Math.round(value * 2) / 2) as [number, number],
+    };
+  };
+  down();
+  up();
+  assert.equal(snapped, 0);
+  assert.equal(changes.length, 0);
+  down();
+  move(3.23, 4.12);
+  up();
+  assert.equal(snapped, 1);
+  assert.equal(changes.filter((change) => change.final).length, 1);
+  for (const member of changes.at(-1)!.items.filter((item) => item.groupId === 'tv-set'))
+    assert.ok(Math.hypot(member.position[0] - 3, member.position[1] - 4) < 1e-8);
+  cleanup();
+});
+
 test('a wall hit by the other linked member stops the entire group, including large pointer jumps', () => {
   const items = assembly();
   items[0].position = [2, 3];

@@ -165,6 +165,110 @@
   text-align: left;
   font-size: 12px;
 }
+.solar-timeline {
+  position: absolute;
+  left: 16px;
+  bottom: 152px;
+  z-index: 5;
+  width: min(340px, calc(100% - 90px));
+  border: 1px solid #d2dbce;
+  border-radius: 8px;
+  background: #fffefaf5;
+  color: #354d40;
+  box-shadow: 0 3px 12px #26452b18;
+  font-size: 12px;
+}
+.solar-timeline > summary {
+  padding: 9px 12px;
+  cursor: pointer;
+  font-weight: 600;
+}
+.solar-timeline summary > span {
+  float: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.solar-timeline-body {
+  padding: 0 12px 10px;
+}
+.solar-timeline-date-row {
+  display: flex;
+  align-items: end;
+  gap: 5px;
+}
+.solar-timeline-date-row label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.solar-timeline input[type='date'] {
+  min-width: 0;
+  width: 100%;
+  padding: 5px;
+  border: 1px solid #cdd8cc;
+  border-radius: 4px;
+  background: white;
+  color: inherit;
+  font: inherit;
+  min-height: 30px;
+}
+.solar-timeline button {
+  min-height: 30px;
+  padding: 5px 6px;
+  border-radius: 4px;
+  background: #edf2e8;
+  color: #355c43;
+  font: inherit;
+}
+.solar-timeline-slider {
+  display: grid;
+  gap: 3px;
+  margin-top: 9px;
+}
+.solar-timeline-slider input {
+  width: 100%;
+  margin: 0;
+  accent-color: #416c48;
+}
+.solar-timeline p {
+  margin: 5px 0 0;
+  line-height: 1.4;
+}
+.solar-timeline-note {
+  color: #6a786d;
+  font-size: 10px;
+}
+.solar-timeline-status:empty {
+  display: none;
+}
+.solar-timeline-status {
+  color: #8b5737;
+}
+@media (max-width: 760px) {
+  .solar-timeline {
+    left: 12px;
+    bottom: 150px;
+    width: min(340px, calc(100% - 80px));
+  }
+  .solar-timeline-date-row {
+    flex-wrap: wrap;
+  }
+  .solar-timeline-date-row label {
+    flex-basis: 100%;
+  }
+}
+@media (max-height: 600px) {
+  .solar-timeline {
+    bottom: 84px;
+    max-height: calc(100% - 160px);
+    overflow-y: auto;
+  }
+  .viewport:has(.furniture-context-toolbar:not([hidden])) .solar-timeline {
+    bottom: 132px;
+    max-height: calc(100% - 208px);
+  }
+}
 @media (max-width: 480px) {
   .solar-form {
     padding: 18px;

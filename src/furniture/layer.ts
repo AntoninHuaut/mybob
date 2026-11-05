@@ -7,7 +7,7 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
-import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Plane } from '@babylonjs/core/Maths/math.plane';
 import { Camera } from '@babylonjs/core/Cameras/camera';
 import { PointerEventTypes, type PointerInfo } from '@babylonjs/core/Events/pointerEvents';
@@ -17,6 +17,7 @@ import type { Level, Point2 } from '../model/types';
 import { footprintParts, televisionDimensions, type FurnitureItem } from './model';
 import { furnitureDistances } from './checks';
 import { constrainGroupDrag, groupMembers } from './groups';
+import { layoutLabels, type LabelRect } from '../ui/labelLayout';
 
 export interface FurnitureOverlays {
   distances: boolean;
@@ -42,6 +43,7 @@ export class FurnitureLayer {
   onEdit?: (id: string) => void;
   onChange?: (items: FurnitureItem[], final: boolean) => void;
   onDragState?: (dragging: boolean) => void;
+  snapPlacement?: (item: FurnitureItem, items: FurnitureItem[]) => FurnitureItem;
   private items: FurnitureItem[] = [];
   private visuals = new Map<string, Visual>();
   private selected?: string;
@@ -50,6 +52,7 @@ export class FurnitureLayer {
   private overlayRoot?: TransformNode;
   private overlayMaterials: StandardMaterial[] = [];
   private observer: Observer<PointerInfo>;
+  private labelObserver: Observer<Scene>;
   private drag?: Drag;
   private disposed = false;
   private readonly release = () => this.finishDrag();
@@ -59,6 +62,7 @@ export class FurnitureLayer {
     private level: Level,
   ) {
     this.observer = scene.onPointerObservable.add((event) => this.pointer(event));
+    this.labelObserver = scene.onBeforeRenderObservable.add(() => this.scalePlanLabels());
     if (typeof window !== 'undefined') {
       window.addEventListener('pointerup', this.release);
       window.addEventListener('pointercancel', this.release);
@@ -133,6 +137,94 @@ export class FurnitureLayer {
   setOverlays(overlays: FurnitureOverlays): void {
     this.overlays = { ...overlays };
     this.drawOverlays();
+  }
+
+  /** Pixel obstacles for room labels in Plan: selected footprint and distance tags. */
+  getLabelObstacles(
+    project: (point: Point2, height?: number) => { x: number; y: number },
+  ): LabelRect[] {
+    const result: LabelRect[] = [];
+    const selected = this.items.find((item) => item.id === this.selected);
+    if (selected) {
+      const points = footprintParts(selected)
+        .flat()
+        .map((p) => project(p));
+      const minX = Math.min(...points.map((p) => p.x)),
+        minY = Math.min(...points.map((p) => p.y));
+      result.push({
+        x: minX - 6,
+        y: minY - 6,
+        width: Math.max(...points.map((p) => p.x)) - minX + 12,
+        height: Math.max(...points.map((p) => p.y)) - minY + 12,
+      });
+    }
+    for (const mesh of this.overlayRoot?.getChildMeshes() ?? []) {
+      if (mesh.name !== 'furniture:dimension-label' || !mesh.isVisible) continue;
+      const p = mesh.getAbsolutePosition();
+      const screen = project([p.x, p.z], p.y - this.level.elevation);
+      result.push({ x: screen.x - 48, y: screen.y - 12, width: 96, height: 24 });
+    }
+    return result;
+  }
+
+  private scalePlanLabels(): void {
+    if (this.mode !== 'plan') return;
+    const camera = this.scene.activeCamera;
+    if (!camera || !this.overlayRoot) return;
+    const engine = this.scene.getEngine();
+    const renderWidth = engine.getRenderWidth(),
+      renderHeight = engine.getRenderHeight();
+    const width = engine.getRenderingCanvas()?.clientWidth || renderWidth;
+    const height = engine.getRenderingCanvas()?.clientHeight || renderHeight;
+    if (width <= 0 || height <= 0) return;
+    const span = Math.abs((camera.orthoTop ?? 1) - (camera.orthoBottom ?? -1));
+    const meshes = this.overlayRoot
+      .getChildMeshes()
+      .filter((mesh) => mesh.name === 'furniture:dimension-label');
+    const parentMatrix = this.overlayRoot.computeWorldMatrix(true);
+    const inverseParent = Matrix.Invert(parentMatrix);
+    const viewport = camera.viewport.toGlobal(renderWidth, renderHeight);
+    const transform = camera.getViewMatrix().multiply(camera.getProjectionMatrix());
+    const anchors = meshes.map((mesh) => {
+      const anchor = Vector3.TransformCoordinates(
+        Vector3.FromArray(mesh.metadata.anchor),
+        parentMatrix,
+      );
+      return Vector3.Project(anchor, Matrix.IdentityReadOnly, transform, viewport);
+    });
+    const placements = layoutLabels(
+      meshes.map((mesh, index) => ({
+        id: String(index),
+        x: (anchors[index].x * width) / renderWidth,
+        y: (anchors[index].y * height) / renderHeight,
+        width: 96,
+        height: 24,
+        priority: mesh.metadata.priority,
+      })),
+      [],
+      { width, height },
+    );
+    for (const [index, mesh] of meshes.entries()) {
+      const placement = placements[index],
+        anchor = anchors[index];
+      mesh.scaling.setAll((24 * span) / (height * 0.18));
+      mesh.isVisible = placement.visible && anchor.z > 0 && anchor.z < 1;
+      if (!mesh.isVisible) continue;
+      const world = Vector3.Unproject(
+        new Vector3(
+          (placement.x * renderWidth) / width,
+          (placement.y * renderHeight) / height,
+          anchor.z,
+        ),
+        renderWidth,
+        renderHeight,
+        Matrix.IdentityReadOnly,
+        camera.getViewMatrix(),
+        camera.getProjectionMatrix(),
+      );
+      mesh.position.copyFrom(Vector3.TransformCoordinates(world, inverseParent));
+      mesh.computeWorldMatrix(true);
+    }
   }
 
   private build(item: FurnitureItem, signature: string): Visual {
@@ -472,7 +564,15 @@ export class FurnitureLayer {
         this.finishDrag();
         return;
       }
-      const constrained = constrainGroupDrag(this.items, item.id, position, this.level);
+      let constrained = constrainGroupDrag(this.items, item.id, position, this.level);
+      if (this.snapPlacement) {
+        const candidate = constrained.find((member) => member.id === item.id)!;
+        const snapped = this.snapPlacement(
+          structuredClone(candidate),
+          structuredClone(constrained),
+        );
+        constrained = constrainGroupDrag(constrained, item.id, snapped.position, this.level);
+      }
       const anchor = constrained.find((member) => member.id === item.id)!;
       if (
         Math.hypot(anchor.position[0] - item.position[0], anchor.position[1] - item.position[1]) <
@@ -540,7 +640,14 @@ export class FurnitureLayer {
       mesh.color = color;
       mesh.isPickable = false;
       mesh.metadata = { kind: 'furniture-overlay', label };
-      if (label) this.label(label, points[0].add(points[points.length - 1]).scale(0.5), root);
+      mesh.renderingGroupId = 2;
+      if (label)
+        this.label(
+          label,
+          points[0].add(points[points.length - 1]).scale(0.5),
+          root,
+          name === 'furniture:wall-distance' ? 200 - Number.parseFloat(label) : 100,
+        );
     };
     const rectangle = (
       name: string,
@@ -619,7 +726,7 @@ export class FurnitureLayer {
     }
   }
 
-  private label(text: string, position: Vector3, root: TransformNode): void {
+  private label(text: string, position: Vector3, root: TransformNode, priority: number): void {
     // NullEngine tests and server-side validation have no canvas implementation.
     if (typeof document === 'undefined') return;
     const texture = new DynamicTexture(
@@ -647,6 +754,13 @@ export class FurnitureLayer {
     label.material = material;
     label.billboardMode = Mesh.BILLBOARDMODE_ALL;
     label.isPickable = false;
+    label.metadata = {
+      kind: 'furniture-overlay',
+      label: text,
+      anchor: label.position.asArray(),
+      priority,
+    };
+    label.renderingGroupId = 2;
   }
 
   private clearOverlays(): void {
@@ -666,6 +780,7 @@ export class FurnitureLayer {
     this.finishDrag();
     this.disposed = true;
     this.scene.onPointerObservable.remove(this.observer);
+    this.scene.onBeforeRenderObservable.remove(this.labelObserver);
     if (typeof window !== 'undefined') {
       window.removeEventListener('pointerup', this.release);
       window.removeEventListener('pointercancel', this.release);

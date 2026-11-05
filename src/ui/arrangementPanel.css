@@ -1,0 +1,97 @@
+.arrangement-panel {
+  border-top: 1px solid #dfe6dc;
+  margin: 16px;
+  padding-top: 12px;
+  font-size: 12px;
+}
+.arrangement-panel > summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+.arrangement-body {
+  display: grid;
+  gap: 10px;
+  padding-top: 8px;
+}
+.arrangement-body p {
+  margin: 0;
+  color: #69796b;
+  line-height: 1.5;
+}
+.arrangement-items {
+  max-height: 180px;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+}
+.arrangement-panel .arrangement-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.arrangement-check input {
+  flex: 0 0 auto;
+}
+.arrangement-check span {
+  overflow-wrap: anywhere;
+}
+.arrangement-row,
+.arrangement-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.arrangement-row label,
+.arrangement-body fieldset {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.arrangement-panel select,
+.arrangement-panel button,
+.arrangement-grid-size {
+  border: 1px solid #ced8ca;
+  border-radius: 6px;
+  background: #fffefa;
+  padding: 7px;
+  color: #354d40;
+  font: inherit;
+  min-width: 0;
+}
+.arrangement-panel select {
+  width: 100%;
+}
+.arrangement-panel button {
+  cursor: pointer;
+}
+.arrangement-panel button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.arrangement-selection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.arrangement-body fieldset {
+  margin: 0;
+  border: 1px solid #dfe6dc;
+  border-radius: 6px;
+}
+.arrangement-grid-size {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 6px;
+}
+.arrangement-grid-size input {
+  width: 52px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+}
+.arrangement-panel [role='status'] {
+  color: #354d40;
+}
