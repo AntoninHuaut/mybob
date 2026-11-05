@@ -82,6 +82,12 @@ test('all parametric furniture stays inside its real dimensions and follows fini
     'desk',
     'cabinet',
     'custom',
+    'tv-stand',
+    'tv',
+    'coffee-table',
+    'bookcase',
+    'ottoman',
+    'side-table',
   ];
   for (const kind of kinds) {
     layer.setItems([item(kind)]);

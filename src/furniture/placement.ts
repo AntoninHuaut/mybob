@@ -1,6 +1,6 @@
 import type { Level, Point2, Room } from '../model/types';
 import { bounds, floorElevationAt, pointInPolygon, polygonInsidePolygon } from '../model/geometry';
-import { footprint, type FurnitureItem } from './model';
+import { footprint, footprintParts, type FurnitureItem } from './model';
 import { polygonsOverlap, wallSolids, type FurnitureIssue } from './checks';
 
 const EPS = 0.002;
@@ -14,16 +14,17 @@ function buildingChecker(level: Level) {
   return (item: FurnitureItem): FurnitureIssue[] => {
     const result: FurnitureIssue[] = [];
     const add = (message: string) => result.push({ itemId: item.id, severity: 'error', message });
-    const polygon = footprint(item),
-      floor = floorElevationAt(level, item.position) - level.elevation;
-    if (!polygonInsidePolygon(polygon, level.outline)) add('Dépasse le contour de la maison.');
+    const parts = footprintParts(item),
+      floor = floorElevationAt(level, item.position) - level.elevation + (item.elevation ?? 0);
+    if (!parts.every((part) => polygonInsidePolygon(part, level.outline)))
+      add('Dépasse le contour de la maison.');
     if (floor + item.height > level.ceilingHeight + EPS) add('Dépasse la hauteur du plafond.');
     if (
       solids.some(
         (s) =>
           s.top > floor + EPS &&
           s.bottom < floor + item.height - EPS &&
-          polygonsOverlap(polygon, s.polygon),
+          parts.some((part) => polygonsOverlap(part, s.polygon)),
       )
     )
       add('Chevauche un mur, un vitrage ou un linteau.');
@@ -112,29 +113,29 @@ export function constrainFurnitureDrag(
     from.width !== to.width ||
     from.depth !== to.depth ||
     from.height !== to.height ||
-    from.rotation !== to.rotation;
+    from.rotation !== to.rotation ||
+    (from.elevation ?? 0) !== (to.elevation ?? 0) ||
+    JSON.stringify(from.sofa) !== JSON.stringify(to.sofa);
   if (geometryChanged && valid(origin).length) return clone(from);
   const movement: Point2 = [to.position[0] - from.position[0], to.position[1] - from.position[1]];
   if (Math.hypot(...movement) < 1e-10) return valid(to).length ? clone(from) : clone(to);
-  const polygon = footprint(origin),
+  const parts = footprintParts(origin),
     times = [0, 1];
   for (const solid of wallSolids(level)) {
-    const interval = sweptInterval(polygon, solid.polygon, movement);
-    if (interval) times.push(...interval);
+    for (const part of parts) {
+      const interval = sweptInterval(part, solid.polygon, movement);
+      if (interval) times.push(...interval);
+    }
   }
   // A translated polygon changes containment only at vertex/edge contacts.
   for (let i = 0; i < level.outline.length; i++) {
     const a = level.outline[i],
       b = level.outline[(i + 1) % level.outline.length];
-    for (const point of polygon) contactTimes(point, movement, a, b, times);
-    for (let j = 0; j < polygon.length; j++)
-      contactTimes(
-        a,
-        [-movement[0], -movement[1]],
-        polygon[j],
-        polygon[(j + 1) % polygon.length],
-        times,
-      );
+    for (const part of parts) {
+      for (const point of part) contactTimes(point, movement, a, b, times);
+      for (let j = 0; j < part.length; j++)
+        contactTimes(a, [-movement[0], -movement[1]], part[j], part[(j + 1) % part.length], times);
+    }
   }
   // Floor datums alter ceiling/solid overlap when the footprint centre crosses a room edge.
   for (const room of level.rooms.filter((r) => r.floorOffset !== undefined))
@@ -189,14 +190,17 @@ export function findFurniturePlacement(
     if (requested && !pointInPolygon(position, requested.polygon)) return false;
     const candidate = { ...item, position };
     if (validBuilding(candidate).length) return false;
-    const floor = floorElevationAt(level, position),
-      polygon = footprint(candidate);
+    const floor = floorElevationAt(level, position) + (candidate.elevation ?? 0),
+      parts = footprintParts(candidate);
     return !existing.some((other) => {
       if (other.id === item.id) return false;
-      const otherFloor = floorElevationAt(level, other.position);
+      const otherFloor = floorElevationAt(level, other.position) + (other.elevation ?? 0);
       return (
         Math.min(floor + item.height, otherFloor + other.height) >
-          Math.max(floor, otherFloor) + EPS && polygonsOverlap(polygon, footprint(other))
+          Math.max(floor, otherFloor) + EPS &&
+        parts.some((part) =>
+          footprintParts(other).some((otherPart) => polygonsOverlap(part, otherPart)),
+        )
       );
     });
   };

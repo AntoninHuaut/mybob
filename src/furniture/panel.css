@@ -352,23 +352,6 @@
   font-size: 13px;
   line-height: 1.6;
 }
-.furniture-reference-thumb {
-  display: block;
-  width: 100%;
-  max-height: 130px;
-  margin-top: 12px;
-  object-fit: contain;
-  border: 1px solid #d8e4ca;
-  border-radius: 5px;
-  background: #f0f3e8;
-}
-.furniture-source-link {
-  display: inline-block;
-  margin-top: 10px;
-  color: #376a2f;
-  font-size: 13px;
-  text-underline-offset: 3px;
-}
 .furniture-dialog {
   width: 640px;
 }
@@ -387,27 +370,6 @@
 .furniture-dialog h2 {
   margin-bottom: 12px;
 }
-.furniture-source-tabs {
-  display: flex;
-  gap: 4px;
-  margin: 19px 0 8px;
-  padding: 4px;
-  border: 1px solid #d0dfc3;
-  border-radius: 7px;
-  background: #eef5e4;
-}
-.furniture-source-tabs button {
-  flex: 1;
-  min-height: 40px;
-  padding: 9px 8px;
-  border-radius: 4px;
-  color: #4b703a;
-  font-size: 14px;
-}
-.furniture-source-tabs button[aria-pressed='true'] {
-  color: white;
-  background: #3b6935;
-}
 .furniture-dialog .furniture-field {
   font-size: 14px;
 }
@@ -421,49 +383,6 @@
   color: var(--secondary);
   font-size: 12px;
   line-height: 1.7;
-}
-.furniture-photo-picker {
-  position: relative;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  margin-top: 15px;
-  padding: 20px 14px;
-  border: 1px dashed #87a872;
-  border-radius: 7px;
-  background: #eef6e3;
-  color: #4a7235;
-  font-size: 14px;
-  cursor: pointer;
-}
-.furniture-photo-picker input {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  opacity: 0;
-  cursor: pointer;
-}
-.furniture-photo-preview {
-  position: relative;
-  margin-top: 12px;
-  text-align: right;
-}
-.furniture-photo-preview img {
-  display: block;
-  width: 100%;
-  max-width: 100%;
-  height: 170px;
-  object-fit: contain;
-  border: 1px solid #d7e4c8;
-  border-radius: 6px;
-  background: #edf4e4;
-}
-.furniture-photo-preview button {
-  min-height: 32px;
-  padding: 8px 0;
-  color: #80613b;
-  font-size: 12px;
 }
 .furniture-tone-field {
   display: flex;
@@ -522,6 +441,36 @@
   margin-top: 12px;
   color: #8b5737;
   font-size: 13px;
+  line-height: 1.6;
+}
+.furniture-sofa-fields {
+  min-width: 0;
+  margin: 15px 0 0;
+  padding: 11px;
+  border: 1px solid #d3e1c8;
+  border-radius: 6px;
+  background: #f4f8ed;
+}
+.furniture-sofa-fields legend {
+  padding: 0 5px;
+  color: #486b37;
+  font-size: 13px;
+  font-weight: 550;
+}
+.furniture-sofa-fields .furniture-field:first-child {
+  margin-top: 4px;
+}
+.furniture-sofa-config {
+  min-width: 0;
+  margin-top: 12px;
+  padding-top: 3px;
+  border-top: 1px solid #d8e5cd;
+}
+.furniture-sofa-fields p,
+.furniture-sofa-config > p {
+  margin: 9px 0 0;
+  color: var(--secondary);
+  font-size: 12px;
   line-height: 1.6;
 }
 @media (max-width: 760px) {

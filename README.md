@@ -59,11 +59,11 @@ docs/MODEL-NOTES.md             Sources, précision et limites
 
 ## Périmètre de cette version
 
-Rez-de-chaussée, garage, visite, portes, plan, mesures et projets multiples. L’atelier permet maintenant d’ajouter des meubles paramétriques cotés, de les déplacer, de vérifier leurs espaces et de sauvegarder/exporter l’aménagement. Les photos et liens sont des références, sans reconstruction automatique exacte. Voir [docs/FURNITURE.md](docs/FURNITURE.md). L’extérieur et les combles restent hors périmètre.
+Rez-de-chaussée, garage, visite, portes, plan, mesures et projets multiples. L’atelier permet maintenant d’ajouter des meubles paramétriques cotés, de les déplacer, de vérifier leurs espaces et de sauvegarder/exporter l’aménagement. Les canapés peuvent avoir un angle ou une méridienne, les téléviseurs une hauteur de pose, et les meubles sont contrôlés contre les murs. L’ajout se fait par dimensions ; les anciennes options photo et lien marchand ont été retirées. Voir [docs/FURNITURE.md](docs/FURNITURE.md). Le terrain et l’enveloppe extérieure sont inclus ; l’aménagement des combles reste hors périmètre.
 
 **La reconstruction n’est pas encore un relevé exact de l’existant.** Plusieurs cotes principales sont reprises du plan, mais les raccords de l’entrée de la chambre 1, du dégagement et du hall restent à confirmer. Les surfaces au plan et celles calculées sur les contours du modèle sont affichées séparément. Voir `docs/MODEL-NOTES.md`.
 
-Les plans et photos fournis par le propriétaire ne sont pas inclus dans les sources ni dans le site. L’hébergement Sites et le dépôt GitHub `AntoninHuaut/mybob` sont privés.
+Les plans et photos fournis par le propriétaire ne sont pas inclus dans les sources ni dans le site. Le dépôt GitHub `AntoninHuaut/mybob` est privé. Le build Cloudflare Pages embarque seulement la démonstration ; la maison personnelle est importée et conservée localement dans le navigateur.
 
 Les corrections issues des revues indépendantes sont résumées dans [docs/REVIEW.md](docs/REVIEW.md). Le détail des cotes vérifiées et des écarts d’origine est conservé dans [docs/GEOMETRY-AUDIT.md](docs/GEOMETRY-AUDIT.md).
 

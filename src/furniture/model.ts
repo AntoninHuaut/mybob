@@ -1,7 +1,27 @@
 import type { Point2 } from '../model/types';
 
 export type FurnitureKind =
-  'sofa' | 'table' | 'chair' | 'bed' | 'wardrobe' | 'desk' | 'cabinet' | 'custom';
+  | 'sofa'
+  | 'table'
+  | 'chair'
+  | 'bed'
+  | 'wardrobe'
+  | 'desk'
+  | 'cabinet'
+  | 'custom'
+  | 'tv-stand'
+  | 'tv'
+  | 'coffee-table'
+  | 'bookcase'
+  | 'ottoman'
+  | 'side-table';
+export interface SofaConfiguration {
+  shape: 'corner' | 'chaise';
+  /** Side viewed from the front: left is local negative X. */
+  side: 'left' | 'right';
+  seatDepth: number;
+  returnWidth: number;
+}
 export interface FurnitureItem {
   id: string;
   name: string;
@@ -9,6 +29,9 @@ export interface FurnitureItem {
   width: number;
   depth: number;
   height: number;
+  /** Height of the object's base above the finished floor, in metres. */
+  elevation?: number;
+  sofa?: SofaConfiguration;
   position: Point2;
   /** Babylon Y rotation, in radians; front is local +Z. */
   rotation: number;
@@ -21,7 +44,7 @@ export interface FurnitureItem {
 
 export const FURNITURE_PRESETS: Record<
   FurnitureKind,
-  { name: string; width: number; depth: number; height: number }
+  { name: string; width: number; depth: number; height: number; elevation?: number }
 > = {
   sofa: { name: 'Canapé', width: 2.1, depth: 0.9, height: 0.85 },
   table: { name: 'Table', width: 1.6, depth: 0.9, height: 0.75 },
@@ -31,6 +54,12 @@ export const FURNITURE_PRESETS: Record<
   desk: { name: 'Bureau', width: 1.2, depth: 0.6, height: 0.75 },
   cabinet: { name: 'Commode', width: 0.9, depth: 0.45, height: 0.9 },
   custom: { name: 'Meuble sur mesure', width: 1, depth: 0.6, height: 0.8 },
+  'tv-stand': { name: 'Meuble TV', width: 1.6, depth: 0.4, height: 0.55 },
+  tv: { name: 'Téléviseur', width: 1.23, depth: 0.12, height: 0.75, elevation: 0.6 },
+  'coffee-table': { name: 'Table basse', width: 1.1, depth: 0.6, height: 0.4 },
+  bookcase: { name: 'Bibliothèque', width: 0.8, depth: 0.3, height: 1.8 },
+  ottoman: { name: 'Pouf', width: 0.65, depth: 0.65, height: 0.42 },
+  'side-table': { name: 'Table d’appoint', width: 0.5, depth: 0.5, height: 0.5 },
 };
 
 export class FurnitureValidationError extends Error {}
@@ -63,6 +92,29 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
       fail('Nom ou type de meuble invalide.');
     if (![item.width, item.depth, item.height].every((v) => finite(v) && v >= 0.05 && v <= 20))
       fail('Les dimensions du meuble doivent être comprises entre 5 cm et 20 m.');
+    if (
+      item.elevation !== undefined &&
+      (!finite(item.elevation) || item.elevation < 0 || item.elevation > 20)
+    )
+      fail('La hauteur de pose doit être comprise entre 0 et 20 m.');
+    if (item.sofa !== undefined) {
+      const sofa = item.sofa;
+      if (
+        item.kind !== 'sofa' ||
+        !record(sofa) ||
+        !['corner', 'chaise'].includes(sofa.shape) ||
+        !['left', 'right'].includes(sofa.side) ||
+        !finite(sofa.seatDepth) ||
+        sofa.seatDepth < 0.2 ||
+        sofa.seatDepth > item.depth - 0.05 ||
+        !finite(sofa.returnWidth) ||
+        sofa.returnWidth < 0.2 ||
+        sofa.returnWidth > item.width - 0.05
+      )
+        fail(
+          'Le canapé en L doit avoir une profondeur d’assise et une largeur de retour inférieures à ses dimensions hors tout.',
+        );
+    }
     if (
       !Array.isArray(item.position) ||
       item.position.length !== 2 ||
@@ -124,16 +176,23 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
   return structuredClone(input as FurnitureItem[]);
 }
 
-export function createFurniture(input: Partial<FurnitureItem> = {}): FurnitureItem {
+export type FurnitureInput = Omit<Partial<FurnitureItem>, 'sofa'> & {
+  sofa?: Partial<SofaConfiguration>;
+};
+
+export function createFurniture(input: FurnitureInput = {}): FurnitureItem {
   const supplied = Object.fromEntries(
     Object.entries(input).filter(([, value]) => value !== undefined),
-  ) as Partial<FurnitureItem>;
-  const kind = input.kind ?? 'custom';
-  const preset = FURNITURE_PRESETS[kind] ?? FURNITURE_PRESETS.custom;
+  ) as FurnitureInput;
+  const kind = input.kind ?? (input.sofa ? 'sofa' : 'custom');
+  const preset =
+    input.sofa && kind === 'sofa'
+      ? { ...FURNITURE_PRESETS.sofa, width: 2.8, depth: 1.8 }
+      : (FURNITURE_PRESETS[kind] ?? FURNITURE_PRESETS.custom);
   const id =
     globalThis.crypto?.randomUUID?.() ??
     `meuble-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-  const item: FurnitureItem = {
+  const item = {
     ...preset,
     id,
     kind,
@@ -142,7 +201,15 @@ export function createFurniture(input: Partial<FurnitureItem> = {}): FurnitureIt
     locked: false,
     color: '#a5a18a',
     ...supplied,
-  };
+  } as FurnitureItem;
+  if (input.sofa)
+    item.sofa = {
+      shape: 'corner',
+      side: 'left',
+      seatDepth: Math.min(0.9, item.depth * 0.55),
+      returnWidth: Math.min(0.9, item.width / 3),
+      ...input.sofa,
+    };
   return validateFurnitureList([item])[0];
 }
 
@@ -158,6 +225,33 @@ export function footprint(item: FurnitureItem): Point2[] {
     localToWorld(item, item.width / 2, -item.depth / 2),
     localToWorld(item, item.width / 2, item.depth / 2),
     localToWorld(item, -item.width / 2, item.depth / 2),
+  ];
+}
+
+function rectangle(
+  item: FurnitureItem,
+  left: number,
+  back: number,
+  right: number,
+  front: number,
+): Point2[] {
+  return [
+    localToWorld(item, left, back),
+    localToWorld(item, right, back),
+    localToWorld(item, right, front),
+    localToWorld(item, left, front),
+  ];
+}
+
+/** Convex occupied pieces. The empty inside corner of an L is deliberately excluded. */
+export function footprintParts(item: FurnitureItem): Point2[][] {
+  if (item.kind !== 'sofa' || !item.sofa) return [footprint(item)];
+  const { seatDepth, returnWidth, side } = item.sofa;
+  const seatFront = -item.depth / 2 + seatDepth;
+  const left = side === 'left' ? -item.width / 2 : item.width / 2 - returnWidth;
+  return [
+    rectangle(item, -item.width / 2, -item.depth / 2, item.width / 2, seatFront),
+    rectangle(item, left, seatFront, left + returnWidth, item.depth / 2),
   ];
 }
 

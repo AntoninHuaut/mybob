@@ -21,6 +21,12 @@ const paths: Record<string, string> = {
   check: '<path d="m5 12 4 4L19 6"/>',
   layers: '<path d="m12 3 10 6-10 6L2 9Zm-9 11 9 5 9-5M3 18l9 5 9-5"/>',
   mouse: '<rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 2v7"/>',
+  'mouse-left':
+    '<path d="M12 2a6 6 0 0 0-6 6v2h6Z" fill="currentColor" fill-opacity=".45" stroke="none"/><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 2v8H6m6 0h6"/>',
+  'mouse-right':
+    '<path d="M12 2a6 6 0 0 1 6 6v2h-6Z" fill="currentColor" fill-opacity=".45" stroke="none"/><rect x="6" y="2" width="12" height="20" rx="6"/><path d="M12 2v8H6m6 0h6"/>',
+  'mouse-wheel':
+    '<rect x="6" y="2" width="12" height="20" rx="6"/><rect x="11" y="4" width="2" height="6" rx="1" fill="currentColor"/>',
   compass: '<circle cx="12" cy="12" r="9"/><path d="m16 8-3 5-5 3 3-5Z"/>',
   trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
 };

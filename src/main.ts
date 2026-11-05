@@ -41,6 +41,7 @@ const furnitureHistory = new FurnitureHistory();
 let furnitureLayer: FurnitureLayer | undefined;
 let furniturePanel: FurniturePanel | undefined;
 let selectedFurnitureId: string | undefined;
+let furnitureContextItem: FurnitureItem | undefined;
 let previewFurniture: FurnitureItem[] | undefined;
 let draggingFurniture = false;
 let overlays: FurnitureOverlays = { distances: true, clearances: false, openings: false };
@@ -58,7 +59,7 @@ el('#app').innerHTML = `
     <aside class="sidebar" id="project-sidebar" aria-label="Projets et pièces">
       <section class="project-section"><div class="eyebrow">Mon projet</div><label for="project-select" class="sr-only">Choisir une maison</label><div class="select-wrap"><span class="select-icon">${icon('house', 20)}</span><select id="project-select"></select>${icon('down', 15)}</div><p id="project-description" class="muted"></p><p id="demo-notice" class="demo-notice" hidden>Vous consultez une démonstration. Importez le fichier JSON de votre maison pour afficher votre projet. Il reste dans ce navigateur.</p><button id="import-project" class="import-button">${icon('plus', 16)} Importer ma maison</button><p class="project-privacy">Fichier JSON · conservé sur cet ordinateur</p><input type="file" id="import-file" accept="application/json,.json" hidden/><button id="remove-project" class="remove-project" hidden>${icon('trash', 14)} Retirer ce projet importé</button></section>
       <div class="sidebar-tabs" role="tablist" aria-label="Outils du projet"><button type="button" id="sidebar-house-tab" role="tab" aria-selected="true" aria-controls="house-panel" tabindex="0">${icon('house', 17)} Maison</button><button type="button" id="sidebar-furniture-tab" role="tab" aria-selected="false" aria-controls="furniture-workspace-panel" tabindex="-1">${icon('layers', 17)} Meubles <span id="furniture-tab-count">0</span></button></div>
-      <section id="house-panel" role="tabpanel" aria-labelledby="sidebar-house-tab" tabindex="0"><button id="quick-add-furniture" class="primary-button quick-add-furniture">${icon('plus', 18)} Ajouter un meuble</button>
+      <section id="house-panel" role="tabpanel" aria-labelledby="sidebar-house-tab" tabindex="0">
 <section class="level-section"><div class="eyebrow">Pièces <span id="room-count"></span></div><label for="level-select" class="sr-only">Choisir le niveau</label><div class="level-selector">${icon('layers', 17)}<select id="level-select"></select><span class="level-dot"></span></div><div id="room-list" class="room-list"></div></section>
       <section class="room-detail" id="room-detail"></section>
       </section>
@@ -71,6 +72,7 @@ el('#app').innerHTML = `
       <div class="viewport-top"><div class="view-heading"><span class="eyebrow" id="view-eyebrow">VOTRE MAISON, EN PERSPECTIVE</span><h1 id="view-title">Vue 3D</h1><p id="view-subtitle">Explorez les volumes, à votre rythme.</p></div><div class="view-switch" role="group" aria-label="Mode de visualisation"><button data-view="overview" class="active" aria-pressed="true">${icon('cube', 17)}Vue 3D</button><button id="view-exterior" aria-pressed="false" hidden>${icon('house', 17)}Extérieur</button><button data-view="plan" aria-pressed="false">${icon('plan', 17)}Plan</button><button data-view="walk" aria-pressed="false">${icon('walk', 17)}Visite</button></div></div>
       <div class="floating-tools" role="group" aria-label="Options d’affichage"><button class="tool-button" id="tool-measure" aria-pressed="false" title="Mesurer une distance au sol">${icon('ruler')}<span>Mesurer</span></button><div class="tool-divider"></div><button class="tool-button active" id="tool-labels" aria-pressed="true" title="Afficher les noms des pièces">${icon('label')}<span>Pièces</span></button><button class="tool-button" id="tool-dimensions" aria-pressed="false" title="Afficher les dimensions extérieures">${icon('plan')}<span>Cotes</span></button><button class="tool-button active" id="tool-lights" aria-pressed="true" title="Allumer les éclairages intérieurs">${icon('sun')}<span>Lumière</span></button><button class="tool-button" id="tool-ceiling" aria-pressed="false" title="Afficher le plafond en vue 3D">${icon('roof')}<span>Plafond</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-reset" title="Recentrer la vue">${icon('reset')}<span>Recentrer</span></button></div>
       <div id="scene-labels" class="scene-labels"></div>
+      <div id="furniture-context-toolbar" class="furniture-context-toolbar" role="group" aria-label="Actions du meuble sélectionné" hidden><span id="furniture-context-name"></span><button type="button" data-rotate-selected="-90" aria-label="Tourner le meuble de 90 degrés vers la gauche" title="Tourner de 90° vers la gauche">↶ 90°</button><button type="button" data-rotate-selected="90" aria-label="Tourner le meuble de 90 degrés vers la droite" title="Tourner de 90° vers la droite">↷ 90°</button><button type="button" data-rotate-selected="15" aria-label="Tourner le meuble de 15 degrés" title="Rotation précise de 15°">+15°</button></div>
       <div class="dimension-label" id="width-label" hidden></div><div class="dimension-label" id="depth-label" hidden></div>
       <div id="measure-label" class="measurement-label" hidden></div>
       <div id="measure-instructions" class="measure-instructions" hidden>${icon('ruler', 17)}<span>Cliquez sur deux points du sol.</span><button id="end-measure" aria-label="Quitter la mesure">${icon('close', 15)}</button></div>
@@ -80,7 +82,7 @@ el('#app').innerHTML = `
       <button id="resume-walk" class="resume-walk" hidden>${icon('mouse', 17)} Reprendre la visite</button>
       <div class="orientation" title="Direction du haut du document de référence"><span>HAUT DU PLAN</span><svg id="orientation-arrow" width="23" height="23" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 6 18-6-4-6 4Z" fill="currentColor"/></svg></div>
       <div class="mini-card"><div class="mini-heading"><span>VOUS REPÉRER</span><button id="mini-plan" aria-label="Ouvrir la vue en plan" title="Vue en plan">${icon('plan', 15)}</button></div><div id="minimap"></div><div class="mini-caption" id="mini-caption">Rez-de-chaussée</div></div>
-      <div class="bottom-controls"><div class="control-hint" id="control-hint">${icon('mouse', 17)}<span>Glisser pour tourner</span><i></i><span>Molette pour zoomer</span><i></i><span>Clic droit pour déplacer</span></div><div class="scale-note"><span class="scale-line"></span> Dimensions en mètres</div></div>
+      <div class="bottom-controls"><div class="control-hint" id="control-hint">${icon('mouse-left', 17)}<span>Glisser gauche pour tourner</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span><i></i>${icon('mouse-wheel', 17)}<span>Molette pour zoomer</span></div><div class="scale-note"><span class="scale-line"></span> Dimensions en mètres</div></div>
       <div id="layout-status" class="layout-status" role="status">Aménagement sauvegardé sur cet ordinateur</div>
       <div class="loading" id="loading"><div class="loading-mark">${icon('house', 35)}</div><span>Votre maison prend forme…</span></div>
       <div id="fatal-error" class="fatal-error" hidden></div>
@@ -126,6 +128,7 @@ function syncFurniture(save = true) {
     selectedFurnitureId = undefined;
   furnitureLayer?.setItems(furnitureHistory.items);
   furnitureLayer?.select(selectedFurnitureId);
+  furnitureContextItem = furnitureHistory.items.find((item) => item.id === selectedFurnitureId);
   furniturePanel?.render();
   el('#furniture-tab-count').textContent = String(furnitureHistory.items.length);
   if (save) persistFurniture();
@@ -141,6 +144,8 @@ function commitFurniture(items: FurnitureItem[]): boolean {
         previous.width !== item.width ||
         previous.depth !== item.depth ||
         previous.height !== item.height ||
+        (previous.elevation ?? 0) !== (item.elevation ?? 0) ||
+        JSON.stringify(previous.sofa) !== JSON.stringify(item.sofa) ||
         previous.rotation !== item.rotation ||
         previous.position[0] !== item.position[0] ||
         previous.position[1] !== item.position[1];
@@ -160,10 +165,54 @@ function commitFurniture(items: FurnitureItem[]): boolean {
   return true;
 }
 
+function rotateSelectedFurniture(degrees: number) {
+  const item = currentFurniture().find((candidate) => candidate.id === selectedFurnitureId);
+  if (!item || item.locked || mode === 'walk' || exteriorView) return;
+  commitFurniture(
+    currentFurniture().map((candidate) =>
+      candidate.id === item.id
+        ? { ...candidate, rotation: candidate.rotation + (degrees * Math.PI) / 180 }
+        : candidate,
+    ),
+  );
+}
+function updateFurnitureContext() {
+  const toolbar = el('#furniture-context-toolbar');
+  const item = furnitureContextItem;
+  if (
+    !selectedFurnitureId ||
+    !item ||
+    mode === 'walk' ||
+    exteriorView ||
+    draggingFurniture ||
+    viewer.measureMode ||
+    viewer.goToMode ||
+    document.querySelector('dialog[open]')
+  ) {
+    toolbar.hidden = true;
+    return;
+  }
+  const point = viewer.project(item.position, (item.elevation ?? 0) + item.height + 0.12);
+  if (!point.visible) {
+    toolbar.hidden = true;
+    return;
+  }
+  el('#furniture-context-name').textContent = item.name;
+  toolbar
+    .querySelectorAll<HTMLButtonElement>('button')
+    .forEach((button) => (button.disabled = item.locked));
+  toolbar.hidden = false;
+  const maxX = Math.max(12, viewer.canvas.clientWidth - toolbar.offsetWidth - 12);
+  const maxY = Math.max(12, viewer.canvas.clientHeight - toolbar.offsetHeight - 74);
+  toolbar.style.left = `${Math.max(12, Math.min(maxX, point.x - toolbar.offsetWidth / 2))}px`;
+  toolbar.style.top = `${Math.max(12, Math.min(maxY, point.y - toolbar.offsetHeight - 12))}px`;
+}
+
 function selectFurniture(id: string | undefined) {
   if (id && exteriorView) setMode('overview');
   if (id) setSidebarTab('furniture');
   selectedFurnitureId = id;
+  furnitureContextItem = id ? currentFurniture().find((item) => item.id === id) : undefined;
   furnitureLayer?.select(id);
   furniturePanel?.render();
 }
@@ -208,8 +257,8 @@ function mountFurniture() {
       onAdd: (item) => {
         if (exteriorView) setMode('overview');
         const room =
-          selectedRoom ??
-          viewer.level.rooms.find((room) => pointInPolygon(item.position, room.polygon));
+          viewer.level.rooms.find((room) => pointInPolygon(item.position, room.polygon)) ??
+          selectedRoom;
         const placed = findFurniturePlacement(item, viewer.level, currentFurniture(), room);
         if (!placed)
           throw new Error(
@@ -583,8 +632,8 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
     next === 'walk'
       ? `<kbd>ZQSD</kbd><span>ou flèches</span><i></i><kbd>E</kbd><span>Portes</span><i></i><kbd>Échap</kbd><span>Libérer la souris</span>`
       : next === 'plan'
-        ? `${icon('mouse', 17)}<span>Clic droit pour déplacer</span><i></i><span>Cliquer sur une pièce pour la sélectionner</span>`
-        : `${icon('mouse', 17)}<span>Glisser pour tourner</span><i></i><span>Molette pour zoomer</span><i></i><span>Clic droit pour déplacer</span>`;
+        ? `${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span><i></i><span>Cliquer sur une pièce pour la sélectionner</span>`
+        : `${icon('mouse-left', 17)}<span>Glisser gauche pour tourner</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span><i></i>${icon('mouse-wheel', 17)}<span>Molette pour zoomer</span>`;
   syncDisplayControls();
   el('#measure-instructions').hidden = true;
   el('#measure-label').hidden = true;
@@ -729,6 +778,13 @@ function updateNavigationPreferences(save = true) {
 }
 
 function wireEvents() {
+  document
+    .querySelectorAll<HTMLButtonElement>('[data-rotate-selected]')
+    .forEach((button) =>
+      button.addEventListener('click', () =>
+        rotateSelectedFurniture(Number(button.dataset.rotateSelected)),
+      ),
+    );
   for (const tab of ['house', 'furniture'] as const) {
     const button = el(`#sidebar-${tab}-tab`);
     button.addEventListener('click', () => setSidebarTab(tab));
@@ -746,7 +802,6 @@ function wireEvents() {
       setSidebarTab(next, true);
     });
   }
-  el('#quick-add-furniture').addEventListener('click', () => furniturePanel?.openAdd());
   const responsiveSidebar = matchMedia('(min-width: 761px)');
   setSidebar(responsiveSidebar.matches);
   responsiveSidebar.addEventListener('change', () => setSidebar(responsiveSidebar.matches));
@@ -961,7 +1016,7 @@ function wireEvents() {
   el('#help').addEventListener('click', () =>
     openDialog(
       'PRENDRE EN MAIN L’ATELIER',
-      `<h2>Faites comme chez vous.</h2><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>Glissez avec le bouton gauche pour tourner. Utilisez la molette pour zoomer et le bouton droit pour déplacer la vue.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau, puis glissez-le dans la scène. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Les photos et liens sont des références à dimensions vérifiées, pas une reconstruction automatique.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
+      `<h2>Faites comme chez vous.</h2><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>Glissez avec le bouton gauche pour tourner. Utilisez la molette pour zoomer et le bouton droit pour déplacer la vue.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau, puis glissez-le dans la scène. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
     ),
   );
   el('#source-info').addEventListener('click', () => {
@@ -1052,6 +1107,7 @@ async function start() {
     };
     viewer.onFrame = (frame) => {
       if (!current) return;
+      updateFurnitureContext();
       const labelsVisible =
         mode !== 'walk' && showLabels && !viewer.measureMode && !(ceiling && mode === 'overview');
       el('#orientation-arrow').style.transform = `rotate(${frame.planUpDegrees}deg)`;

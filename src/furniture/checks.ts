@@ -6,7 +6,7 @@ import {
   polygonInsidePolygon,
   wallSections,
 } from '../model/geometry';
-import { footprint, localToWorld, type FurnitureItem } from './model';
+import { footprint, footprintParts, localToWorld, type FurnitureItem } from './model';
 
 export interface FurnitureIssue {
   itemId: string;
@@ -21,6 +21,11 @@ export interface FurnitureDistance {
 }
 const EPS = 0.002;
 const dot = (a: Point2, b: Point2) => a[0] * b[0] + a[1] * b[1];
+const itemBase = (item: FurnitureItem, level: Level) =>
+  floorElevationAt(level, item.position) - level.elevation + (item.elevation ?? 0);
+const verticalOverlap = (a: FurnitureItem, b: FurnitureItem, level: Level) =>
+  Math.min(itemBase(a, level) + a.height, itemBase(b, level) + b.height) >
+  Math.max(itemBase(a, level), itemBase(b, level)) + EPS;
 
 /** SAT on convex footprints. Mere contact is allowed; penetration is not. */
 export function polygonsOverlap(a: Point2[], b: Point2[], epsilon = EPS): boolean {
@@ -124,10 +129,11 @@ export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureI
   const solids = wallSolids(level);
   for (let i = 0; i < items.length; i++) {
     const item = items[i],
-      polygon = footprint(item);
-    const floor = floorElevationAt(level, item.position) - level.elevation;
+      parts = footprintParts(item);
+    const floor = itemBase(item, level);
     if (
-      polygon.some((point) => {
+      (item.elevation ?? 0) <= EPS &&
+      parts.flat().some((point) => {
         const sample: Point2 = [
           item.position[0] + (point[0] - item.position[0]) * 0.999,
           item.position[1] + (point[1] - item.position[1]) * 0.999,
@@ -136,22 +142,21 @@ export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureI
       })
     )
       add(item, 'warning', 'Chevauche une différence de niveau du sol.');
-    if (!polygonInsidePolygon(polygon, level.outline))
+    if (!parts.every((part) => polygonInsidePolygon(part, level.outline)))
       add(item, 'error', 'Dépasse le contour de la maison.');
     if (floor + item.height > level.ceilingHeight + EPS)
       add(item, 'error', 'Dépasse la hauteur du plafond.');
     const walls = solids.filter((s) => s.top > floor + EPS && s.bottom < floor + item.height - EPS);
-    if (walls.some((wall) => polygonsOverlap(polygon, wall.polygon)))
+    if (walls.some((wall) => parts.some((part) => polygonsOverlap(part, wall.polygon))))
       add(item, 'error', 'Chevauche un mur, un vitrage ou un linteau.');
     for (let j = i + 1; j < items.length; j++) {
       const other = items[j];
-      const otherFloor = floorElevationAt(level, other.position) - level.elevation;
+      if (!verticalOverlap(item, other, level)) continue;
       if (
-        Math.min(floor + item.height, otherFloor + other.height) <=
-        Math.max(floor, otherFloor) + EPS
-      )
-        continue;
-      if (polygonsOverlap(polygon, footprint(other))) {
+        parts.some((part) =>
+          footprintParts(other).some((otherPart) => polygonsOverlap(part, otherPart)),
+        )
+      ) {
         add(item, 'error', `Chevauche « ${other.name} ».`);
         add(other, 'error', `Chevauche « ${item.name} ».`);
       }
@@ -161,7 +166,12 @@ export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureI
       if (
         !polygonInsidePolygon(envelope, level.outline) ||
         walls.some((w) => polygonsOverlap(envelope, w.polygon)) ||
-        items.some((other) => other.id !== item.id && polygonsOverlap(envelope, footprint(other)))
+        items.some(
+          (other) =>
+            other.id !== item.id &&
+            verticalOverlap(item, other, level) &&
+            footprintParts(other).some((part) => polygonsOverlap(envelope, part)),
+        )
       )
         add(
           item,
@@ -174,7 +184,12 @@ export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureI
       envelope &&
       (!polygonInsidePolygon(envelope, level.outline) ||
         walls.some((w) => polygonsOverlap(envelope, w.polygon)) ||
-        items.some((other) => other.id !== item.id && polygonsOverlap(envelope, footprint(other))))
+        items.some(
+          (other) =>
+            other.id !== item.id &&
+            verticalOverlap(item, other, level) &&
+            footprintParts(other).some((part) => polygonsOverlap(envelope, part)),
+        ))
     )
       add(item, 'warning', 'L’espace d’ouverture du meuble risque d’être gêné.');
     for (const wall of level.walls)
@@ -182,12 +197,19 @@ export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureI
         if (
           opening.kind === 'window' &&
           floor + item.height >=
-            (opening.sill ?? 0) + openingBase(wall, opening.offset + opening.width / 2, level)
+            (opening.sill ?? 0) + openingBase(wall, opening.offset + opening.width / 2, level) &&
+          floor <
+            (opening.sill ?? 0) +
+              openingBase(wall, opening.offset + opening.width / 2, level) +
+              opening.height -
+              EPS
         ) {
           if (
-            polygonsOverlap(
-              polygon,
-              wallRectangle(wall, opening.offset, opening.offset + opening.width, 0.12),
+            parts.some((part) =>
+              polygonsOverlap(
+                part,
+                wallRectangle(wall, opening.offset, opening.offset + opening.width, 0.12),
+              ),
             )
           )
             add(item, 'warning', 'Très proche d’un vitrage : vérifiez son ouverture et son accès.');
@@ -208,7 +230,10 @@ export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureI
             hinge[1] - Math.sin(angle) * vx + Math.cos(angle) * vz,
           ]);
         }
-        if (polygonsOverlap(polygon, sector))
+        if (
+          parts.some((part) => polygonsOverlap(part, sector)) &&
+          floor < opening.height + openingBase(wall, opening.offset + opening.width / 2, level)
+        )
           add(item, 'warning', 'Gêne le débattement d’une porte de la maison.');
       }
   }
@@ -255,12 +280,14 @@ export function furnitureDistances(
       direction: [Math.cos(item.rotation), -Math.sin(item.rotation)],
     },
   ];
-  const floor = floorElevationAt(level, item.position) - level.elevation;
+  const floor = itemBase(item, level);
   const obstacles = [
     ...wallSolids(level)
       .filter((s) => s.top > floor + EPS && s.bottom < floor + item.height - EPS)
       .map((s) => s.polygon),
-    ...items.filter((other) => other.id !== item.id).map(footprint),
+    ...items
+      .filter((other) => other.id !== item.id && verticalOverlap(item, other, level))
+      .flatMap(footprintParts),
   ];
   return definitions.flatMap(({ label, local, direction }) => {
     const from = localToWorld(item, ...local);

@@ -55,6 +55,11 @@ export interface Measurement {
   distance?: number;
 }
 
+/** Babylon scales pan deltas by the inverse of this value, in world metres. */
+export function configureOrbitInteractions(camera: ArcRotateCamera) {
+  camera.panningSensibility = 1000;
+}
+
 export class HouseViewer {
   readonly engine: Engine;
   scene!: Scene;
@@ -97,6 +102,7 @@ export class HouseViewer {
   private planZoom = 1;
   private resizeObserver: ResizeObserver;
   private pointerLockError = () => this.onPointerLockError?.();
+  private orbitPointerDown = (event: PointerEvent) => this.recoverOrbitControls(event);
 
   constructor(readonly canvas: HTMLCanvasElement) {
     this.engine = new Engine(
@@ -115,6 +121,7 @@ export class HouseViewer {
     document.addEventListener('pointerlockerror', this.pointerLockError);
     canvas.addEventListener('blur', this.clearKeys);
     canvas.addEventListener('wheel', this.planWheel, { passive: false });
+    canvas.addEventListener('pointerdown', this.orbitPointerDown, true);
     this.engine.runRenderLoop(() => {
       if (this.scene) this.scene.render();
     });
@@ -158,7 +165,7 @@ export class HouseViewer {
     this.orbit.lowerBetaLimit = 0.03;
     this.orbit.upperBetaLimit = Math.PI * 0.48;
     this.orbit.wheelPrecision = 12;
-    this.orbit.panningSensibility = 60;
+    configureOrbitInteractions(this.orbit);
     this.orbit.minZ = 0.03;
     this.orbit.maxZ = 1000;
     this.orbit.fov = 0.66;
@@ -320,6 +327,22 @@ export class HouseViewer {
     } catch {
       this.onPointerLockError?.();
     }
+  }
+
+  /** A previous interrupted furniture gesture must not strand the orbit controls. */
+  private recoverOrbitControls(event: PointerEvent) {
+    if (
+      !this.scene ||
+      this.mode === 'walk' ||
+      this.paused ||
+      ![0, 2].includes(event.button) ||
+      this.orbit.inputs.attachedToElement
+    )
+      return;
+    const rect = this.canvas.getBoundingClientRect();
+    const hit = this.scene.pick(event.clientX - rect.left, event.clientY - rect.top);
+    if (hit?.pickedMesh?.metadata?.kind === 'furniture') return;
+    this.orbit.attachControl(this.canvas, true);
   }
 
   focusRoom(id: string, enter = false) {
@@ -756,5 +779,6 @@ export class HouseViewer {
     this.scene?.dispose();
     this.engine.dispose();
     this.canvas.removeEventListener('wheel', this.planWheel);
+    this.canvas.removeEventListener('pointerdown', this.orbitPointerDown, true);
   }
 }

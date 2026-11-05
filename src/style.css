@@ -371,12 +371,7 @@ button svg {
 #furniture-workspace-panel {
   min-width: 0;
 }
-.quick-add-furniture {
-  display: flex;
-  width: calc(100% - 32px);
-  min-height: 44px;
-  margin: 16px 16px 4px;
-}
+
 .level-section {
   padding: 18px 10px 8px;
 }
@@ -1029,6 +1024,60 @@ button svg {
   pointer-events: none;
   box-shadow: 0 3px 10px #1e442225;
 }
+.furniture-context-toolbar {
+  position: absolute;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  max-width: calc(100% - 24px);
+  padding: 5px;
+  border: 1px solid #c9d9bf;
+  border-radius: 8px;
+  background: #fcfff7f5;
+  box-shadow: 0 5px 18px #26452b20;
+  backdrop-filter: blur(7px);
+  pointer-events: auto;
+  white-space: nowrap;
+}
+#furniture-context-name {
+  min-width: 0;
+  max-width: 120px;
+  overflow: hidden;
+  padding: 0 7px;
+  color: #3e6033;
+  font-size: 12px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+}
+.furniture-context-toolbar .readout {
+  color: var(--secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.furniture-context-toolbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  min-width: 48px;
+  min-height: 40px;
+  padding: 8px;
+  border: 1px solid #d4e1c9;
+  border-radius: 5px;
+  background: #eef5e6;
+  color: #3d6831;
+  font-size: 13px;
+  font-weight: 500;
+}
+.furniture-context-toolbar button:hover {
+  border-color: #96b783;
+  background: #e0edd3;
+}
+.furniture-context-toolbar button:active {
+  background: #d2e5c0;
+}
 .measure-instructions {
   position: absolute;
   z-index: 6;
@@ -1626,6 +1675,15 @@ dialog p {
   .help-grid {
     grid-template-columns: 1fr;
     gap: 21px;
+  }
+}
+@media (max-width: 480px) {
+  #furniture-context-name {
+    display: none;
+  }
+  .furniture-context-toolbar {
+    gap: 3px;
+    padding: 4px;
   }
 }
 @media (max-height: 600px) {

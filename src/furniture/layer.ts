@@ -77,6 +77,7 @@ export class FurnitureLayer {
         item.depth,
         item.height,
         item.color,
+        item.sofa,
       ]);
       let visual = this.visuals.get(item.id);
       if (visual?.signature !== signature) {
@@ -86,7 +87,7 @@ export class FurnitureLayer {
       }
       visual.root.position.set(
         item.position[0],
-        floorElevationAt(this.level, item.position),
+        floorElevationAt(this.level, item.position) + (item.elevation ?? 0),
         item.position[1],
       );
       visual.root.rotation.y = item.rotation;
@@ -179,7 +180,39 @@ export class FurnitureLayer {
             wood,
           );
     };
-    if (item.kind === 'sofa') {
+    if (item.kind === 'sofa' && item.sofa) {
+      const { side, seatDepth, returnWidth, shape } = item.sofa;
+      const sideSign = side === 'left' ? -1 : 1;
+      const rowZ = -d / 2 + seatDepth / 2;
+      const returnDepth = d - seatDepth;
+      const returnX = sideSign * (w / 2 - returnWidth / 2);
+      const returnZ = seatDepth / 2;
+      const regionalLegs = (width: number, depth: number, x: number, z: number) => {
+        const t = Math.min(width, depth, h) * 0.08;
+        for (const sx of [-1, 1])
+          for (const sz of [-1, 1])
+            box(t, h * 0.12, t, x + sx * (width / 2 - t), h * 0.06, z + sz * (depth / 2 - t), wood);
+      };
+      regionalLegs(w, seatDepth, 0, rowZ);
+      regionalLegs(returnWidth, returnDepth, returnX, returnZ);
+      box(w, h * 0.28, seatDepth, 0, h * 0.26, rowZ);
+      box(returnWidth, h * 0.28, returnDepth, returnX, h * 0.26, returnZ);
+      box(w * 0.84, h * 0.16, seatDepth * 0.77, 0, h * 0.48, rowZ + seatDepth * 0.06, soft);
+      box(returnWidth * 0.92, h * 0.16, returnDepth * 0.98, returnX, h * 0.48, returnZ, soft);
+      box(w, h * 0.6, seatDepth * 0.18, 0, h * 0.7, -d / 2 + seatDepth * 0.09);
+      const arm = Math.min(w * 0.08, returnWidth * 0.15);
+      for (const sx of [-1, 1])
+        box(
+          arm,
+          h * 0.37,
+          seatDepth * 0.83,
+          sx * (w / 2 - arm / 2),
+          h * 0.585,
+          rowZ + seatDepth * 0.085,
+        );
+      if (shape === 'corner')
+        box(arm, h * 0.6, returnDepth, sideSign * (w / 2 - arm / 2), h * 0.7, returnZ);
+    } else if (item.kind === 'sofa') {
       legs(h * 0.12);
       box(w, h * 0.28, d, 0, h * 0.26, 0);
       box(w * 0.84, h * 0.16, d * 0.77, 0, h * 0.48, d * 0.06, soft);
@@ -196,7 +229,12 @@ export class FurnitureLayer {
       box(w * 0.94, h * 0.035, d * 0.58, 0, h * 0.6875, d * 0.17, soft);
       for (const side of [-1, 1])
         box(w * 0.38, h * 0.12, d * 0.17, side * w * 0.23, h * 0.73, -d * 0.3, pale);
-    } else if (item.kind === 'table' || item.kind === 'desk') {
+    } else if (
+      item.kind === 'table' ||
+      item.kind === 'desk' ||
+      item.kind === 'coffee-table' ||
+      item.kind === 'side-table'
+    ) {
       const top = Math.min(h * 0.1, 0.07);
       legs(h - top);
       box(w, top, d, 0, h - top / 2, 0);
@@ -205,6 +243,36 @@ export class FurnitureLayer {
       legs(h * 0.44);
       box(w, h * 0.09, d, 0, h * 0.485, 0);
       box(w, h * 0.47, d * 0.1, 0, h * 0.765, -d * 0.45);
+    } else if (item.kind === 'ottoman') {
+      legs(h * 0.12);
+      box(w, h * 0.63, d, 0, h * 0.435, 0);
+      box(w, h * 0.25, d, 0, h * 0.875, 0, soft);
+    } else if (item.kind === 'bookcase') {
+      const panel = Math.min(w, d, h) * 0.06;
+      box(w, h, panel, 0, h / 2, -d / 2 + panel / 2);
+      for (const sx of [-1, 1]) box(panel, h, d, sx * (w / 2 - panel / 2), h / 2, 0);
+      for (let shelf = 0; shelf <= 4; shelf++)
+        box(w, panel, d, 0, panel / 2 + (shelf * (h - panel)) / 4, 0);
+    } else if (item.kind === 'tv-stand') {
+      const panel = Math.min(w, d, h) * 0.08;
+      legs(h * 0.12);
+      for (const y of [h * 0.12 + panel / 2, h - panel / 2]) box(w, panel, d, 0, y, 0);
+      box(w, h * 0.88, panel, 0, h * 0.56, -d / 2 + panel / 2);
+      for (const x of [-w / 2 + panel / 2, -w / 6, w / 6, w / 2 - panel / 2])
+        box(panel, h * 0.88, d, x, h * 0.56, 0);
+      for (const sx of [-1, 1]) {
+        box(w * 0.32, h * 0.8, panel, (sx * w) / 3, h * 0.56, d / 2 - panel / 2);
+        box(w * 0.08, panel, panel, (sx * w) / 3, h * 0.7, d / 2 - panel / 2, metal);
+      }
+      box(w / 3, panel, d, 0, h * 0.56, 0);
+    } else if (item.kind === 'tv') {
+      const frame = material('screen-frame', new Color3(0.055, 0.06, 0.065));
+      const screen = material('screen', new Color3(0.1, 0.14, 0.18));
+      screen.specularColor = new Color3(0.25, 0.28, 0.3);
+      box(w * 0.45, h * 0.035, d, 0, h * 0.0175, 0, frame);
+      box(w * 0.08, h * 0.09, d * 0.18, 0, h * 0.08, 0, frame);
+      box(w, h * 0.9, d * 0.2, 0, h * 0.55, -d * 0.1, frame);
+      box(w * 0.96, h * 0.84, d * 0.015, 0, h * 0.55, d * 0.0075, screen);
     } else if (item.kind === 'wardrobe' || item.kind === 'cabinet') {
       box(w, h, d * 0.95, 0, h / 2, -d * 0.025);
       for (const side of [-1, 1]) {
@@ -212,7 +280,7 @@ export class FurnitureLayer {
         box(
           Math.min(0.025, w * 0.03),
           Math.min(0.2, h * 0.2),
-          Math.min(0.025, d * 0.05),
+          Math.min(0.025, d * 0.025),
           side * w * 0.055,
           h * 0.56,
           d * 0.485,
@@ -230,6 +298,7 @@ export class FurnitureLayer {
       return;
     }
     if (event.type === PointerEventTypes.POINTERDOWN && event.event.button === 0) {
+      this.finishDrag();
       const picked = event.pickInfo?.pickedMesh;
       const id =
         picked?.metadata?.kind === 'furniture' ? (picked.metadata.id as string) : undefined;
@@ -272,7 +341,7 @@ export class FurnitureLayer {
       const visual = this.visuals.get(item.id);
       visual?.root.position.set(
         item.position[0],
-        floorElevationAt(this.level, item.position),
+        floorElevationAt(this.level, item.position) + (item.elevation ?? 0),
         item.position[1],
       );
       this.drawOverlays();
