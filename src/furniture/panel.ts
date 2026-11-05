@@ -4,6 +4,7 @@ import { escapeHtml as esc } from '../ui/format';
 import { icon } from '../ui/icons';
 import { measurementsFromForm, sofaDiagram } from './measurements';
 import { groupMembers } from './groups';
+import { FurnitureEditorDraft } from './editorDraft';
 import { televisionDimensions } from './television';
 import { createFurniture, type FurnitureItem } from './model';
 
@@ -15,6 +16,7 @@ export interface FurniturePanelAdapter {
   getAddRoomName?(): string | undefined;
   onAdd(item: FurnitureItem, linkedTo?: string): void;
   onUpdate(item: FurnitureItem): boolean | void;
+  onApplyDraft(items: FurnitureItem[], selectedId: string | undefined): boolean;
   onDelete(id: string): void;
   onDuplicate(id: string): void;
   onLink(id: string, otherId: string): void;
@@ -48,14 +50,6 @@ const KINDS: Record<FurnitureItem['kind'], string> = {
   ottoman: 'Pouf',
   'side-table': 'Table d’appoint',
 };
-const suggestedSpaces = (kind: FurnitureItem['kind']): NonNullable<FurnitureItem['clearances']> => {
-  if (kind === 'table') return { front: 0.75, back: 0.75, left: 0.75, right: 0.75 };
-  if (kind === 'bed') return { front: 0.6, back: 0.05, left: 0.6, right: 0.6 };
-  if (kind === 'wardrobe' || kind === 'desk')
-    return { front: 0.8, back: 0.05, left: 0.05, right: 0.05 };
-  if (kind === 'chair') return { front: 0.4, back: 0.6, left: 0.15, right: 0.15 };
-  return { front: 0.6, back: 0.05, left: 0.1, right: 0.1 };
-};
 const cm = (meters: number) => Math.round(meters * 1000) / 10;
 const degrees = (radians: number) =>
   Math.round((((((radians * 180) / Math.PI) % 360) + 360) % 360) * 10) / 10;
@@ -68,7 +62,7 @@ function disabled(value: boolean) {
 }
 
 function dimensionsFields(item: FurnitureItem) {
-  return `<fieldset class="furniture-tv-fields" data-tv-fields${item.kind === 'tv' ? '' : ' hidden disabled'}${item.locked ? ' disabled' : ''}><legend>Taille de l’écran</legend><label class="furniture-field">Diagonale <span>pouces</span><input name="tvDiagonal" type="number" min="5" max="300" step="0.1" placeholder="Ex. 55" value="${item.tvDiagonalInches ?? ''}"></label><p class="furniture-form-note" data-tv-size-note>Écran 16:9. Le pied et les bordures sont estimés ; les dimensions exactes restent ajustables ci-dessous.</p></fieldset><details class="furniture-dimensions" data-dimensions${item.kind === 'tv' ? '' : ' open'}><summary${item.kind === 'tv' ? '' : ' hidden'}>Dimensions exactes (facultatif)</summary><div class="furniture-field-grid"><label class="furniture-field">Largeur <span>cm</span><input name="width" type="number" min="5" max="2000" step="0.1" value="${cm(item.width)}" required${disabled(item.locked)}></label><label class="furniture-field"><span data-depth-label>${item.kind === 'sofa' ? 'Profondeur du corps du canapé' : 'Profondeur'}</span><span>cm</span><input name="depth" type="number" min="5" max="2000" step="0.1" value="${cm(item.sofa?.seatDepth ?? item.depth)}" required${disabled(item.locked)}></label><label class="furniture-field">Hauteur <span>cm</span><input name="height" type="number" min="5" max="1000" step="0.1" value="${cm(item.height)}" required${disabled(item.locked)}></label></div></details>`;
+  return `<fieldset class="furniture-tv-fields" data-tv-fields${item.kind === 'tv' ? '' : ' hidden disabled'}${item.locked ? ' disabled' : ''}><legend>Taille de l’écran</legend><label class="furniture-field">Diagonale <span>pouces</span><input name="tvDiagonal" type="number" min="5" max="300" step="0.1" placeholder="Ex. 55" value="${item.tvDiagonalInches ?? ''}"></label><p class="furniture-form-note" data-tv-size-note>Écran 16:9. Le pied et les bordures sont estimés ; les dimensions exactes restent ajustables ci-dessous.</p></fieldset><details class="furniture-dimensions" data-dimensions${item.kind === 'tv' ? '' : ' open'}><summary${item.kind === 'tv' ? '' : ' hidden'}>Dimensions exactes (facultatif)</summary><div class="furniture-field-grid"><label class="furniture-field">Largeur <span>cm</span><input name="width" type="number" min="5" max="2000" step="0.1" value="${cm(item.width)}" required${disabled(item.locked)}></label><label class="furniture-field"><span data-depth-label>${item.kind === 'sofa' ? 'Profondeur du corps' : 'Profondeur'}</span><span>cm</span><input name="depth" type="number" min="5" max="2000" step="0.1" value="${cm(item.sofa?.seatDepth ?? item.depth)}" required${disabled(item.locked)}></label><label class="furniture-field">Hauteur <span>cm</span><input name="height" type="number" min="5" max="1000" step="0.1" value="${cm(item.height)}" required${disabled(item.locked)}></label></div></details>`;
 }
 function updateTelevisionFields(form: HTMLFormElement, kind: string, reset = false) {
   const fields = form.querySelector<HTMLFieldSetElement>('[data-tv-fields]');
@@ -88,7 +82,7 @@ function updateTelevisionFields(form: HTMLFormElement, kind: string, reset = fal
 
 function sofaFields(item: FurnitureItem) {
   const sofa = item.sofa;
-  return `<fieldset class="furniture-sofa-fields" data-sofa-fields${item.locked ? ' disabled' : ''}${item.kind === 'sofa' ? '' : ' hidden'}><legend>Forme du canapé</legend><label class="furniture-field">Configuration<select name="sofaShape"><option value="straight"${!sofa ? ' selected' : ''}>Canapé droit</option><option value="corner"${sofa?.shape === 'corner' ? ' selected' : ''}>Canapé d’angle avec dossier en retour</option><option value="chaise"${sofa?.shape === 'chaise' ? ' selected' : ''}>Canapé avec méridienne</option></select></label><div class="furniture-sofa-config" data-sofa-config${sofa ? '' : ' hidden'}><label class="furniture-field">Retour vu de face<select name="sofaSide"><option value="left"${sofa?.side !== 'right' ? ' selected' : ''}>À gauche</option><option value="right"${sofa?.side === 'right' ? ' selected' : ''}>À droite</option></select></label><div class="furniture-field-grid two"><label class="furniture-field">Profondeur totale côté allongé <span>cm</span><input type="number" name="returnDepth" min="5" max="2000" step="0.1" value="${cm(sofa ? item.depth : Math.max(1.8, item.depth + 0.6))}"></label><label class="furniture-field">Largeur de la méridienne / du retour <span>cm</span><input type="number" name="returnWidth" min="5" max="2000" step="0.1" value="${cm(sofa?.returnWidth ?? 0.9)}"></label></div><p class="furniture-form-note">Les deux profondeurs partent de l’arrière du dossier. Saisissez la profondeur totale du côté allongé, pas la différence. La largeur du retour est celle de la place allongée vue de face.</p><div class="sofa-diagram" data-sofa-diagram></div></div></fieldset>`;
+  return `<fieldset class="furniture-sofa-fields" data-sofa-fields${item.locked ? ' disabled' : ''}${item.kind === 'sofa' ? '' : ' hidden'}><legend>Forme du canapé</legend><label class="furniture-field">Configuration<select name="sofaShape"><option value="straight"${!sofa ? ' selected' : ''}>Canapé droit</option><option value="corner"${sofa?.shape === 'corner' ? ' selected' : ''}>Canapé d’angle avec dossier en retour</option><option value="chaise"${sofa?.shape === 'chaise' ? ' selected' : ''}>Canapé avec méridienne</option></select></label><div class="furniture-sofa-config" data-sofa-config${sofa ? '' : ' hidden'}><label class="furniture-field">Retour vu de face<select name="sofaSide"><option value="left"${sofa?.side !== 'right' ? ' selected' : ''}>À gauche</option><option value="right"${sofa?.side === 'right' ? ' selected' : ''}>À droite</option></select></label><div class="furniture-field-grid two"><label class="furniture-field">Profondeur totale <span>cm</span><input type="number" name="returnDepth" min="5" max="2000" step="0.1" value="${cm(sofa ? item.depth : Math.max(1.8, item.depth + 0.6))}"></label><label class="furniture-field">Largeur du retour <span>cm</span><input type="number" name="returnWidth" min="5" max="2000" step="0.1" value="${cm(sofa?.returnWidth ?? 0.9)}"></label></div><p class="furniture-form-note">Les deux profondeurs partent de l’arrière du dossier. Saisissez la profondeur totale du côté allongé, pas la différence. La largeur du retour est celle de la place allongée vue de face.</p><div class="sofa-diagram" data-sofa-diagram></div></div></fieldset>`;
 }
 function updateSofaFields(form: HTMLFormElement, kind: string, expandDepth = false) {
   const fields = form.querySelector<HTMLFieldSetElement>('[data-sofa-fields]');
@@ -104,8 +98,7 @@ function updateSofaFields(form: HTMLFormElement, kind: string, expandDepth = fal
     )
     .forEach((input) => (input.disabled = kind !== 'sofa' || shape === 'straight'));
   const depthLabel = form.querySelector<HTMLElement>('[data-depth-label]');
-  if (depthLabel)
-    depthLabel.textContent = kind === 'sofa' ? 'Profondeur du corps du canapé' : 'Profondeur';
+  if (depthLabel) depthLabel.textContent = kind === 'sofa' ? 'Profondeur du corps' : 'Profondeur';
   if (expandDepth && kind === 'sofa' && shape !== 'straight') {
     const total = form.elements.namedItem('returnDepth') as HTMLInputElement;
     const body = Number((form.elements.namedItem('depth') as HTMLInputElement).value);
@@ -121,6 +114,7 @@ export class FurniturePanel {
   private overlays = { distances: true, clearances: false, openings: false };
   private editDialog: HTMLDialogElement;
   private editId?: string;
+  private draft?: FurnitureEditorDraft;
 
   constructor(
     private container: HTMLElement,
@@ -155,29 +149,14 @@ export class FurniturePanel {
   render() {
     const selectedId = this.adapter.getSelectedId();
     const items = this.adapter.getItems();
-    const selected = items.find((item) => item.id === selectedId);
     const checks = this.adapter.getChecks();
-    if (this.editId && !items.some((item) => item.id === this.editId)) this.editDialog.close();
     this.container.innerHTML = `
-      <div class="furniture-heading"><div class="eyebrow">Aménagement <span>${items.length}</span></div><div class="furniture-history"><button type="button" data-furniture-action="undo" aria-label="Annuler la dernière modification" title="Annuler · Ctrl Z"${disabled(!this.adapter.canUndo())}>↶</button><button type="button" data-furniture-action="redo" aria-label="Rétablir la modification" title="Rétablir · Ctrl Maj Z"${disabled(!this.adapter.canRedo())}>↷</button></div></div>
+      <div class="furniture-heading"><div class="eyebrow">Aménagement</div><div class="furniture-history"><button type="button" data-furniture-action="undo" aria-label="Annuler la dernière modification" title="Annuler · Ctrl Z"${disabled(!this.adapter.canUndo())}>↶</button><button type="button" data-furniture-action="redo" aria-label="Rétablir la modification" title="Rétablir · Ctrl Maj Z"${disabled(!this.adapter.canRedo())}>↷</button></div></div>
       <button type="button" class="furniture-add" data-furniture-action="add">${icon('plus', 17)} Ajouter un meuble</button>
-      ${items.length ? `<div class="furniture-items" role="group" aria-label="Meubles présents dans ce niveau">${items.map((item) => `<button type="button" class="furniture-item${item.id === selectedId ? ' selected' : ''}" data-furniture-select="${esc(item.id)}" aria-pressed="${item.id === selectedId}"><span class="furniture-item-swatch" style="background:${/^#[a-f\d]{6}$/i.test(item.color) ? item.color : '#a5a18a'}"></span><span>${esc(item.name)}<small>${cm(item.width)} × ${cm(item.depth)} × ${cm(item.height)} cm</small></span><span class="furniture-item-state">${item.locked ? '🔒' : ''}${checks.some((check) => check.itemId === item.id) ? '<span class="furniture-alert-dot" title="Un point est à vérifier">!</span>' : ''}</span></button>`).join('')}</div>` : '<p class="furniture-empty">Ajoutez un premier meuble, puis déplacez-le dans la maison pour essayer votre idée.</p>'}
-      ${selected ? `<button class="furniture-apply furniture-edit-selected" type="button" data-furniture-action="edit">Modifier ${esc(selected.name)}</button>` : ''}
+      ${items.length ? `<div class="furniture-items" role="group" aria-label="Meubles présents dans ce niveau">${items.map((item) => `<div class="furniture-item${item.id === selectedId ? ' selected' : ''}"><button type="button" class="furniture-item-select" data-furniture-select="${esc(item.id)}" aria-pressed="${item.id === selectedId}"><span class="furniture-item-swatch" style="background:${/^#[a-f\d]{6}$/i.test(item.color) ? item.color : '#a5a18a'}"></span><span class="furniture-item-copy">${esc(item.name)}<small>${cm(item.width)} × ${cm(item.depth)} × ${cm(item.height)} cm</small></span><span class="furniture-item-state">${item.locked ? '🔒' : ''}${checks.some((check) => check.itemId === item.id && check.severity === 'error') ? '<span class="furniture-alert-dot" title="Un conflit est à vérifier">!</span>' : ''}</span></button><button type="button" class="furniture-item-edit" data-furniture-edit-id="${esc(item.id)}" aria-label="Modifier ${esc(item.name)}" title="Modifier">${icon('edit', 15)}</button></div>`).join('')}</div>` : '<p class="furniture-empty">Ajoutez un premier meuble, puis déplacez-le dans la maison pour essayer votre idée.</p>'}
       ${
         items.length
-          ? `<fieldset class="furniture-overlays"><legend>Voir les espaces utiles</legend><label><input type="checkbox" data-furniture-overlay="distances"${checked(this.overlays.distances)}> Distances aux murs</label><label><input type="checkbox" data-furniture-overlay="clearances"${checked(this.overlays.clearances)}> Espaces de passage</label><label><input type="checkbox" data-furniture-overlay="openings"${checked(this.overlays.openings)}> Ouvertures des meubles</label></fieldset><div class="furniture-checks" aria-live="polite">${
-              checks.length
-                ? `<strong>${checks.length} point${checks.length > 1 ? 's' : ''} à vérifier</strong>${checks
-                    .slice(0, 6)
-                    .map(
-                      (check) =>
-                        `<button type="button" class="furniture-check ${check.severity}" data-furniture-select="${esc(check.itemId)}">${icon('info', 13)}<span>${esc(check.message)}</span></button>`,
-                    )
-                    .join(
-                      '',
-                    )}${checks.length > 6 ? '<p>Les autres points apparaissent en sélectionnant les meubles concernés.</p>' : ''}`
-                : `<p class="furniture-check-ok">${icon('check', 14)} Aucun conflit détecté dans ces contrôles simplifiés.</p>`
-            }<small>Les passages et débattements sont des aides visuelles, à confirmer sur place.</small></div>`
+          ? `<fieldset class="furniture-overlays"><legend>Repères</legend><label><input type="checkbox" data-furniture-overlay="distances"${checked(this.overlays.distances)}> Distances aux murs</label><label><input type="checkbox" data-furniture-overlay="clearances"${checked(this.overlays.clearances)}> Espaces de passage</label><label><input type="checkbox" data-furniture-overlay="openings"${checked(this.overlays.openings)}> Ouvertures des meubles</label></fieldset>${checks.length ? `<details class="furniture-checks"${this.container.querySelector<HTMLDetailsElement>('.furniture-checks')?.open ? ' open' : ''}><summary>${checks.length} point${checks.length > 1 ? 's' : ''} à vérifier</summary>${checks.map((check) => `<button type="button" class="furniture-check ${check.severity}" data-furniture-select="${esc(check.itemId)}">${icon('info', 13)}<span>${esc(check.message)}</span></button>`).join('')}<small>Les passages et débattements sont des aides visuelles, à confirmer sur place.</small></details>` : ''}`
           : ''
       }
     `;
@@ -195,9 +174,9 @@ export class FurniturePanel {
         ${item.kind === 'sofa' ? sofaFields(item) : ''}
         <details class="furniture-placement"><summary>Placement et options</summary>
         <label class="furniture-field">Hauteur de pose au-dessus du sol <span>cm</span><input name="elevation" type="number" min="0" max="2000" step="0.1" value="${cm(item.elevation ?? 0)}"${disabled(item.locked)}></label>
-        <div class="furniture-field-grid"><label class="furniture-field">Position X <span>cm</span><input name="x" type="number" min="-100000" max="100000" step="1" value="${cm(item.position[0])}" required${disabled(item.locked)}></label><label class="furniture-field">Position Z <span>cm</span><input name="z" type="number" min="-100000" max="100000" step="1" value="${cm(item.position[1])}" required${disabled(item.locked)}></label><label class="furniture-field">Rotation <span>°</span><input name="rotation" type="number" min="-3600" max="3600" step="1" value="${degrees(item.rotation)}" required${disabled(item.locked)}></label></div>
+        <div class="furniture-field-grid"><label class="furniture-field">Position X <span>cm</span><input name="x" type="number" min="-100000" max="100000" step="0.1" value="${cm(item.position[0])}" required${disabled(item.locked)}></label><label class="furniture-field">Position Z <span>cm</span><input name="z" type="number" min="-100000" max="100000" step="0.1" value="${cm(item.position[1])}" required${disabled(item.locked)}></label><label class="furniture-field">Rotation <span>°</span><input name="rotation" type="number" min="-3600" max="3600" step="0.1" value="${degrees(item.rotation)}" required${disabled(item.locked)}></label></div>
         <details class="furniture-advanced"${this.editDialog.querySelector<HTMLDetailsElement>('.furniture-advanced')?.open ? ' open' : ''}><summary>Passage et ouverture</summary><p>Les distances sont proposées pour tester votre aménagement ; ajustez-les à votre usage.</p><div class="furniture-field-grid"><label class="furniture-field">Devant <span>cm</span><input name="front" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.front ?? 0)}"></label><label class="furniture-field">Derrière <span>cm</span><input name="back" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.back ?? 0)}"></label><label class="furniture-field">À gauche <span>cm</span><input name="left" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.left ?? 0)}"></label><label class="furniture-field">À droite <span>cm</span><input name="right" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.right ?? 0)}"></label></div><div class="furniture-field-grid two"><label class="furniture-field">Ouverture<select name="openingKind"><option value="none"${!item.opening ? ' selected' : ''}>Aucune</option><option value="hinged"${item.opening?.kind === 'hinged' ? ' selected' : ''}>Porte battante</option><option value="drawer"${item.opening?.kind === 'drawer' ? ' selected' : ''}>Tiroir</option></select></label><label class="furniture-field">Débattement <span>cm</span><input name="reach" type="number" min="0" max="500" step="1" value="${cm(item.opening?.reach ?? 0.6)}"></label></div></details>
-        <label class="furniture-lock"><input type="checkbox" name="locked"${checked(item.locked)}> Verrouiller le placement</label>
+        <label class="furniture-lock"><input type="checkbox" name="locked"${checked(item.locked)}> Verrouiller le meuble</label>
         </details>
         <div class="furniture-edit-status" role="status"></div>
         <div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button class="primary-button" type="submit">Enregistrer</button></div>
@@ -215,7 +194,7 @@ export class FurniturePanel {
   }
 
   private groupControls(item: FurnitureItem) {
-    const items = this.adapter.getItems();
+    const items = this.draft?.items ?? this.adapter.getItems();
     const members = groupMembers(items, item.id);
     const candidates = items.filter((other) => !members.some((member) => member.id === other.id));
     if (members.length < 2 && !candidates.length) return '';
@@ -223,23 +202,44 @@ export class FurniturePanel {
   }
 
   openEdit(id: string) {
-    const item = this.adapter.getItems().find((item) => item.id === id);
-    if (!item) return;
-    if (this.dialog.open) this.dialog.close();
-    const alreadyOpen = this.editDialog.open;
-    this.editId = id;
-    this.editDialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-edit-title">Modifier ${esc(item.name)}</h2><button type="button" class="icon-button" data-edit-close aria-label="Fermer">${icon('close', 20)}</button></div>${this.details(item)}`;
-    const form = this.editDialog.querySelector<HTMLFormElement>('form')!;
-    updateSofaFields(form, item.kind);
-    updateTelevisionFields(form, item.kind, true);
-    if (!alreadyOpen) this.editDialog.showModal();
-    this.adapter.onDialogState?.(true);
-    this.focusDimensions();
+    try {
+      this.draft = new FurnitureEditorDraft(this.adapter.getItems(), this.adapter.getLevel(), id);
+      if (this.dialog.open) this.dialog.close();
+      this.renderDraft();
+      if (!this.editDialog.open) this.editDialog.showModal();
+      this.adapter.onDialogState?.(true);
+      this.focusDimensions();
+    } catch (error) {
+      this.adapter.onToast(
+        error instanceof Error ? error.message : 'Impossible d’ouvrir ce meuble.',
+      );
+    }
+  }
+
+  private renderDraft(message = '') {
+    const item = this.draft?.selected;
+    this.editId = item?.id;
+    this.editDialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-edit-title">${item ? `Modifier ${esc(item.name)}` : 'Retirer le meuble'}</h2><button type="button" class="icon-button" data-edit-close aria-label="Fermer">${icon('close', 20)}</button></div>${item ? this.details(item) : '<p>Le meuble sera retiré lorsque vous enregistrerez.</p><div class="furniture-edit-status" role="status"></div><div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button type="button" class="primary-button" data-save-draft>Enregistrer</button></div>'}`;
+    if (item) {
+      const form = this.editDialog.querySelector<HTMLFormElement>('form')!;
+      updateSofaFields(form, item.kind);
+      updateTelevisionFields(form, item.kind, true);
+    }
+    this.setEditStatus(message);
+  }
+
+  private setEditStatus(message: string) {
+    const status = this.editDialog.querySelector<HTMLElement>('.furniture-edit-status');
+    if (status) status.textContent = message;
   }
 
   private editClick = (event: Event) => {
     if ((event.target as HTMLElement).closest('[data-edit-close]')) {
       this.editDialog.close();
+      return;
+    }
+    if ((event.target as HTMLElement).closest('[data-save-draft]')) {
+      this.saveDraft();
       return;
     }
     this.click(event);
@@ -248,22 +248,9 @@ export class FurniturePanel {
   private editClosed = () => {
     if (this.editDialog.open) return;
     this.editId = undefined;
+    this.draft = undefined;
     this.dialogClosed();
   };
-
-  private refreshEditActions() {
-    const item = this.adapter.getItems().find((item) => item.id === this.editId);
-    if (!item) return;
-    const form = this.editDialog.querySelector<HTMLFormElement>('form')!;
-    for (const [key, value] of Object.entries({
-      x: cm(item.position[0]),
-      z: cm(item.position[1]),
-      rotation: degrees(item.rotation),
-    }))
-      (form.elements.namedItem(key) as HTMLInputElement).value = String(value);
-    this.editDialog.querySelector<HTMLElement>('[data-group-controls]')!.innerHTML =
-      this.groupControls(item);
-  }
 
   private doubleClick = (event: Event) => {
     const id = (event.target as HTMLElement).closest<HTMLElement>('[data-furniture-select]')
@@ -273,6 +260,11 @@ export class FurniturePanel {
 
   private click = (event: Event) => {
     const target = event.target as HTMLElement;
+    const edit = target.closest<HTMLElement>('[data-furniture-edit-id]');
+    if (edit) {
+      this.adapter.onEdit(edit.dataset.furnitureEditId!);
+      return;
+    }
     const select = target.closest<HTMLElement>('[data-furniture-select]');
     if (select) {
       this.adapter.onSelect(select.dataset.furnitureSelect!);
@@ -281,44 +273,26 @@ export class FurniturePanel {
     }
     const action = target.closest<HTMLElement>('[data-furniture-action]')?.dataset.furnitureAction;
     if (!action) return;
-    const item = this.adapter
-      .getItems()
-      .find((item) => item.id === (this.editId ?? this.adapter.getSelectedId()));
-    if (action === 'edit' && item) {
-      this.adapter.onEdit(item.id);
-      return;
-    }
-    if (action === 'link' && item) {
-      const other = this.editDialog.querySelector<HTMLSelectElement>('[data-link-target]')?.value;
-      if (other) this.adapter.onLink(item.id, other);
-      this.refreshEditActions();
-      return;
-    }
-    if (action === 'unlink' && item) {
-      this.adapter.onUnlink(item.id);
-      this.refreshEditActions();
+    if (this.editDialog.contains(target) && this.draft) {
+      try {
+        const other = this.editDialog.querySelector<HTMLSelectElement>('[data-link-target]')?.value;
+        const form = this.editDialog.querySelector<HTMLFormElement>('form');
+        if (form && !this.stageForm(form)) return;
+        if (action === 'link' && other) this.draft.link(other);
+        else if (action === 'unlink') this.draft.unlink();
+        else if (action === 'snap') this.draft.snap();
+        else if (action === 'duplicate') this.draft.duplicate();
+        else if (action === 'add-tv') this.draft.addTelevision();
+        else if (action === 'delete') this.draft.remove();
+        else return;
+        this.renderDraft('Modification préparée. Enregistrez pour l’appliquer, ou annulez.');
+      } catch (error) {
+        this.setEditStatus(error instanceof Error ? error.message : 'Cette action est impossible.');
+      }
       return;
     }
     if (action === 'add') this.openAdd();
-    else if (action === 'add-tv' && item) {
-      try {
-        this.adapter.onAdd(
-          createFurniture({
-            kind: 'tv',
-            position: [...item.position],
-            rotation: item.rotation,
-            elevation: (item.elevation ?? 0) + item.height,
-          }),
-          item.id,
-        );
-        this.editDialog.close();
-        this.adapter.onToast('Téléviseur ajouté. Ajustez ses dimensions à votre modèle.');
-      } catch (error) {
-        this.adapter.onToast(
-          error instanceof Error ? error.message : 'Impossible de placer le téléviseur.',
-        );
-      }
-    } else if (action === 'undo') {
+    else if (action === 'undo') {
       this.adapter.onUndo();
       this.render();
     } else if (action === 'redo') {
@@ -326,20 +300,6 @@ export class FurniturePanel {
       this.render();
     } else if (action === 'deselect') {
       this.adapter.onSelect(undefined);
-      this.render();
-    } else if (item) {
-      if (action === 'delete') this.adapter.onDelete(item.id);
-      else if (action === 'duplicate') this.adapter.onDuplicate(item.id);
-      else if (action === 'snap') this.adapter.onSnap(item.id);
-      else if (action === 'rotate' && !item.locked)
-        this.adapter.onUpdate({ ...item, rotation: item.rotation + Math.PI / 2 });
-      if (
-        action === 'duplicate' &&
-        this.adapter.getSelectedId() !== this.editId &&
-        this.editDialog.open
-      )
-        this.editDialog.close();
-      this.refreshEditActions();
       this.render();
     }
   };
@@ -349,6 +309,7 @@ export class FurniturePanel {
     if (!form) return;
     const kind =
       (form.elements.namedItem('kind') as HTMLSelectElement | null)?.value ??
+      this.draft?.items.find((item) => item.id === form.dataset.furnitureEdit)?.kind ??
       this.adapter.getItems().find((item) => item.id === form.dataset.furnitureEdit)?.kind ??
       'custom';
     const name = (event.target as HTMLInputElement).name;
@@ -379,12 +340,9 @@ export class FurniturePanel {
     }
   };
 
-  private submitDetails = (event: Event) => {
-    const form = (event.target as HTMLElement).closest<HTMLFormElement>('[data-furniture-edit]');
-    if (!form) return;
-    event.preventDefault();
-    const item = this.adapter.getItems().find((item) => item.id === form.dataset.furnitureEdit);
-    if (!item || !form.reportValidity()) return;
+  private stageForm(form: HTMLFormElement): boolean {
+    const item = this.draft?.selected;
+    if (!item || !form.reportValidity()) return false;
     const data = new FormData(form);
     const value = (key: string, fallback: number) =>
       data.has(key) ? Number(data.get(key)) : fallback;
@@ -419,20 +377,61 @@ export class FurniturePanel {
           ? undefined
           : { kind: openingKind as 'hinged' | 'drawer', reach: value('reach', 60) / 100 },
     };
+    // Displayed centimetres are rounded for readability. Untouched controls must
+    // preserve the original metres, particularly for objects flush against a wall.
+    const unchanged = (name: string) => {
+      const field = form.elements.namedItem(name) as HTMLInputElement | HTMLSelectElement | null;
+      if (!field) return true;
+      if (field instanceof HTMLSelectElement) {
+        const initial =
+          Array.from(field.options).find((option) => option.defaultSelected)?.value ??
+          field.options[0]?.value;
+        return field.value === initial;
+      }
+      return field.value === field.defaultValue;
+    };
+    if (unchanged('width')) next.width = item.width;
+    if (unchanged('height')) next.height = item.height;
+    if (unchanged('elevation')) next.elevation = item.elevation;
+    if (unchanged('depth') && (!next.sofa || unchanged('returnDepth'))) next.depth = item.depth;
+    if (next.sofa && item.sofa) {
+      if (unchanged('depth')) next.sofa.seatDepth = item.sofa.seatDepth;
+      if (unchanged('returnWidth')) next.sofa.returnWidth = item.sofa.returnWidth;
+      if (unchanged('returnDepth')) next.depth = item.depth;
+    }
+    if (unchanged('x')) next.position[0] = item.position[0];
+    if (unchanged('z')) next.position[1] = item.position[1];
+    if (unchanged('rotation')) next.rotation = item.rotation;
+    if (['front', 'back', 'left', 'right'].every(unchanged)) next.clearances = item.clearances;
+    if (unchanged('openingKind') && unchanged('reach')) next.opening = item.opening;
+    this.draft!.update(next);
+    return true;
+  }
+
+  private saveDraft() {
+    if (!this.draft) return;
     try {
-      if (this.adapter.onUpdate(next) === false) {
-        this.editDialog.querySelector<HTMLElement>('.furniture-edit-status')!.textContent =
-          'Modification refusée. Vérifiez les dimensions et la position du meuble.';
+      const form = this.editDialog.querySelector<HTMLFormElement>('form');
+      if (form && !this.stageForm(form)) return;
+      if (!this.adapter.onApplyDraft(this.draft.items, this.draft.selectedId)) {
+        this.setEditStatus(
+          'Modification refusée. Vérifiez les dimensions et la position du meuble.',
+        );
         return;
       }
       this.editDialog.close();
       this.render();
-      this.adapter.onToast('Meuble modifié.');
+      this.adapter.onToast('Aménagement modifié.');
     } catch (error) {
-      this.adapter.onToast(
+      this.setEditStatus(
         error instanceof Error ? error.message : 'Impossible de modifier ce meuble.',
       );
     }
+  }
+
+  private submitDetails = (event: Event) => {
+    event.preventDefault();
+    this.saveDraft();
   };
 
   openAdd() {
@@ -504,7 +503,6 @@ export class FurniturePanel {
         position: [
           ...(this.adapter.getAddPosition?.() ?? this.adapter.getLevel().spawn.position),
         ] as Point2,
-        clearances: suggestedSpaces(String(data.get('kind')) as FurnitureItem['kind']),
         color: String(data.get('color')),
       });
       this.adapter.onAdd(item);

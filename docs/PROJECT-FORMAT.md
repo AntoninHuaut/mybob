@@ -128,3 +128,9 @@ Importer le fichier avec le bouton **Importer une autre maison**. Un import ayan
 La sauvegarde est locale au navigateur : pas de synchronisation entre appareils. Exporter le projet conserve les dimensions et les hypothèses, pas la caméra courante. Les niveaux multiples sont sélectionnables, mais aucune circulation par escalier n’est développée dans cette version.
 
 L’export peut inclure `furnishing: {version: 1, levels: {...}}`, avec les meubles par identifiant de niveau. Ces données sont validées et sauvegardées séparément à l’import pour éviter de dupliquer les photos dans le stockage des plans.
+
+## Soleil facultatif
+
+`solar` peut contenir `latitude` (−90 à 90), `longitude` (−180 à 180), `northAngleDeg` (sens horaire depuis le haut du plan), et facultativement `timeZone` (IANA, par exemple `Europe/Paris`) et `label`. Aucun lieu n’est fourni par défaut. L’import valide ces champs ; les angles sont normalisés sur [0,360). Le calcul utilise un instant absolu, la date et l’heure locale étant converties avec le fuseau choisi.
+
+Les réglages appliqués dans l’interface restent dans `maison-atelier:solar:<projectId>` et remplacent ceux du fichier lors de l’utilisation locale. L’export inclut la configuration effective. La préférence locale `null` signifie que l’utilisateur a choisi de revenir à l’éclairage standard, même si le fichier d’origine contient un champ solaire. Ces données ne sont jamais envoyées au serveur d’hébergement.

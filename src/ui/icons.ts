@@ -9,6 +9,7 @@ const paths: Record<string, string> = {
   import: '<path d="M12 16V3m-5 5 5-5 5 5M4 14v6h16v-6"/>',
   export: '<path d="M12 3v13m-5-5 5 5 5-5M4 14v6h16v-6"/>',
   sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
+  bulb: '<path d="M9 18h6m-5 3h4M8 14a6 6 0 1 1 8 0c-1.5 1.2-1 3-1 4H9c0-1 .5-2.8-1-4Z"/>',
   roof: '<path d="m3 12 9-8 9 8M5 10v9h14v-9M9 15h6"/>',
   ruler: '<path d="m3 16 13-13 5 5L8 21Z"/><path d="m7 12 3 3m1-7 3 3m1-7 3 3"/>',
   label: '<path d="M20 13 11 22l-9-9V2h11l9 9Z"/><circle cx="7" cy="7" r="1"/>',

@@ -1,5 +1,6 @@
 import type { HouseProject, Point2 } from './types';
 import { pointInPolygon, polygonArea, polygonInsidePolygon, wallLength } from './geometry';
+import { validateSolarSettings } from './solarSettings';
 
 export class ProjectValidationError extends Error {}
 const fail = (message: string): never => {
@@ -93,6 +94,14 @@ export function validateProject(input: unknown): HouseProject {
     fail('Format attendu : schemaVersion 1, unités en mètres (m).');
   if (!text(p.id) || !text(p.name) || typeof p.description !== 'string')
     fail('Identifiant, nom ou description du projet manquant.');
+  let solar: HouseProject['solar'];
+  if (p.solar !== undefined) {
+    try {
+      solar = validateSolarSettings(p.solar);
+    } catch (error) {
+      fail(error instanceof Error ? error.message : 'Réglages du soleil invalides.');
+    }
+  }
   if (p.finishes !== undefined) {
     if (
       !record(p.finishes) ||
@@ -296,5 +305,7 @@ export function validateProject(input: unknown): HouseProject {
       }
     }
   }
-  return structuredClone(p);
+  const result = structuredClone(p);
+  if (solar !== undefined) result.solar = solar;
+  return result;
 }

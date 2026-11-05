@@ -82,12 +82,12 @@ function stateFixture(width: number, height: number) {
 test('exterior mode restores complete facades and roof, then restores editor cutaway and section', () => {
   const { viewer, scene, engine, exterior } = stateFixture(1000, 700);
   viewer.orbit.getViewMatrix(true);
-  viewer.setSectionHeight(1.2);
+  viewer.setSectionHeight(undefined);
   viewer.setCutaway(true);
-  assert.ok(scene.clipPlane);
+  assert.equal(scene.clipPlane, null);
   assert.ok(
-    exterior.facadeMeshes.some((mesh) => mesh.visibility === 0),
-    'cutaway hides the near facades in the editor',
+    exterior.facadeMeshes.some((mesh) => mesh.material?.clipPlane),
+    'automatic display locally lowers the near facades in the editor',
   );
   viewer.setExteriorView(true);
   assert.equal(scene.clipPlane, null);
@@ -95,16 +95,26 @@ test('exterior mode restores complete facades and roof, then restores editor cut
     exterior.roofMeshes.length > 0 && exterior.roofMeshes.every((mesh) => mesh.isEnabled()),
   );
   assert.ok(
-    exterior.facadeMeshes.every((mesh) => mesh.visibility === 1),
+    exterior.facadeMeshes.every((mesh) => mesh.visibility === 1 && !mesh.material?.clipPlane),
     'the exterior presents complete facades',
   );
   viewer.setExteriorView(false);
   assert.ok(exterior.roofMeshes.every((mesh) => !mesh.isEnabled()));
+  assert.equal(scene.clipPlane, null);
+  assert.ok(
+    exterior.facadeMeshes.some((mesh) => mesh.material?.clipPlane),
+    'the previous automatic facade cut returns in the editor',
+  );
+  viewer.setSectionHeight(1.2);
   assertSectionAt(scene, 1.2);
   assert.ok(
-    exterior.facadeMeshes.some((mesh) => mesh.visibility === 0),
-    'the previous cutaway setting returns in the editor',
+    exterior.facadeMeshes.every((mesh) => !mesh.material?.clipPlane),
+    'the explicit cut takes priority',
   );
+  viewer.setExteriorView(true);
+  assert.equal(scene.clipPlane, null);
+  viewer.setExteriorView(false);
+  assertSectionAt(scene, 1.2);
   scene.dispose();
   engine.dispose();
 });

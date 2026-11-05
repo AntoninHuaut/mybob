@@ -11,6 +11,7 @@ import { footprint, footprintParts, localToWorld, type FurnitureItem } from './m
 export interface FurnitureIssue {
   itemId: string;
   severity: 'warning' | 'error';
+  code?: 'clearance';
   message: string;
 }
 export interface FurnitureDistance {
@@ -122,9 +123,14 @@ export function wallSolids(level: Level) {
 
 export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureIssue[] {
   const issues: FurnitureIssue[] = [];
-  const add = (item: FurnitureItem, severity: FurnitureIssue['severity'], message: string) => {
+  const add = (
+    item: FurnitureItem,
+    severity: FurnitureIssue['severity'],
+    message: string,
+    code?: FurnitureIssue['code'],
+  ) => {
     if (!issues.some((issue) => issue.itemId === item.id && issue.message === message))
-      issues.push({ itemId: item.id, severity, message });
+      issues.push({ itemId: item.id, severity, message, ...(code ? { code } : {}) });
   };
   const solids = wallSolids(level);
   for (let i = 0; i < items.length; i++) {
@@ -177,6 +183,7 @@ export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureI
           item,
           'warning',
           'L’espace libre demandé autour de ce meuble n’est pas entièrement disponible.',
+          'clearance',
         );
     }
     const envelope = openingFootprint(item);

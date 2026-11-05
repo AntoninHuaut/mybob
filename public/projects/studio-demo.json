@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "studio-demo",
-  "name": "Un autre projet",
+  "name": "Démonstration",
   "description": "Studio de démonstration · modèle indépendant",
   "units": "m",
   "finishes": { "wallColor": "#f0eee9", "floorTint": "#f0f5ef", "joineryColor": "#f7f6f1" },

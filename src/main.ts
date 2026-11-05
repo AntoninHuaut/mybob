@@ -1,4 +1,6 @@
 import './style.css';
+import { SolarPanel } from './ui/solarPanel';
+import { solarPosition } from './scene/solar';
 import { HouseViewer, type ViewMode } from './scene/viewer';
 import type { HouseProject, Room } from './model/types';
 import { validateProject } from './model/validate';
@@ -19,13 +21,14 @@ import {
 } from './furniture/model';
 import { checkFurniture, snapFurniture } from './furniture/checks';
 import { findFurniturePlacement, getBuildingPlacementIssues } from './furniture/placement';
-import { deliveryChecks } from './furniture/delivery';
 import { applyFurnitureTransform, linkFurniture, unlinkFurniture } from './furniture/groups';
+import type { WallDisplay } from './scene/wallCutaway';
 
 const STORAGE = 'maison-atelier:projects:v1';
 const el = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
 let viewer: HouseViewer;
+let solarPanel: SolarPanel;
 let projects: HouseProject[] = [];
 let imported: HouseProject[] = [];
 let builtins: HouseProject[] = [];
@@ -53,12 +56,12 @@ el('#app').innerHTML = `
     <button id="toggle-sidebar" class="mobile-menu-button" aria-controls="project-sidebar" aria-expanded="false" aria-label="Afficher les pièces et projets">${icon('layers', 20)}</button>
     <a class="brand" href="#" aria-label="Maison, revenir à la vue d’ensemble"><span class="brand-mark">${icon('house', 23)}</span><span>maison<span class="brand-dot">.</span><small>ATELIER 3D</small></span></a>
     <div class="header-separator"></div><div class="project-breadcrumb"><span id="header-project">Votre espace</span>${icon('chevron', 13)}<span id="header-level">Rez-de-chaussée</span></div>
-    <div class="header-actions"><button class="text-button" id="export-project" title="Exporter les données du projet">${icon('export', 17)}<span>Exporter</span></button><button class="icon-button" id="help" title="Aide et commandes" aria-label="Aide et commandes">${icon('help')}</button></div>
+    <div class="header-actions"><span id="layout-status" class="layout-status" role="status" title="Aménagement sauvegardé sur cet ordinateur" aria-label="Aménagement sauvegardé sur cet ordinateur">Sauvegardé</span><button class="text-button" id="export-project" title="Exporter les données du projet">${icon('export', 17)}<span>Exporter</span></button><button class="icon-button" id="help" title="Aide et commandes" aria-label="Aide et commandes">${icon('help')}</button></div>
   </header>
   <div class="workspace">
     <button class="sidebar-backdrop" aria-label="Fermer le panneau des pièces" hidden></button>
     <aside class="sidebar" id="project-sidebar" aria-label="Projets et pièces">
-      <section class="project-section"><div class="eyebrow">Mon projet</div><label for="project-select" class="sr-only">Choisir une maison</label><div class="select-wrap"><span class="select-icon">${icon('house', 20)}</span><select id="project-select"></select>${icon('down', 15)}</div><p id="project-description" class="muted"></p><p id="demo-notice" class="demo-notice" hidden>Vous consultez une démonstration. Importez le fichier JSON de votre maison pour afficher votre projet. Il reste dans ce navigateur.</p><button id="import-project" class="import-button">${icon('plus', 16)} Importer ma maison</button><p class="project-privacy">Fichier JSON · conservé sur cet ordinateur</p><input type="file" id="import-file" accept="application/json,.json" hidden/><button id="remove-project" class="remove-project" hidden>${icon('trash', 14)} Retirer ce projet importé</button></section>
+      <section class="project-section"><div class="eyebrow">Mon projet</div><label for="project-select" class="sr-only">Choisir une maison</label><div class="project-select-row"><div class="select-wrap"><span class="select-icon">${icon('house', 20)}</span><select id="project-select"></select>${icon('down', 15)}</div><button id="remove-project" class="project-delete icon-button" disabled title="Les projets fournis ne peuvent pas être supprimés" aria-label="Supprimer le projet importé">${icon('trash', 18)}</button></div><p id="project-description" class="muted"></p><p id="demo-notice" class="demo-notice" hidden>Vous consultez une démonstration. Importez le fichier JSON de votre maison pour afficher votre projet. Il reste dans ce navigateur.</p><button id="import-project" class="import-button">${icon('plus', 16)} Importer ma maison</button><p class="project-privacy">Fichier JSON · conservé sur cet ordinateur</p><input type="file" id="import-file" accept="application/json,.json" hidden/></section>
       <div class="sidebar-tabs" role="tablist" aria-label="Outils du projet"><button type="button" id="sidebar-house-tab" role="tab" aria-selected="true" aria-controls="house-panel" tabindex="0">${icon('house', 17)} Maison</button><button type="button" id="sidebar-furniture-tab" role="tab" aria-selected="false" aria-controls="furniture-workspace-panel" tabindex="-1">${icon('layers', 17)} Meubles <span id="furniture-tab-count">0</span></button></div>
       <section id="house-panel" role="tabpanel" aria-labelledby="sidebar-house-tab" tabindex="0">
 <section class="level-section"><div class="eyebrow">Pièces <span id="room-count"></span></div><label for="level-select" class="sr-only">Choisir le niveau</label><div class="level-selector">${icon('layers', 17)}<select id="level-select"></select><span class="level-dot"></span></div><div id="room-list" class="room-list"></div></section>
@@ -71,8 +74,8 @@ el('#app').innerHTML = `
     <main class="viewport" id="viewport" aria-label="Atelier de visite 3D">
       <canvas id="scene" tabindex="0" aria-label="Vue 3D de la maison. Utilisez le bouton Visite pour vous déplacer au clavier."></canvas>
       <div class="viewport-top"><div class="view-heading"><span class="eyebrow" id="view-eyebrow">VOTRE MAISON, EN PERSPECTIVE</span><h1 id="view-title">Vue 3D</h1><p id="view-subtitle">Explorez les volumes, à votre rythme.</p></div><div class="view-switch" role="group" aria-label="Mode de visualisation"><button data-view="overview" class="active" aria-pressed="true">${icon('cube', 17)}Vue 3D</button><button id="view-exterior" aria-pressed="false" hidden>${icon('house', 17)}Extérieur</button><button data-view="plan" aria-pressed="false">${icon('plan', 17)}Plan</button><button data-view="walk" aria-pressed="false">${icon('walk', 17)}Visite</button></div></div>
-      <div class="floating-tools" role="group" aria-label="Options d’affichage"><button class="tool-button" id="tool-navigation" title="Réglages de navigation" aria-controls="navigation-panel" aria-expanded="false">${icon('compass')}<span>Navigation</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-measure" aria-pressed="false" title="Mesurer une distance au sol">${icon('ruler')}<span>Mesurer</span></button><div class="tool-divider"></div><button class="tool-button active" id="tool-labels" aria-pressed="true" title="Afficher les noms des pièces">${icon('label')}<span>Pièces</span></button><button class="tool-button" id="tool-dimensions" aria-pressed="false" title="Afficher les dimensions extérieures">${icon('plan')}<span>Cotes</span></button><button class="tool-button active" id="tool-lights" aria-pressed="true" title="Allumer les éclairages intérieurs">${icon('sun')}<span>Lumière</span></button><button class="tool-button" id="tool-ceiling" aria-pressed="false" title="Afficher le plafond en vue 3D">${icon('roof')}<span>Plafond</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-reset" title="Recentrer la vue">${icon('reset')}<span>Recentrer</span></button></div>
-      <section class="navigation-settings navigation-panel" id="navigation-panel" aria-label="Navigation et caméra" hidden><div class="navigation-panel-heading"><strong>Navigation</strong><button type="button" id="close-navigation" class="icon-button" aria-label="Fermer les réglages de navigation">${icon('close', 18)}</button></div><div class="navigation-settings-body"><button id="go-to" class="visit-room" aria-pressed="false">Cliquer pour entrer ici</button><p>Choisissez un point libre du sol, puis explorez au clavier.</p><label>Vitesse de marche <output id="walk-speed-value">2,8 m/s</output><input id="walk-speed" type="range" min="1" max="5" step="0.2" value="2.8"></label><label>Sensibilité de la souris <output id="look-sensitivity-value">100 %</output><input id="look-sensitivity" type="range" min="50" max="200" step="10" value="100"></label><small>Maj pour marcher plus vite. Ces réglages sont conservés sur cet ordinateur.</small><label>Hauteur du regard<select id="eye-height"><option value="1.65">Debout · 1,65 m</option><option value="1.15">Assis · 1,15 m</option><option value="0.95">À 0,95 m</option><option value="1.80">À 1,80 m</option></select></label><label class="navigation-check"><input type="checkbox" id="cutaway"> Masquer les façades gênantes</label><label class="navigation-check"><input type="checkbox" id="section-enable"> Vue en coupe</label><label>Hauteur de coupe <output id="section-value">1,20 m</output><input id="section-height" type="range" min="0.4" max="2.5" step="0.05" value="1.2" disabled></label><small>La coupe et les façades masquées servent aux vues de dessus. La visite conserve les volumes complets.</small></div></section>
+      <div class="floating-tools" role="group" aria-label="Options d’affichage"><button class="tool-button" id="tool-navigation" title="Réglages de navigation" aria-controls="navigation-panel" aria-expanded="false">${icon('compass')}<span>Navigation</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-measure" aria-pressed="false" title="Mesurer une distance au sol">${icon('ruler')}<span>Mesurer</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-solar" title="Soleil selon le lieu, la date et l’heure" aria-haspopup="dialog">${icon('sun')}<span>Soleil</span></button><button class="tool-button active" id="tool-labels" aria-pressed="true" title="Afficher les noms des pièces">${icon('label')}<span>Pièces</span></button><button class="tool-button" id="tool-dimensions" aria-pressed="false" title="Afficher les dimensions extérieures">${icon('plan')}<span>Cotes</span></button><button class="tool-button active" id="tool-lights" aria-pressed="true" title="Allumer les éclairages intérieurs">${icon('bulb')}<span>Éclairages intérieurs</span></button><button class="tool-button" id="tool-ceiling" aria-pressed="false" title="Afficher le plafond en vue 3D">${icon('roof')}<span>Plafond</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-reset" title="Recentrer la vue">${icon('reset')}<span>Recentrer</span></button></div>
+      <section class="navigation-settings navigation-panel" id="navigation-panel" aria-label="Navigation et caméra" hidden><div class="navigation-panel-heading"><strong>Navigation</strong><button type="button" id="close-navigation" class="icon-button" aria-label="Fermer les réglages de navigation">${icon('close', 18)}</button></div><div class="navigation-settings-body"><button id="go-to" class="visit-room" aria-pressed="false">Cliquer pour entrer ici</button><p>Choisissez un point libre du sol, puis explorez au clavier.</p><label>Vitesse de marche <output id="walk-speed-value">2,8 m/s</output><input id="walk-speed" type="range" min="1" max="5" step="0.2" value="2.8"></label><label>Sensibilité de la souris <output id="look-sensitivity-value">100 %</output><input id="look-sensitivity" type="range" min="50" max="200" step="10" value="100"></label><small>Maj pour marcher plus vite. Ces réglages sont conservés sur cet ordinateur.</small><label>Hauteur du regard<select id="eye-height"><option value="1.65">Debout · 1,65 m</option><option value="1.15">Assis · 1,15 m</option><option value="0.95">À 0,95 m</option><option value="1.80">À 1,80 m</option></select></label><label>Affichage des murs<select id="wall-display"><option value="auto">Automatique</option><option value="full">Murs complets</option><option value="low">Murs bas</option></select></label><label class="navigation-check"><input type="checkbox" id="section-enable"> Vue en coupe</label><label>Hauteur de coupe <output id="section-value">1,20 m</output><input id="section-height" type="range" min="0.4" max="2.5" step="0.05" value="1.2" disabled></label><small>En automatique, les murs gênants s’abaissent selon la vue. La visite conserve les volumes complets.</small></div></section>
       <div id="scene-labels" class="scene-labels"></div>
       <div id="furniture-context-toolbar" class="furniture-context-toolbar" role="group" aria-label="Actions du meuble sélectionné" hidden><span id="furniture-context-name"></span><button type="button" id="edit-selected-furniture" aria-label="Modifier le meuble sélectionné" title="Modifier le meuble">${icon('edit', 16)}</button><button type="button" data-rotate-selected="-90" aria-label="Tourner le meuble de 90 degrés vers la gauche" title="Tourner de 90° vers la gauche">↶ 90°</button><button type="button" data-rotate-selected="90" aria-label="Tourner le meuble de 90 degrés vers la droite" title="Tourner de 90° vers la droite">↷ 90°</button><button type="button" data-rotate-selected="15" aria-label="Tourner le meuble de 15 degrés" title="Rotation précise de 15°">+15°</button></div>
       <div class="dimension-label" id="width-label" hidden></div><div class="dimension-label" id="depth-label" hidden></div>
@@ -85,7 +88,6 @@ el('#app').innerHTML = `
       <div class="orientation" title="Direction du haut du document de référence"><span>HAUT DU PLAN</span><svg id="orientation-arrow" width="23" height="23" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 6 18-6-4-6 4Z" fill="currentColor"/></svg></div>
       <div class="mini-card"><div class="mini-heading"><span>VOUS REPÉRER</span><button id="mini-plan" aria-label="Ouvrir la vue en plan" title="Vue en plan">${icon('plan', 15)}</button></div><div id="minimap"></div><div class="mini-caption" id="mini-caption">Rez-de-chaussée</div></div>
       <div class="bottom-controls"><div class="control-hint" id="control-hint"><kbd>ZQSD</kbd><span>Déplacer la vue</span><i></i>${icon('mouse-left', 17)}<span>Glisser gauche pour tourner</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span></div><div class="scale-note"><span class="scale-line"></span> Dimensions en mètres</div></div>
-      <div id="layout-status" class="layout-status" role="status">Aménagement sauvegardé sur cet ordinateur</div>
       <div class="loading" id="loading"><div class="loading-mark">${icon('house', 35)}</div><span>Votre maison prend forme…</span></div>
       <div id="fatal-error" class="fatal-error" hidden></div>
     </main>
@@ -112,14 +114,20 @@ function currentFurniture() {
   return previewFurniture ?? furnitureHistory.items;
 }
 
+function setLayoutStatus(message = 'Aménagement sauvegardé sur cet ordinateur', unsaved = false) {
+  const status = el('#layout-status');
+  status.textContent = unsaved ? 'Non sauvegardé' : 'Sauvegardé';
+  status.title = message;
+  status.setAttribute('aria-label', message);
+  status.classList.toggle('unsaved', unsaved);
+}
+
 function persistFurniture() {
   try {
     saveLayout(current.id, viewer.level.id, furnitureHistory.items);
-    el('#layout-status').textContent = 'Aménagement sauvegardé sur cet ordinateur';
-    el('#layout-status').classList.remove('unsaved');
+    setLayoutStatus();
   } catch (error) {
-    el('#layout-status').textContent = 'Non sauvegardé · exportez le projet';
-    el('#layout-status').classList.add('unsaved');
+    setLayoutStatus('Aménagement non sauvegardé · exportez le projet', true);
     toast(error instanceof Error ? error.message : 'Sauvegarde indisponible.');
   }
 }
@@ -278,6 +286,11 @@ function mountFurniture() {
         if (!matchMedia('(min-width: 761px)').matches) setSidebar(false);
       },
       onUpdate: updateFurniture,
+      onApplyDraft: (items, selectedId) => {
+        if (!commitFurniture(items)) return false;
+        selectFurniture(selectedId);
+        return true;
+      },
       onLink: (id, other) => {
         try {
           if (commitFurniture(linkFurniture(currentFurniture(), id, other)))
@@ -335,11 +348,12 @@ function mountFurniture() {
       onOverlays: (options) => {
         overlays = options;
         furnitureLayer?.setOverlays(options);
+        furniturePanel?.render();
       },
-      getChecks: () => [
-        ...checkFurniture(currentFurniture(), viewer.level),
-        ...deliveryChecks(currentFurniture(), viewer.level),
-      ],
+      getChecks: () =>
+        checkFurniture(currentFurniture(), viewer.level).filter(
+          (issue) => overlays.clearances || issue.code !== 'clearance',
+        ),
       onToast: toast,
       onDialogState: (open) => {
         if (open && document.pointerLockElement) document.exitPointerLock();
@@ -348,10 +362,10 @@ function mountFurniture() {
     });
   furniturePanel.render();
   el('#furniture-tab-count').textContent = String(items.length);
-  el('#layout-status').textContent = restoreError
-    ? 'Aménagement non restauré · importez une sauvegarde'
-    : 'Aménagement sauvegardé sur cet ordinateur';
-  el('#layout-status').classList.toggle('unsaved', restoreError);
+  setLayoutStatus(
+    restoreError ? 'Aménagement non restauré · importez une sauvegarde' : undefined,
+    restoreError,
+  );
 }
 
 function setSidebarTab(tab: 'house' | 'furniture', focus = false) {
@@ -446,6 +460,7 @@ function loadProject(id: string, levelId?: string) {
   furnitureLayer = undefined;
   current = p;
   viewer.load(p, levelId);
+  solarPanel.load(p);
   selectedRoom = undefined;
   mode = 'overview';
   ceiling = false;
@@ -456,7 +471,7 @@ function loadProject(id: string, levelId?: string) {
   viewer.setDimensions(showDimensions);
   mountFurniture();
   viewer.setEyeHeight(Number(el<HTMLSelectElement>('#eye-height').value));
-  viewer.setCutaway(el<HTMLInputElement>('#cutaway').checked);
+  viewer.setWallDisplay(el<HTMLSelectElement>('#wall-display').value as WallDisplay);
   el<HTMLInputElement>('#section-height').max = String(viewer.level.ceilingHeight);
   el('#section-value').textContent =
     `${number(Number(el<HTMLInputElement>('#section-height').value))} m`;
@@ -476,7 +491,11 @@ function loadProject(id: string, levelId?: string) {
   el<HTMLSelectElement>('#level-select').value = viewer.level.id;
   el('#header-level').textContent = viewer.level.name;
   el('#room-count').textContent = String(viewer.level.rooms.length).padStart(2, '0');
-  el('#remove-project').hidden = !imported.some((project) => project.id === current.id);
+  const removable = imported.some((project) => project.id === current.id);
+  el<HTMLButtonElement>('#remove-project').disabled = !removable;
+  el('#remove-project').title = removable
+    ? 'Supprimer ce projet de cet ordinateur'
+    : 'Les projets fournis ne peuvent pas être supprimés';
   renderRooms();
   renderLabels();
   renderMinimap();
@@ -686,7 +705,13 @@ function downloadProject() {
     return;
   }
   const blob = new Blob(
-    [JSON.stringify({ ...current, furnishing: { version: 1, levels } }, null, 2)],
+    [
+      JSON.stringify(
+        { ...current, solar: solarPanel.settings, furnishing: { version: 1, levels } },
+        null,
+        2,
+      ),
+    ],
     { type: 'application/json' },
   );
   const url = URL.createObjectURL(blob);
@@ -872,8 +897,8 @@ function wireEvents() {
     if (mode === 'walk')
       el('#view-subtitle').textContent = `Une visite à ${number(height)} m du sol.`;
   });
-  el<HTMLInputElement>('#cutaway').addEventListener('change', (event) =>
-    viewer.setCutaway((event.target as HTMLInputElement).checked),
+  el<HTMLSelectElement>('#wall-display').addEventListener('change', (event) =>
+    viewer.setWallDisplay((event.target as HTMLSelectElement).value as WallDisplay),
   );
   const updateSection = () => {
     const enabled = el<HTMLInputElement>('#section-enable').checked,
@@ -892,7 +917,7 @@ function wireEvents() {
         draggingFurniture ||
         document.querySelector('dialog[open]') ||
         (event.target instanceof HTMLElement &&
-          (event.target.matches('input,textarea,select') ||
+          (event.target.closest('input,textarea,select,button,a,summary') ||
             event.target.closest('[role=tab],#navigation-panel') ||
             event.target.isContentEditable))
       )
@@ -984,16 +1009,56 @@ function wireEvents() {
     input.value = '';
   });
   el('#remove-project').addEventListener('click', () => {
-    const next = imported.filter((p) => p.id !== current.id);
-    try {
-      localStorage.setItem(STORAGE, JSON.stringify(next));
+    const project = imported.find((project) => project.id === current.id);
+    if (!project) return;
+    openDialog(
+      'SUPPRIMER CE PROJET',
+      `<h2>Supprimer « ${esc(project.name)} » ?</h2><p>Ce projet et les aménagements de ses niveaux seront supprimés de cet ordinateur. Exportez une copie pour les conserver.</p><button type="button" class="text-button" id="export-before-delete">${icon('export', 17)} Exporter avant de supprimer</button><button type="button" class="primary-button" id="confirm-delete-project">Supprimer le projet</button><button type="button" class="text-button" id="cancel-delete-project">Annuler</button>`,
+    );
+    el('#export-before-delete').addEventListener('click', downloadProject);
+    el('#cancel-delete-project').addEventListener('click', () =>
+      el<HTMLDialogElement>('#info-dialog').close(),
+    );
+    el('#confirm-delete-project').addEventListener('click', () => {
+      const next = imported.filter((candidate) => candidate.id !== project.id);
+      const keys = [
+        STORAGE,
+        `maison-atelier:solar:${project.id}`,
+        ...project.levels.map((level) => layoutStorageKey(project.id, level.id)),
+      ];
+      let backups: [string, string | null][] = [];
+      try {
+        backups = keys.map((key) => [key, localStorage.getItem(key)]);
+        localStorage.setItem(STORAGE, JSON.stringify(next));
+        for (const key of keys.slice(1)) localStorage.removeItem(key);
+      } catch {
+        for (const [key, value] of backups) {
+          try {
+            if (value === null) localStorage.removeItem(key);
+            else localStorage.setItem(key, value);
+          } catch {
+            /* Keep reporting the failed operation if storage remains unavailable. */
+          }
+        }
+        toast(
+          'Suppression impossible : la mémoire locale est indisponible. Votre projet reste ouvert.',
+        );
+        return;
+      }
       imported = next;
+      el<HTMLDialogElement>('#info-dialog').close();
       renderProjectOptions();
-      loadProject(projects[0].id);
-      toast('Projet importé retiré de ce navigateur.');
-    } catch {
-      toast('Impossible de modifier la mémoire locale.');
-    }
+      try {
+        loadProject(projects[0].id);
+        toast('Projet et aménagements supprimés de cet ordinateur.');
+      } catch (error) {
+        toast(
+          error instanceof Error
+            ? error.message
+            : 'Le projet a été supprimé, mais la vue suivante n’a pas pu être chargée.',
+        );
+      }
+    });
   });
   el('#tool-reset').addEventListener('click', () => {
     viewer.reset();
@@ -1010,6 +1075,7 @@ function wireEvents() {
     el('#width-label').hidden = !showDimensions;
     el('#depth-label').hidden = !showDimensions;
   });
+  el('#tool-solar').addEventListener('click', () => solarPanel.open());
   el('#tool-lights').addEventListener('click', () => {
     lights = !lights;
     activeButton('#tool-lights', lights);
@@ -1047,7 +1113,7 @@ function wireEvents() {
   el('#help').addEventListener('click', () =>
     openDialog(
       'PRENDRE EN MAIN L’ATELIER',
-      `<h2>Faites comme chez vous.</h2><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>ZQSD ou WASD pour déplacer la vue, Maj pour accélérer. Glissez avec le bouton gauche pour tourner, le bouton droit pour déplacer ; utilisez la molette pour zoomer. Les flèches déplacent aussi la vue quand aucun meuble n’est sélectionné.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte, F pour modifier le meuble visé. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau, puis glissez-le dans la scène. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
+      `<h2>Faites comme chez vous.</h2><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>ZQSD ou WASD pour déplacer la vue, Maj pour accélérer. Glissez avec le bouton gauche pour tourner, le bouton droit pour déplacer ; utilisez la molette pour zoomer. Les flèches déplacent aussi la vue quand aucun meuble n’est sélectionné.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte, F pour modifier le meuble visé. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau Meubles, puis glissez-le dans la scène. Dans la fenêtre de modification, les changements restent en aperçu jusqu’à validation ; Annuler conserve l’aménagement précédent. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Affichage des murs</h3><p>Dans Navigation, choisissez Automatique, Murs complets ou Murs bas pour dégager la vue. La visite conserve les murs complets.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
     ),
   );
   el('#source-info').addEventListener('click', () => {
@@ -1073,6 +1139,7 @@ function wireEvents() {
     }
   });
   document.addEventListener('keydown', (event) => {
+    if (document.querySelector('dialog[open]')) return;
     if (event.code === 'Escape') setNavigationPanel(false);
     if (event.code === 'Escape' && viewer.measureMode) endMeasure();
     if (event.code === 'Escape' && el('.workspace').classList.contains('sidebar-open')) {
@@ -1110,6 +1177,20 @@ async function start() {
       storageWarning = true;
     }
     viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'));
+    solarPanel = new SolarPanel({
+      onApply: (settings, instant) => {
+        viewer.setSolar(settings ? solarPosition(settings, instant) : undefined);
+        activeButton('#tool-solar', Boolean(settings));
+        el('.orientation span').textContent = settings ? 'NORD' : 'HAUT DU PLAN';
+        el('.orientation').title = settings
+          ? 'Nord géographique renseigné pour ce projet'
+          : 'Direction du haut du document de référence';
+      },
+      onDialogState: (open) => {
+        if (open && document.pointerLockElement) document.exitPointerLock();
+        viewer.setPaused(open);
+      },
+    });
     viewer.onModeChange = (next) => {
       if (!syncingViewerMode && current) setMode(next, true);
     };
@@ -1143,7 +1224,8 @@ async function start() {
       updateFurnitureContext();
       const labelsVisible =
         mode !== 'walk' && showLabels && !viewer.measureMode && !(ceiling && mode === 'overview');
-      el('#orientation-arrow').style.transform = `rotate(${frame.planUpDegrees}deg)`;
+      el('#orientation-arrow').style.transform =
+        `rotate(${frame.planUpDegrees + (solarPanel.settings?.northAngleDeg ?? 0)}deg)`;
       for (const room of viewer.level.rooms) {
         const label = document.querySelector<HTMLButtonElement>(
           `[data-label="${CSS.escape(room.id)}"]`,

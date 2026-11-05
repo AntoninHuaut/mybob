@@ -64,6 +64,16 @@ export interface ProjectSite {
   roofs?: SiteRoof[];
   notes: string[];
 }
+export interface SolarSettings {
+  latitude: number;
+  longitude: number;
+  /** Clockwise from the top of the plan (-Z); 90 degrees points toward +X. */
+  northAngleDeg: number;
+  /** Explicit IANA time zone, when provided; never inferred from personal context. */
+  timeZone?: string;
+  /** Optional place label supplied by the user. */
+  label?: string;
+}
 export interface HouseProject {
   schemaVersion: 1;
   id: string;
@@ -71,6 +81,8 @@ export interface HouseProject {
   description: string;
   units: 'm';
   site?: ProjectSite;
+  /** User-supplied geographic/orientation settings; absent unless configured. */
+  solar?: SolarSettings;
   finishes?: {
     wallColor?: string;
     floorTint?: string;

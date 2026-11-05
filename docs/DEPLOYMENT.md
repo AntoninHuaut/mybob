@@ -4,7 +4,7 @@
 
 `npm run build` produit désormais une application publique avec **uniquement le studio de démonstration**. Vite ne copie pas le dossier `public/` : un plugin embarque explicitement le favicon et `studio-demo.json`. Le vrai plan `private-project.json`, les PDF et les photos de chantier ne font pas partie de cet artefact.
 
-Les meubles, photos de référence et projets importés sont traités et conservés dans le navigateur. Leur export reste un fichier personnel. Ces données ne sont pas envoyées à Cloudflare par l’application. Un changement d’origine de site ne transfère pas le stockage du navigateur : **exporter le projet et son aménagement depuis l’ancien site privé avant la migration**, puis importer ce fichier sur le nouveau site.
+Les meubles, réglages solaires et projets importés sont traités et conservés dans le navigateur. Leur export reste un fichier personnel. Ces données ne sont pas envoyées à Cloudflare par l’application. Un changement d’origine de site ne transfère pas le stockage du navigateur : **exporter le projet et son aménagement depuis l’ancien site privé avant la migration**, puis importer ce fichier sur le nouveau site.
 
 Le dépôt GitHub reste privé. Le rendre public exposerait aussi son historique et le modèle de maison présent dans les sources : ce n’est pas nécessaire pour Cloudflare Pages.
 
@@ -47,4 +47,6 @@ Le fichier `wrangler.toml` déclare le dossier de sortie Pages. Aucun jeton Clou
 
 ## État de la connexion
 
-La configuration du dépôt peut être préparée et testée sans accès Cloudflare. L’activation réelle nécessite l’autorisation du compte Cloudflare et de son application GitHub. Le lien Sites privé existant ne change pas tant qu’une migration distincte n’est pas réalisée.
+La connexion GitHub → Cloudflare Pages est active sur `main`. Le site est `https://mybob-9rj.pages.dev/`, avec Cloudflare Access configuré par le propriétaire (emails autorisés et OTP). Un HTTP 302 sans authentification est attendu. Vérifier les checks GitHub CI et Cloudflare du commit précis avant d’annoncer une publication. Aucun ancien hébergement Sites n’est la cible de livraison.
+
+La recherche de commune du réglage Soleil contacte Open-Meteo uniquement après un clic explicite et transmet seulement le nom recherché. Les coordonnées choisies, plans et meubles restent dans le stockage local et les exports.

@@ -34,12 +34,13 @@ import {
 import { fitOverview, fitPlan, siteOverviewLevel } from './framing';
 import { panOrbitWithKeys } from './orbitNavigation';
 import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
+import { buildWallCutaway, type WallCutaway, type WallDisplay } from './wallCutaway';
+import type { SolarPosition } from './solar';
 import {
   applyEyeHeight,
   findVisitDestination,
   isSceneVisitDestination,
   sectionPlane,
-  wallFacesCamera,
 } from './navigation';
 import { cameraYaw, planHeading, setPlanView, stopOrbit, usePlanCoordinates } from './coordinates';
 
@@ -102,18 +103,19 @@ export class HouseViewer {
   private eyeHeight = EYE_HEIGHT;
   private walkSpeed = DEFAULT_WALK_SPEED;
   private lookSensitivity = 1;
-  private cutaway = false;
+  private wallDisplay: WallDisplay = 'auto';
+  private wallCutaway?: WallCutaway;
   private sectionHeight?: number;
   private planOpenings?: PlanOpenings;
-  private exteriorMeshes: {
-    wall: Level['walls'][number];
-    meshes: { mesh: AbstractMesh; visibility: number; pickable: boolean }[];
-  }[] = [];
   private dimensions: LinesMesh[] = [];
   private measureMeshes: AbstractMesh[] = [];
   private keyState = new Set<string>();
   private hemispheric!: HemisphericLight;
   private sun!: DirectionalLight;
+  private planLighting?: { diffuse: Color3; ground: Color3 };
+  private shadowsBeforeReadability?: boolean;
+  private solarPosition?: SolarPosition;
+  private baseSun?: { direction: Vector3; position: Vector3; diffuse: Color3 };
   private lightOn = true;
   private ceilingOn = false;
   private dimensionOn = false;
@@ -147,8 +149,13 @@ export class HouseViewer {
   }
 
   load(project: HouseProject, levelId?: string) {
+    this.wallCutaway?.dispose();
+    this.wallCutaway = undefined;
     this.planOpenings?.dispose();
     this.scene?.dispose();
+    this.planLighting = undefined;
+    this.shadowsBeforeReadability = undefined;
+    this.baseSun = undefined;
     this.exterior = undefined;
     this.exteriorFrame = undefined;
     this.exteriorView = false;
@@ -206,6 +213,9 @@ export class HouseViewer {
     );
     this.sun.intensity = 1.3;
     this.sun.diffuse = Color3.FromHexString('#fff5df');
+    this.captureSunPreset();
+    this.sun.shadowMinZ = 0.1;
+    this.sun.shadowMaxZ = 100;
     const shadow = new ShadowGenerator(2048, this.sun);
     shadow.usePercentageCloserFiltering = true;
     shadow.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
@@ -221,21 +231,8 @@ export class HouseViewer {
         if (this.exterior.roofMeshes.includes(mesh)) shadow.addShadowCaster(mesh);
       }
     }
-    this.exteriorMeshes = level.walls
-      .filter((wall) => wall.exterior)
-      .map((wall) => ({
-        wall,
-        meshes: [
-          ...(scene.getTransformNodeByName(`wall:${wall.id}`)?.getChildMeshes() ?? []),
-          ...(this.exterior?.facadeMeshes.filter((mesh) => mesh.metadata?.wallId === wall.id) ??
-            []),
-        ].map((mesh) => ({
-          mesh,
-          visibility: mesh.visibility,
-          pickable: mesh.isPickable,
-        })),
-      }));
     this.planOpenings = buildPlanOpenings(scene, level);
+    this.wallCutaway = buildWallCutaway(scene, level);
     this.buildDimensions();
     this.setMode('overview');
     scene.onPointerObservable.add((event) => {
@@ -503,6 +500,7 @@ export class HouseViewer {
     this.setGoToMode(false);
     this.updateSection();
     this.updateCutaway();
+    this.updateShadowPolicy();
     if (this.mode === 'overview') this.fitOverview();
   }
 
@@ -516,13 +514,54 @@ export class HouseViewer {
   }
 
   setCutaway(enabled: boolean) {
-    this.cutaway = enabled;
+    this.setWallDisplay(enabled ? 'auto' : 'full');
+  }
+
+  setWallDisplay(mode: WallDisplay) {
+    this.wallDisplay = mode;
     this.updateCutaway();
+    this.updateShadowPolicy();
   }
 
   setSectionHeight(height: number | undefined) {
     this.sectionHeight = height;
     this.updateSection();
+    this.updateCutaway();
+    this.updateShadowPolicy();
+  }
+
+  setSolar(position?: SolarPosition) {
+    this.captureSunPreset();
+    this.solarPosition = position;
+    this.updateLighting();
+  }
+
+  private captureSunPreset() {
+    if (!this.baseSun && this.sun?.direction && this.sun.position && this.sun.diffuse) {
+      this.baseSun = {
+        direction: this.sun.direction.clone(),
+        position: this.sun.position.clone(),
+        diffuse: this.sun.diffuse.clone(),
+      };
+    }
+  }
+
+  private updateShadowPolicy() {
+    if (!this.scene) return;
+    const explicitSection = this.sectionHeight !== undefined && Number.isFinite(this.sectionHeight);
+    const suppressed =
+      this.mode === 'plan' ||
+      (this.mode === 'overview' &&
+        !this.exteriorView &&
+        !explicitSection &&
+        (this.wallDisplay ?? 'auto') !== 'full');
+    if (suppressed) {
+      this.shadowsBeforeReadability ??= this.scene.shadowsEnabled;
+      this.scene.shadowsEnabled = false;
+    } else if (this.shadowsBeforeReadability !== undefined) {
+      this.scene.shadowsEnabled = this.shadowsBeforeReadability;
+      this.shadowsBeforeReadability = undefined;
+    }
   }
 
   private updateSection() {
@@ -535,18 +574,24 @@ export class HouseViewer {
   }
 
   private updateCutaway() {
+    if (!this.scene || !this.level || !this.orbit) return;
+    this.wallCutaway ??= buildWallCutaway(this.scene, this.level);
     const camera: Point2 = [this.orbit.position.x, this.orbit.position.z];
-    for (const { wall, meshes } of this.exteriorMeshes) {
-      const hidden =
-        this.cutaway &&
-        !this.exteriorView &&
-        this.mode === 'overview' &&
-        wallFacesCamera(this.level, wall, camera);
-      // Visibility is independent of Babylon's collision flag. Restore completely in a visit.
-      for (const { mesh, visibility, pickable } of meshes) {
-        mesh.visibility = hidden ? 0 : visibility;
-        mesh.isPickable = hidden ? false : pickable;
-      }
+    const active = this.mode === 'overview' && !this.exteriorView;
+    const explicitSection = this.sectionHeight !== undefined && Number.isFinite(this.sectionHeight);
+    const selected = this.wallCutaway.apply(
+      active && !explicitSection ? (this.wallDisplay ?? 'auto') : 'full',
+      camera,
+    );
+    if (this.mode !== 'plan') {
+      this.planOpenings?.setVisible(
+        active && (explicitSection || selected.size > 0),
+        explicitSection ? this.sectionHeight : 1.1,
+        {
+          markers: false,
+          wallIds: explicitSection ? undefined : selected,
+        },
+      );
     }
   }
 
@@ -591,13 +636,60 @@ export class HouseViewer {
 
   private updateLighting() {
     const interior = this.mode === 'walk';
+    const plan = this.mode === 'plan';
+    this.updateShadowPolicy();
     this.house.ceiling.setEnabled(interior || (this.ceilingOn && this.mode === 'overview'));
     this.house.fixtures.forEach((f) =>
       f.setEnabled(interior || (this.ceilingOn && this.mode === 'overview')),
     );
-    this.house.pointLights.forEach((l) => l.setEnabled(this.lightOn));
-    this.hemispheric.intensity = interior ? 0.42 : 0.55;
-    this.sun.intensity = 0.95;
+    this.house.pointLights.forEach((l) => l.setEnabled(this.lightOn && !plan));
+    if (plan) {
+      this.planLighting ??= {
+        diffuse: this.hemispheric.diffuse?.clone() ?? Color3.White(),
+        ground: this.hemispheric.groundColor?.clone() ?? Color3.White(),
+      };
+      this.hemispheric.diffuse = Color3.White();
+      this.hemispheric.groundColor = Color3.White();
+      this.hemispheric.intensity = 0.9;
+      this.sun.intensity = 0;
+    } else {
+      if (this.planLighting) {
+        this.hemispheric.diffuse = this.planLighting.diffuse;
+        this.hemispheric.groundColor = this.planLighting.ground;
+        this.planLighting = undefined;
+      }
+      this.hemispheric.intensity = interior ? 0.42 : 0.55;
+      this.sun.intensity = 0.95;
+      if (this.solarPosition) {
+        const solar = this.solarPosition;
+        const daylight = solar.daylight && solar.altitudeDeg > 0;
+        const direction = new Vector3(
+          solar.lightDirection.x,
+          solar.lightDirection.y,
+          solar.lightDirection.z,
+        ).normalize();
+        const centre = bounds(this.level.outline).center;
+        this.sun.direction = direction;
+        this.sun.position = new Vector3(
+          centre[0],
+          this.level.elevation + this.level.ceilingHeight / 2,
+          centre[1],
+        ).subtract(direction.scale(30));
+        this.sun.intensity = daylight
+          ? 0.8 * Math.sqrt(Math.max(0, Math.sin((solar.altitudeDeg * Math.PI) / 180)))
+          : 0;
+        this.sun.diffuse = Color3.Lerp(
+          Color3.FromHexString('#ffbd7a'),
+          Color3.FromHexString('#fff5e6'),
+          Math.max(0, Math.min(1, solar.altitudeDeg / 35)),
+        );
+        this.hemispheric.intensity = daylight ? 0.35 : 0.1;
+      } else if (this.baseSun) {
+        this.sun.direction = this.baseSun.direction.clone();
+        this.sun.position = this.baseSun.position.clone();
+        this.sun.diffuse = this.baseSun.diffuse.clone();
+      }
+    }
     if (interior) this.house.highlights.forEach((m) => m.setEnabled(false));
   }
 
@@ -827,6 +919,7 @@ export class HouseViewer {
   }
 
   dispose() {
+    this.wallCutaway?.dispose();
     this.planOpenings?.dispose();
     window.removeEventListener('keydown', this.keydown);
     window.removeEventListener('keyup', this.keyup);

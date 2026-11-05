@@ -39,6 +39,8 @@ function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa
   let selected: string | undefined = 'sofa';
   const added: FurnitureItem[] = [];
   let rejectUpdates = false;
+  const applied: FurnitureItem[][] = [];
+  let checks: { itemId: string; severity: 'warning' | 'error'; message: string }[] = [];
   const dialogStates: boolean[] = [];
   const panel = new FurniturePanel(container as unknown as HTMLElement, {
     getItems: () => structuredClone(items),
@@ -67,6 +69,13 @@ function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa
       if (rejectUpdates) return false;
       items = items.map((old) => (old.id === item.id ? item : old));
     },
+    onApplyDraft: (snapshot, id) => {
+      if (rejectUpdates) return false;
+      applied.push(structuredClone(snapshot));
+      items = structuredClone(snapshot);
+      selected = id;
+      return true;
+    },
     onDelete: () => {},
     onDuplicate: () => {},
     onSelect: (id) => {
@@ -80,7 +89,7 @@ function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa
     onDialogState: (open) => dialogStates.push(open),
     onOverlays: () => {},
     onSnap: () => {},
-    getChecks: () => [],
+    getChecks: () => checks,
     onToast: () => {},
     onLink: () => {},
     onUnlink: () => {},
@@ -98,6 +107,14 @@ function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa
     },
     panel,
     added,
+    applied,
+    getSelectedId: () => selected,
+    setChecks: (next: typeof checks) => {
+      checks = next;
+    },
+    setItems: (next: FurnitureItem[]) => {
+      items = structuredClone(next);
+    },
     cleanup: () => {
       panel.dispose();
       window.close();
@@ -304,6 +321,243 @@ test('rejected edits keep the popup and draft open without empty group boxes or 
     assert.equal(editor.querySelector<DOMInput>('input[name=name]')!.value, 'À ajuster');
     assert.equal(getItems()[0].name, 'Canapé');
     assert.ok(editor.querySelector('.furniture-edit-status')!.textContent);
+  } finally {
+    cleanup();
+  }
+});
+
+test('row pencil opens the editor and only errors receive a list badge', () => {
+  const { window, container, editor, cleanup } = setup(false);
+  try {
+    assert.equal(container.querySelector('.furniture-edit-selected'), null);
+    container
+      .querySelector('[data-furniture-edit-id]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.ok(editor.hasAttribute('open'));
+    assert.equal(container.querySelectorAll('.furniture-heading .eyebrow span').length, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+test('linking a draft and cancelling leaves the persisted furniture untouched', async () => {
+  const { window, panel, editor, getItems, setItems, applied, cleanup } = setup();
+  try {
+    const other = createFurniture({ kind: 'chair', id: 'chair', position: [6, 6] });
+    setItems([...getItems(), other]);
+    panel.openEdit('sofa');
+    editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
+    editor.querySelector<DOMInput>('input[name=name]')!.value = 'Nom en attente';
+    editor
+      .querySelector('[data-furniture-action=link]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(getItems()[0].groupId, undefined);
+    assert.equal(getItems()[0].name, 'Canapé');
+    assert.equal(applied.length, 0);
+    assert.match(editor.querySelector('.furniture-group-controls')!.textContent!, /Ensemble de 2/);
+    editor
+      .querySelector('[data-edit-close]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await Promise.resolve();
+    assert.equal(getItems()[0].groupId, undefined);
+    assert.equal(getItems()[0].name, 'Canapé');
+  } finally {
+    cleanup();
+  }
+});
+
+test('draft link and dimensional changes are applied together in one save', () => {
+  const { window, panel, editor, getItems, setItems, applied, cleanup } = setup();
+  try {
+    setItems([...getItems(), createFurniture({ kind: 'chair', id: 'chair', position: [6, 6] })]);
+    panel.openEdit('sofa');
+    editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
+    editor.querySelector<DOMInput>('input[name=width]')!.value = '240';
+    editor
+      .querySelector('[data-furniture-action=link]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    const form = editor.querySelector<DOMForm>('form')!;
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(applied.length, 1);
+    assert.equal(getItems()[0].width, 2.4);
+    assert.ok(getItems()[0].groupId);
+    assert.equal(getItems()[0].groupId, getItems()[1].groupId);
+    assert.ok(!editor.hasAttribute('open'));
+  } finally {
+    cleanup();
+  }
+});
+
+test('duplicating inside the popup remains cancellable and retains the edited source', async () => {
+  const { window, editor, getItems, applied, cleanup } = setup();
+  try {
+    editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
+    editor.querySelector<DOMInput>('input[name=name]')!.value = 'Canapé choisi';
+    editor
+      .querySelector('[data-furniture-action=duplicate]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.ok(editor.hasAttribute('open'));
+    assert.match(
+      editor.querySelector('input[name=name]')!.getAttribute('value')!,
+      /Canapé choisi.*copie/,
+    );
+    assert.equal(getItems().length, 1);
+    assert.equal(applied.length, 0);
+    editor
+      .querySelector('[data-edit-close]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await Promise.resolve();
+    assert.equal(getItems().length, 1);
+    assert.equal(getItems()[0].name, 'Canapé');
+  } finally {
+    cleanup();
+  }
+});
+
+test('adding a television inside the editor saves the staged stand and TV atomically', () => {
+  const { window, editor, getItems, applied, cleanup } = setup(true, 'tv-stand');
+  try {
+    editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
+    editor
+      .querySelector('[data-furniture-action=add-tv]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.ok(editor.hasAttribute('open'));
+    assert.ok(!editor.querySelector('[data-tv-fields]')!.hasAttribute('hidden'));
+    assert.equal(getItems().length, 1);
+    const form = editor.querySelector<DOMForm>('form')!;
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(applied.length, 1);
+    assert.equal(getItems().length, 2);
+    assert.equal(getItems()[0].groupId, getItems()[1].groupId);
+  } finally {
+    cleanup();
+  }
+});
+
+test('removing a furniture item requires saving and can be cancelled', async () => {
+  const { window, panel, editor, getItems, applied, cleanup } = setup();
+  try {
+    editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
+    editor
+      .querySelector('[data-furniture-action=delete]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(getItems().length, 1);
+    assert.ok(editor.querySelector('[data-save-draft]'));
+    editor
+      .querySelector('[data-edit-close]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await Promise.resolve();
+    assert.equal(getItems().length, 1);
+    panel.openEdit('sofa');
+    editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
+    editor
+      .querySelector('[data-furniture-action=delete]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    editor
+      .querySelector('[data-save-draft]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(getItems().length, 0);
+    assert.equal(applied.length, 1);
+  } finally {
+    cleanup();
+  }
+});
+
+test('failed popup actions show an inline error and leave the draft form open', () => {
+  const { window, editor, getItems, applied, cleanup } = setup();
+  try {
+    editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
+    editor
+      .querySelector('[data-furniture-action=snap]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.ok(editor.hasAttribute('open'));
+    assert.match(editor.querySelector('.furniture-edit-status')!.textContent!, /Rapprochez/);
+    assert.equal(getItems()[0].position[0], 3);
+    assert.equal(applied.length, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+test('renaming preserves precise geometry and absent optional spaces', () => {
+  const { window, panel, editor, getItems, setItems, cleanup } = setup(true, 'tv');
+  try {
+    const original = createFurniture({
+      kind: 'tv',
+      id: 'sofa',
+      position: [3.123456789, 3.987654321],
+      rotation: Math.PI / 7,
+    });
+    setItems([original]);
+    panel.openEdit(original.id);
+    editor.querySelector<DOMInput>('input[name=name]')!.value = 'TV renommée';
+    const form = editor.querySelector<DOMForm>('form')!;
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    const next = getItems()[0];
+    assert.equal(next.name, 'TV renommée');
+    for (const key of ['width', 'depth', 'height', 'rotation', 'elevation'] as const)
+      assert.equal(next[key], original[key]);
+    assert.deepEqual(next.position, original.position);
+    assert.equal(next.clearances, undefined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('all diagnostics are available in one collapsed section and only errors mark furniture', () => {
+  const { panel, container, setChecks, cleanup } = setup(false);
+  try {
+    setChecks(
+      Array.from({ length: 8 }, (_, index) => ({
+        itemId: 'sofa',
+        severity: 'warning',
+        message: `Point ${index + 1}`,
+      })),
+    );
+    panel.render();
+    assert.equal(container.querySelectorAll('.furniture-check').length, 8);
+    assert.ok(!container.querySelector('.furniture-checks')!.hasAttribute('open'));
+    assert.equal(container.querySelector('.furniture-alert-dot'), null);
+    setChecks([{ itemId: 'sofa', severity: 'error', message: 'Chevauche un meuble' }]);
+    panel.render();
+    assert.ok(container.querySelector('.furniture-alert-dot'));
+  } finally {
+    cleanup();
+  }
+});
+
+test('adding furniture does not impose suggested passage clearances', () => {
+  const { window, panel, added, cleanup } = setup(false);
+  try {
+    panel.openAdd();
+    const form = window.document.querySelector<DOMForm>('#furniture-add-form')!;
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(added.length, 1);
+    assert.equal(added[0].clearances, undefined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('cancelling a staged television addition leaves the stand alone', async () => {
+  const { window, editor, getItems, applied, cleanup } = setup(true, 'tv-stand');
+  try {
+    editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
+    editor
+      .querySelector('[data-furniture-action=add-tv]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.ok(editor.hasAttribute('open'));
+    editor
+      .querySelector('[data-edit-close]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await Promise.resolve();
+    assert.equal(getItems().length, 1);
+    assert.equal(getItems()[0].groupId, undefined);
+    assert.equal(applied.length, 0);
   } finally {
     cleanup();
   }

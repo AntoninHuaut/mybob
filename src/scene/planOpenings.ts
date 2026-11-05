@@ -11,7 +11,11 @@ import { alongWall, wallSections } from '../model/geometry';
 export interface PlanOpenings {
   readonly meshes: LinesMesh[];
   readonly wallCaps: Mesh[];
-  setVisible(enabled: boolean, cutHeight?: number): void;
+  setVisible(
+    enabled: boolean,
+    cutHeight?: number,
+    options?: { markers?: boolean; wallIds?: ReadonlySet<string> },
+  ): void;
   dispose(): void;
 }
 
@@ -101,17 +105,22 @@ export function buildPlanOpenings(scene: Scene, level: Level): PlanOpenings {
   return {
     meshes,
     wallCaps,
-    setVisible(enabled, cutHeight = 1.2) {
+    setVisible(enabled, cutHeight = 1.2, options = {}) {
       const height = Number.isFinite(cutHeight)
         ? Math.max(0.1, Math.min(level.ceilingHeight, cutHeight))
         : 1.2;
       for (const mesh of meshes) {
         mesh.position.y = level.elevation + height - 0.012;
-        mesh.setEnabled(enabled);
+        mesh.setEnabled(enabled && options.markers !== false);
       }
       for (const { mesh, bottom, top } of capSections) {
         mesh.position.y = level.elevation + height - 0.022;
-        mesh.setEnabled(enabled && bottom <= height && height < top);
+        mesh.setEnabled(
+          enabled &&
+            bottom <= height &&
+            height < top &&
+            (!options.wallIds || options.wallIds.has(mesh.metadata.wallId)),
+        );
       }
     },
     dispose() {

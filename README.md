@@ -2,6 +2,10 @@
 
 Application de visite de maisons en 3D pour ordinateur, réalisée avec **Babylon.js 9**, TypeScript et Vite. Le moteur est indépendant des projets : la maison reconstruite depuis les plans VP et un studio fictif utilisent exactement le même code.
 
+## Reprise avec un nouvel agent
+
+Lire [AGENTS.md](AGENTS.md), [le guide de passation locale](docs/HANDOFF.md) et [le skill de maintenance](.agents/skills/mybob-maintenance/SKILL.md). **Exporter son projet depuis le navigateur actuel avant de passer en local** : le dépôt ne contient pas l’aménagement sauvegardé dans ce navigateur.
+
 ## Démarrer
 
 Node.js 22.12+ ou 24 recommandé.
@@ -23,7 +27,7 @@ Le dossier `dist/` contient la version statique déployable. Les dépendances et
 
 Le build normal est **public et limité à la démonstration**. La commande `npm run ci` exécute tous les contrôles et vérifie qu’aucun plan personnel n’est présent dans l’artefact. Configuration Cloudflare Pages et GitHub Actions : [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable et un éclairage avec tone mapping. Détails et limites : [docs/V2.md](docs/V2.md), [docs/EXTERIOR.md](docs/EXTERIOR.md).
+La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable et un éclairage avec tone mapping. Le bouton Soleil ajoute un aperçu selon la commune, le nord du plan, la date et l’heure locale ; la vue Plan reste neutre. Détails et limites : [docs/V2.md](docs/V2.md), [docs/EXTERIOR.md](docs/EXTERIOR.md).
 
 ## Utilisation
 
@@ -71,6 +75,6 @@ Le téléphone permet de consulter la vue 3D et le plan en pleine largeur, avec 
 
 ## Extensions prévues
 
-Le mobilier forme une collection indépendante, liée au projet et au niveau, avec identifiants, dimensions en mètres et transformations. Le rendu, les contrôles de placement, l’historique et les sauvegardes sont isolés dans `src/furniture/`. Un futur test de livraison complet nécessiterait une simulation du trajet et des rotations ; le contrôle actuel est une vérification théorique de passage debout.
+Le mobilier forme une collection indépendante, liée au projet et au niveau, avec identifiants, dimensions en mètres et transformations. Le rendu, les contrôles de placement, l’historique et les sauvegardes sont isolés dans `src/furniture/`. Un futur test de livraison complet nécessiterait une simulation du trajet et des rotations ; le module théorique de passage debout reste dans le code, mais n’est plus exposé comme alerte de placement.
 
 Les identifiants sont stables et le format porte `schemaVersion: 1`, afin de permettre des migrations ultérieures. Aucun outil d’analyse automatique de PDF n’est inclus.

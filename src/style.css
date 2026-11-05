@@ -148,6 +148,8 @@ button svg {
 }
 .header-actions {
   margin-left: auto;
+  min-width: 0;
+  flex-shrink: 0;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -245,6 +247,33 @@ button svg {
   font-weight: 450;
   color: var(--secondary);
 }
+.project-select-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  margin-top: 9px;
+}
+.project-select-row > .select-wrap {
+  flex: 1;
+  min-width: 0;
+  margin-top: 0;
+}
+.project-select-row > .project-delete {
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  border: 1px solid #e0e5dc;
+  color: #7c6a60;
+}
+.project-select-row > .project-delete:hover:not(:disabled) {
+  border-color: #ddc9bc;
+  background: #f6efea;
+  color: #885d49;
+}
+.project-select-row > .project-delete:disabled {
+  opacity: 0.35;
+}
 .select-wrap {
   display: flex;
   align-items: center;
@@ -266,6 +295,7 @@ button svg {
   color: #667c60;
 }
 .select-wrap select {
+  min-width: 0;
   appearance: none;
   background: transparent;
   border: 0;
@@ -306,15 +336,6 @@ button svg {
   color: var(--secondary);
   font-size: 12px;
   line-height: 1.55;
-}
-.remove-project {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  min-height: 32px;
-  padding: 8px 0 0;
-  font-size: 12px;
-  color: #805c40;
 }
 .demo-notice {
   margin: 10px 0 13px;
@@ -1279,24 +1300,33 @@ kbd {
   white-space: nowrap;
 }
 .layout-status {
-  position: absolute;
-  z-index: 4;
-  bottom: 59px;
-  left: 22px;
-  max-width: calc(100% - 215px);
-  padding: 6px 9px;
-  border: 1px solid #d4e3c7;
-  border-radius: 5px;
-  background: #f8fff0e6;
-  color: #526f42;
+  position: static;
+  display: inline-block;
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 150px;
+  overflow: hidden;
+  color: #637268;
   font-size: 11px;
-  line-height: 1.5;
-  pointer-events: none;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.layout-status::before {
+  content: '';
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 6px;
+  border-radius: 50%;
+  background: #6b946d;
+  vertical-align: 1px;
 }
 .layout-status.unsaved {
-  color: #845d2b;
-  background: #fff3dc;
-  border-color: #e8d6b4;
+  color: #9b4f43;
+}
+.layout-status.unsaved::before {
+  background: #b16754;
 }
 
 /* Dialogs and clear feedback use the same type scale as the workspace. */
@@ -1561,6 +1591,17 @@ dialog p {
   .header-actions {
     gap: 3px;
   }
+  .layout-status {
+    flex: 0 0 8px;
+    width: 8px;
+    max-width: 8px;
+    overflow: visible;
+    font-size: 0;
+    line-height: 1;
+  }
+  .layout-status::before {
+    margin-right: 0;
+  }
   .text-button {
     width: 40px;
     padding: 0;
@@ -1678,13 +1719,6 @@ dialog p {
   .scene-label > small {
     font-size: 9px;
   }
-  .layout-status {
-    bottom: 60px;
-    left: 12px;
-    max-width: calc(100% - 174px);
-    font-size: 10px;
-    padding: 5px 7px;
-  }
   .measure-instructions {
     left: 12px;
     right: 12px;
@@ -1737,9 +1771,6 @@ dialog p {
   .tool-button > svg {
     width: 18px;
   }
-  .layout-status {
-    max-width: calc(100% - 96px);
-  }
 }
 @media (max-width: 760px) and (max-height: 600px) {
   .floating-tools {
@@ -1748,9 +1779,6 @@ dialog p {
   .tool-button {
     width: 36px;
     height: 33px;
-  }
-  .layout-status {
-    max-width: calc(100% - 28px);
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -8,7 +8,7 @@ Les ajouts et duplications cherchent une place libre dans la pièce choisie. En 
 
 Les anciennes positions invalides importées ne sont pas déplacées silencieusement. Elles restent signalées et peuvent être sorties du mur par glisser. Le champ Position permet de replacer directement un meuble dans une autre pièce ; le glisser respecte les obstacles sur son trajet.
 
-Les distances partent des centres des quatre faces. Les enveloppes de passage et d’ouverture sont réglables ; les alertes d’intersection et de débattement sont des aides géométriques conservatrices, sans certification réglementaire. Le contrôle de livraison vérifie uniquement un volume debout face à une porte d’entrée modélisée : ni l’inclinaison, ni l’emballage, ni les virages du trajet ne sont simulés.
+Les distances partent des centres des quatre faces. Les enveloppes de passage et d’ouverture sont réglables ; les alertes d’intersection et de débattement sont des aides géométriques conservatrices, sans certification réglementaire. Le module de livraison théorique ne tient compte ni de l’inclinaison, ni de l’emballage, ni des virages du trajet ; il n’est plus exposé comme alerte de placement. Les marges de passage sont facultatives, sans valeur imposée à l’ajout.
 
 Les aménagements sont sauvegardés localement par maison et par niveau. L’export du projet inclut les meubles. Les références déjà présentes dans les anciens fichiers restent compatibles, mais ne sont plus proposées dans l’interface. Une erreur de sauvegarde est signalée si la mémoire locale est indisponible ou pleine. Conserver un export pour transférer ou sauvegarder le travail.
 
@@ -46,7 +46,7 @@ Les tests du contrôleur DOM utilisent Happy DOM (sans navigateur graphique) pou
 
 ## Popup et commandes discrètes
 
-Modifier ouvre une fenêtre modale avec Annuler et Enregistrer. Fermer, Annuler ou Échap laisse les champs non validés sans effet. Un placement refusé conserve la popup et la saisie pour correction. Les groupes et actions explicites restent disponibles dans la popup ; les actions secondaires sont regroupées sous Autres actions et Favori est retiré. Un bloc de liaison sans contenu n’est plus rendu.
+Modifier ouvre une fenêtre modale avec Annuler et Enregistrer. Fermer, Annuler ou Échap abandonne tout le brouillon, y compris lier, séparer, dupliquer, aligner, ajouter une TV et retirer. Enregistrer applique les changements en une seule opération annulable. Un placement refusé conserve la popup et la saisie pour correction. Les groupes et actions explicites restent disponibles dans la popup ; les actions secondaires sont regroupées sous Autres actions et Favori est retiré. Un bloc de liaison sans contenu n’est plus rendu.
 
 La barre de sélection est désormais compacte et dockée en bas de la vue ; elle ne suit plus le meuble et ne masque pas son déplacement. Navigation est un panneau distinct, près des outils de vue, pour les réglages de caméra.
 

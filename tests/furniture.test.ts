@@ -95,6 +95,10 @@ test('required clearances and drawer opening are conservative warnings', () => {
   assert.equal(issues.filter((i) => i.severity === 'error').length, 0);
   assert.ok(issues.some((i) => i.message.includes('espace libre')));
   assert.ok(issues.some((i) => i.message.includes('ouverture')));
+  assert.equal(issues.filter((issue) => issue.code === 'clearance').length, 1);
+  const withoutClearances = issues.filter((issue) => issue.code !== 'clearance');
+  assert.ok(withoutClearances.some((issue) => issue.message.includes('ouverture')));
+  assert.ok(!withoutClearances.some((issue) => issue.message.includes('espace libre')));
 });
 
 test('door swing is checked even while the wall aperture is geometrically clear', () => {
