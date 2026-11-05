@@ -21,7 +21,9 @@ Read [docs/HANDOFF.md](docs/HANDOFF.md) first, then the relevant technical docs.
 
 ## Work and verification
 
-Use Node 24, `npm ci`, and `npm run ci` for a release. Tests cover DOM behavior with Happy DOM and geometry with Babylon NullEngine. Neither proves visual correctness: use a real browser when available and record what was actually inspected.
+Use Node 24, `pnpm install --frozen-lockfile`, and `pnpm run ci` for a release. Run `pnpm run test:e2e` for browser workflows. Tests cover DOM behavior with Happy DOM and geometry with Babylon NullEngine. Neither proves visual correctness: use a real browser when available and record what was actually inspected.
+
+All changes must go through a pull request (MR) from a `codex/` branch to `main`. Do not commit or push changes directly to `main`. A local test pass is not a substitute for the remote CI. Never merge while any required check is pending, failed, cancelled or missing; verify the checks for the exact latest PR commit. The owner authorizes auto-merge through GitHub once required CI checks pass; enable it for completed, validated changes without asking again. Never bypass branch protections or required checks.
 
 Use existing app architecture instead of rewriting the renderer or migrating frameworks. When the user asks for independent agent reviews, delegation is appropriate; otherwise follow the current session's delegation rules. Complete authorized fixes, but never claim a deployment until GitHub CI and the Cloudflare Pages check succeed for the pushed commit.
 

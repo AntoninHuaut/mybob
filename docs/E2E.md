@@ -15,6 +15,8 @@ Sous Linux, la première installation peut nécessiter `pnpm exec playwright ins
 
 Après un build public déjà vérifié, `pnpm run test:e2e:built` lance les scénarios seuls. `pnpm run test:e2e:report` ouvre le rapport HTML local. On peut cibler un format avec `pnpm exec playwright test --project=mobile-chromium`, ou afficher le navigateur avec `--headed`.
 
+Les tests indépendants restent à un worker par machine pour limiter la concurrence WebGL logicielle. Le benchmark local à deux workers a donné 51,1 s contre 52,2 s à un worker : gain trop faible pour changer ce défaut. On peut essayer `pnpm run test:e2e:built --workers=2` sur une machine plus puissante. `fullyParallel` permet de répartir les tests du même fichier entre plusieurs lots CI.
+
 ## Couverture
 
 Six scénarios sont exécutés en Chromium ordinateur 1280 × 720 et en émulation mobile tactile 390 × 844, soit douze exécutions :
@@ -30,7 +32,13 @@ Les actions passent par l’interface et les fichiers téléchargés. Aucun acc�
 
 ## CI et diagnostic
 
-GitHub Actions exécute les E2E après les tests unitaires, le build et le contrôle public. Chromium et ses dépendances système sont installés dans le job. Un scénario en échec fait échouer la CI, sans retry masquant une instabilité. Le rapport HTML et les fichiers des scénarios sont conservés comme artefact GitHub pendant sept jours ; les traces et captures sont conservées en cas d’échec. Seule la démonstration doit être utilisée dans ces rapports.
+GitHub Actions compile et contrôle une seule fois le build public, puis le transmet par artefact à trois runners E2E parallèles. Chaque runner exécute quatre des douze tests (`--shard=1/3`, `2/3`, `3/3`), avec un seul worker pour éviter que plusieurs scènes WebGL logicielles se disputent le même CPU. Le mode `fullyParallel` répartit les tests individuels, même s’ils sont dans le même fichier. Chaque test conserve son contexte et son stockage isolés.
+
+Seul Chromium headless shell est téléchargé, avec un cache lié à la version de Playwright ; les dépendances système restent installées sur chaque runner. Un scénario en échec fait échouer la CI, sans retry masquant une instabilité. Les trois lots continuent en cas d’échec d’un lot pour garder leurs diagnostics. Les rapports HTML et fichiers des scénarios sont conservés sous `playwright-report-1`, `-2`, `-3` pendant sept jours ; traces et captures restent disponibles en cas d’échec. Seule la démonstration doit être utilisée dans ces rapports. Le build public intermédiaire expire après un jour.
+
+Le check obligatoire « Tests, types, build et confidentialité » reste identique pour la protection de `main`. Il s’exécute même si une dépendance échoue ou est ignorée et ne réussit que si le build et les trois lots ont tous réussi. Ne pas remplacer ce contrôle par un check qui ne vérifie que le build. L’auto-merge attend ce résultat agrégé.
+
+Mesure de référence avant parallélisation : run GitHub `42125616484`, 4 min 15 s au total, dont 3 min 09 s d’E2E en série ; tests unitaires 2 s, build 27 s et installation navigateur 21 s. Le gain distant dépend aussi du temps d’attribution des runners et de l’état du cache ; le mesurer sur les runs de la PR, sans déduire le gain CI des seuls timings locaux.
 
 Les sorties `playwright-report/` et `test-results/` sont ignorées par Git. Cloudflare conserve la commande `npm run ci` sans navigateur ; les E2E sont une étape supplémentaire du workflow GitHub, exécutée sur le même commit. Les deux pipelines restent indépendants : Cloudflare n’attend pas le résultat E2E GitHub pour publier.
 

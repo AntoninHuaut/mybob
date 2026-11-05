@@ -21,13 +21,17 @@ Le résultat de `build:private` ne doit pas être publié sur un site public. `n
 
 ## CI GitHub Actions
 
+Toutes les modifications passent par une branche `codex/` et une MR vers `main`. Aucun push direct ni fusion avec CI distante en attente ou en échec. Les tests locaux ne remplacent pas les checks du dernier commit de la MR. Le propriétaire autorise l’auto-merge GitHub lorsque les checks requis sont verts : l’activer pour les changements terminés et validés, sans redemander une permission par MR. Cloudflare ne doit recevoir la branche de production qu’après cette validation ; ses pipelines de build restent techniquement indépendants de GitHub Actions.
+
+Protection GitHub de `main` activée le 5 novembre 2026 et relue par API : MR obligatoire, check « Tests, types, build et confidentialité » exigé depuis GitHub Actions, branche à jour (`strict`), règles appliquées aux administrateurs, force-push et suppression interdits. Aucune approbation formelle supplémentaire n’est imposée au dépôt individuel. L’auto-merge attend ces checks et ne constitue pas un contournement. Ces réglages serveur ne sont pas contenus dans le diff Git.
+
 Le workflow `.github/workflows/ci.yml` s’exécute sur les pushes vers `main`, les pull requests visant `main` et sur lancement manuel. Il utilise Node 24, pnpm 12.15.0 et `pnpm install --frozen-lockfile` avec `pnpm-lock.yaml`. Le passage à pnpm remplace l’ancienne installation `npm ci`.
 
 Contrôles : mise en forme, tests, vérification TypeScript, compilation publique, puis contrôle de l’artefact. Le contrôle public rejette les fichiers hors liste autorisée, les documents d’origine, le vrai projet de maison et ses signatures connues dans les ressources JavaScript. Ce garde-fou complète l’inclusion explicite des seuls fichiers de démonstration ; il ne remplace pas la revue de tout nouvel asset destiné à être public.
 
 Les Actions ont uniquement `contents: read`, aucun secret Cloudflare, une limite de 15 minutes et annulent les exécutions devenues obsolètes sur la même branche.
 
-Après le contrôle public, GitHub installe Chromium et exécute les tests E2E du build en formats ordinateur/mobile. Les rapports et traces d’échec sont archivés sept jours. Voir `docs/E2E.md`. Cette étape supplémentaire n’est pas incluse dans `npm run ci` côté Cloudflare : les deux pipelines restent indépendants et un échec E2E GitHub ne bloque pas à lui seul la publication Cloudflare.
+Après le contrôle public, GitHub partage le build avec trois runners qui exécutent les douze E2E en parallèle, quatre par lot, en formats ordinateur/mobile. Chromium headless shell est mis en cache par version. Le check obligatoire « Tests, types, build et confidentialité » agrège le build et les trois lots : tout échec ou lot ignoré bloque sa réussite et l’auto-merge. Les rapports et traces d’échec sont archivés sept jours. Voir `docs/E2E.md`. Cette étape supplémentaire n’est pas incluse dans `npm run ci` côté Cloudflare : les deux pipelines restent indépendants, mais la protection de `main` empêche désormais de fusionner une PR avant le résultat E2E.
 
 ## Connexion Cloudflare Pages
 

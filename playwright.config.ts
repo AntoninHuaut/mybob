@@ -2,9 +2,10 @@ import { defineConfig, devices } from '@playwright/test';
 
 export default defineConfig({
   testDir: './e2e',
-  fullyParallel: false,
+  fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
+  // Dedicated CI shards provide parallelism without competing software WebGL renders.
   workers: 1,
   // Software WebGL on the shared Linux runner takes longer than a local GPU.
   timeout: process.env.CI ? 90_000 : 45_000,
