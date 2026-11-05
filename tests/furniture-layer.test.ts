@@ -141,6 +141,23 @@ test('overlays are non-pickable, do not allocate a canvas headlessly, and dispos
   cleanup();
 });
 
+test('clicking outside furniture clears the selected footprint without changing furniture', () => {
+  const { scene, layer, cleanup } = setup();
+  layer.setItems([item()]);
+  layer.select('f');
+  assert.ok(scene.getMeshByName('furniture:selection'));
+  const selected: (string | undefined)[] = [];
+  layer.onSelect = (id) => selected.push(id);
+  const pick = new PickingInfo();
+  scene.onPointerObservable.notifyObservers(
+    new PointerInfo(PointerEventTypes.POINTERDOWN, { button: 0 } as PointerEvent, pick),
+  );
+  assert.equal(scene.getMeshByName('furniture:selection'), null);
+  assert.deepEqual(selected, [undefined]);
+  assert.ok(scene.meshes.some((mesh) => mesh.metadata?.kind === 'furniture'));
+  cleanup();
+});
+
 test('drag emits live positions and exactly one final commit, respecting lock and walk mode', () => {
   const { scene, layer, cleanup } = setup();
   scene.activeCamera = new UniversalCamera('test', new Vector3(0, 10, 0), scene);

@@ -32,6 +32,8 @@ La hauteur de pose est relative au sol fini. Le bouton Ajouter une TV dessus d�
 
 Les commandes flottantes sur le meuble sélectionné tournent de −90°, +90° ou +15°, en plan et en 3D. Les mêmes contraintes et l’historique s’appliquent : une rotation qui pénètre un mur est refusée.
 
+Cette barre donne aussi accès à Dupliquer, Placer contre un mur (à moins de 30 cm) et Retirer, sans ouvrir la popup. Chaque action est annulable. Les actions réalisées dans la popup restent des brouillons jusqu’à Enregistrer. La barre se replie sur plusieurs lignes sur écran étroit. Cliquer hors du meuble dans la scène, ou Échap même avec un bouton actif, efface la sélection et son contour vert. Ctrl Z / Ctrl Maj Z fonctionnent sans meuble sélectionné et avec le focus sur un bouton ; les champs et dialogues gardent leur propre édition.
+
 La navigation 3D utilise le glisser gauche pour tourner, le glisser droit pour déplacer et la molette pour zoomer. Le Plan se déplace aussi par glisser simple et se zoome au pincement sur écran tactile. Chaque commande possède une icône qui distingue le bouton concerné. La sensibilité du déplacement droit a été ramenée à la valeur normale Babylon après la régression de la passe précédente.
 
 ## Navigation et édition

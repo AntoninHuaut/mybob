@@ -88,7 +88,7 @@ el('#app').innerHTML = `
       <div class="floating-tools" role="group" aria-label="Options d’affichage"><button class="tool-button" id="tool-navigation" title="Réglages de navigation" aria-controls="navigation-panel" aria-expanded="false">${icon('compass')}<span>Navigation</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-measure" aria-pressed="false" title="Mesurer une distance au sol">${icon('ruler')}<span>Mesurer</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-solar" title="Soleil selon le lieu, la date et l’heure" aria-haspopup="dialog">${icon('sun')}<span>Soleil</span></button><button class="tool-button active" id="tool-labels" aria-pressed="true" title="Afficher les noms des pièces">${icon('label')}<span>Pièces</span></button><button class="tool-button" id="tool-dimensions" aria-pressed="false" title="Afficher les dimensions extérieures">${icon('plan')}<span>Cotes</span></button><button class="tool-button active" id="tool-lights" aria-pressed="true" title="Allumer les éclairages intérieurs">${icon('bulb')}<span>Éclairages intérieurs</span></button><button class="tool-button" id="tool-ceiling" aria-pressed="false" title="Afficher le plafond en vue 3D">${icon('roof')}<span>Plafond</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-reset" title="Recentrer la vue">${icon('reset')}<span>Recentrer</span></button></div>
       <section class="navigation-settings navigation-panel" id="navigation-panel" aria-label="Navigation et caméra" hidden><div class="navigation-panel-heading"><strong>Navigation</strong><button type="button" id="close-navigation" class="icon-button" aria-label="Fermer les réglages de navigation">${icon('close', 18)}</button></div><div class="navigation-settings-body"><button id="go-to" class="visit-room" aria-pressed="false">Cliquer pour entrer ici</button><p>Choisissez un point libre du sol, puis explorez au clavier.</p><label>Vitesse de marche <output id="walk-speed-value">2,8 m/s</output><input id="walk-speed" type="range" min="1" max="5" step="0.2" value="2.8"></label><label>Sensibilité de la souris <output id="look-sensitivity-value">100 %</output><input id="look-sensitivity" type="range" min="50" max="200" step="10" value="100"></label><small>Maj pour marcher plus vite. Ces réglages sont conservés sur cet ordinateur.</small><label>Hauteur du regard<select id="eye-height"><option value="1.65">Debout · 1,65 m</option><option value="1.15">Assis · 1,15 m</option><option value="0.95">À 0,95 m</option><option value="1.80">À 1,80 m</option></select></label><label>Affichage des murs<select id="wall-display"><option value="auto">Automatique</option><option value="full">Murs complets</option><option value="low">Murs bas</option></select></label><label class="navigation-check"><input type="checkbox" id="section-enable"> Vue en coupe</label><label>Hauteur de coupe <output id="section-value">1,20 m</output><input id="section-height" type="range" min="0.4" max="2.5" step="0.05" value="1.2" disabled></label><small>En automatique, les murs gênants s’abaissent selon la vue. La visite conserve les volumes complets.</small></div></section>
       <div id="scene-labels" class="scene-labels"></div>
-      <div id="furniture-context-toolbar" class="furniture-context-toolbar" role="group" aria-label="Actions du meuble sélectionné" hidden><span id="furniture-context-name"></span><button type="button" id="edit-selected-furniture" aria-label="Modifier le meuble sélectionné" title="Modifier le meuble">${icon('edit', 16)}</button><button type="button" data-rotate-selected="-90" aria-label="Tourner le meuble de 90 degrés vers la gauche" title="Tourner de 90° vers la gauche">↶ 90°</button><button type="button" data-rotate-selected="90" aria-label="Tourner le meuble de 90 degrés vers la droite" title="Tourner de 90° vers la droite">↷ 90°</button><button type="button" data-rotate-selected="15" aria-label="Tourner le meuble de 15 degrés" title="Rotation précise de 15°">+15°</button></div>
+      <div id="furniture-context-toolbar" class="furniture-context-toolbar" role="group" aria-label="Actions du meuble sélectionné" hidden><span id="furniture-context-name"></span><button type="button" id="edit-selected-furniture" aria-label="Modifier le meuble sélectionné" title="Modifier le meuble">${icon('edit', 16)}</button><button type="button" data-rotate-selected="-90" aria-label="Tourner le meuble de 90 degrés vers la gauche" title="Tourner de 90° vers la gauche">↶ 90°</button><button type="button" data-rotate-selected="90" aria-label="Tourner le meuble de 90 degrés vers la droite" title="Tourner de 90° vers la droite">↷ 90°</button><button type="button" data-rotate-selected="15" aria-label="Tourner le meuble de 15 degrés" title="Rotation précise de 15°">+15°</button><button type="button" id="duplicate-selected-furniture" aria-label="Dupliquer le meuble sélectionné" title="Dupliquer le meuble">${icon('copy', 17)}</button><button type="button" id="snap-selected-furniture" aria-label="Placer le meuble sélectionné contre un mur" title="Placer contre un mur">${icon('wall-snap', 17)}</button><button type="button" id="delete-selected-furniture" aria-label="Retirer le meuble sélectionné" title="Retirer le meuble">${icon('trash', 17)}</button></div>
       <div class="dimension-label" id="width-label" hidden></div><div class="dimension-label" id="depth-label" hidden></div>
       <div id="measure-label" class="measurement-label" hidden></div>
       <div id="measure-instructions" class="measure-instructions" hidden>${icon('ruler', 17)}<span>Cliquez sur deux points du sol.</span><button id="end-measure" aria-label="Quitter la mesure">${icon('close', 15)}</button></div>
@@ -213,6 +213,42 @@ function rotateSelectedFurniture(degrees: number) {
   if (!item || item.locked || mode === 'walk' || exteriorView) return;
   updateFurniture({ ...item, rotation: item.rotation + (degrees * Math.PI) / 180 });
 }
+
+function duplicateFurniture(id: string) {
+  const item = currentFurniture().find((candidate) => candidate.id === id);
+  if (!item) return;
+  const copy = createFurniture({
+    ...item,
+    id: undefined,
+    groupId: undefined,
+    name: `${item.name} (copie)`,
+    locked: false,
+    position: [item.position[0] + 0.2, item.position[1] + 0.2],
+  });
+  const room = viewer.level.rooms.find((room) => pointInPolygon(item.position, room.polygon));
+  const placed = findFurniturePlacement(copy, viewer.level, currentFurniture(), room);
+  if (!placed) {
+    toast('Pas de place libre pour la copie dans cette pièce.');
+    return;
+  }
+  if (commitFurniture([...currentFurniture(), placed])) selectFurniture(placed.id);
+}
+
+function snapSelectedFurniture(id: string) {
+  const items = currentFurniture(),
+    item = items.find((candidate) => candidate.id === id);
+  if (!item || item.locked) return;
+  const snapped = snapFurniture(item, viewer.level, items, 0.3);
+  if (
+    Math.hypot(snapped.position[0] - item.position[0], snapped.position[1] - item.position[1]) <
+    0.001
+  ) {
+    toast('Rapprochez le meuble du mur (moins de 30 cm), puis réessayez.');
+    return;
+  }
+  updateFurniture(snapped);
+}
+
 function updateFurnitureContext() {
   const toolbar = el('#furniture-context-toolbar');
   const item = furnitureContextItem;
@@ -233,6 +269,7 @@ function updateFurnitureContext() {
   toolbar
     .querySelectorAll<HTMLButtonElement>('[data-rotate-selected]')
     .forEach((button) => (button.disabled = item.locked));
+  el<HTMLButtonElement>('#snap-selected-furniture').disabled = item.locked;
   toolbar.hidden = false;
 }
 
@@ -339,25 +376,7 @@ function mountFurniture() {
           toast('Les meubles sont maintenant indépendants.');
       },
       onDelete: (id) => commitFurniture(currentFurniture().filter((item) => item.id !== id)),
-      onDuplicate: (id) => {
-        const item = currentFurniture().find((candidate) => candidate.id === id);
-        if (!item) return;
-        const copy = createFurniture({
-          ...item,
-          id: undefined,
-          groupId: undefined,
-          name: `${item.name} (copie)`,
-          locked: false,
-          position: [item.position[0] + 0.2, item.position[1] + 0.2],
-        });
-        const room = viewer.level.rooms.find((room) => pointInPolygon(item.position, room.polygon));
-        const placed = findFurniturePlacement(copy, viewer.level, currentFurniture(), room);
-        if (!placed) {
-          toast('Pas de place libre pour la copie dans cette pièce.');
-          return;
-        }
-        if (commitFurniture([...currentFurniture(), placed])) selectFurniture(placed.id);
-      },
+      onDuplicate: duplicateFurniture,
       onSelect: selectFurniture,
       onEdit: openFurnitureEditor,
       onUndo: () => {
@@ -366,20 +385,7 @@ function mountFurniture() {
       onRedo: () => {
         if (furnitureHistory.redo()) syncFurniture();
       },
-      onSnap: (id) => {
-        const items = currentFurniture(),
-          item = items.find((candidate) => candidate.id === id);
-        if (!item || item.locked) return;
-        const snapped = snapFurniture(item, viewer.level, items, 0.3);
-        if (
-          Math.hypot(
-            snapped.position[0] - item.position[0],
-            snapped.position[1] - item.position[1],
-          ) < 0.001
-        )
-          toast('Rapprochez le meuble du mur (moins de 30 cm), puis réessayez.');
-        updateFurniture(snapped);
-      },
+      onSnap: snapSelectedFurniture,
       onOverlays: (options) => {
         overlays = options;
         furnitureLayer?.setOverlays(options);
@@ -961,6 +967,17 @@ function wireEvents() {
   el('#edit-selected-furniture').addEventListener('click', () => {
     if (selectedFurnitureId) openFurnitureEditor(selectedFurnitureId);
   });
+  el('#duplicate-selected-furniture').addEventListener('click', () => {
+    if (selectedFurnitureId) duplicateFurniture(selectedFurnitureId);
+  });
+  el('#snap-selected-furniture').addEventListener('click', () => {
+    if (selectedFurnitureId) snapSelectedFurniture(selectedFurnitureId);
+  });
+  el('#delete-selected-furniture').addEventListener('click', () => {
+    if (!selectedFurnitureId) return;
+    if (commitFurniture(currentFurniture().filter((item) => item.id !== selectedFurnitureId)))
+      toast('Meuble retiré. Annulez depuis Meubles ou avec Ctrl Z.');
+  });
   el('#tool-navigation').addEventListener('click', () =>
     setNavigationPanel(el('#navigation-panel').hidden),
   );
@@ -1039,30 +1056,35 @@ function wireEvents() {
     'keydown',
     (event) => {
       if (
-        mode === 'walk' ||
         draggingFurniture ||
         document.querySelector('dialog[open]') ||
         (event.target instanceof HTMLElement &&
-          (event.target.closest('input,textarea,select,button,a,summary') ||
-            event.target.closest('[role=tab],#navigation-panel') ||
-            event.target.isContentEditable))
+          (event.target.closest('input,textarea,select') || event.target.isContentEditable))
       )
         return;
       const modifier = event.ctrlKey || event.metaKey;
       if (modifier && ['KeyZ', 'KeyY'].includes(event.code)) {
         event.preventDefault();
         event.stopImmediatePropagation();
-        if (event.code === 'KeyY' || event.shiftKey) furnitureHistory.redo();
-        else furnitureHistory.undo();
-        syncFurniture();
+        const changed =
+          event.code === 'KeyY' || event.shiftKey
+            ? furnitureHistory.redo()
+            : furnitureHistory.undo();
+        if (changed) syncFurniture();
         return;
       }
-      const item = currentFurniture().find((candidate) => candidate.id === selectedFurnitureId);
-      if (!item) return;
       if (event.code === 'Escape') {
         selectFurniture(undefined);
         return;
       }
+      if (
+        mode === 'walk' ||
+        (event.target instanceof HTMLElement &&
+          event.target.closest('button,a,summary,[role=tab],#navigation-panel'))
+      )
+        return;
+      const item = currentFurniture().find((candidate) => candidate.id === selectedFurnitureId);
+      if (!item) return;
       if (item.locked) return;
       const step = event.shiftKey ? 0.1 : 0.01;
       const delta: Record<string, [number, number]> = {
@@ -1369,10 +1391,14 @@ async function start() {
     viewer.onMeasure = (measurement) => {
       el('#measure-label').hidden = !measurement?.b;
       if (measurement?.distance !== undefined) {
-        el('#measure-label').textContent = `${number(measurement.distance)} m`;
-        el('#measure-instructions span').textContent = 'Un nouveau clic commence une autre mesure.';
+        el('#measure-label').textContent =
+          `${number(measurement.distance)} m${measurement.aligned ? ' · droit' : ''}`;
+        el('#measure-instructions span').textContent = measurement.preview
+          ? 'Cliquez pour confirmer · Maj : droit · Alt : libre'
+          : 'Un nouveau clic commence une autre mesure.';
       } else if (measurement)
-        el('#measure-instructions span').textContent = 'Choisissez le deuxième point.';
+        el('#measure-instructions span').textContent =
+          'Déplacez le pointeur · Maj : droit · Alt : libre';
     };
     viewer.onFrame = (frame) => {
       if (!current) return;

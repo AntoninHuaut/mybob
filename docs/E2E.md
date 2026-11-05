@@ -17,12 +17,14 @@ Après un build public déjà vérifié, `pnpm run test:e2e:built` lance les sc�
 
 ## Couverture
 
-Quatre scénarios sont exécutés en Chromium ordinateur 1280 × 720 et en émulation mobile tactile 390 × 844, soit huit exécutions :
+Six scénarios sont exécutés en Chromium ordinateur 1280 × 720 et en émulation mobile tactile 390 × 844, soit douze exécutions :
 
 - Ajout d’un canapé, édition et duplication en brouillon, annulation, rechargement : un seul meuble conserve son nom et sa largeur enregistrés.
 - Variante indépendante, retrait transactionnel, annuler/rétablir après bascule entre variantes, validation du nom inchangé et restauration après rechargement.
 - Export JSON téléchargé et analysé, puis import dans un second contexte vierge : les deux variantes et leurs meubles sont restaurés, y compris après rechargement.
 - Passage au Plan, téléchargement d’un PNG dont l’en-tête et les dimensions sont vérifiés, puis accès réel à Recentrer en paysage 568 × 320.
+- Duplication/retrait depuis la barre rapide, Ctrl Z avec le focus sur un bouton et sans sélection, rétablissement, puis désélection par Échap et clic hors du meuble.
+- Mesure : aperçu du segment et distance évolutive, alignement droit, confirmation au second clic et sortie par Échap.
 
 Les actions passent par l’interface et les fichiers téléchargés. Aucun accès à l’instance interne du moteur ni modification directe de localStorage ne remplace les actions utilisateur. Les tests ne reposent pas sur des délais fixes. Les rendus WebGL utilisent SwiftShader pour rester exécutables sur les runners sans GPU.
 
@@ -31,6 +33,8 @@ Les actions passent par l’interface et les fichiers téléchargés. Aucun acc�
 GitHub Actions exécute les E2E après les tests unitaires, le build et le contrôle public. Chromium et ses dépendances système sont installés dans le job. Un scénario en échec fait échouer la CI, sans retry masquant une instabilité. Le rapport HTML et les fichiers des scénarios sont conservés comme artefact GitHub pendant sept jours ; les traces et captures sont conservées en cas d’échec. Seule la démonstration doit être utilisée dans ces rapports.
 
 Les sorties `playwright-report/` et `test-results/` sont ignorées par Git. Cloudflare conserve la commande `npm run ci` sans navigateur ; les E2E sont une étape supplémentaire du workflow GitHub, exécutée sur le même commit. Les deux pipelines restent indépendants : Cloudflare n’attend pas le résultat E2E GitHub pour publier.
+
+La première exécution Linux a passé six des huit parcours initiaux ; les deux réimports ont dépassé leur budget de 45 s, alors que le rendu logiciel était sensiblement plus lent que localement. La suite accorde désormais 90 s par scénario en CI ; les parcours longs réimport/actions rapides utilisent `test.slow()`. Le réimport ferme aussi la première page avant d’ouvrir la seconde session WebGL, tout en gardant les stockages isolés. Les assertions restent identiques et aucun retry n’est activé.
 
 Cette couverture complète les tests Happy DOM/NullEngine et les inspections visuelles. Elle ne prouve pas la fidélité visuelle d’une image, les collisions sur un trajet complet ou le comportement sur un appareil iOS/Android physique. Firefox, WebKit et le pincement natif ne sont pas couverts par cette suite Chromium.
 

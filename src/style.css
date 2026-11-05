@@ -1088,6 +1088,9 @@ button svg {
   left: 50%;
   transform: translateX(-50%);
   display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  width: max-content;
   align-items: center;
   gap: 3px;
   max-width: calc(100% - 160px);
@@ -1137,6 +1140,9 @@ button svg {
 }
 .furniture-context-toolbar button:active {
   background: #e0e9dc;
+}
+#delete-selected-furniture {
+  color: #a34d39;
 }
 .measure-instructions {
   position: absolute;

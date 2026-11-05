@@ -6,7 +6,8 @@ export default defineConfig({
   forbidOnly: !!process.env.CI,
   retries: 0,
   workers: 1,
-  timeout: 45_000,
+  // Software WebGL on the shared Linux runner takes longer than a local GPU.
+  timeout: process.env.CI ? 90_000 : 45_000,
   expect: { timeout: 10_000 },
   reporter: [['list'], ['html', { open: 'never' }]],
   use: {
@@ -26,7 +27,7 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm exec vite -- preview --host 127.0.0.1 --port 4179 --strictPort',
+    command: 'node node_modules/vite/bin/vite.js preview --host 127.0.0.1 --port 4179 --strictPort',
     url: 'http://127.0.0.1:4179',
     reuseExistingServer: false,
   },

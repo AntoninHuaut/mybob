@@ -98,6 +98,8 @@ test('export JSON puis import dans un navigateur vierge restaurent toutes les va
   page,
   browser,
 }, testInfo) => {
+  // This journey loads two separate WebGL sessions; software rendering on CI is slower.
+  test.slow();
   await emptyVariant(page);
   const downloadEvent = page.waitForEvent('download');
   await page.locator('#export-project').click();
@@ -111,6 +113,7 @@ test('export JSON puis import dans un navigateur vierge restaurent toutes les va
     Object.values(variants.find((v: { name: string }) => v.name === name).levels).flat().length;
   expect(count('Aménagement initial')).toBe(1);
   expect(count('Option E2E')).toBe(0);
+  await page.close();
 
   // A second isolated context proves import restores the file, rather than old localStorage.
   const context = await browser.newContext(testInfo.project.use);
@@ -167,4 +170,81 @@ test('Plan, export PNG et outils sur écran bas restent utilisables', async ({ p
   expect(reset!.y).toBeGreaterThanOrEqual(0);
   expect(reset!.y + reset!.height).toBeLessThanOrEqual(320);
   expect(errors).toEqual([]);
+});
+
+test('actions rapides et Ctrl Z fonctionnent sans popup et sans sélection active', async ({
+  page,
+}, testInfo) => {
+  test.slow();
+  await addSofa(page);
+  const closePanel = async () => {
+    const menu = page.locator('#toggle-sidebar');
+    if ((await menu.getAttribute('aria-expanded')) === 'true') await menu.click();
+  };
+  await closePanel();
+  const toolbar = page.getByRole('group', { name: 'Actions du meuble sélectionné', exact: true });
+  await expect(toolbar).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('quick-actions.png') });
+  await toolbar
+    .getByRole('button', { name: 'Dupliquer le meuble sélectionné', exact: true })
+    .click();
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(2);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  // Focus stays on a quick-action button; history shortcuts must still work.
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
+  await expect(toolbar).not.toBeVisible();
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+Shift+z');
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
+  await furnishings(page);
+  await page.locator('[data-furniture-select]').click();
+  await closePanel();
+  await expect(toolbar).toBeVisible();
+  await toolbar.getByRole('button', { name: 'Retirer le meuble sélectionné', exact: true }).click();
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(0);
+  await page.keyboard.press('ControlOrMeta+z');
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
+  await furnishings(page);
+  await page.locator('[data-furniture-select]').click();
+  await closePanel();
+  await page.keyboard.press('Escape');
+  await expect(toolbar).not.toBeVisible();
+  await furnishings(page);
+  await page.locator('[data-furniture-select]').click();
+  await closePanel();
+  await expect(toolbar).toBeVisible();
+  await page.locator('#scene').click({ position: { x: 10, y: 180 } });
+  await expect(toolbar).not.toBeVisible();
+});
+
+test('mesure avec aperçu, alignement droit et validation au second clic', async ({
+  page,
+}, testInfo) => {
+  await page.getByRole('button', { name: 'Plan', exact: true }).click();
+  const label = page.locator('[data-label]').filter({ hasText: 'Espace de vie' });
+  await expect(label).toBeVisible();
+  const box = await label.boundingBox();
+  expect(box).not.toBeNull();
+  await page.locator('#tool-labels').click();
+  await page.getByTitle('Mesurer une distance au sol', { exact: true }).click();
+  const x = box!.x + box!.width / 2,
+    y = box!.y + box!.height / 2;
+  await page.mouse.click(x, y);
+  await expect(page.locator('#measure-instructions')).toContainText('Déplacez le pointeur');
+  await page.mouse.move(x + 35, y + 1, { steps: 3 });
+  await expect(page.locator('#measure-label')).toBeVisible();
+  await expect(page.locator('#measure-label')).toContainText('droit');
+  await page.screenshot({ path: testInfo.outputPath('measurement-preview.png') });
+  const first = await page.locator('#measure-label').textContent();
+  await page.mouse.move(x + 60, y + 1, { steps: 3 });
+  await expect(page.locator('#measure-label')).not.toHaveText(first!);
+  await page.mouse.click(x + 60, y + 1);
+  await expect(page.locator('#measure-instructions')).toContainText('Un nouveau clic');
+  const final = await page.locator('#measure-label').textContent();
+  await page.mouse.move(x - 20, y + 25);
+  await expect(page.locator('#measure-label')).toHaveText(final!);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#measure-label')).not.toBeVisible();
 });

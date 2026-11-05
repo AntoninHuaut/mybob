@@ -1,6 +1,7 @@
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Camera } from '@babylonjs/core/Cameras/camera';
 import { HouseOrbitPointersInput } from './orbitPointerInput';
+import { measurementEndpoint } from './measurement';
 import type { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
@@ -59,6 +60,8 @@ export interface Measurement {
   a: Point2;
   b?: Point2;
   distance?: number;
+  preview?: boolean;
+  aligned?: boolean;
 }
 
 /** Babylon scales pan deltas by the inverse of this value, in world metres. */
@@ -123,6 +126,8 @@ export class HouseViewer {
   private planOpenings?: PlanOpenings;
   private dimensions: LinesMesh[] = [];
   private measureMeshes: AbstractMesh[] = [];
+  private measureLine?: LinesMesh;
+  private measureCursor?: Point2;
   private keyState = new Set<string>();
   private hemispheric!: HemisphericLight;
   private sun!: DirectionalLight;
@@ -178,6 +183,8 @@ export class HouseViewer {
     this.measurement = undefined;
     this.measureMode = false;
     this.measureMeshes = [];
+    this.measureLine = undefined;
+    this.measureCursor = undefined;
     this.dimensions = [];
     this.level = project.levels.find((l) => l.id === levelId) ?? project.levels[0];
     const level = this.level;
@@ -251,7 +258,31 @@ export class HouseViewer {
     this.buildDimensions();
     this.setMode('overview');
     scene.onPointerObservable.add((event) => {
-      if (event.type !== PointerEventTypes.POINTERTAP || event.event.button !== 0) return;
+      if (
+        this.measureMode &&
+        event.type === PointerEventTypes.POINTERMOVE &&
+        this.measurement?.preview
+      ) {
+        const hit = scene.pick(
+          scene.pointerX,
+          scene.pointerY,
+          (mesh) => mesh.metadata?.kind === 'floor',
+        );
+        if (hit?.pickedPoint)
+          this.previewMeasurement(
+            [hit.pickedPoint.x, hit.pickedPoint.z],
+            event.event.shiftKey,
+            event.event.altKey,
+          );
+        return;
+      }
+      // A fast second measurement click may be classified as a double tap by Babylon.
+      if (
+        (event.type !== PointerEventTypes.POINTERTAP &&
+          !(this.measureMode && event.type === PointerEventTypes.POINTERDOUBLETAP)) ||
+        event.event.button !== 0
+      )
+        return;
       if (this.mode === 'walk') {
         const hit = scene.pickWithRay(this.walk.getForwardRay(2.4));
         if (hit?.pickedMesh?.metadata?.kind === 'door') this.toggleDoor(hit.pickedMesh.metadata.id);
@@ -263,7 +294,12 @@ export class HouseViewer {
           scene.pointerY,
           (mesh) => mesh.metadata?.kind === 'floor',
         );
-        if (hit?.pickedPoint) this.addMeasurement([hit.pickedPoint.x, hit.pickedPoint.z]);
+        if (hit?.pickedPoint)
+          this.addMeasurement(
+            [hit.pickedPoint.x, hit.pickedPoint.z],
+            event.event.shiftKey,
+            event.event.altKey,
+          );
         return;
       }
       if (this.goToMode) {
@@ -618,6 +654,8 @@ export class HouseViewer {
       this.measurement = undefined;
       this.measureMeshes.forEach((m) => m.dispose());
       this.measureMeshes = [];
+      this.measureLine = undefined;
+      this.measureCursor = undefined;
       this.onMeasure?.();
     }
   }
@@ -854,6 +892,12 @@ export class HouseViewer {
 
   private handleKeydown(event: KeyboardEvent) {
     if (
+      this.measureMode &&
+      this.measureCursor &&
+      ['ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight'].includes(event.code)
+    )
+      this.previewMeasurement(this.measureCursor, event.shiftKey, event.altKey);
+    if (
       this.paused ||
       event.ctrlKey ||
       event.metaKey ||
@@ -887,6 +931,12 @@ export class HouseViewer {
   }
   private keyup = (event: KeyboardEvent) => {
     this.keyState.delete(event.code);
+    if (
+      this.measureMode &&
+      this.measureCursor &&
+      ['ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight'].includes(event.code)
+    )
+      this.previewMeasurement(this.measureCursor, event.shiftKey, event.altKey);
   };
   private clearKeys = () => {
     this.keyState.clear();
@@ -904,31 +954,47 @@ export class HouseViewer {
     this.setOrthoSize();
   }
 
-  private addMeasurement(point: Point2) {
-    if (!this.measurement || this.measurement.b) {
-      this.measureMeshes.forEach((m) => m.dispose());
-      this.measureMeshes = [];
-      this.measurement = { a: point };
-    } else {
-      this.measurement.b = point;
-      this.measurement.distance = Math.hypot(
-        point[0] - this.measurement.a[0],
-        point[1] - this.measurement.a[1],
-      );
-      const a = this.measurement.a;
-      const line = MeshBuilder.CreateLines(
+  private previewMeasurement(point: Point2, forceAxis = false, free = false) {
+    if (!this.measurement?.preview) return;
+    this.measureCursor = point;
+    const snapped = measurementEndpoint(this.measurement.a, point, forceAxis, free);
+    this.measurement.b = snapped.point;
+    this.measurement.aligned = snapped.aligned;
+    this.measurement.distance = Math.hypot(
+      snapped.point[0] - this.measurement.a[0],
+      snapped.point[1] - this.measurement.a[1],
+    );
+    const points = [this.measurement.a, snapped.point].map(
+      (p) => new Vector3(p[0], floorElevationAt(this.level, p) + 0.04, p[1]),
+    );
+    if (this.measureLine)
+      MeshBuilder.CreateLines('measurement', { points, instance: this.measureLine }, this.scene);
+    else {
+      this.measureLine = MeshBuilder.CreateLines(
         'measurement',
-        {
-          points: [
-            new Vector3(a[0], floorElevationAt(this.level, a) + 0.04, a[1]),
-            new Vector3(point[0], floorElevationAt(this.level, point) + 0.04, point[1]),
-          ],
-        },
+        { points, updatable: true },
         this.scene,
       );
-      line.color = Color3.FromHexString('#27634e');
-      line.isPickable = false;
-      this.measureMeshes.push(line);
+      this.measureLine.isPickable = false;
+      this.measureMeshes.push(this.measureLine);
+    }
+    this.measureLine.color = Color3.FromHexString('#5e9377');
+    this.onMeasure?.(this.measurement);
+  }
+
+  private addMeasurement(point: Point2, forceAxis = false, free = false) {
+    if (!this.measurement?.preview) {
+      this.measureMeshes.forEach((m) => m.dispose());
+      this.measureMeshes = [];
+      this.measureLine = undefined;
+      this.measureCursor = undefined;
+      this.measurement = { a: point, preview: true };
+    } else {
+      this.previewMeasurement(point, forceAxis, free);
+      point = this.measurement.b!;
+      this.measurement.preview = false;
+      if (this.measureLine) this.measureLine.color = Color3.FromHexString('#27634e');
+      this.measureCursor = undefined;
     }
     const dot = MeshBuilder.CreateSphere(
       'measure-point',

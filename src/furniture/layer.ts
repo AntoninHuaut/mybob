@@ -39,7 +39,7 @@ interface Drag {
 
 /** Metres throughout. Furniture front is local +Z; yaw follows Babylon rotation.y. */
 export class FurnitureLayer {
-  onSelect?: (id: string) => void;
+  onSelect?: (id: string | undefined) => void;
   onEdit?: (id: string) => void;
   onChange?: (items: FurnitureItem[], final: boolean) => void;
   onDragState?: (dragging: boolean) => void;
@@ -535,7 +535,11 @@ export class FurnitureLayer {
       const id =
         picked?.metadata?.kind === 'furniture' ? (picked.metadata.id as string) : undefined;
       const item = this.items.find((candidate) => candidate.id === id);
-      if (!item) return;
+      if (!item) {
+        this.select(undefined);
+        this.onSelect?.(undefined);
+        return;
+      }
       this.select(item.id);
       this.onSelect?.(item.id);
       if (groupMembers(this.items, item.id).some((member) => member.locked)) return;
