@@ -27,6 +27,8 @@ Contrôles : mise en forme, tests, vérification TypeScript, compilation publiqu
 
 Les Actions ont uniquement `contents: read`, aucun secret Cloudflare, une limite de 15 minutes et annulent les exécutions devenues obsolètes sur la même branche.
 
+Après le contrôle public, GitHub installe Chromium et exécute les tests E2E du build en formats ordinateur/mobile. Les rapports et traces d’échec sont archivés sept jours. Voir `docs/E2E.md`. Cette étape supplémentaire n’est pas incluse dans `npm run ci` côté Cloudflare : les deux pipelines restent indépendants et un échec E2E GitHub ne bloque pas à lui seul la publication Cloudflare.
+
 ## Connexion Cloudflare Pages
 
 Dans le compte Cloudflare du propriétaire : **Workers & Pages → créer une application Pages → connecter GitHub**, puis autoriser uniquement le dépôt `AntoninHuaut/mybob`.

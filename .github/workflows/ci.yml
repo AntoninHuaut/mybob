@@ -39,3 +39,17 @@ jobs:
         run: npm run build
       - name: Ensure personal house data is absent from publication
         run: npm run check:public
+      - name: Install Chromium for end-to-end tests
+        run: pnpm exec playwright install --with-deps chromium
+      - name: Test public build in desktop and mobile Chromium
+        run: pnpm run test:e2e:built
+      - name: Upload E2E report and failure traces
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+          if-no-files-found: ignore

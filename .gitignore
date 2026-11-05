@@ -6,6 +6,8 @@ dist/
 .DS_Store
 reference-documents/
 artifacts/
+playwright-report/
+test-results/
 *.pdf
 *.zip
 *.tar.gz

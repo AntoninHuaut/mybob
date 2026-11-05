@@ -1,0 +1,170 @@
+import { expect, test, type Page } from '@playwright/test';
+import { readFile } from 'node:fs/promises';
+
+// Only exercise the compiled public demo through its UI; each test gets fresh storage.
+async function furnishings(page: Page) {
+  const menu = page.locator('#toggle-sidebar');
+  if (await menu.isVisible()) {
+    if ((await menu.getAttribute('aria-expanded')) !== 'true') await menu.click();
+  }
+  await page.getByRole('tab', { name: /Meubles/ }).click();
+}
+
+async function addSofa(page: Page) {
+  await furnishings(page);
+  await page.getByRole('button', { name: 'Ajouter un meuble', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Ajouter un meuble', exact: true });
+  await dialog.getByLabel('Nom', { exact: true }).fill('Canapé E2E');
+  await dialog
+    .getByLabel(/Largeur/)
+    .first()
+    .fill('210');
+  await dialog.getByRole('button', { name: 'Ajouter dans la maison' }).click();
+  await expect(dialog).not.toBeVisible();
+  await furnishings(page);
+  await expect(
+    page.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }),
+  ).toBeVisible();
+}
+
+test.beforeEach(async ({ page }) => {
+  // External optional fonts must not make the suite depend on internet access.
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1:4179(?:\/|$))/, (route) => route.abort());
+  await page.goto('/');
+  await expect(page.getByRole('button', { name: 'Plan', exact: true })).toBeEnabled();
+  await expect(page.locator('#project-select')).toContainText('Démonstration');
+});
+
+test('ajout, brouillon annulé et rechargement conservent les valeurs enregistrées', async ({
+  page,
+}) => {
+  await addSofa(page);
+  await page.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Modifier Canapé E2E', exact: true });
+  await dialog.getByLabel('Nom', { exact: true }).fill('Brouillon à jeter');
+  await dialog
+    .getByLabel(/Largeur/)
+    .first()
+    .fill('250');
+  await dialog.getByText('Autres actions', { exact: true }).click();
+  await dialog.getByRole('button', { name: 'Dupliquer', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Annuler', exact: true }).click();
+  await page.reload();
+  await furnishings(page);
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
+  await page.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }).click();
+  await expect(dialog.getByLabel('Nom', { exact: true })).toHaveValue('Canapé E2E');
+  await expect(dialog.getByLabel(/Largeur/).first()).toHaveValue('210');
+});
+
+async function emptyVariant(page: Page) {
+  await addSofa(page);
+  const variants = page.getByRole('region', { name: 'Variantes d’aménagement', exact: true });
+  await variants.getByRole('button', { name: 'Dupliquer', exact: true }).click();
+  await variants.getByLabel('Nom de la copie').fill('Option E2E');
+  await variants.getByRole('button', { name: 'Créer la copie' }).click();
+  await page.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Modifier Canapé E2E', exact: true });
+  await dialog.getByText('Autres actions', { exact: true }).click();
+  await dialog.getByRole('button', { name: 'Retirer le meuble' }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await furnishings(page);
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(0);
+}
+
+test('variantes indépendantes, annuler/rétablir et confirmation du nom inchangé', async ({
+  page,
+}) => {
+  await emptyVariant(page);
+  await page.getByRole('button', { name: 'Annuler la dernière modification', exact: true }).click();
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
+  const select = page.getByLabel('Variante d’aménagement', { exact: true });
+  await select.selectOption({ label: 'Aménagement initial' });
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
+  await select.selectOption({ label: 'Option E2E' });
+  await page.getByRole('button', { name: 'Rétablir la modification', exact: true }).click();
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(0);
+  const variants = page.getByRole('region', { name: 'Variantes d’aménagement', exact: true });
+  await variants.getByRole('button', { name: 'Renommer' }).click();
+  await variants.getByRole('button', { name: 'Enregistrer', exact: true }).click();
+  await expect(variants.getByLabel('Nom de la variante')).toHaveCount(0);
+  await page.reload();
+  await furnishings(page);
+  await expect(select.locator('option:checked')).toHaveText('Option E2E');
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(0);
+});
+
+test('export JSON puis import dans un navigateur vierge restaurent toutes les variantes', async ({
+  page,
+  browser,
+}, testInfo) => {
+  await emptyVariant(page);
+  const downloadEvent = page.waitForEvent('download');
+  await page.locator('#export-project').click();
+  const download = await downloadEvent;
+  const file = testInfo.outputPath('demo-export.json');
+  await download.saveAs(file);
+  const exported = JSON.parse(await readFile(file, 'utf8'));
+  const variants = exported.furnishing.variants.variants;
+  expect(variants).toHaveLength(2);
+  const count = (name: string) =>
+    Object.values(variants.find((v: { name: string }) => v.name === name).levels).flat().length;
+  expect(count('Aménagement initial')).toBe(1);
+  expect(count('Option E2E')).toBe(0);
+
+  // A second isolated context proves import restores the file, rather than old localStorage.
+  const context = await browser.newContext(testInfo.project.use);
+  try {
+    const imported = await context.newPage();
+    await imported.route(/^https?:\/\/(?!127\.0\.0\.1:4179(?:\/|$))/, (route) => route.abort());
+    await imported.goto('/');
+    await furnishings(imported);
+    await imported.getByRole('tab', { name: 'Maison', exact: true }).click();
+    await imported.locator('#import-file').setInputFiles(file);
+    await imported.getByRole('button', { name: /Remplacer/, exact: false }).click();
+    await furnishings(imported);
+    const select = imported.getByLabel('Variante d’aménagement', { exact: true });
+    await expect(select.locator('option:checked')).toHaveText('Option E2E');
+    await expect(imported.locator('[data-furniture-edit-id]')).toHaveCount(0);
+    await select.selectOption({ label: 'Aménagement initial' });
+    await expect(
+      imported.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }),
+    ).toBeVisible();
+    await imported.reload();
+    await furnishings(imported);
+    await expect(
+      imported.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }),
+    ).toBeVisible();
+  } finally {
+    await context.close();
+  }
+});
+
+test('Plan, export PNG et outils sur écran bas restent utilisables', async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.getByRole('button', { name: 'Plan', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Plan', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+  await page.getByRole('button', { name: 'Exporter une image de la vue', exact: true }).click();
+  const downloadEvent = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Télécharger le PNG', exact: true }).click();
+  const download = await downloadEvent;
+  expect(download.suggestedFilename()).toMatch(/\.png$/);
+  const file = testInfo.outputPath('plan.png');
+  await download.saveAs(file);
+  const png = await readFile(file);
+  expect(png.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
+  expect(png.readUInt32BE(16)).toBeGreaterThan(100);
+  expect(png.readUInt32BE(20)).toBeGreaterThan(100);
+  await page.setViewportSize({ width: 568, height: 320 });
+  await page.getByTitle('Recentrer la vue', { exact: true }).click();
+  await expect(page.locator('#toast')).toContainText('Vue recentrée');
+  const reset = await page.getByTitle('Recentrer la vue', { exact: true }).boundingBox();
+  expect(reset).not.toBeNull();
+  expect(reset!.y).toBeGreaterThanOrEqual(0);
+  expect(reset!.y + reset!.height).toBeLessThanOrEqual(320);
+  expect(errors).toEqual([]);
+});

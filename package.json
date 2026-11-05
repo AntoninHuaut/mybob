@@ -12,14 +12,18 @@
     "check:public": "node scripts/check-public-build.mjs",
     "ci": "npm run format:check && npm test && npm run build && npm run check:public",
     "test": "node --import tsx --test --test-isolation=none tests/*.test.ts",
-    "format": "prettier --write src tests public/projects docs scripts .github .agents AGENTS.md README.md package.json tsconfig.json vite.config.ts index.html .prettierrc.json",
-    "format:check": "prettier --check src tests public/projects docs scripts .github .agents AGENTS.md README.md package.json tsconfig.json vite.config.ts index.html .prettierrc.json"
+    "test:e2e": "npm run build && npm run check:public && playwright test",
+    "test:e2e:built": "playwright test",
+    "test:e2e:report": "playwright show-report",
+    "format": "prettier --write src tests e2e public/projects docs scripts .github .agents AGENTS.md README.md package.json tsconfig.json vite.config.ts playwright.config.ts index.html .prettierrc.json",
+    "format:check": "prettier --check src tests e2e public/projects docs scripts .github .agents AGENTS.md README.md package.json tsconfig.json vite.config.ts playwright.config.ts index.html .prettierrc.json"
   },
   "dependencies": {
     "@babylonjs/core": "^9.34.0",
     "earcut": "^3.0.2"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.1",
     "@types/earcut": "^3.0.0",
     "@types/node": "^26.6.6",
     "happy-dom": "^21.0.4",

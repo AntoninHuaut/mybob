@@ -25,6 +25,8 @@ npm run format:check
 
 Le dossier `dist/` contient la version statique déployable. Les dépendances et les données de maison sont intégrées ou servies localement ; Google Fonts est facultatif et possède des polices de repli système.
 
+Tests navigateur automatisés : `pnpm exec playwright install chromium`, puis `pnpm run test:e2e`. Huit exécutions couvrent les parcours essentiels en Chromium ordinateur et mobile simulé. Voir [le guide E2E](docs/E2E.md) pour les scénarios, rapports et limites.
+
 Le build normal est **public et limité à la démonstration**. La commande `npm run ci` exécute tous les contrôles et vérifie qu’aucun plan personnel n’est présent dans l’artefact. Configuration Cloudflare Pages et GitHub Actions : [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable et un éclairage avec tone mapping. Le bouton Soleil ajoute un aperçu selon la commune, le nord du plan, la date et l’heure locale ; la vue Plan reste neutre. Détails et limites : [docs/V2.md](docs/V2.md), [docs/EXTERIOR.md](docs/EXTERIOR.md).
