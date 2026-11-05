@@ -1,6 +1,6 @@
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Camera } from '@babylonjs/core/Cameras/camera';
-import { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
+import type { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
@@ -20,6 +20,7 @@ import type { HouseProject, Level, Point2 } from '../model/types';
 import { bounds, pointInPolygon } from '../model/geometry';
 import { buildHouse, poseDoor, type HouseScene } from './buildHouse';
 import { createMaterials } from './materials';
+import { createWalkCamera, EYE_HEIGHT } from './walkCamera';
 
 export type ViewMode = 'overview' | 'plan' | 'walk';
 export interface FrameInfo {
@@ -99,15 +100,7 @@ export class HouseViewer {
     this.orbit.inertia = .7;
     this.orbit.attachControl(this.canvas, true);
 
-    this.walk = new UniversalCamera('walk', new Vector3(level.spawn.position[0], level.elevation + 1.65, level.spawn.position[1]), scene);
-    this.walk.rotation.y = level.spawn.yaw;
-    this.walk.minZ = .04; this.walk.maxZ = 300; this.walk.fov = 1.05;
-    this.walk.checkCollisions = true; this.walk.applyGravity = true;
-    this.walk.ellipsoid.set(.17, .8, .17);
-    this.walk.ellipsoidOffset.set(0, -.85, 0);
-    this.walk.inertia = 0;
-    this.walk.angularSensibility = 2300;
-    this.walk.inputs.removeByType('FreeCameraKeyboardMoveInput');
+    this.walk = createWalkCamera(scene, level);
     this.hemispheric = new HemisphericLight('sky', new Vector3(.3, 1, -.1), scene);
     this.hemispheric.intensity = .9;
     this.hemispheric.groundColor = Color3.FromHexString('#b6b4a2');
@@ -191,7 +184,7 @@ export class HouseViewer {
     const room = this.level.rooms.find(r => r.id === id);
     if (!room) return;
     if (enter || this.mode === 'walk') {
-      this.walk.position.set(room.viewpoint[0], this.level.elevation + 1.65, room.viewpoint[1]);
+      this.walk.position.set(room.viewpoint[0], this.level.elevation + EYE_HEIGHT, room.viewpoint[1]);
       this.walk.rotation.set(0, this.level.spawn.yaw, 0);
       this.walk.cameraDirection.setAll(0);
       if (enter && this.mode !== 'walk') this.setMode('walk');
@@ -200,7 +193,7 @@ export class HouseViewer {
   }
 
   reset() {
-    this.walk.position.set(this.level.spawn.position[0], this.level.elevation + 1.65, this.level.spawn.position[1]);
+    this.walk.position.set(this.level.spawn.position[0], this.level.elevation + EYE_HEIGHT, this.level.spawn.position[1]);
     this.walk.rotation.set(0, this.level.spawn.yaw, 0);
     this.walk.cameraDirection.setAll(0);
     const extent = bounds(this.level.outline);

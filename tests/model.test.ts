@@ -13,6 +13,7 @@ import { alongWall, bounds, pointInPolygon, polygonArea, wallSections } from '..
 import { buildHouse, poseDoor, polygonMesh } from '../src/scene/buildHouse';
 import type { Materials } from '../src/scene/materials';
 import type { HouseProject } from '../src/model/types';
+import { createWalkCamera, EYE_HEIGHT } from '../src/scene/walkCamera';
 
 const load = async (name: string) => validateProject(JSON.parse(await readFile(new URL(`../public/projects/${name}.json`, import.meta.url), 'utf8')));
 const main = await load('private-project');
@@ -123,6 +124,17 @@ test('collisions stop movement through a solid wall', () => {
   actor.computeWorldMatrix(true);
   actor.moveWithCollisions(new Vector3(1.5, 0, 0));
   assert.ok(actor.position.x < 7.7, `visitor crossed wall: x=${actor.position.x}`);
+  scene.dispose(); engine.dispose();
+});
+
+test('the actual walk camera keeps eye height above the floor under gravity while moving', () => {
+  const { engine, scene } = sceneFor(main);
+  scene.gravity = new Vector3(0, -.25, 0);
+  const camera = createWalkCamera(scene, main.levels[0]);
+  const collide = camera as unknown as { _collideWithWorld: (direction: Vector3) => void };
+  for (let i = 0; i < 30; i++) collide._collideWithWorld(new Vector3(.01, 0, 0));
+  near(camera.position.y, EYE_HEIGHT, .03);
+  assert.ok(camera.position.x > main.levels[0].spawn.position[0] + .2);
   scene.dispose(); engine.dispose();
 });
 

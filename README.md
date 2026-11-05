@@ -42,6 +42,7 @@ src/model/geometry.ts           Calculs en mètres
 src/scene/buildHouse.ts         Génération des murs, sols, menuiseries et portes
 src/scene/materials.ts          Matériaux et texture procédurale de carrelage
 src/scene/viewer.ts             Caméras, collisions, éclairage et mesure
+src/scene/walkCamera.ts         Caméra de visite et hauteur réelle du regard
 src/ui/                        Plan miniature, icônes et formatage
 src/main.ts                    Interface et gestion des projets
 tests/model.test.ts             Contrôles de géométrie et de collisions avec Babylon NullEngine
