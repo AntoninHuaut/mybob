@@ -1,5 +1,6 @@
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Camera } from '@babylonjs/core/Cameras/camera';
+import { HouseOrbitPointersInput } from './orbitPointerInput';
 import type { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
@@ -61,9 +62,22 @@ export interface Measurement {
 }
 
 /** Babylon scales pan deltas by the inverse of this value, in world metres. */
-export function configureOrbitInteractions(camera: ArcRotateCamera) {
-  camera.panningSensibility = 1000;
+export function configureOrbitInteractions(
+  camera: ArcRotateCamera,
+  zoomPlan?: (factor: number) => void,
+) {
   camera.inputs.removeByType('ArcRotateCameraKeyboardMoveInput');
+  camera.inputs.removeByType('ArcRotateCameraPointersInput');
+  camera.inputs.add(
+    new HouseOrbitPointersInput(
+      zoomPlan ??
+        ((factor) => {
+          for (const key of ['orthoLeft', 'orthoRight', 'orthoTop', 'orthoBottom'] as const)
+            if (camera[key] !== null) camera[key] *= factor;
+        }),
+    ),
+  );
+  camera.panningSensibility = 1000;
 }
 
 function editableFurnitureId(hit: PickingInfo | null | undefined) {
@@ -193,7 +207,7 @@ export class HouseViewer {
     this.orbit.lowerBetaLimit = 0.03;
     this.orbit.upperBetaLimit = Math.PI * 0.48;
     this.orbit.wheelPrecision = 12;
-    configureOrbitInteractions(this.orbit);
+    configureOrbitInteractions(this.orbit, (factor) => this.zoomPlan(factor));
     this.orbit.minZ = 0.03;
     this.orbit.maxZ = 1000;
     this.orbit.fov = 0.66;
@@ -881,9 +895,14 @@ export class HouseViewer {
   private planWheel = (event: WheelEvent) => {
     if (this.mode !== 'plan') return;
     event.preventDefault();
-    this.planZoom = Math.max(0.18, Math.min(4, this.planZoom * Math.exp(event.deltaY * 0.001)));
-    this.setOrthoSize();
+    this.zoomPlan(Math.exp(event.deltaY * 0.001));
   };
+
+  private zoomPlan(factor: number) {
+    if (this.mode !== 'plan' || !Number.isFinite(factor) || factor <= 0) return;
+    this.planZoom = Math.max(0.18, Math.min(4, this.planZoom * factor));
+    this.setOrthoSize();
+  }
 
   private addMeasurement(point: Point2) {
     if (!this.measurement || this.measurement.b) {

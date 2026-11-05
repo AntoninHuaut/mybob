@@ -985,6 +985,17 @@ button svg {
   line-height: 1.5;
   color: #526e46;
 }
+.control-hint > .touch-hint {
+  display: none;
+}
+@media (pointer: coarse) {
+  .control-hint > :not(.touch-hint) {
+    display: none;
+  }
+  .control-hint > .touch-hint {
+    display: inline;
+  }
+}
 .control-hint > i {
   height: 3px;
   width: 3px;
@@ -1821,8 +1832,12 @@ dialog p {
   }
   .floating-tools {
     top: 79px;
+    max-height: calc(100% - 140px);
+    overflow-y: auto;
+    scrollbar-width: thin;
   }
   .tool-button {
+    flex-shrink: 0;
     width: 35px;
     height: 33px;
   }
@@ -1833,6 +1848,7 @@ dialog p {
 @media (max-width: 760px) and (max-height: 600px) {
   .floating-tools {
     top: 13px;
+    max-height: calc(100% - 80px);
   }
   .tool-button {
     width: 36px;

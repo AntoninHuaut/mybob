@@ -32,7 +32,7 @@ La hauteur de pose est relative au sol fini. Le bouton Ajouter une TV dessus d�
 
 Les commandes flottantes sur le meuble sélectionné tournent de −90°, +90° ou +15°, en plan et en 3D. Les mêmes contraintes et l’historique s’appliquent : une rotation qui pénètre un mur est refusée.
 
-La navigation utilise le glisser gauche pour tourner, le glisser droit pour déplacer et la molette pour zoomer. Chaque commande possède une icône qui distingue le bouton concerné. La sensibilité du déplacement droit a été ramenée à la valeur normale Babylon après la régression de la passe précédente.
+La navigation 3D utilise le glisser gauche pour tourner, le glisser droit pour déplacer et la molette pour zoomer. Le Plan se déplace aussi par glisser simple et se zoome au pincement sur écran tactile. Chaque commande possède une icône qui distingue le bouton concerné. La sensibilité du déplacement droit a été ramenée à la valeur normale Babylon après la régression de la passe précédente.
 
 ## Navigation et édition
 

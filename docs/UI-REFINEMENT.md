@@ -2,6 +2,8 @@
 
 Le Plan dispose maintenant les noms de pièces en évitant le meuble sélectionné, les tags de distance et les commandes superposées. Les distances gardent une taille de 24 px ; leurs étiquettes sont déplacées à proximité ou masquées en manque de place, sans changer les lignes ni les valeurs.
 
+Le Plan se déplace au glisser simple (souris ou doigt) et se zoome au pincement ou à la molette. Les gestes 3D restent ceux de Babylon. En faible hauteur, la colonne d’outils défile pour laisser toutes les commandes accessibles. Les indications de navigation s’adaptent aux pointeurs tactiles ; la marche en Visite nécessite toujours un clavier. Valider le nom inchangé d’une variante ferme son formulaire sans écriture superflue.
+
 Dans Meubles, le sélecteur de variante, Dupliquer et Renommer précèdent l’ajout. Les variantes couvrent tous les niveaux et gardent la caméra lors d’une bascule. Le volet Placement précis rassemble la sélection multiple, l’alignement, la répartition et les accrochages grille/murs facultatifs. La popup d’édition individuelle conserve son fonctionnement transactionnel.
 
 Le bouton Image exporte un PNG de la caméra actuelle, sans l’interface, avec noms/surfaces et dimensions extérieures facultatifs. Un cartouche identifie le projet, le niveau et la variante. La capture restaure l’affichage courant, reste locale et utilise la résolution de la scène, plafonnée à 2400 × 1800.
@@ -32,4 +34,4 @@ Le curseur parcourt les instants réels de la journée locale : 23 ou 25 heures 
 
 ## Vérification
 
-Tests des contrôleurs DOM avec Happy DOM, calculs solaires, transitions d’éclairage et matériaux avec Babylon NullEngine, validation TypeScript, production et exclusion des données privées du build public. Aucun navigateur graphique disponible : l’alignement CSS a été revu à partir des captures utilisateur et du code, sans prétendre à une validation visuelle dans le navigateur.
+Tests des contrôleurs DOM avec Happy DOM, calculs solaires, transitions d’éclairage et matériaux avec Babylon NullEngine, validation TypeScript, production et exclusion des données privées du build public. Les premières passes n’avaient pas de navigateur graphique ; les vérifications réelles ultérieures et leurs limites sont consignées dans `HANDOFF.md` et `E2E-2026-11-05.md`.

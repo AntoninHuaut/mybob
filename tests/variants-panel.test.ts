@@ -53,6 +53,22 @@ test('variant naming keeps native input while typing, cancels without callbacks 
       .dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     assert.deepEqual(actions, ['duplicate:Option C']);
     panel.finishEditing();
+    host
+      .querySelector('[data-variant-action=rename]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    host
+      .querySelector<DOMForm>('form')!
+      .dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(
+      host.querySelector('[name=variantName]'),
+      null,
+      'saving the unchanged name closes the form',
+    );
+    assert.deepEqual(
+      actions,
+      ['duplicate:Option C'],
+      'an unchanged name does not trigger a storage write',
+    );
     const select = host.querySelector<DOMSelect>('[name=layoutVariant]')!;
     select.value = 'b';
     select.dispatchEvent(new window.Event('change', { bubbles: true }));

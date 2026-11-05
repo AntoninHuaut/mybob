@@ -5,6 +5,8 @@ import { defineConfig } from 'vite';
 export default defineConfig(({ mode }) => {
   const publicBuild = mode !== 'private';
   return {
+    // Deep Babylon imports must share one shader registry in the development server.
+    optimizeDeps: { exclude: ['@babylonjs/core'] },
     publicDir: publicBuild ? false : 'public',
     define: { __PUBLIC_BUILD__: JSON.stringify(publicBuild) },
     plugins: publicBuild

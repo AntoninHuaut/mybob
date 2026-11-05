@@ -754,8 +754,17 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
     next === 'walk'
       ? `<kbd>ZQSD</kbd><span>ou flèches</span><i></i><kbd>E</kbd><span>Portes</span><i></i><kbd>Échap</kbd><span>Libérer la souris</span>`
       : next === 'plan'
-        ? `<kbd>ZQSD</kbd><span>Déplacer la vue · Maj pour accélérer</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span><i></i>${icon('mouse-wheel', 17)}<span>Molette pour zoomer</span>`
+        ? `<kbd>ZQSD</kbd><span>Déplacer la vue · Maj pour accélérer</span><i></i>${icon('mouse-left', 17)}<span>Glisser pour déplacer</span><i></i>${icon('mouse-wheel', 17)}<span>Molette pour zoomer</span>`
         : `<kbd>ZQSD</kbd><span>Déplacer la vue</span><i></i>${icon('mouse-left', 17)}<span>Glisser gauche pour tourner</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span><i></i>${icon('mouse-wheel', 17)}<span>Molette pour zoomer</span>`;
+  const touchHint = document.createElement('span');
+  touchHint.className = 'touch-hint';
+  touchHint.textContent =
+    next === 'plan'
+      ? 'Glisser pour déplacer · Pincer pour zoomer'
+      : next === 'walk'
+        ? 'Glisser pour regarder · Clavier pour marcher'
+        : 'Glisser pour tourner · Deux doigts pour déplacer ou zoomer';
+  el('#control-hint').append(touchHint);
   syncDisplayControls();
   if (next !== 'walk' && !fromViewer) viewer.canvas.focus({ preventScroll: true });
   el('#measure-instructions').hidden = true;

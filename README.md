@@ -34,7 +34,7 @@ La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable e
 - **Vue 3D** : glisser avec le bouton gauche pour tourner ; molette pour zoomer ; bouton droit pour déplacer.
 - Le cadrage s’adapte à la fenêtre et réserve une marge pour l’interface. **Recentrer** réaffiche la maison entière après un zoom ou un déplacement.
 - **Extérieur** : si le projet contient un terrain, affiche la parcelle, les façades et la toiture ; la vue 3D garde la toiture ouverte pour aménager.
-- **Plan** : vue orthographique, sélection des pièces et des dimensions extérieures.
+- **Plan** : vue orthographique, sélection des pièces et des dimensions extérieures ; glisser pour déplacer, pincer ou utiliser la molette pour zoomer.
 - **Visite** : ZQSD, WASD ou flèches pour marcher, souris pour regarder, Maj pour accélérer, E pour ouvrir ou fermer une porte proche. Échap libère la souris.
 - En cas de refus de capture de souris, cliquer dans la scène et glisser avec le bouton gauche pour regarder.
 - Cliquer sur une pièce dans la liste ou le plan miniature, puis sur **Visiter cette pièce**, pour s’y rendre.

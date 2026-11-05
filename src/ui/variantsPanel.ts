@@ -35,7 +35,12 @@ export class VariantsPanel {
       event.preventDefault();
       const name = host.querySelector<HTMLInputElement>('[name=variantName]')!.value;
       if (this.editing === 'duplicate') adapter.onDuplicate(name);
-      else adapter.onRename(name);
+      else {
+        const book = adapter.getBook();
+        if (book.variants.find((variant) => variant.id === book.activeId)?.name === name.trim())
+          this.finishEditing();
+        else adapter.onRename(name);
+      }
     });
   }
   finishEditing() {
