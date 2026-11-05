@@ -849,7 +849,10 @@ function wireEvents() {
 async function start() {
   try {
     const loaded = await Promise.all(
-      ['/projects/private-project.json', '/projects/studio-demo.json'].map(async (path) => {
+      (__PUBLIC_BUILD__
+        ? ['/projects/studio-demo.json']
+        : ['/projects/private-project.json', '/projects/studio-demo.json']
+      ).map(async (path) => {
         const response = await fetch(path);
         if (!response.ok) throw new Error('Impossible de charger les données de la maison.');
         return validateProject(await response.json());

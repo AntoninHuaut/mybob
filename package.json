@@ -5,10 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
+    "dev:private": "vite --host 0.0.0.0 --mode private",
     "build": "tsc --noEmit && vite build",
+    "build:private": "tsc --noEmit && vite build --mode private",
+    "check:public": "node scripts/check-public-build.mjs",
+    "ci": "npm run format:check && npm test && npm run build && npm run check:public",
     "test": "node --import tsx --test --test-isolation=none tests/*.test.ts",
-    "format": "prettier --write src tests public/projects docs README.md package.json tsconfig.json index.html .prettierrc.json",
-    "format:check": "prettier --check src tests public/projects docs README.md package.json tsconfig.json index.html .prettierrc.json"
+    "format": "prettier --write src tests public/projects docs scripts .github README.md package.json tsconfig.json vite.config.ts index.html .prettierrc.json",
+    "format:check": "prettier --check src tests public/projects docs scripts .github README.md package.json tsconfig.json vite.config.ts index.html .prettierrc.json"
   },
   "dependencies": {
     "@babylonjs/core": "^9.34.0",

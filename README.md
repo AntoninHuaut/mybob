@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-Ouvrir l’adresse indiquée par Vite. L’application nécessite WebGL et l’accélération graphique. Aucun compte ni serveur de données n’est nécessaire en local.
+Ouvrir l’adresse indiquée par Vite. Par défaut, seul le studio de démonstration est embarqué ; importer sa maison localement. `npm run dev:private` charge le modèle personnel depuis le dépôt privé. L’application nécessite WebGL et l’accélération graphique. Aucun compte ni serveur de données n’est nécessaire en local.
 
 ```sh
 npm test
@@ -20,6 +20,8 @@ npm run format:check
 ```
 
 Le dossier `dist/` contient la version statique déployable. Les dépendances et les données de maison sont intégrées ou servies localement ; Google Fonts est facultatif et possède des polices de repli système.
+
+Le build normal est **public et limité à la démonstration**. La commande `npm run ci` exécute tous les contrôles et vérifie qu’aucun plan personnel n’est présent dans l’artefact. Configuration Cloudflare Pages et GitHub Actions : [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ## Utilisation
 
