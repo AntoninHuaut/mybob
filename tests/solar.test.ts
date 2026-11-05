@@ -2,10 +2,22 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { localDateTimeToInstant, solarPosition } from '../src/scene/solar';
 import type { SolarSettings } from '../src/model/types';
+import { validateSolarSettings } from '../src/model/solarSettings';
 
 const near = (actual: number, expected: number, tolerance = 1e-8) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected}`);
 const settings: SolarSettings = { latitude: 39.742476, longitude: -105.1786, northAngleDeg: 0 };
+
+test('solar instant validation preserves canonical UTC and rejects impossible dates', () => {
+  assert.deepEqual(validateSolarSettings(settings), settings);
+  const instant = '2026-07-01T10:30:00.000Z';
+  assert.equal(validateSolarSettings({ ...settings, instant }).instant, instant);
+  for (const invalid of ['invalid', '2026-02-30T10:30:00.000Z', '2026-07-01', 123, null])
+    assert.throws(
+      () => validateSolarSettings({ ...settings, instant: invalid }),
+      /instant solaire/,
+    );
+});
 
 test('NOAA approximation agrees with the published NREL SPA solar-position example', () => {
   // NREL SPA reference: 2003-10-17, 12:30:30 at UTC−07, 39.742476°N/105.1786°W.

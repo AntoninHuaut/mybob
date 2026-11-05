@@ -18,6 +18,34 @@ const expectInvalid = (mutate: (project: HouseProject) => void, message: RegExp)
   );
 };
 
+test('import rejects crossing and repeated edges in level and room outlines', () => {
+  const crossed: Point2[] = [
+    [0, 0],
+    [6, 6],
+    [0, 6],
+    [4, 0],
+  ];
+  expectInvalid((p) => {
+    p.levels[0].outline = crossed;
+    p.levels[0].rooms = [];
+    p.levels[0].walls = [];
+    p.levels[0].spawn.position = [2, 5];
+  }, /Contour de niveau/);
+  expectInvalid((p) => {
+    p.levels[0].rooms[0].polygon = crossed;
+    p.levels[0].rooms[0].label = [2, 5];
+    p.levels[0].rooms[0].viewpoint = [2, 5];
+  }, /Pièce invalide/);
+  expectInvalid((p) => {
+    p.levels[0].outline.splice(1, 0, p.levels[0].outline[0]);
+  }, /Contour de niveau/);
+  // Valid collinear subdivisions of an edge remain accepted.
+  const valid = structuredClone(original);
+  const [a, b] = valid.levels[0].outline;
+  valid.levels[0].outline.splice(1, 0, [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2]);
+  assert.doesNotThrow(() => validateProject(valid));
+});
+
 test('import rejects openings smaller than their joinery profiles', () => {
   for (const kind of ['door', 'window', 'sliding', 'garage'] as const) {
     for (const dimension of ['width', 'height'] as const) {

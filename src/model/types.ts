@@ -73,6 +73,8 @@ export interface SolarSettings {
   timeZone?: string;
   /** Optional place label supplied by the user. */
   label?: string;
+  /** Optional selected solar instant, serialized by Date.toISOString(). */
+  instant?: string;
 }
 export interface HouseProject {
   schemaVersion: 1;

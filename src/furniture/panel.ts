@@ -329,6 +329,21 @@ export class FurniturePanel {
 
   private change = (event: Event) => {
     const input = event.target as HTMLInputElement;
+    if (input.name === 'locked' && !input.checked && this.editDialog.contains(input)) {
+      const item = this.draft?.selected;
+      const form = input.closest<HTMLFormElement>('form');
+      if (item && form) {
+        // Unlock the isolated draft so dimensions can be edited before the same Save.
+        this.draft!.update({ ...item, locked: false });
+        form.dataset.geometryLocked = 'false';
+        for (const name of ['width', 'depth', 'height', 'elevation', 'x', 'z', 'rotation'])
+          (form.elements.namedItem(name) as HTMLInputElement).disabled = false;
+        updateSofaFields(form, item.kind);
+        updateTelevisionFields(form, item.kind);
+        this.editDialog.querySelector<HTMLButtonElement>('[data-furniture-action=snap]')!.disabled =
+          false;
+      }
+    }
     if (input.name === 'sofaShape') {
       const form = input.closest<HTMLFormElement>('form');
       if (form) updateSofaFields(form, 'sofa', true);
@@ -393,12 +408,11 @@ export class FurniturePanel {
     if (unchanged('width')) next.width = item.width;
     if (unchanged('height')) next.height = item.height;
     if (unchanged('elevation')) next.elevation = item.elevation;
-    if (unchanged('depth') && (!next.sofa || unchanged('returnDepth'))) next.depth = item.depth;
-    if (next.sofa && item.sofa) {
-      if (unchanged('depth')) next.sofa.seatDepth = item.sofa.seatDepth;
-      if (unchanged('returnWidth')) next.sofa.returnWidth = item.sofa.returnWidth;
-      if (unchanged('returnDepth')) next.depth = item.depth;
-    }
+    if (next.sofa) {
+      if (unchanged('depth')) next.sofa.seatDepth = item.sofa?.seatDepth ?? item.depth;
+      if (item.sofa && unchanged('returnWidth')) next.sofa.returnWidth = item.sofa.returnWidth;
+      if (item.sofa && unchanged('returnDepth')) next.depth = item.depth;
+    } else if (unchanged('depth')) next.depth = item.sofa?.seatDepth ?? item.depth;
     if (unchanged('x')) next.position[0] = item.position[0];
     if (unchanged('z')) next.position[1] = item.position[1];
     if (unchanged('rotation')) next.rotation = item.rotation;

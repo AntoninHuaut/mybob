@@ -123,7 +123,7 @@ Une pièce peut déclarer `floorOffset`, entre −1 et 0 m, pour un sol plus bas
 
 ## Ajouter et sauvegarder
 
-Importer le fichier avec le bouton **Importer une autre maison**. Un import ayant le même identifiant remplace sa version importée précédente et peut masquer la version fournie du même projet. Retirer ce projet importé restaure la version fournie, lorsqu’elle existe.
+Importer le fichier avec le bouton **Importer ma maison**. Un import ayant le même identifiant demande confirmation avant de remplacer sa version importée précédente ou masquer la version fournie du même projet. Lorsque ce projet est ouvert, la confirmation permet d’exporter d’abord sa version actuelle. Les meubles sont remplacés uniquement pour les niveaux fournis dans l’aménagement importé. Retirer ce projet importé restaure la version fournie, lorsqu’elle existe. Les contours de niveaux et pièces doivent être simples, sans croisement ni arête répétée.
 
 La sauvegarde est locale au navigateur : pas de synchronisation entre appareils. Exporter le projet conserve les dimensions et les hypothèses, pas la caméra courante. Les niveaux multiples sont sélectionnables, mais aucune circulation par escalier n’est développée dans cette version.
 
@@ -131,6 +131,6 @@ L’export peut inclure `furnishing: {version: 1, levels: {...}}`, avec les meub
 
 ## Soleil facultatif
 
-`solar` peut contenir `latitude` (−90 à 90), `longitude` (−180 à 180), `northAngleDeg` (sens horaire depuis le haut du plan), et facultativement `timeZone` (IANA, par exemple `Europe/Paris`) et `label`. Aucun lieu n’est fourni par défaut. L’import valide ces champs ; les angles sont normalisés sur [0,360). Le calcul utilise un instant absolu, la date et l’heure locale étant converties avec le fuseau choisi.
+`solar` peut contenir `latitude` (−90 à 90), `longitude` (−180 à 180), `northAngleDeg` (sens horaire depuis le haut du plan), et facultativement `timeZone` (IANA, par exemple `Europe/Paris`), `label` et `instant`. Ce dernier conserve la date et l’heure choisies sous forme UTC ISO canonique (`2026-07-01T10:30:00.000Z`). Les anciens fichiers sans `instant` utilisent l’heure actuelle. Aucun lieu n’est fourni par défaut. L’import valide ces champs ; les angles sont normalisés sur [0,360). Le calcul utilise un instant absolu, la date et l’heure locale étant converties avec le fuseau choisi.
 
 Les réglages appliqués dans l’interface restent dans `maison-atelier:solar:<projectId>` et remplacent ceux du fichier lors de l’utilisation locale. L’export inclut la configuration effective. La préférence locale `null` signifie que l’utilisateur a choisi de revenir à l’éclairage standard, même si le fichier d’origine contient un champ solaire. Ces données ne sont jamais envoyées au serveur d’hébergement.

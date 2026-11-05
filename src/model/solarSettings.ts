@@ -48,5 +48,17 @@ export function validateSolarSettings(input: unknown): SolarSettings {
       );
     if (value.label.trim()) result.label = value.label.trim();
   }
+  if (value.instant !== undefined) {
+    if (
+      typeof value.instant !== 'string' ||
+      !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(value.instant) ||
+      !Number.isFinite(Date.parse(value.instant)) ||
+      new Date(value.instant).toISOString() !== value.instant
+    )
+      throw new SolarSettingsValidationError(
+        'L’instant solaire doit être une date ISO UTC valide.',
+      );
+    result.instant = value.instant;
+  }
   return result;
 }

@@ -18,7 +18,7 @@ const MIN_CEILING_HEIGHT = 1.8;
 // Technical minimums for the fixed-size joinery profiles, not construction standards.
 const MIN_OPENING_SIZE = 0.1;
 
-/** A parcel or face must have a simple perimeter; a bow-tie has no usable interior. */
+/** Every floor, room, parcel or face must have a simple perimeter. */
 function simplePolygon(points: Point2[]): boolean {
   const cross = (a: Point2, b: Point2, c: Point2) =>
     (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
@@ -137,7 +137,8 @@ export function validateProject(input: unknown): HouseProject {
       l.outline.length < 3 ||
       l.outline.length > 1000 ||
       !l.outline.every(point) ||
-      polygonArea(l.outline) < 1
+      polygonArea(l.outline) < 1 ||
+      !simplePolygon(l.outline)
     )
       fail('Contour de niveau invalide.');
     if (
@@ -207,6 +208,7 @@ export function validateProject(input: unknown): HouseProject {
         r.polygon.length > 1000 ||
         !r.polygon.every(point) ||
         polygonArea(r.polygon) < 0.01 ||
+        !simplePolygon(r.polygon) ||
         !point(r.label) ||
         !point(r.viewpoint) ||
         !pointInPolygon(r.label, r.polygon) ||

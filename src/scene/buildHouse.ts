@@ -77,7 +77,7 @@ function pointSegmentDistance(point: Point2, a: Point2, b: Point2) {
 }
 
 /** Floors adjacent to either face determine a wall's bottom and opening datum. */
-function wallFloorSpan(wall: Wall, level: Level) {
+export function wallFloorSpan(wall: Wall, level: Level) {
   const touching = level.rooms
     .filter((room) =>
       room.polygon.some((a, i) => {
@@ -511,6 +511,7 @@ export function buildHouse(
   const ceiling = polygonMesh('ceiling', level.outline, level.ceilingHeight, scene);
   ceiling.parent = root;
   ceiling.material = materials.plaster;
+  shadow?.addShadowCaster(ceiling);
   // Double sided ceiling for an interior view from below.
   materials.plaster.backFaceCulling = false;
   ceiling.setEnabled(false);

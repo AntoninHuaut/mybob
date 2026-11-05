@@ -4,6 +4,7 @@ import { registerHooks } from 'node:module';
 import { readFile } from 'node:fs/promises';
 import { Window, HTMLFormElement as DOMForm, HTMLInputElement as DOMInput } from 'happy-dom';
 import type { HouseProject, SolarSettings } from '../src/model/types';
+import { validateProject } from '../src/model/validate';
 
 registerHooks({
   load(url, context, nextLoad) {
@@ -163,15 +164,88 @@ test('Apply persists explicit coordinates and converts the local date using the 
     ctx.fillValid();
     ctx.submit();
     await turn();
-    assert.deepEqual(ctx.panel.settings, location);
-    assert.deepEqual(
-      JSON.parse(ctx.window.localStorage.getItem(preferenceKey(project.id))!),
-      location,
-    );
+    assert.deepEqual(ctx.panel.settings, { ...location, instant: '2026-07-01T10:30:00.000Z' });
+    assert.deepEqual(JSON.parse(ctx.window.localStorage.getItem(preferenceKey(project.id))!), {
+      ...location,
+      instant: '2026-07-01T10:30:00.000Z',
+    });
     assert.equal(ctx.applications.at(-1)!.instant.toISOString(), '2026-07-01T10:30:00.000Z');
     assert.equal(ctx.panel.dialog.open, false);
     assert.equal(ctx.dialogStates.at(-1), false);
     assert.equal(ctx.requests.length, 0);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('solar instant survives reload/export and stays independent for each project', () => {
+  const ctx = setup();
+  try {
+    const a = { ...structuredClone(fixture), id: 'instant-a' };
+    ctx.panel.load(a);
+    ctx.panel.open();
+    ctx.fillValid();
+    ctx.submit();
+    const exported = validateProject(
+      JSON.parse(JSON.stringify({ ...a, solar: ctx.panel.settings })),
+    );
+    const b = {
+      ...structuredClone(fixture),
+      id: 'instant-b',
+      solar: { ...location, instant: '2026-01-01T17:00:00.000Z' },
+    };
+    const restored = new SolarPanel({
+      onApply: (settings, instant) => ctx.applications.push({ settings, instant }),
+      onDialogState: () => {},
+    });
+    restored.load(b);
+    assert.equal(ctx.applications.at(-1)!.instant.toISOString(), b.solar.instant);
+    restored.load(a);
+    assert.equal(ctx.applications.at(-1)!.instant.toISOString(), exported.solar!.instant);
+    restored.open();
+    assert.equal(
+      restored.dialog.querySelector<HTMLInputElement>('[name=date]')!.value,
+      '2026-07-01',
+    );
+    assert.equal(restored.dialog.querySelector<HTMLInputElement>('[name=time]')!.value, '12:30');
+    restored.dialog.remove();
+    ctx.window.localStorage.clear();
+    restored.load(exported);
+    assert.equal(ctx.applications.at(-1)!.instant.toISOString(), exported.solar!.instant);
+    restored.load({ ...a, id: 'legacy-solar', solar: { ...location } });
+    assert.ok(Math.abs(ctx.applications.at(-1)!.instant.getTime() - Date.now()) < 5000);
+  } finally {
+    ctx.cleanup();
+  }
+});
+
+test('editing a town clears stale coordinates and Enter searches instead of applying', async () => {
+  const ctx = setup();
+  try {
+    ctx.panel.load({ ...structuredClone(fixture), solar: { ...location } });
+    ctx.panel.open();
+    const before = ctx.applications.length;
+    ctx.input('city', 'Toulouse').dispatchEvent(new ctx.window.Event('input', { bubbles: true }));
+    assert.equal(ctx.input('latitude').value, '');
+    assert.equal(ctx.input('longitude').value, '');
+    assert.equal(ctx.panel.dialog.querySelector('details')!.open, true);
+    ctx.respondWith({
+      results: [{ name: 'Toulouse', latitude: 43.6, longitude: 1.44, timezone: 'Europe/Paris' }],
+    });
+    const enter = new ctx.window.KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    });
+    ctx.input('city').dispatchEvent(enter);
+    await turn();
+    assert.equal(enter.defaultPrevented, true);
+    assert.equal(ctx.requests.length, 1);
+    assert.equal(ctx.applications.length, before);
+    assert.equal(ctx.panel.dialog.open, true);
+    ctx.click('[data-solar-result="0"]');
+    assert.equal(ctx.input('latitude').value, '43.6');
+    assert.equal(ctx.input('longitude').value, '1.44');
   } finally {
     ctx.cleanup();
   }

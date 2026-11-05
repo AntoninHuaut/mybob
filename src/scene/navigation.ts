@@ -4,6 +4,8 @@ import type { Level, Point2, Wall } from '../model/types';
 import { floorElevationAt, pointInPolygon } from '../model/geometry';
 import { ELLIPSOID_HALF_HEIGHT, VISITOR_RADIUS } from './walkCamera';
 import type { Scene } from '@babylonjs/core/scene';
+import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 
 /** The viewpoint changes, while the visitor's collision body stays on the floor. */
 export function applyEyeHeight(camera: UniversalCamera, level: Level, requested: number) {
@@ -18,7 +20,7 @@ export function applyEyeHeight(camera: UniversalCamera, level: Level, requested:
   return height;
 }
 
-function distanceToWall(point: Point2, wall: Wall) {
+function distanceToWall(point: Point2, wall: Pick<Wall, 'start' | 'end'>) {
   const dx = wall.end[0] - wall.start[0],
     dz = wall.end[1] - wall.start[1];
   const lengthSquared = dx * dx + dz * dz;
@@ -57,7 +59,33 @@ export function isSceneVisitDestination(scene: Scene, level: Level, point: Point
     if (box.maximumWorld.y < floor + 0.01 || box.minimumWorld.y > floor + 1.6) return false;
     const dx = point[0] - Math.max(box.minimumWorld.x, Math.min(point[0], box.maximumWorld.x));
     const dz = point[1] - Math.max(box.minimumWorld.z, Math.min(point[1], box.maximumWorld.z));
-    return dx * dx + dz * dz < (VISITOR_RADIUS + 0.025) ** 2;
+    const radius = VISITOR_RADIUS + 0.025;
+    if (dx * dx + dz * dz >= radius ** 2) return false;
+    const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+    const indices = mesh.getIndices();
+    if (!positions || !indices) return true;
+    // Test the rendered footprint, including concave upholstery and rotated boxes.
+    // A world AABB alone also fills the empty corner of an L-shaped sofa.
+    const vertices: Point2[] = [];
+    for (let i = 0; i < positions.length; i += 3) {
+      const world = Vector3.TransformCoordinates(
+        Vector3.FromArray(positions, i),
+        mesh.getWorldMatrix(),
+      );
+      vertices.push([world.x, world.z]);
+    }
+    for (let i = 0; i < indices.length; i += 3) {
+      const triangle = [vertices[indices[i]], vertices[indices[i + 1]], vertices[indices[i + 2]]];
+      if (pointInPolygon(point, triangle)) return true;
+      if (
+        triangle.some((a, j) => {
+          const b = triangle[(j + 1) % 3];
+          return distanceToWall(point, { start: a, end: b }) < radius;
+        })
+      )
+        return true;
+    }
+    return false;
   });
 }
 

@@ -901,7 +901,7 @@ button svg {
   position: absolute;
   z-index: 4;
   bottom: 79px;
-  right: 22px;
+  right: 90px;
   width: 165px;
   padding: 11px;
   border: 1px solid #d0dec6;
@@ -1689,7 +1689,7 @@ dialog p {
   }
   .mini-card {
     bottom: 78px;
-    right: 12px;
+    right: 72px;
     width: 140px;
     padding: 9px;
   }

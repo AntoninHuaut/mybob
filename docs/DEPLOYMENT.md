@@ -21,7 +21,7 @@ Le résultat de `build:private` ne doit pas être publié sur un site public. `n
 
 ## CI GitHub Actions
 
-Le workflow `.github/workflows/ci.yml` s’exécute sur les pushes vers `main`, les pull requests visant `main` et sur lancement manuel. Il utilise Node 24 et les dépendances verrouillées par `package-lock.json`.
+Le workflow `.github/workflows/ci.yml` s’exécute sur les pushes vers `main`, les pull requests visant `main` et sur lancement manuel. Il utilise Node 24, pnpm 12.15.0 et `pnpm install --frozen-lockfile` avec `pnpm-lock.yaml`. Le passage à pnpm remplace l’ancienne installation `npm ci`.
 
 Contrôles : mise en forme, tests, vérification TypeScript, compilation publique, puis contrôle de l’artefact. Le contrôle public rejette les fichiers hors liste autorisée, les documents d’origine, le vrai projet de maison et ses signatures connues dans les ressources JavaScript. Ce garde-fou complète l’inclusion explicite des seuls fichiers de démonstration ; il ne remplace pas la revue de tout nouvel asset destiné à être public.
 
@@ -47,6 +47,6 @@ Le fichier `wrangler.toml` déclare le dossier de sortie Pages. Aucun jeton Clou
 
 ## État de la connexion
 
-La connexion GitHub → Cloudflare Pages est active sur `main`. Le site est `https://mybob-9rj.pages.dev/`, avec Cloudflare Access configuré par le propriétaire (emails autorisés et OTP). Un HTTP 302 sans authentification est attendu. Vérifier les checks GitHub CI et Cloudflare du commit précis avant d’annoncer une publication. Aucun ancien hébergement Sites n’est la cible de livraison.
+La connexion GitHub → Cloudflare Pages est active sur `main`. Le site est `https://mybob-9rj.pages.dev/`. Le 5 novembre 2026, le propriétaire a rendu la production accessible et conservé Cloudflare Access sur les previews. Ne pas modifier ces restrictions pour tester. Vérifier les checks GitHub CI et Cloudflare du commit précis avant d’annoncer une publication. Aucun ancien hébergement Sites n’est la cible de livraison.
 
 La recherche de commune du réglage Soleil contacte Open-Meteo uniquement après un clic explicite et transmet seulement le nom recherché. Les coordonnées choisies, plans et meubles restent dans le stockage local et les exports.

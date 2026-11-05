@@ -1,7 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { registerHooks } from 'node:module';
-import { Window, HTMLInputElement as DOMInput, HTMLFormElement as DOMForm } from 'happy-dom';
+import {
+  Window,
+  HTMLInputElement as DOMInput,
+  HTMLFormElement as DOMForm,
+  HTMLSelectElement as DOMSelect,
+} from 'happy-dom';
 import { createFurniture, type FurnitureItem } from '../src/furniture/model';
 
 // Unit tests exercise the DOM controller; styles and WebGL are intentionally absent.
@@ -502,6 +507,99 @@ test('renaming preserves precise geometry and absent optional spaces', () => {
       assert.equal(next[key], original[key]);
     assert.deepEqual(next.position, original.position);
     assert.equal(next.clearances, undefined);
+  } finally {
+    cleanup();
+  }
+});
+
+for (const shape of ['corner', 'chaise'] as const) {
+  test(`editing a straight sofa into ${shape} uses the displayed total and exact body depth`, () => {
+    const { window, panel, editor, getItems, setItems, applied, cleanup } = setup();
+    try {
+      const original = createFurniture({
+        kind: 'sofa',
+        id: 'sofa',
+        position: [3, 3],
+        depth: 0.912345,
+      });
+      setItems([original]);
+      panel.openEdit(original.id);
+      const configuration = editor.querySelector<DOMSelect>('select[name=sofaShape]')!;
+      configuration.value = shape;
+      configuration.dispatchEvent(new window.Event('change', { bubbles: true }));
+      const form = editor.querySelector<DOMForm>('form')!;
+      form.reportValidity = () => true;
+      form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+      assert.equal(applied.length, 1);
+      assert.equal(getItems()[0].sofa?.shape, shape);
+      assert.equal(getItems()[0].sofa?.seatDepth, original.depth);
+      assert.equal(getItems()[0].depth, 1.8);
+    } finally {
+      cleanup();
+    }
+  });
+}
+
+test('editing an L sofa into a straight sofa preserves its exact body depth', () => {
+  const { window, panel, editor, getItems, setItems, applied, cleanup } = setup();
+  try {
+    const original = createFurniture({
+      kind: 'sofa',
+      id: 'sofa',
+      position: [3, 3],
+      depth: 1.876543,
+      sofa: { seatDepth: 0.912345, returnWidth: 0.876543 },
+    });
+    setItems([original]);
+    panel.openEdit(original.id);
+    const configuration = editor.querySelector<DOMSelect>('select[name=sofaShape]')!;
+    configuration.value = 'straight';
+    configuration.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const form = editor.querySelector<DOMForm>('form')!;
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(applied.length, 1);
+    assert.equal(getItems()[0].sofa, undefined);
+    assert.equal(getItems()[0].depth, original.sofa!.seatDepth);
+  } finally {
+    cleanup();
+  }
+});
+
+test('unlocking enables draft geometry immediately and Cancel preserves the locked item', async () => {
+  const { window, panel, editor, getItems, setItems, applied, cleanup } = setup();
+  try {
+    const original = createFurniture({ kind: 'sofa', id: 'sofa', position: [3, 3], locked: true });
+    setItems([original]);
+    panel.openEdit(original.id);
+    const form = editor.querySelector<DOMForm>('form')!;
+    const width = editor.querySelector<DOMInput>('input[name=width]')!;
+    const lock = editor.querySelector<DOMInput>('input[name=locked]')!;
+    assert.equal(width.disabled, true);
+    lock.checked = false;
+    lock.dispatchEvent(new window.Event('change', { bubbles: true }));
+    assert.equal(editor.querySelector('form'), form);
+    assert.equal(width.disabled, false);
+    width.value = '240';
+    assert.deepEqual(getItems()[0], original);
+    editor
+      .querySelector('[data-edit-close]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await Promise.resolve();
+    assert.equal(applied.length, 0);
+    assert.deepEqual(getItems()[0], original);
+
+    panel.openEdit(original.id);
+    const nextLock = editor.querySelector<DOMInput>('input[name=locked]')!;
+    nextLock.checked = false;
+    nextLock.dispatchEvent(new window.Event('change', { bubbles: true }));
+    editor.querySelector<DOMInput>('input[name=width]')!.value = '240';
+    const nextForm = editor.querySelector<DOMForm>('form')!;
+    nextForm.reportValidity = () => true;
+    nextForm.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(applied.length, 1);
+    assert.equal(getItems()[0].locked, false);
+    assert.equal(getItems()[0].width, 2.4);
   } finally {
     cleanup();
   }

@@ -1,5 +1,6 @@
 import './style.css';
 import { SolarPanel } from './ui/solarPanel';
+import { confirmImportReplacement } from './ui/confirmImport';
 import { solarPosition } from './scene/solar';
 import { HouseViewer, type ViewMode } from './scene/viewer';
 import type { HouseProject, Room } from './model/types';
@@ -10,10 +11,10 @@ import { area, escapeHtml as esc, number } from './ui/format';
 import { minimap } from './ui/minimap';
 import { FurnitureLayer, type FurnitureOverlays } from './furniture/layer';
 import { FurniturePanel } from './furniture/panel';
+import { LayoutSession } from './furniture/layoutSession';
 import {
   FurnitureHistory,
   createFurniture,
-  loadLayout,
   saveLayout,
   layoutStorageKey,
   validateFurnitureList,
@@ -42,6 +43,7 @@ let lights = true;
 let mode: ViewMode = 'overview';
 let toastTimer: ReturnType<typeof setTimeout>;
 const furnitureHistory = new FurnitureHistory();
+const layoutSession = new LayoutSession();
 let furnitureLayer: FurnitureLayer | undefined;
 let furniturePanel: FurniturePanel | undefined;
 let selectedFurnitureId: string | undefined;
@@ -124,12 +126,21 @@ function setLayoutStatus(message = 'Aménagement sauvegardé sur cet ordinateur'
 
 function persistFurniture() {
   try {
-    saveLayout(current.id, viewer.level.id, furnitureHistory.items);
-    setLayoutStatus();
+    layoutSession.save(current.id, viewer.level.id, furnitureHistory.items);
+    refreshLayoutStatus();
   } catch (error) {
     setLayoutStatus('Aménagement non sauvegardé · exportez le projet', true);
     toast(error instanceof Error ? error.message : 'Sauvegarde indisponible.');
   }
+}
+
+function refreshLayoutStatus() {
+  setLayoutStatus(
+    layoutSession.hasUnsaved
+      ? 'Des modifications restent en mémoire dans cette session · exportez les projets concernés avant de fermer'
+      : undefined,
+    layoutSession.hasUnsaved,
+  );
 }
 
 function syncFurniture(save = true) {
@@ -229,7 +240,7 @@ function mountFurniture() {
   let items: FurnitureItem[] = [];
   let restoreError = false;
   try {
-    items = loadLayout(current.id, viewer.level.id);
+    items = layoutSession.load(current.id, viewer.level.id);
   } catch (error) {
     restoreError = true;
     toast(error instanceof Error ? error.message : 'Aménagement illisible.');
@@ -362,10 +373,8 @@ function mountFurniture() {
     });
   furniturePanel.render();
   el('#furniture-tab-count').textContent = String(items.length);
-  setLayoutStatus(
-    restoreError ? 'Aménagement non restauré · importez une sauvegarde' : undefined,
-    restoreError,
-  );
+  if (restoreError) setLayoutStatus('Aménagement non restauré · importez une sauvegarde', true);
+  else refreshLayoutStatus();
 }
 
 function setSidebarTab(tab: 'house' | 'furniture', focus = false) {
@@ -697,7 +706,9 @@ function downloadProject() {
     levels = Object.fromEntries(
       current.levels.map((level) => [
         level.id,
-        level.id === viewer.level.id ? currentFurniture() : loadLayout(current.id, level.id),
+        level.id === viewer.level.id
+          ? furnitureHistory.items
+          : layoutSession.load(current.id, level.id),
       ]),
     );
   } catch (error) {
@@ -746,6 +757,19 @@ async function importProject(file: File) {
         if (Object.hasOwn(furnishing.levels, level.id))
           staged.push([level.id, validateFurnitureList(furnishing.levels[level.id])]);
     }
+    const existing = projects.find((candidate) => candidate.id === project.id);
+    if (
+      existing &&
+      !(await confirmImportReplacement(
+        existing.name,
+        (open) => {
+          if (open && document.pointerLockElement) document.exitPointerLock();
+          viewer.setPaused(open);
+        },
+        current.id === existing.id ? downloadProject : undefined,
+      ))
+    )
+      return;
     delete (project as HouseProject & { furnishing?: unknown }).furnishing;
     const previous = imported;
     const previousProjectId = current.id;
@@ -772,11 +796,22 @@ async function importProject(file: File) {
       );
     }
     imported = next;
+    const replacedLevelIds = new Set([
+      ...staged.map(([levelId]) => levelId),
+      ...(existing?.levels ?? [])
+        .filter((level) => !project.levels.some((nextLevel) => nextLevel.id === level.id))
+        .map((level) => level.id),
+    ]);
+    const replacedPending = [...replacedLevelIds].map(
+      (levelId) => [levelId, layoutSession.forget(project.id, levelId)] as const,
+    );
     try {
       renderProjectOptions();
       loadProject(project.id);
     } catch (error) {
       imported = previous;
+      for (const [levelId, items] of replacedPending)
+        if (items) layoutSession.retain(project.id, levelId, items);
       for (const [key, value] of backups) {
         if (value === null) localStorage.removeItem(key);
         else localStorage.setItem(key, value);
@@ -832,6 +867,11 @@ function setNavigationPanel(open: boolean) {
 }
 
 function wireEvents() {
+  window.addEventListener('beforeunload', (event) => {
+    if (!layoutSession.hasUnsaved) return;
+    event.preventDefault();
+    event.returnValue = '';
+  });
   el('#edit-selected-furniture').addEventListener('click', () => {
     if (selectedFurnitureId) openFurnitureEditor(selectedFurnitureId);
   });
@@ -1046,6 +1086,7 @@ function wireEvents() {
         return;
       }
       imported = next;
+      for (const level of project.levels) layoutSession.forget(project.id, level.id);
       el<HTMLDialogElement>('#info-dialog').close();
       renderProjectOptions();
       try {

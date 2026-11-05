@@ -11,7 +11,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import earcut from 'earcut';
 import type { HouseProject, Level, Point2 } from '../model/types';
 import { alongWall, bounds, pointInPolygon, wallLength, wallSections } from '../model/geometry';
-import { polygonMesh } from './buildHouse';
+import { polygonMesh, wallFloorSpan } from './buildHouse';
 
 export interface ExteriorScene {
   root: TransformNode;
@@ -163,19 +163,12 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     const normal = wall.thickness / 2 + 0.012;
     const positiveSide = alongWall(wall, length / 2, normal + 0.025);
     const sign = pointInPolygon(positiveSide, level.outline) ? -1 : 1;
-    const adjacentGarage = level.rooms.find(
-      (room) =>
-        room.kind === 'garage' &&
-        [normal + 0.06, -normal - 0.06].some((n) =>
-          pointInPolygon(alongWall(wall, length / 2, n), room.polygon),
-        ),
-    );
-    const floorOffset = adjacentGarage?.floorOffset ?? 0;
+    const { bottom: floorOffset, openingBase } = wallFloorSpan(wall, level);
     const effectiveWall = {
       ...wall,
       openings: (wall.openings ?? []).map((opening) => ({
         ...opening,
-        sill: (opening.sill ?? 0) + floorOffset,
+        sill: (opening.sill ?? 0) + openingBase,
       })),
     };
     const sections = wallSections(effectiveWall, height);

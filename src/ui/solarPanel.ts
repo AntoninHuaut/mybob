@@ -49,6 +49,22 @@ export class SolarPanel {
       event.preventDefault();
       this.apply();
     });
+    this.dialog.addEventListener('keydown', (event) => {
+      if (event.key !== 'Enter' || (event.target as HTMLInputElement).name !== 'city') return;
+      event.preventDefault();
+      void this.search();
+    });
+    this.dialog.addEventListener('input', (event) => {
+      if ((event.target as HTMLInputElement).name !== 'city') return;
+      this.searchController?.abort();
+      this.query<HTMLButtonElement>('[data-solar-search]').disabled = false;
+      this.query('[data-solar-results]').replaceChildren();
+      this.candidates = [];
+      this.input('latitude').value = '';
+      this.input('longitude').value = '';
+      this.query<HTMLDetailsElement>('details').open = true;
+      this.status('Recherchez et choisissez une commune, ou saisissez ses coordonnées.');
+    });
   }
   get settings() {
     return this.value ? { ...this.value } : undefined;
@@ -65,6 +81,7 @@ export class SolarPanel {
     } catch {
       /* A malformed preference must not stop loading a house. */
     }
+    this.instant = this.value?.instant ? new Date(this.value.instant) : new Date();
     this.callbacks.onApply(this.settings, this.instant);
   }
   open() {
@@ -131,6 +148,7 @@ export class SolarPanel {
         this.input('time').value,
         settings.timeZone!,
       );
+      settings.instant = instant.toISOString();
       localStorage.setItem(key(this.project!.id), JSON.stringify(settings));
       this.value = settings;
       this.instant = instant;

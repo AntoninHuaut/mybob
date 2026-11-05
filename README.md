@@ -8,11 +8,11 @@ Lire [AGENTS.md](AGENTS.md), [le guide de passation locale](docs/HANDOFF.md) et 
 
 ## Démarrer
 
-Node.js 22.12+ ou 24 recommandé.
+Node.js 24 et pnpm 12.15.0.
 
 ```sh
-npm ci
-npm run dev
+pnpm install --frozen-lockfile
+pnpm run dev
 ```
 
 Ouvrir l’adresse indiquée par Vite. Par défaut, seul le studio de démonstration est embarqué ; importer sa maison localement. `npm run dev:private` charge le modèle personnel depuis le dépôt privé. L’application nécessite WebGL et l’accélération graphique. Aucun compte ni serveur de données n’est nécessaire en local.

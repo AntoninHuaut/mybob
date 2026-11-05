@@ -42,6 +42,12 @@ Ce format accepte une autre parcelle et une autre enveloppe de toiture sans ré�
 
 `buildExterior(project, level, scene)` retourne un groupe indépendant et ses maillages : terrain et accès, façades identifiées par `metadata.wallId`, toiture/pignons initialement masqués, limites horizontales et hauteur maximale. La vue contrôle la visibilité des faces extérieures en même temps que celle des murs en coupe. Le gazon est évidé sous la maison, y compris quand le mur touche la limite de parcelle ; il ne traverse donc pas le garage abaissé.
 
+Les ouvertures des façades utilisent la même cote de sol adjacente que les murs intérieurs, quelle que soit la catégorie de pièce abaissée. En visite, le plafond visible participe aux ombres solaires même lorsque la toiture extérieure est masquée. L'aperçu reste simplifié et ne simule pas la lumière indirecte, la météo ou les bâtiments voisins.
+
+Le départ d'une visite vérifie les triangles projetés du mobilier avec la marge du visiteur : le creux libre d'un canapé en L et les espaces autour d'un meuble tourné restent accessibles. Le test se déclenche au choix de la destination, pas à chaque image. Les collisions pendant le déplacement restent celles des maillages Babylon.
+
 ## Vérification automatisée
 
 Les tests contrôlent la surface et les quatre longueurs de la parcelle, l’implantation, l’aire exacte du gazon après évidement, l’absence de gazon sous le garage, le dégagement de sa porte, la couverture et les hauteurs de toiture, l’élimination de géométries invalides, le nettoyage de la scène et la compatibilité des projets sans terrain. Ces contrôles géométriques ne remplacent pas une inspection visuelle dans un navigateur WebGL.
+
+`tests/scene-review.test.ts` vérifie aussi les ouvertures d'une pièce habitable abaissée, l'occultation par le plafond et les départs de visite autour de meubles concaves ou tournés.

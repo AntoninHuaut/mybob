@@ -34,6 +34,8 @@ Le simple clic sélectionne et propose les rotations rapides. Le double-clic dan
 
 Les profondeurs des canapés sont saisies depuis le dos : profondeur du corps principal puis profondeur totale côté allongé. Aucune soustraction n’est demandée. Le schéma local indique ces deux longueurs et la largeur du retour. Les assises et bases en L utilisent des volumes continus, sans trou à la jonction.
 
+Changer un canapé droit en angle ou méridienne utilise la profondeur totale affichée pour le retour ; revenir à un canapé droit conserve la profondeur du corps. Les mesures laissées intactes conservent leur précision d’origine. Décocher le verrouillage dans la popup rend immédiatement les dimensions et la position modifiables, dans le même brouillon. Annuler conserve le meuble et son verrouillage initiaux ; Enregistrer applique le déverrouillage et les modifications ensemble.
+
 La TV se renseigne d’abord par diagonale en pouces, au format 16:9. Le boîtier et les pieds sont estimés ; Dimensions exactes permet de corriger largeur, profondeur et hauteur. Une modification manuelle de largeur/hauteur retire la diagonale associée, pour ne pas conserver une indication devenue fausse. Les anciens téléviseurs aux dimensions personnalisées restent compatibles.
 
 ## Ensembles de meubles
