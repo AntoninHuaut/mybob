@@ -2004,3 +2004,13 @@ dialog p,
     padding: 16px 19px;
   }
 }
+
+.demo-notice {
+  padding: 12px;
+  border: 1px solid #d8e1ce;
+  border-radius: 8px;
+  background: #eef3e8;
+  color: #3c5947;
+  font-size: 12px;
+  line-height: 1.6;
+}

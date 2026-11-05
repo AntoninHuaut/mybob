@@ -7,7 +7,13 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import '@babylonjs/core/Collisions/collisionCoordinator';
 import type { HouseProject } from '../src/model/types';
-import { createWalkCamera, ELLIPSOID_HALF_HEIGHT } from '../src/scene/walkCamera';
+import {
+  applyLookSensitivity,
+  createWalkCamera,
+  DEFAULT_WALK_SPEED,
+  ELLIPSOID_HALF_HEIGHT,
+  walkDisplacement,
+} from '../src/scene/walkCamera';
 import {
   applyEyeHeight,
   isVisitDestination,
@@ -19,6 +25,52 @@ const project: HouseProject = JSON.parse(
   await readFile(new URL('../public/projects/private-project.json', import.meta.url), 'utf8'),
 );
 const level = project.levels[0];
+
+test('real camera travel matches metres per second at 30–240 Hz and stops immediately', () => {
+  for (const fps of [30, 60, 144, 240]) {
+    const engine = new NullEngine();
+    engine.getDeltaTime = () => 1000 / fps;
+    const scene = new Scene(engine);
+    const camera = createWalkCamera(scene, level);
+    camera.applyGravity = camera.checkCollisions = false;
+    camera.needMoveForGravity = false;
+    const start = camera.position.clone();
+    for (let frame = 0; frame < fps; frame++) {
+      camera.cameraDirection.copyFrom(walkDisplacement(camera, 1, 1, DEFAULT_WALK_SPEED, 1 / fps));
+      camera.update();
+    }
+    assert.ok(
+      Math.abs(Vector3.Distance(start, camera.position) - DEFAULT_WALK_SPEED) < 0.00001,
+      `walking distance must stay in metres at ${fps} Hz`,
+    );
+    const stopped = camera.position.clone();
+    camera.update();
+    assert.ok(
+      Vector3.Distance(stopped, camera.position) < 0.00001,
+      'no residual movement on release',
+    );
+    const sprint = walkDisplacement(camera, 1, 0, DEFAULT_WALK_SPEED, 1, true);
+    assert.ok(Math.abs(sprint.length() - DEFAULT_WALK_SPEED * 1.7) < 0.00001);
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+test('mouse sensitivity is adjustable without changing the collision body or travel speed', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const camera = createWalkCamera(scene, level);
+  const before = camera.ellipsoid.clone();
+  assert.equal(camera.angularSensibility, 900);
+  assert.equal(applyLookSensitivity(camera, 2), 2);
+  assert.equal(camera.angularSensibility, 450);
+  assert.equal(applyLookSensitivity(camera, 0.1), 0.5);
+  assert.equal(camera.angularSensibility, 1800);
+  assert.equal(applyLookSensitivity(camera, NaN), 1);
+  assert.ok(camera.ellipsoid.equals(before));
+  scene.dispose();
+  engine.dispose();
+});
 
 test('seated and standing viewpoints keep the collision body on the lowered garage floor', () => {
   const engine = new NullEngine();

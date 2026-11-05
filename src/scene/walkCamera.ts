@@ -3,13 +3,33 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Level } from '../model/types';
 import { floorElevationAt } from '../model/geometry';
-import { cameraYaw } from './coordinates';
+import { cameraYaw, walkMovement } from './coordinates';
 import { pointInPolygon } from '../model/geometry';
 import { Ray } from '@babylonjs/core/Culling/ray';
 
 export const EYE_HEIGHT = 1.65;
 export const VISITOR_RADIUS = 0.17;
 export const ELLIPSOID_HALF_HEIGHT = 0.8;
+export const DEFAULT_WALK_SPEED = 2.8;
+
+/** One frame of travel in metres, independent of display refresh rate or diagonal input. */
+export function walkDisplacement(
+  camera: UniversalCamera,
+  forward: number,
+  side: number,
+  speed: number,
+  seconds: number,
+  sprint = false,
+) {
+  const direction = walkMovement(camera, forward, side);
+  return direction.normalize().scaleInPlace(speed * (sprint ? 1.7 : 1) * seconds);
+}
+
+export function applyLookSensitivity(camera: UniversalCamera, multiplier: number) {
+  const value = Number.isFinite(multiplier) ? Math.max(0.5, Math.min(2, multiplier)) : 1;
+  camera.angularSensibility = 900 / value;
+  return value;
+}
 
 /** Lift over a small, unobstructed threshold; keep mesh collisions for walls and doors. */
 export function prepareWalkStep(camera: UniversalCamera, level: Level, movement: Vector3) {
@@ -66,7 +86,7 @@ export function createWalkCamera(scene: Scene, level: Level) {
   // Center = eye - halfHeight + offset; its bottom must coincide with the floor.
   camera.ellipsoidOffset.set(0, 2 * ELLIPSOID_HALF_HEIGHT - EYE_HEIGHT, 0);
   camera.inertia = 0;
-  camera.angularSensibility = 2300;
+  applyLookSensitivity(camera, 1);
   camera.inputs.removeByType('FreeCameraKeyboardMoveInput');
   return camera;
 }

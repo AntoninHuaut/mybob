@@ -8,6 +8,7 @@ import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { Engine } from '@babylonjs/core/Engines/engine';
 import { Scene } from '@babylonjs/core/scene';
+import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
@@ -20,8 +21,16 @@ import type { HouseProject, Level, Point2 } from '../model/types';
 import { bounds, floorElevationAt, pointInPolygon } from '../model/geometry';
 import { buildHouse, poseDoor, type HouseScene } from './buildHouse';
 import { createMaterials } from './materials';
-import { createWalkCamera, EYE_HEIGHT, prepareWalkStep } from './walkCamera';
-import { fitOverview, fitPlan } from './framing';
+import { buildExterior, type ExteriorScene } from './buildExterior';
+import {
+  applyLookSensitivity,
+  createWalkCamera,
+  DEFAULT_WALK_SPEED,
+  EYE_HEIGHT,
+  prepareWalkStep,
+  walkDisplacement,
+} from './walkCamera';
+import { fitOverview, fitPlan, siteOverviewLevel } from './framing';
 import {
   applyEyeHeight,
   findVisitDestination,
@@ -29,14 +38,7 @@ import {
   sectionPlane,
   wallFacesCamera,
 } from './navigation';
-import {
-  cameraYaw,
-  planHeading,
-  setPlanView,
-  stopOrbit,
-  usePlanCoordinates,
-  walkMovement,
-} from './coordinates';
+import { cameraYaw, planHeading, setPlanView, stopOrbit, usePlanCoordinates } from './coordinates';
 
 export type ViewMode = 'overview' | 'plan' | 'walk';
 export interface FrameInfo {
@@ -59,6 +61,9 @@ export class HouseViewer {
   orbit!: ArcRotateCamera;
   walk!: UniversalCamera;
   house!: HouseScene;
+  exterior?: ExteriorScene;
+  private exteriorView = false;
+  private exteriorFrame?: Level;
   level!: Level;
   mode: ViewMode = 'overview';
   measureMode = false;
@@ -72,6 +77,8 @@ export class HouseViewer {
   onDestinationRejected?: () => void;
   goToMode = false;
   private eyeHeight = EYE_HEIGHT;
+  private walkSpeed = DEFAULT_WALK_SPEED;
+  private lookSensitivity = 1;
   private cutaway = false;
   private sectionHeight?: number;
   private exteriorMeshes: {
@@ -115,6 +122,9 @@ export class HouseViewer {
 
   load(project: HouseProject, levelId?: string) {
     this.scene?.dispose();
+    this.exterior = undefined;
+    this.exteriorFrame = undefined;
+    this.exteriorView = false;
     this.keyState.clear();
     this.measurement = undefined;
     this.measureMode = false;
@@ -125,11 +135,14 @@ export class HouseViewer {
     const scene = (this.scene = new Scene(this.engine));
     usePlanCoordinates(scene);
     scene.clearColor = new Color4(0.918, 0.925, 0.906, 0);
-    scene.ambientColor = Color3.FromHexString('#dfdfd4');
+    scene.ambientColor = Color3.Black();
     scene.collisionsEnabled = true;
     scene.gravity = new Vector3(0, -0.25, 0);
-    scene.imageProcessingConfiguration.exposure = 1.12;
-    scene.imageProcessingConfiguration.contrast = 1.12;
+    scene.imageProcessingConfiguration.toneMappingEnabled = true;
+    scene.imageProcessingConfiguration.toneMappingType =
+      ImageProcessingConfiguration.TONEMAPPING_ACES;
+    scene.imageProcessingConfiguration.exposure = 0.95;
+    scene.imageProcessingConfiguration.contrast = 1.02;
     const extent = bounds(level.outline);
     const center = new Vector3(extent.center[0], level.elevation + 0.35, extent.center[1]);
     this.orbit = new ArcRotateCamera(
@@ -144,8 +157,8 @@ export class HouseViewer {
     this.orbit.upperRadiusLimit = Math.max(extent.width, extent.depth) * 6;
     this.orbit.lowerBetaLimit = 0.03;
     this.orbit.upperBetaLimit = Math.PI * 0.48;
-    this.orbit.wheelPrecision = 35;
-    this.orbit.panningSensibility = 85;
+    this.orbit.wheelPrecision = 12;
+    this.orbit.panningSensibility = 60;
     this.orbit.minZ = 0.03;
     this.orbit.maxZ = 1000;
     this.orbit.fov = 0.66;
@@ -153,6 +166,7 @@ export class HouseViewer {
     this.orbit.attachControl(this.canvas, true);
 
     this.walk = createWalkCamera(scene, level);
+    applyLookSensitivity(this.walk, this.lookSensitivity);
     this.eyeHeight = applyEyeHeight(this.walk, level, this.eyeHeight);
     this.hemispheric = new HemisphericLight('sky', new Vector3(0.3, 1, -0.1), scene);
     this.hemispheric.intensity = 0.9;
@@ -172,17 +186,27 @@ export class HouseViewer {
     shadow.normalBias = 0.025;
     shadow.setDarkness(0.2);
     this.house = buildHouse(level, scene, createMaterials(scene, project.finishes), shadow);
+    this.exterior = buildExterior(project, level, scene);
+    if (project.site && this.exterior) {
+      this.exteriorFrame = siteOverviewLevel(level, project.site, this.exterior.height);
+      for (const mesh of this.exterior.meshes) {
+        mesh.receiveShadows = true;
+        if (this.exterior.roofMeshes.includes(mesh)) shadow.addShadowCaster(mesh);
+      }
+    }
     this.exteriorMeshes = level.walls
       .filter((wall) => wall.exterior)
       .map((wall) => ({
         wall,
-        meshes: (scene.getTransformNodeByName(`wall:${wall.id}`)?.getChildMeshes() ?? []).map(
-          (mesh) => ({
-            mesh,
-            visibility: mesh.visibility,
-            pickable: mesh.isPickable,
-          }),
-        ),
+        meshes: [
+          ...(scene.getTransformNodeByName(`wall:${wall.id}`)?.getChildMeshes() ?? []),
+          ...(this.exterior?.facadeMeshes.filter((mesh) => mesh.metadata?.wallId === wall.id) ??
+            []),
+        ].map((mesh) => ({
+          mesh,
+          visibility: mesh.visibility,
+          pickable: mesh.isPickable,
+        })),
       }));
     this.buildDimensions();
     this.setMode('overview');
@@ -225,7 +249,8 @@ export class HouseViewer {
         if (room) this.onSelectRoom?.(room.id);
       }
     });
-    scene.onBeforeRenderObservable.add(() => this.beforeFrame());
+    // Input must be prepared before Babylon updates its active camera, not after rendering starts.
+    scene.onBeforeAnimationsObservable.add(() => this.beforeFrame());
     this.resize();
   }
 
@@ -252,6 +277,11 @@ export class HouseViewer {
     this.orbit.detachControl();
     this.walk.detachControl();
     this.mode = mode;
+    if (mode !== 'overview') this.exteriorView = false;
+    this.exterior?.root.setEnabled(mode !== 'plan');
+    this.exterior?.roofMeshes.forEach((mesh) =>
+      mesh.setEnabled(this.exteriorView && mode === 'overview'),
+    );
     this.setGoToMode(false);
     this.setMeasureMode(false);
     if (mode === 'walk') {
@@ -271,7 +301,7 @@ export class HouseViewer {
         this.orbit.upperBetaLimit = Math.PI * 0.48;
         this.orbit.beta = 0.66;
         this.orbit.alpha = Math.PI * 0.66;
-        fitOverview(this.orbit, this.level, this.canvas.clientWidth, this.canvas.clientHeight);
+        this.fitOverview();
       }
     }
     this.updateLighting();
@@ -346,7 +376,7 @@ export class HouseViewer {
     } else if (this.mode === 'overview') {
       this.orbit.alpha = Math.PI * 0.66;
       this.orbit.beta = 0.66;
-      fitOverview(this.orbit, this.level, this.canvas.clientWidth, this.canvas.clientHeight);
+      this.fitOverview();
     }
     this.clearKeys();
   }
@@ -390,6 +420,18 @@ export class HouseViewer {
     return this.eyeHeight;
   }
 
+  setWalkSpeed(metersPerSecond: number) {
+    this.walkSpeed = Number.isFinite(metersPerSecond)
+      ? Math.max(1, Math.min(5, metersPerSecond))
+      : DEFAULT_WALK_SPEED;
+    return this.walkSpeed;
+  }
+
+  setLookSensitivity(multiplier: number) {
+    this.lookSensitivity = applyLookSensitivity(this.walk, multiplier);
+    return this.lookSensitivity;
+  }
+
   setGoToMode(enabled: boolean) {
     this.goToMode = enabled && this.mode !== 'walk';
     if (this.goToMode) this.setMeasureMode(false);
@@ -414,6 +456,25 @@ export class HouseViewer {
     return true;
   }
 
+  setExteriorView(enabled: boolean) {
+    this.exteriorView = enabled && !!this.exteriorFrame && this.mode === 'overview';
+    this.exterior?.roofMeshes.forEach((mesh) => mesh.setEnabled(this.exteriorView));
+    this.setMeasureMode(false);
+    this.setGoToMode(false);
+    this.updateSection();
+    this.updateCutaway();
+    if (this.mode === 'overview') this.fitOverview();
+  }
+
+  private fitOverview() {
+    fitOverview(
+      this.orbit,
+      this.exteriorView && this.exteriorFrame ? this.exteriorFrame : this.level,
+      this.canvas.clientWidth,
+      this.canvas.clientHeight,
+    );
+  }
+
   setCutaway(enabled: boolean) {
     this.cutaway = enabled;
     this.updateCutaway();
@@ -426,14 +487,19 @@ export class HouseViewer {
 
   private updateSection() {
     this.scene.clipPlane =
-      this.mode === 'walk' ? null : sectionPlane(this.level, this.sectionHeight);
+      this.mode === 'walk' || this.exteriorView
+        ? null
+        : sectionPlane(this.level, this.sectionHeight);
   }
 
   private updateCutaway() {
     const camera: Point2 = [this.orbit.position.x, this.orbit.position.z];
     for (const { wall, meshes } of this.exteriorMeshes) {
       const hidden =
-        this.cutaway && this.mode === 'overview' && wallFacesCamera(this.level, wall, camera);
+        this.cutaway &&
+        !this.exteriorView &&
+        this.mode === 'overview' &&
+        wallFacesCamera(this.level, wall, camera);
       // Visibility is independent of Babylon's collision flag. Restore completely in a visit.
       for (const { mesh, visibility, pickable } of meshes) {
         mesh.visibility = hidden ? 0 : visibility;
@@ -488,8 +554,8 @@ export class HouseViewer {
       f.setEnabled(interior || (this.ceilingOn && this.mode === 'overview')),
     );
     this.house.pointLights.forEach((l) => l.setEnabled(this.lightOn));
-    this.hemispheric.intensity = interior ? 0.64 : 0.92;
-    this.sun.intensity = this.lightOn ? 1.15 : 1.35;
+    this.hemispheric.intensity = interior ? 0.42 : 0.55;
+    this.sun.intensity = 0.95;
     if (interior) this.house.highlights.forEach((m) => m.setEnabled(false));
   }
 
@@ -506,8 +572,7 @@ export class HouseViewer {
   private resize() {
     this.engine.resize();
     if (this.mode === 'plan' && this.level) this.setOrthoSize();
-    else if (this.mode === 'overview' && this.level && this.orbit)
-      fitOverview(this.orbit, this.level, this.canvas.clientWidth, this.canvas.clientHeight);
+    else if (this.mode === 'overview' && this.level && this.orbit) this.fitOverview();
   }
 
   private beforeFrame() {
@@ -547,14 +612,14 @@ export class HouseViewer {
               this.keyState.has('KeyQ') ||
               this.keyState.has('ArrowLeft'),
           );
-        movement = walkMovement(this.walk, forward, side);
-        if (movement.lengthSquared()) {
-          movement
-            .normalize()
-            .scaleInPlace(
-              (this.keyState.has('ShiftLeft') || this.keyState.has('ShiftRight') ? 3.6 : 2.1) * dt,
-            );
-        }
+        movement = walkDisplacement(
+          this.walk,
+          forward,
+          side,
+          this.walkSpeed,
+          dt,
+          this.keyState.has('ShiftLeft') || this.keyState.has('ShiftRight'),
+        );
       }
       prepareWalkStep(this.walk, this.level, movement);
       this.walk.cameraDirection.addInPlace(movement);

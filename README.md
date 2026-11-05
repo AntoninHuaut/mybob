@@ -23,10 +23,13 @@ Le dossier `dist/` contient la version statique déployable. Les dépendances et
 
 Le build normal est **public et limité à la démonstration**. La commande `npm run ci` exécute tous les contrôles et vérifie qu’aucun plan personnel n’est présent dans l’artefact. Configuration Cloudflare Pages et GitHub Actions : [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
+La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable et un éclairage avec tone mapping. Détails et limites : [docs/V2.md](docs/V2.md), [docs/EXTERIOR.md](docs/EXTERIOR.md).
+
 ## Utilisation
 
 - **Vue 3D** : glisser avec le bouton gauche pour tourner ; molette pour zoomer ; bouton droit pour déplacer.
 - Le cadrage s’adapte à la fenêtre et réserve une marge pour l’interface. **Recentrer** réaffiche la maison entière après un zoom ou un déplacement.
+- **Extérieur** : si le projet contient un terrain, affiche la parcelle, les façades et la toiture ; la vue 3D garde la toiture ouverte pour aménager.
 - **Plan** : vue orthographique, sélection des pièces et des dimensions extérieures.
 - **Visite** : ZQSD, WASD ou flèches pour marcher, souris pour regarder, Maj pour accélérer, E pour ouvrir ou fermer une porte proche. Échap libère la souris.
 - En cas de refus de capture de souris, cliquer dans la scène et glisser avec le bouton gauche pour regarder.

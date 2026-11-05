@@ -1,7 +1,7 @@
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Viewport } from '@babylonjs/core/Maths/math.viewport';
 import type { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
-import type { Level } from '../model/types';
+import type { Level, ProjectSite } from '../model/types';
 import { bounds } from '../model/geometry';
 
 export function frameInsets(width: number, height: number) {
@@ -88,4 +88,15 @@ export function fitOverview(camera: ArcRotateCamera, level: Level, width: number
   }
   if (camera.upperRadiusLimit !== null && camera.upperRadiusLimit < camera.radius)
     camera.upperRadiusLimit = camera.radius * 1.1;
+}
+
+/** Frame the parcel and roof together, including ground below the finished floor. */
+export function siteOverviewLevel(level: Level, site: ProjectSite, roofHeight: number): Level {
+  const ground = Math.min(site.elevation, 0);
+  return {
+    ...level,
+    outline: site.boundary,
+    elevation: level.elevation + ground,
+    ceilingHeight: Math.max(level.ceilingHeight, roofHeight) - ground + 0.15,
+  };
 }

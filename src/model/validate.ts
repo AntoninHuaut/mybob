@@ -17,6 +17,75 @@ const MIN_CEILING_HEIGHT = 1.8;
 // Technical minimums for the fixed-size joinery profiles, not construction standards.
 const MIN_OPENING_SIZE = 0.1;
 
+/** A parcel or face must have a simple perimeter; a bow-tie has no usable interior. */
+function simplePolygon(points: Point2[]): boolean {
+  const cross = (a: Point2, b: Point2, c: Point2) =>
+    (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const on = (a: Point2, b: Point2, c: Point2) =>
+    Math.abs(cross(a, b, c)) < 1e-8 &&
+    c[0] >= Math.min(a[0], b[0]) - 1e-8 &&
+    c[0] <= Math.max(a[0], b[0]) + 1e-8 &&
+    c[1] >= Math.min(a[1], b[1]) - 1e-8 &&
+    c[1] <= Math.max(a[1], b[1]) + 1e-8;
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i],
+      b = points[(i + 1) % points.length];
+    if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.001) return false;
+    for (let j = i + 1; j < points.length; j++) {
+      if (j === i + 1 || (i === 0 && j === points.length - 1)) continue;
+      const c = points[j],
+        d = points[(j + 1) % points.length];
+      if (
+        (cross(a, b, c) * cross(a, b, d) < 0 && cross(c, d, a) * cross(c, d, b) < 0) ||
+        on(a, b, c) ||
+        on(a, b, d) ||
+        on(c, d, a) ||
+        on(c, d, b)
+      )
+        return false;
+    }
+  }
+  return true;
+}
+function validPolygon(value: unknown): value is Point2[] {
+  return (
+    Array.isArray(value) &&
+    value.length >= 3 &&
+    value.length <= 500 &&
+    value.every(point) &&
+    polygonArea(value) >= 0.01 &&
+    simplePolygon(value)
+  );
+}
+
+function validRoofFace(face: unknown, vertices: [number, number, number][]): boolean {
+  if (
+    !Array.isArray(face) ||
+    face.length < 3 ||
+    face.length > 100 ||
+    !face.every((index) => Number.isInteger(index) && index >= 0 && index < vertices.length) ||
+    new Set(face).size !== face.length
+  )
+    return false;
+  const points = face.map((index) => vertices[index]);
+  const normal = [0, 0, 0];
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i],
+      b = points[(i + 1) % points.length];
+    normal[0] += (a[1] - b[1]) * (a[2] + b[2]);
+    normal[1] += (a[2] - b[2]) * (a[0] + b[0]);
+    normal[2] += (a[0] - b[0]) * (a[1] + b[1]);
+  }
+  const length = Math.hypot(...normal);
+  if (length < 0.001) return false;
+  const dominant = normal.map(Math.abs).indexOf(Math.max(...normal.map(Math.abs)));
+  const projected = points.map((p) => p.filter((_, i) => i !== dominant) as Point2);
+  if (!simplePolygon(projected)) return false;
+  return points.every(
+    (p) => Math.abs(p.reduce((s, n, i) => s + (n - points[0][i]) * normal[i], 0)) / length < 0.001,
+  );
+}
+
 export function validateProject(input: unknown): HouseProject {
   if (!record(input)) fail('Le fichier doit contenir un objet de projet JSON.');
   const p = input as HouseProject;
@@ -167,6 +236,64 @@ export function validateProject(input: unknown): HouseProject {
       id(light.id);
       if (!point(light.position) || !optionalBoolean(light.provisional))
         fail('Position ou statut de luminaire invalide.');
+    }
+  }
+  if (p.site !== undefined) {
+    const site = p.site;
+    if (
+      !record(site) ||
+      !validPolygon(site.boundary) ||
+      !finite(site.elevation) ||
+      site.elevation < -10 ||
+      site.elevation > 5 ||
+      !Array.isArray(site.notes) ||
+      site.notes.length > 100 ||
+      !site.notes.every(text) ||
+      (site.declaredArea !== undefined && !positive(site.declaredArea))
+    )
+      fail('Le terrain doit contenir un contour simple, une altitude et des notes valides.');
+    for (const color of [site.facadeColor, site.roofColor])
+      if (color !== undefined && (typeof color !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(color)))
+        fail('Les couleurs extérieures doivent respecter le format #rrggbb.');
+    if (!polygonInsidePolygon(p.levels[0].outline, site.boundary))
+      fail('La maison doit rester à l’intérieur de la parcelle.');
+    if (site.surfaces !== undefined) {
+      if (!Array.isArray(site.surfaces) || site.surfaces.length > 100)
+        fail('Surfaces extérieures invalides.');
+      for (const surface of site.surfaces) {
+        if (!record(surface)) fail('Une surface extérieure doit être un objet.');
+        id(surface.id);
+        if (
+          !['gravel', 'path'].includes(surface.kind) ||
+          !validPolygon(surface.polygon) ||
+          !polygonInsidePolygon(surface.polygon, site.boundary)
+        )
+          fail(`Surface extérieure invalide : ${surface.id}`);
+      }
+    }
+    if (site.roofs !== undefined) {
+      if (!Array.isArray(site.roofs) || site.roofs.length > 30) fail('Toitures invalides.');
+      for (const roof of site.roofs) {
+        if (!record(roof)) fail('Une toiture doit être un objet.');
+        id(roof.id);
+        if (
+          !Array.isArray(roof.vertices) ||
+          roof.vertices.length < 3 ||
+          roof.vertices.length > 500 ||
+          !roof.vertices.every(
+            (v) => Array.isArray(v) && v.length === 3 && v.every(finite) && v[1] >= 0 && v[1] <= 30,
+          ) ||
+          !Array.isArray(roof.faces) ||
+          !roof.faces.length ||
+          roof.faces.length > 500 ||
+          !roof.faces.every((f) => validRoofFace(f, roof.vertices)) ||
+          (roof.gables !== undefined &&
+            (!Array.isArray(roof.gables) ||
+              roof.gables.length > 500 ||
+              !roof.gables.every((f) => validRoofFace(f, roof.vertices))))
+        )
+          fail(`Géométrie de toiture invalide : ${roof.id}`);
+      }
     }
   }
   return structuredClone(p);

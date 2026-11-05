@@ -43,12 +43,34 @@ export interface Level {
   lights: { id: string; position: Point2; provisional?: boolean }[];
   spawn: { position: Point2; yaw: number };
 }
+export interface SiteRoof {
+  id: string;
+  /** Metres in the level coordinate system: x, height above level datum, z. */
+  vertices: [number, number, number][];
+  /** Planar polygon faces; indices into vertices. */
+  faces: number[][];
+  /** Rendered with the exterior plaster instead of the roof material. */
+  gables?: number[][];
+}
+export interface ProjectSite {
+  /** Parcel in the same x/z coordinate system as the floor plan. */
+  boundary: Point2[];
+  /** Simplified flat ground height relative to the first level datum. */
+  elevation: number;
+  declaredArea?: number;
+  facadeColor?: string;
+  roofColor?: string;
+  surfaces?: { id: string; kind: 'gravel' | 'path'; polygon: Point2[] }[];
+  roofs?: SiteRoof[];
+  notes: string[];
+}
 export interface HouseProject {
   schemaVersion: 1;
   id: string;
   name: string;
   description: string;
   units: 'm';
+  site?: ProjectSite;
   finishes?: {
     wallColor?: string;
     floorTint?: string;

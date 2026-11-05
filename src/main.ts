@@ -32,6 +32,7 @@ let selectedRoom: Room | undefined;
 let showLabels = true;
 let showDimensions = false;
 let ceiling = false;
+let exteriorView = false;
 let lights = true;
 let mode: ViewMode = 'overview';
 let toastTimer: ReturnType<typeof setTimeout>;
@@ -49,21 +50,21 @@ el('#app').innerHTML = `
     <button id="toggle-sidebar" class="mobile-menu-button" aria-controls="project-sidebar" aria-expanded="false" aria-label="Afficher les pièces et projets">${icon('layers', 20)}</button>
     <a class="brand" href="#" aria-label="Maison, revenir à la vue d’ensemble"><span class="brand-mark">${icon('house', 23)}</span><span>maison<span class="brand-dot">.</span><small>ATELIER 3D</small></span></a>
     <div class="header-separator"></div><div class="project-breadcrumb"><span id="header-project">Votre espace</span>${icon('chevron', 13)}<span id="header-level">Rez-de-chaussée</span></div>
-    <div class="header-actions"><span class="version-badge"><i></i> Première version</span><button class="text-button" id="export-project" title="Exporter les données du projet">${icon('export', 17)}<span>Exporter le projet</span></button><button class="icon-button" id="help" title="Aide et commandes" aria-label="Aide et commandes">${icon('help')}</button></div>
+    <div class="header-actions"><span class="version-badge"><i></i> Version 2</span><button class="text-button" id="export-project" title="Exporter les données du projet">${icon('export', 17)}<span>Exporter le projet</span></button><button class="icon-button" id="help" title="Aide et commandes" aria-label="Aide et commandes">${icon('help')}</button></div>
   </header>
   <div class="workspace">
     <button class="sidebar-backdrop" aria-label="Fermer le panneau des pièces" hidden></button>
     <aside class="sidebar" id="project-sidebar" aria-label="Projets et pièces">
-      <section class="project-section"><div class="eyebrow">VOTRE PROJET <span>01</span></div><label for="project-select" class="sr-only">Choisir une maison</label><div class="select-wrap"><span class="select-icon">${icon('house', 20)}</span><select id="project-select"></select>${icon('down', 15)}</div><p id="project-description" class="muted"></p><button id="import-project" class="import-button">${icon('plus', 16)} Importer une autre maison</button><input type="file" id="import-file" accept="application/json,.json" hidden/><button id="remove-project" class="remove-project" hidden>${icon('trash', 14)} Retirer ce projet importé</button></section>
+      <section class="project-section"><div class="eyebrow">VOTRE PROJET <span>01</span></div><label for="project-select" class="sr-only">Choisir une maison</label><div class="select-wrap"><span class="select-icon">${icon('house', 20)}</span><select id="project-select"></select>${icon('down', 15)}</div><p id="project-description" class="muted"></p><p id="demo-notice" class="demo-notice" hidden>Vous consultez une démonstration. Importez le fichier JSON de votre maison pour afficher votre projet. Il reste dans ce navigateur.</p><button id="import-project" class="import-button">${icon('plus', 16)} Importer ma maison</button><input type="file" id="import-file" accept="application/json,.json" hidden/><button id="remove-project" class="remove-project" hidden>${icon('trash', 14)} Retirer ce projet importé</button></section>
       <section id="furniture-panel" aria-label="Aménager la maison"></section>
-      <details class="navigation-settings"><summary>Déplacement et vue</summary><div class="navigation-settings-body"><button id="go-to" class="visit-room" aria-pressed="false">Cliquer pour entrer ici</button><p>Choisissez un point libre du sol, puis explorez au clavier.</p><label>Hauteur du regard<select id="eye-height"><option value="1.65">Debout · 1,65 m</option><option value="1.15">Assis · 1,15 m</option><option value="0.95">À 0,95 m</option><option value="1.80">À 1,80 m</option></select></label><label class="navigation-check"><input type="checkbox" id="cutaway"> Masquer les façades gênantes</label><label class="navigation-check"><input type="checkbox" id="section-enable"> Vue en coupe</label><label>Hauteur de coupe <output id="section-value">1,20 m</output><input id="section-height" type="range" min="0.4" max="2.5" step="0.05" value="1.2" disabled></label><small>La coupe et les façades masquées servent aux vues de dessus. La visite conserve les volumes complets.</small></div></details>
+      <details class="navigation-settings"><summary>Déplacement et vue</summary><div class="navigation-settings-body"><button id="go-to" class="visit-room" aria-pressed="false">Cliquer pour entrer ici</button><p>Choisissez un point libre du sol, puis explorez au clavier.</p><label>Vitesse de marche <output id="walk-speed-value">2,8 m/s</output><input id="walk-speed" type="range" min="1" max="5" step="0.2" value="2.8"></label><label>Sensibilité de la souris <output id="look-sensitivity-value">100 %</output><input id="look-sensitivity" type="range" min="50" max="200" step="10" value="100"></label><small>Maj pour marcher plus vite. Ces réglages sont conservés sur cet ordinateur.</small><label>Hauteur du regard<select id="eye-height"><option value="1.65">Debout · 1,65 m</option><option value="1.15">Assis · 1,15 m</option><option value="0.95">À 0,95 m</option><option value="1.80">À 1,80 m</option></select></label><label class="navigation-check"><input type="checkbox" id="cutaway"> Masquer les façades gênantes</label><label class="navigation-check"><input type="checkbox" id="section-enable"> Vue en coupe</label><label>Hauteur de coupe <output id="section-value">1,20 m</output><input id="section-height" type="range" min="0.4" max="2.5" step="0.05" value="1.2" disabled></label><small>La coupe et les façades masquées servent aux vues de dessus. La visite conserve les volumes complets.</small></div></details>
       <section class="level-section"><div class="eyebrow">EXPLORER LES ESPACES <span id="room-count"></span></div><label for="level-select" class="sr-only">Choisir le niveau</label><div class="level-selector">${icon('layers', 17)}<select id="level-select"></select><span class="level-dot"></span></div><div id="room-list" class="room-list"></div></section>
       <section class="room-detail" id="room-detail"></section>
       <div class="sidebar-bottom"><button class="source-button" id="source-info">${icon('info', 17)}<span>Plans & précision du modèle<small>Cotes, hypothèses et points à vérifier</small></span>${icon('chevron', 15)}</button><div class="sidebar-footnote">Un espace pour se projeter.</div></div>
     </aside>
     <main class="viewport" id="viewport" aria-label="Atelier de visite 3D">
       <canvas id="scene" tabindex="0" aria-label="Vue 3D de la maison. Utilisez le bouton Visite pour vous déplacer au clavier."></canvas>
-      <div class="viewport-top"><div class="view-heading"><span class="eyebrow" id="view-eyebrow">VOTRE MAISON, EN PERSPECTIVE</span><h1 id="view-title">Prenez de la hauteur.</h1><p id="view-subtitle">Explorez les volumes, à votre rythme.</p></div><div class="view-switch" role="group" aria-label="Mode de visualisation"><button data-view="overview" class="active" aria-pressed="true">${icon('cube', 17)}Vue 3D</button><button data-view="plan" aria-pressed="false">${icon('plan', 17)}Plan</button><button data-view="walk" aria-pressed="false">${icon('walk', 17)}Visite</button></div></div>
+      <div class="viewport-top"><div class="view-heading"><span class="eyebrow" id="view-eyebrow">VOTRE MAISON, EN PERSPECTIVE</span><h1 id="view-title">Prenez de la hauteur.</h1><p id="view-subtitle">Explorez les volumes, à votre rythme.</p></div><div class="view-switch" role="group" aria-label="Mode de visualisation"><button data-view="overview" class="active" aria-pressed="true">${icon('cube', 17)}Vue 3D</button><button id="view-exterior" aria-pressed="false" hidden>${icon('house', 17)}Extérieur</button><button data-view="plan" aria-pressed="false">${icon('plan', 17)}Plan</button><button data-view="walk" aria-pressed="false">${icon('walk', 17)}Visite</button></div></div>
       <div class="floating-tools" role="group" aria-label="Options d’affichage"><button class="tool-button" id="tool-measure" aria-pressed="false" title="Mesurer une distance au sol">${icon('ruler')}<span>Mesurer</span></button><div class="tool-divider"></div><button class="tool-button active" id="tool-labels" aria-pressed="true" title="Afficher les noms des pièces">${icon('label')}<span>Pièces</span></button><button class="tool-button" id="tool-dimensions" aria-pressed="false" title="Afficher les dimensions extérieures">${icon('plan')}<span>Cotes</span></button><button class="tool-button active" id="tool-lights" aria-pressed="true" title="Allumer les éclairages intérieurs">${icon('sun')}<span>Lumière</span></button><button class="tool-button" id="tool-ceiling" aria-pressed="false" title="Afficher le plafond en vue 3D">${icon('roof')}<span>Plafond</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-reset" title="Recentrer la vue">${icon('reset')}<span>Recentrer</span></button></div>
       <div id="scene-labels" class="scene-labels"></div>
       <div class="dimension-label" id="width-label" hidden></div><div class="dimension-label" id="depth-label" hidden></div>
@@ -138,6 +139,7 @@ function commitFurniture(items: FurnitureItem[]) {
 }
 
 function selectFurniture(id: string | undefined) {
+  if (id && exteriorView) setMode('overview');
   selectedFurnitureId = id;
   furnitureLayer?.select(id);
   furniturePanel?.render();
@@ -177,6 +179,7 @@ function mountFurniture() {
       canUndo: () => furnitureHistory.canUndo,
       canRedo: () => furnitureHistory.canRedo,
       onAdd: (item) => {
+        if (exteriorView) setMode('overview');
         selectedFurnitureId = item.id;
         commitFurniture([...currentFurniture(), item]);
         setSidebar(false);
@@ -254,14 +257,21 @@ function setSidebar(open: boolean) {
 function syncDisplayControls() {
   const measuring = viewer.measureMode;
   activeButton('#go-to', viewer.goToMode);
+  activeButton('#view-exterior', exteriorView);
+  const overviewButton = document.querySelector<HTMLButtonElement>('[data-view=overview]')!;
+  overviewButton.classList.toggle('active', mode === 'overview' && !exteriorView);
+  overviewButton.setAttribute('aria-pressed', String(mode === 'overview' && !exteriorView));
   el('#scene-labels').hidden =
     mode === 'walk' ||
+    exteriorView ||
     !showLabels ||
     measuring ||
     viewer.goToMode ||
     (ceiling && mode === 'overview');
   el<HTMLButtonElement>('#go-to').disabled = mode === 'walk';
-  furnitureLayer?.setMode(mode === 'walk' || measuring || viewer.goToMode ? 'walk' : mode);
+  furnitureLayer?.setMode(
+    mode === 'walk' || exteriorView || measuring || viewer.goToMode ? 'walk' : mode,
+  );
   el('#measure-instructions').hidden = !measuring;
   activeButton('#tool-measure', measuring);
   activeButton('#tool-labels', showLabels);
@@ -269,6 +279,7 @@ function syncDisplayControls() {
   for (const id of ['tool-measure', 'tool-labels', 'tool-dimensions', 'tool-ceiling']) {
     el<HTMLButtonElement>(`#${id}`).disabled =
       mode === 'walk' ||
+      exteriorView ||
       (id === 'tool-ceiling' && mode === 'plan') ||
       (measuring && ['tool-labels', 'tool-ceiling'].includes(id));
   }
@@ -308,6 +319,8 @@ function loadProject(id: string, levelId?: string) {
   selectedRoom = undefined;
   mode = 'overview';
   ceiling = false;
+  exteriorView = false;
+  el<HTMLButtonElement>('#view-exterior').hidden = !p.site;
   viewer.setCeiling(false);
   viewer.setLights(lights);
   viewer.setDimensions(showDimensions);
@@ -315,6 +328,8 @@ function loadProject(id: string, levelId?: string) {
   viewer.setEyeHeight(Number(el<HTMLSelectElement>('#eye-height').value));
   viewer.setCutaway(el<HTMLInputElement>('#cutaway').checked);
   el<HTMLInputElement>('#section-height').max = String(viewer.level.ceilingHeight);
+  el('#section-value').textContent =
+    `${number(Number(el<HTMLInputElement>('#section-height').value))} m`;
   viewer.setSectionHeight(
     el<HTMLInputElement>('#section-enable').checked
       ? Number(el<HTMLInputElement>('#section-height').value)
@@ -323,6 +338,8 @@ function loadProject(id: string, levelId?: string) {
   el<HTMLSelectElement>('#project-select').value = p.id;
   el('#header-project').textContent = p.name;
   el('#project-description').textContent = p.description;
+  el('#demo-notice').hidden = p.id !== 'studio-demo';
+  applyNavigationPreferences();
   el<HTMLSelectElement>('#level-select').innerHTML = p.levels
     .map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`)
     .join('');
@@ -374,6 +391,7 @@ function renderRooms() {
 function selectRoom(id: string, move = true) {
   selectedRoom = viewer.level.rooms.find((r) => r.id === id);
   if (!selectedRoom) return;
+  if (move && exteriorView) setMode('overview');
   if (move) viewer.focusRoom(id);
   syncSelection();
   renderRoomDetail();
@@ -457,6 +475,10 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
     return false;
   }
   mode = next;
+  if (exteriorView && (next !== 'overview' || !fromViewer)) {
+    exteriorView = false;
+    viewer.setExteriorView(false);
+  }
   if (viewer.mode !== next) {
     syncingViewerMode = true;
     viewer.setMode(next);
@@ -572,6 +594,8 @@ async function importProject(file: File) {
     }
     delete (project as HouseProject & { furnishing?: unknown }).furnishing;
     const previous = imported;
+    const previousProjectId = current.id;
+    const previousLevelId = viewer.level.id;
     const next = [...imported.filter((p) => p.id !== project.id), project];
     if (next.length > 10) throw new Error('Vous pouvez conserver jusqu’à 10 projets importés.');
     const backups = staged.map(
@@ -599,9 +623,13 @@ async function importProject(file: File) {
       loadProject(project.id);
     } catch (error) {
       imported = previous;
+      for (const [key, value] of backups) {
+        if (value === null) localStorage.removeItem(key);
+        else localStorage.setItem(key, value);
+      }
       localStorage.setItem(STORAGE, JSON.stringify(previous));
       renderProjectOptions();
-      loadProject(builtins[0].id);
+      loadProject(previousProjectId, previousLevelId);
       throw error;
     }
     toast('Maison importée et conservée dans ce navigateur.');
@@ -610,7 +638,40 @@ async function importProject(file: File) {
   }
 }
 
+const NAVIGATION_STORAGE = 'maison-atelier:navigation:v1';
+function applyNavigationPreferences() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(NAVIGATION_STORAGE) ?? '{}');
+    if (typeof saved?.speed === 'number' && Number.isFinite(saved.speed))
+      el<HTMLInputElement>('#walk-speed').value = String(Math.max(1, Math.min(5, saved.speed)));
+    if (typeof saved?.sensitivity === 'number' && Number.isFinite(saved.sensitivity))
+      el<HTMLInputElement>('#look-sensitivity').value = String(
+        Math.max(50, Math.min(200, saved.sensitivity)),
+      );
+  } catch {
+    /* Use the defaults if preferences are unavailable. */
+  }
+  updateNavigationPreferences(false);
+}
+function updateNavigationPreferences(save = true) {
+  const speed = Number(el<HTMLInputElement>('#walk-speed').value);
+  const sensitivity = Number(el<HTMLInputElement>('#look-sensitivity').value);
+  viewer.setWalkSpeed(speed);
+  viewer.setLookSensitivity(sensitivity / 100);
+  el('#walk-speed-value').textContent = `${number(speed)} m/s`;
+  el('#look-sensitivity-value').textContent = `${sensitivity} %`;
+  if (save) {
+    try {
+      localStorage.setItem(NAVIGATION_STORAGE, JSON.stringify({ speed, sensitivity }));
+    } catch {
+      /* Preferences are optional; scene and project still work. */
+    }
+  }
+}
+
 function wireEvents() {
+  el('#walk-speed').addEventListener('input', () => updateNavigationPreferences());
+  el('#look-sensitivity').addEventListener('input', () => updateNavigationPreferences());
   el('#go-to').addEventListener('click', () => {
     if (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) {
       setMode('walk');
@@ -721,9 +782,24 @@ function wireEvents() {
     setMode('overview');
     viewer.reset();
   });
-  document
-    .querySelectorAll<HTMLButtonElement>('[data-view]')
-    .forEach((b) => b.addEventListener('click', () => setMode(b.dataset.view as ViewMode)));
+  document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) =>
+    b.addEventListener('click', () => {
+      exteriorView = false;
+      viewer.setExteriorView(false);
+      setMode(b.dataset.view as ViewMode);
+    }),
+  );
+  el('#view-exterior').addEventListener('click', () => {
+    if (!current.site) return;
+    setMode('overview');
+    exteriorView = true;
+    viewer.setExteriorView(true);
+    el('#view-eyebrow').textContent = 'LA MAISON SUR SON TERRAIN';
+    el('#view-title').textContent = 'Regardez autour.';
+    el('#view-subtitle').textContent =
+      'Toiture, façades et jardin. Les approximations figurent dans Plans & précision.';
+    syncDisplayControls();
+  });
   el<HTMLSelectElement>('#project-select').addEventListener('change', (event) =>
     loadProject((event.target as HTMLSelectElement).value),
   );
@@ -733,8 +809,8 @@ function wireEvents() {
   el('#export-project').addEventListener('click', downloadProject);
   el('#import-project').addEventListener('click', () =>
     openDialog(
-      'UNE AUTRE MAISON',
-      `<h2>Un atelier, plusieurs projets.</h2><p>Importez une maison au format de données de l’atelier. Vous pourrez passer d’un projet à l’autre et conserver leurs dimensions et leurs ouvertures séparément.</p><div class="dialog-callout">Un plan PDF ou une photo doit d’abord être interprété et converti en projet. Cette version n’effectue pas de reconstruction automatique à partir d’une image.</div><p>Les projets importés sont conservés dans ce navigateur. Exportez-les pour les sauvegarder ou les utiliser sur un autre ordinateur.</p><button class="primary-button" id="choose-file">${icon('plus', 17)} Choisir un fichier JSON</button>`,
+      'IMPORTER MA MAISON',
+      `<h2>Ouvrez votre maison.</h2><p>Choisissez le fichier JSON de votre maison fourni avec le projet. Votre maison et vos meubles restent dans ce navigateur : ce fichier n’est pas envoyé au serveur.</p><div class="dialog-callout">Un plan PDF ou une photo doit d’abord être interprété et converti en projet. Cette version n’effectue pas de reconstruction automatique à partir d’une image.</div><p>Les projets importés sont conservés dans ce navigateur. Exportez-les pour les sauvegarder ou les utiliser sur un autre ordinateur.</p><button class="primary-button" id="choose-file">${icon('plus', 17)} Choisir un fichier JSON</button>`,
     ),
   );
   el('#dialog-content').addEventListener('click', (event) => {
@@ -819,7 +895,7 @@ function wireEvents() {
     const rooms = viewer.level.rooms;
     openDialog(
       'PLANS & PRÉCISION',
-      `<h2>Les dimensions d’abord.</h2><p class="source-title">${esc(current.source.title)}${current.source.date ? ` · ${esc(current.source.date)}` : ''}</p><span class="status-pill">${esc(current.source.status)}</span><ul class="source-notes">${current.source.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul><h3>Surfaces : plan et reconstruction</h3><p>Les surfaces calculées concernent les contours de pièces enregistrés. Elles permettent de repérer les écarts ; elles ne constituent pas un relevé sur chantier.</p><table class="area-table"><thead><tr><th>Pièce</th><th>Au plan</th><th>Reconstruite</th></tr></thead><tbody>${rooms.map((r) => `<tr${r.planArea && Math.abs(r.planArea - polygonArea(r.polygon)) > 0.1 ? ' class="area-warning"' : ''}><td>${esc(r.name)}</td><td>${r.planArea === undefined ? '—' : area(r.planArea)}</td><td>${area(polygonArea(r.polygon))}</td></tr>`).join('')}</tbody></table>`,
+      `<h2>Les dimensions d’abord.</h2><p class="source-title">${esc(current.source.title)}${current.source.date ? ` · ${esc(current.source.date)}` : ''}</p><span class="status-pill">${esc(current.source.status)}</span><ul class="source-notes">${current.source.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>${current.site ? `<h3>Terrain et extérieur</h3><ul class="source-notes">${current.site.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}<h3>Surfaces : plan et reconstruction</h3><p>Les surfaces calculées concernent les contours de pièces enregistrés. Elles permettent de repérer les écarts ; elles ne constituent pas un relevé sur chantier.</p><table class="area-table"><thead><tr><th>Pièce</th><th>Au plan</th><th>Reconstruite</th></tr></thead><tbody>${rooms.map((r) => `<tr${r.planArea && Math.abs(r.planArea - polygonArea(r.polygon)) > 0.1 ? ' class="area-warning"' : ''}><td>${esc(r.name)}</td><td>${r.planArea === undefined ? '—' : area(r.planArea)}</td><td>${area(polygonArea(r.polygon))}</td></tr>`).join('')}</tbody></table>`,
     );
   });
   const dialog = el<HTMLDialogElement>('#info-dialog');
