@@ -1,4 +1,24 @@
-import type { FurnitureItem } from './model';
+import {
+  dressingBounds,
+  dressingStrips,
+  type DressingRun,
+  type FurnitureItem,
+  type ShowerType,
+} from './model';
+
+/** Reads the run rows of a dressing form, whatever the field source. */
+export function readDressingRuns(read: (name: string) => string | null): DressingRun[] {
+  const runs: DressingRun[] = [];
+  for (let index = 0; read(`dressingRunLength${index}`) !== null; index++) {
+    const length = Number(read(`dressingRunLength${index}`)) / 100;
+    const turn = read(`dressingRunTurn${index}`) ?? 'end';
+    runs.push({
+      length: Number.isFinite(length) && length > 0 ? length : 0.6,
+      ...(turn === 'left' || turn === 'right' ? { turn } : {}),
+    });
+  }
+  return runs.length ? runs : [{ length: 1.8 }];
+}
 
 /** UI measurements use centimetres; the model stores metres and overall depth. */
 export function measurementsFromForm(
@@ -6,27 +26,46 @@ export function measurementsFromForm(
   kind: FurnitureItem['kind'],
 ): Pick<
   FurnitureItem,
-  'width' | 'depth' | 'height' | 'elevation' | 'sofa' | 'dressing' | 'tvDiagonalInches'
+  | 'width'
+  | 'depth'
+  | 'height'
+  | 'elevation'
+  | 'sofa'
+  | 'dressing'
+  | 'showerType'
+  | 'tvDiagonalInches'
 > {
+  const height = Number(data.get('height')) / 100;
+  const elevation = Number(data.get('elevation') ?? 0) / 100;
+  if (kind === 'dressing') {
+    // Overall width and depth are derived from the runs, never typed directly.
+    const runDepth = Number(data.get('dressingRunDepth')) / 100;
+    const runs = readDressingRuns((name) => (data.has(name) ? String(data.get(name)) : null));
+    const bounds = dressingBounds(Number.isFinite(runDepth) && runDepth > 0 ? runDepth : 0.6, runs);
+    return {
+      width: bounds.width,
+      depth: bounds.depth,
+      height,
+      elevation,
+      dressing: { runDepth: Number.isFinite(runDepth) && runDepth > 0 ? runDepth : 0.6, runs },
+      sofa: undefined,
+      showerType: undefined,
+      tvDiagonalInches: undefined,
+    };
+  }
   const width = Number(data.get('width')) / 100;
   const bodyDepth = Number(data.get('depth')) / 100;
   const shape = data.get('sofaShape');
   const shaped = kind === 'sofa' && (shape === 'corner' || shape === 'chaise');
-  const cornered = kind === 'dressing' && data.get('dressingShape') === 'corner';
-  const totalDepth = shaped
-    ? Number(data.get('returnDepth')) / 100
-    : cornered
-      ? Number(data.get('dressingReturnDepth')) / 100
-      : bodyDepth;
   return {
     width,
     tvDiagonalInches:
       kind === 'tv' && Number(data.get('tvDiagonal')) > 0
         ? Number(data.get('tvDiagonal'))
         : undefined,
-    depth: totalDepth,
-    height: Number(data.get('height')) / 100,
-    elevation: Number(data.get('elevation') ?? 0) / 100,
+    depth: shaped ? Number(data.get('returnDepth')) / 100 : bodyDepth,
+    height,
+    elevation,
     sofa: shaped
       ? {
           shape,
@@ -35,13 +74,8 @@ export function measurementsFromForm(
           returnWidth: Number(data.get('returnWidth')) / 100,
         }
       : undefined,
-    dressing: cornered
-      ? {
-          side: data.get('dressingSide') === 'right' ? ('right' as const) : ('left' as const),
-          runDepth: bodyDepth,
-          returnWidth: Number(data.get('dressingReturnWidth')) / 100,
-        }
-      : undefined,
+    dressing: undefined,
+    showerType: kind === 'shower' ? (String(data.get('showerType')) as ShowerType) : undefined,
   };
 }
 
@@ -91,12 +125,28 @@ export const sofaDiagram = (data: FormData) =>
     arm: 'largeur du retour',
   });
 
-export const dressingDiagram = (data: FormData) =>
-  cornerDiagram(data, {
-    sideKey: 'dressingSide',
-    depthKey: 'dressingReturnDepth',
-    widthKey: 'dressingReturnWidth',
-    body: 'profondeur du linéaire',
-    total: 'profondeur totale',
-    arm: 'largeur du retour',
+/** Draws the run chain from above, one rectangle per run. */
+export function dressingDiagram(runDepth: number, runs: DressingRun[]) {
+  const strips = dressingStrips(runDepth, runs);
+  const points = strips.flat();
+  const minX = Math.min(...points.map((point) => point[0]));
+  const maxX = Math.max(...points.map((point) => point[0]));
+  const minZ = Math.min(...points.map((point) => point[1]));
+  const maxZ = Math.max(...points.map((point) => point[1]));
+  const width = Math.max(maxX - minX, 0.01);
+  const depth = Math.max(maxZ - minZ, 0.01);
+  const scale = Math.min(300 / width, 150 / depth);
+  const ox = 40,
+    oy = 30;
+  const rects = strips.map((strip) => {
+    const xs = strip.map((point) => point[0]);
+    const zs = strip.map((point) => point[1]);
+    const x = ox + (Math.min(...xs) - minX) * scale;
+    const y = oy + (Math.min(...zs) - minZ) * scale;
+    const w = (Math.max(...xs) - Math.min(...xs)) * scale;
+    const h = (Math.max(...zs) - Math.min(...zs)) * scale;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="#dfe9d8" stroke="#3d6c50" stroke-width="1.5"/>`;
   });
+  const label = `${Math.round(width * 100)} × ${Math.round(depth * 100)} cm hors tout`;
+  return `<svg viewBox="0 0 380 235" role="img" aria-label="Vue de dessus du dressing : ${runs.length} tronçon${runs.length > 1 ? 's' : ''}, ${label}">${rects.join('')}<text x="${ox}" y="${(oy + depth * scale + 24).toFixed(1)}" font-size="12" fill="#314c3c" font-family="system-ui,sans-serif">${label}</text></svg>`;
+}

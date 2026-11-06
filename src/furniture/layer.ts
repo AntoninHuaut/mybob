@@ -14,7 +14,13 @@ import { PointerEventTypes, type PointerInfo } from '@babylonjs/core/Events/poin
 import type { Observer } from '@babylonjs/core/Misc/observable';
 import { floorElevationAt } from '../model/geometry';
 import type { Level, Point2 } from '../model/types';
-import { footprintParts, televisionDimensions, type FurnitureItem } from './model';
+import {
+  dressingBounds,
+  dressingPlacements,
+  footprintParts,
+  televisionDimensions,
+  type FurnitureItem,
+} from './model';
 import { furnitureDistances, type SnapGuide, type SnapResult } from './checks';
 import { circulationBands, CIRCULATION_TIGHT } from './circulation';
 import { constrainGroupDrag, groupMembers } from './groups';
@@ -95,6 +101,7 @@ export class FurnitureLayer {
         item.color,
         item.sofa,
         item.dressing,
+        item.showerType,
         item.tvDiagonalInches,
       ]);
       let visual = this.visuals.get(item.id);
@@ -351,6 +358,7 @@ export class FurnitureLayer {
       y: number,
       z: number,
       mat = main,
+      parent: TransformNode = root,
     ) => {
       const mesh = MeshBuilder.CreateBox(
         `furniture:${item.id}:part:${part++}`,
@@ -361,7 +369,7 @@ export class FurnitureLayer {
         },
         this.scene,
       );
-      mesh.parent = root;
+      mesh.parent = parent;
       mesh.position.set(x, y, z);
       mesh.material = mat;
       mesh.checkCollisions = true;
@@ -609,27 +617,42 @@ export class FurnitureLayer {
       }
     } else if (item.kind === 'dressing') {
       const panel = Math.min(w, d, h) * 0.05;
-      // Open front, hanging rail and shelf: one run, repeated for the corner return.
-      const run = (runWidth: number, runDepth: number, cx: number, cz: number) => {
-        box(runWidth, h, panel, cx, h / 2, cz - runDepth / 2 + panel / 2);
-        for (const sx of [-1, 1])
-          box(panel, h, runDepth, cx + sx * (runWidth / 2 - panel / 2), h / 2, cz);
-        box(runWidth, panel, runDepth, cx, h - panel / 2, cz);
-        box(runWidth, panel, runDepth, cx, panel / 2, cz);
-        box(runWidth * 0.94, 0.025, 0.025, cx, h * 0.88, cz, metal);
-        box(runWidth * 0.94, panel, runDepth * 0.9, cx, h * 0.55, cz);
-      };
-      if (item.dressing) {
-        const { side, runDepth, returnWidth } = item.dressing;
-        const sideSign = side === 'left' ? -1 : 1;
-        run(w, runDepth, 0, -d / 2 + runDepth / 2);
-        run(
-          returnWidth,
-          d - runDepth,
-          sideSign * (w / 2 - returnWidth / 2),
-          -d / 2 + runDepth + (d - runDepth) / 2,
+      const runDepth = item.dressing?.runDepth ?? d;
+      const runs = item.dressing?.runs ?? [{ length: w }];
+      const bounds = dressingBounds(runDepth, runs);
+      // One open carcass per run, turned to follow the chain.
+      for (const placement of dressingPlacements(runDepth, runs)) {
+        const [dx, dz] = placement.direction;
+        const rx = -dz,
+          rz = dx;
+        const startX = placement.start[0] - bounds.centerX;
+        const startZ = placement.start[1] - bounds.centerZ;
+        const run = new TransformNode(`furniture:${item.id}:run`, this.scene);
+        run.parent = root;
+        run.position.set(
+          startX + (dx * placement.length) / 2 + (rx * runDepth) / 2,
+          0,
+          startZ + (dz * placement.length) / 2 + (rz * runDepth) / 2,
         );
-      } else run(w, d, 0, 0);
+        run.rotation.y = Math.atan2(-dz, dx);
+        const length = placement.length;
+        const depth = runDepth;
+        const part = (
+          width: number,
+          height: number,
+          thickness: number,
+          x: number,
+          y: number,
+          z: number,
+          mat = main,
+        ) => box(width, height, thickness, x, y, z, mat, run);
+        part(length, h, panel, 0, h / 2, -depth / 2 + panel / 2);
+        for (const sx of [-1, 1]) part(panel, h, depth, sx * (length / 2 - panel / 2), h / 2, 0);
+        part(length, panel, depth, 0, h - panel / 2, 0);
+        part(length, panel, depth, 0, panel / 2, 0);
+        part(length * 0.94, 0.025, 0.025, 0, h * 0.88, 0, metal);
+        part(length * 0.94, panel, depth * 0.9, 0, h * 0.55, 0);
+      }
     } else if (item.kind === 'toilet') {
       box(w * 0.5, h * 0.3, d * 0.35, 0, h * 0.15, -d * 0.1);
       box(w, h * 0.22, d * 0.6, 0, h * 0.41, d * 0.1);
@@ -637,12 +660,16 @@ export class FurnitureLayer {
       box(w, h * 0.42, d * 0.24, 0, h * 0.72, -d * 0.36);
       box(w * 0.2, h * 0.02, d * 0.06, 0, h * 0.94, -d * 0.36, metal);
     } else if (item.kind === 'shower') {
+      const type = item.showerType ?? 'bac';
       const glass = material('glass', new Color3(0.72, 0.84, 0.88));
       glass.alpha = 0.32;
       glass.backFaceCulling = false;
-      box(w, 0.06, d, 0, 0.03, 0, pale);
-      box(w, h - 0.06, 0.02, 0, 0.06 + (h - 0.06) / 2, -d / 2 + 0.01, glass);
-      box(0.02, h - 0.06, d, -w / 2 + 0.01, 0.06 + (h - 0.06) / 2, 0, glass);
+      const tray = type === 'italienne' ? 0.02 : 0.06;
+      box(w, tray, d, 0, tray / 2, 0, pale);
+      if (type === 'italienne') box(w * 0.12, 0.004, w * 0.12, 0, tray + 0.002, 0, metal);
+      box(w, h - tray, 0.02, 0, tray + (h - tray) / 2, -d / 2 + 0.01, glass);
+      box(0.02, h - tray, d, -w / 2 + 0.01, tray + (h - tray) / 2, 0, glass);
+      if (type === 'cabine') box(w, h - tray, 0.02, 0, tray + (h - tray) / 2, d / 2 - 0.01, glass);
       box(0.04, h * 0.5, 0.04, 0, h * 0.65, -d / 2 + 0.05, metal);
       box(w * 0.22, 0.03, w * 0.22, 0, h * 0.92, -d / 2 + 0.15, metal);
     } else if (item.kind === 'bathtub') {

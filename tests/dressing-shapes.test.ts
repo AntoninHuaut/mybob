@@ -2,13 +2,14 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createFurniture,
+  dressingBounds,
+  dressingStrips,
   footprint,
   footprintParts,
   FURNITURE_PRESETS,
   validateFurnitureList,
 } from '../src/furniture/model';
 import { checkFurniture, polygonsOverlap } from '../src/furniture/checks';
-import { polygonArea } from '../src/model/geometry';
 import type { Level } from '../src/model/types';
 
 const level: Level = {
@@ -41,85 +42,146 @@ const level: Level = {
   lights: [],
   spawn: { position: [3, 3], yaw: Math.PI },
 };
-const cornerDressing = () =>
+/** Metres accumulate floating-point noise; compare at the millimetre. */
+const near = (actual: number, expected: number) =>
+  assert.ok(Math.abs(actual - expected) < 0.0005, `${actual} != ${expected}`);
+const dressing = (runs: { length: number; turn?: 'left' | 'right' }[], runDepth = 0.6) =>
   createFurniture({
     kind: 'dressing',
-    width: 3,
-    depth: 2,
     height: 2.2,
     position: [3, 3],
-    dressing: { side: 'left', runDepth: 0.8, returnWidth: 1 },
+    dressing: { runDepth, runs },
   });
 
-test('a straight dressing keeps a single rectangular footprint', () => {
-  const dressing = createFurniture({ kind: 'dressing', position: [3, 3] });
-  assert.equal(dressing.dressing, undefined);
-  assert.equal(dressing.depth, FURNITURE_PRESETS.dressing.depth);
-  const parts = footprintParts(dressing);
+test('a straight dressing is one run and keeps the preset depth', () => {
+  const item = createFurniture({ kind: 'dressing', position: [3, 3] });
+  assert.deepEqual(item.dressing, { runDepth: 0.6, runs: [{ length: 1.8 }] });
+  near(item.width, FURNITURE_PRESETS.dressing.width);
+  near(item.depth, FURNITURE_PRESETS.dressing.depth);
+  const parts = footprintParts(item);
   assert.equal(parts.length, 1);
-  assert.deepEqual(parts[0], footprint(dressing));
+  // Same rectangle as the bounding footprint, walked from the wall side.
+  const corners = (points: [number, number][]) =>
+    points
+      .map(([x, z]) => [Math.round(x * 1000) / 1000, Math.round(z * 1000) / 1000])
+      .sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  assert.deepEqual(corners(parts[0]), corners(footprint(item)));
 });
 
-test('a corner dressing occupies two convex runs and leaves the inside corner free', () => {
-  const dressing = cornerDressing();
-  const parts = footprintParts(dressing);
+test('an L dressing occupies two runs and leaves its inside corner free', () => {
+  const item = dressing([{ length: 1.8, turn: 'right' }, { length: 1.2 }]);
+  near(item.width, 1.8);
+  near(item.depth, 1.2);
+  const parts = footprintParts(item);
   assert.equal(parts.length, 2);
-  assert.ok(Math.abs(parts.reduce((sum, part) => sum + polygonArea(part), 0) - 3.6) < 0.0001);
-  assert.equal(polygonsOverlap(parts[0], parts[1]), false);
   // The bounding rectangle alone would reject a stool standing in the empty corner.
   const stool = createFurniture({
     kind: 'ottoman',
     width: 0.4,
     depth: 0.4,
     height: 0.4,
-    position: [3.75, 3.4],
+    position: [2.4, 3.3],
   });
-  assert.ok(polygonsOverlap(footprint(dressing), footprint(stool)));
+  assert.ok(polygonsOverlap(footprint(item), footprint(stool)));
   assert.equal(
-    checkFurniture([dressing, stool], level).some((issue) => issue.severity === 'error'),
+    checkFurniture([item, stool], level).some((issue) => issue.severity === 'error'),
     false,
   );
-  stool.position = [2, 3.4];
-  assert.ok(checkFurniture([dressing, stool], level).some((issue) => issue.severity === 'error'));
+  stool.position = [3.6, 3.3];
+  assert.ok(checkFurniture([item, stool], level).some((issue) => issue.severity === 'error'));
 });
 
-test('the dressing return follows its side and the overall rotation', () => {
-  const dressing = cornerDressing();
-  assert.ok(footprintParts(dressing)[1].every((point) => point[0] <= 2.5));
-  dressing.dressing!.side = 'right';
-  assert.ok(footprintParts(dressing)[1].every((point) => point[0] >= 3.5));
-  dressing.rotation = Math.PI / 2;
-  assert.ok(footprintParts(dressing)[1].every((point) => point[1] <= 2.5));
-  assert.equal(dressing.width, 3);
-  assert.equal(dressing.depth, 2);
-});
-
-test('a corner dressing defaults to a usable return and rejects impossible measurements', () => {
-  const created = createFurniture({ kind: 'dressing', dressing: {} });
-  assert.equal(created.depth, 1.2);
-  assert.deepEqual(created.dressing, { side: 'left', runDepth: 0.6, returnWidth: 0.6 });
-  assert.throws(() => createFurniture({ kind: 'dressing', dressing: { runDepth: 10 } }));
-  assert.throws(() => createFurniture({ kind: 'dressing', dressing: { returnWidth: 10 } }));
-  assert.throws(() =>
-    createFurniture({ kind: 'dressing', dressing: { side: 'middle' as 'left' } }),
+test('a U dressing follows two turns and keeps the room side open', () => {
+  const item = dressing([
+    { length: 1.8, turn: 'right' },
+    { length: 2.4, turn: 'right' },
+    { length: 1.8 },
+  ]);
+  near(item.width, 1.8);
+  near(item.depth, 2.4);
+  assert.equal(footprintParts(item).length, 3);
+  const stool = createFurniture({
+    kind: 'ottoman',
+    width: 0.4,
+    depth: 0.4,
+    height: 0.4,
+    position: [2.4, 3.3],
+  });
+  assert.equal(
+    checkFurniture([item, stool], level).some((issue) => issue.severity === 'error'),
+    false,
   );
-  assert.throws(() => createFurniture({ kind: 'table', dressing: {} }));
-  // A run as deep as the whole footprint leaves no room for the return.
+});
+
+test('a zigzag dressing alternates its turns and widens the footprint', () => {
+  const item = dressing([
+    { length: 1.8, turn: 'right' },
+    { length: 1.2, turn: 'left' },
+    { length: 1.8 },
+  ]);
+  near(item.width, 3.6);
+  near(item.depth, 1.8);
+  assert.equal(footprintParts(item).length, 3);
+});
+
+test('the chain geometry is measured from the wall side and centred on the item', () => {
+  const runs = [{ length: 1.8, turn: 'right' as const }, { length: 1.2 }];
+  const bounds = dressingBounds(0.6, runs);
+  near(bounds.width, 1.8);
+  near(bounds.depth, 1.2);
+  near(bounds.centerX, 0.9);
+  near(bounds.centerZ, 0.6);
+  const strips = dressingStrips(0.6, runs).map((strip) =>
+    strip.map(([x, z]) => [Math.round(x * 1000) / 1000, Math.round(z * 1000) / 1000]),
+  );
+  assert.deepEqual(strips[0], [
+    [0, 0],
+    [0, 0.6],
+    [1.8, 0.6],
+    [1.8, 0],
+  ]);
+  assert.deepEqual(strips[1], [
+    [1.8, 0],
+    [1.2, 0],
+    [1.2, 1.2],
+    [1.8, 1.2],
+  ]);
+});
+
+test('a dressing rejects impossible runs and inconsistent overall dimensions', () => {
+  assert.throws(() => createFurniture({ kind: 'dressing', dressing: { runs: [] } }));
+  assert.throws(() => createFurniture({ kind: 'dressing', dressing: { runs: [{ length: 0.1 }] } }));
+  assert.throws(() =>
+    createFurniture({ kind: 'dressing', dressing: { runs: [{ length: 1.8, turn: 'right' }] } }),
+  );
   assert.throws(() =>
     createFurniture({
       kind: 'dressing',
-      width: 2,
-      depth: 0.6,
-      dressing: { runDepth: 0.6, returnWidth: 0.6 },
+      dressing: { runs: Array.from({ length: 13 }, () => ({ length: 1 })) },
     }),
   );
+  assert.throws(() => createFurniture({ kind: 'table', dressing: {} }));
+  const valid = dressing([{ length: 1.8 }]);
+  assert.throws(() => validateFurnitureList([{ ...valid, width: 5 }]));
+  assert.throws(() => validateFurnitureList([{ ...valid, depth: 5 }]));
 });
 
-test('a corner dressing survives validation and duplication with its exact measurements', () => {
-  const dressing = cornerDressing();
-  const [validated] = validateFurnitureList([dressing]);
-  assert.deepEqual(validated.dressing, dressing.dressing);
-  const copy = createFurniture({ ...dressing, id: undefined, name: 'Dressing (copie)' });
-  assert.deepEqual(copy.dressing, dressing.dressing);
-  assert.equal(copy.depth, dressing.depth);
+test('a dressing survives validation and duplication with its exact runs', () => {
+  const item = dressing([{ length: 1.8, turn: 'right' }, { length: 1.2 }]);
+  const [validated] = validateFurnitureList([item]);
+  assert.deepEqual(validated.dressing, item.dressing);
+  const copy = createFurniture({ ...item, id: undefined, name: 'Dressing (copie)' });
+  assert.deepEqual(copy.dressing, item.dressing);
+  assert.equal(copy.width, item.width);
+  assert.equal(copy.depth, item.depth);
+});
+
+test('a shower offers three simple types and rejects the others', () => {
+  assert.equal(createFurniture({ kind: 'shower' }).showerType, 'bac');
+  for (const type of ['italienne', 'bac', 'cabine'] as const)
+    assert.equal(createFurniture({ kind: 'shower', showerType: type }).showerType, type);
+  assert.throws(() => createFurniture({ kind: 'table', showerType: 'bac' }));
+  assert.throws(() =>
+    createFurniture({ kind: 'shower', showerType: 'hammam' as unknown as 'bac' }),
+  );
 });

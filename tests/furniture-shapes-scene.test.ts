@@ -110,35 +110,32 @@ test('corner and chaise sofas have no pickable or colliding mesh in the L void o
   cleanup();
 });
 
-test('a corner dressing leaves its inside corner empty on either side', () => {
+test('a dressing chain builds one run per segment and leaves the inside corner empty', () => {
   const { scene, layer, cleanup } = setup();
-  for (const side of ['left', 'right'] as const)
-    for (const rotation of [0, Math.PI / 2, Math.PI / 3]) {
-      const item = createFurniture({
-        kind: 'dressing',
-        position: [4, 4],
-        width: 3,
-        depth: 2,
-        height: 2.2,
-        rotation,
-        dressing: { side, runDepth: 0.8, returnWidth: 1 },
-      });
-      layer.setItems([item]);
-      boundsCheck(scene, item);
-      const meshes = scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture');
-      const world = (x: number, y: number, z: number) =>
-        new Vector3(
-          4 + x * Math.cos(rotation) + z * Math.sin(rotation),
-          y,
-          4 - x * Math.sin(rotation) + z * Math.cos(rotation),
-        );
-      const down = (x: number, z: number) =>
-        new Ray(world(x, 5, z), new Vector3(0, -1, 0)).intersectsMeshes(meshes);
-      const sign = side === 'left' ? -1 : 1;
-      assert.equal(down(-sign * 0.75, 0.6).length, 0, `${side}: inside corner`);
-      assert.ok(down(sign, 0.6).length > 0, `${side}: return run`);
-      assert.ok(down(0, -0.7).length > 0, `${side}: main run`);
-    }
+  for (const rotation of [0, Math.PI / 2, Math.PI / 3]) {
+    const item = createFurniture({
+      kind: 'dressing',
+      position: [4, 4],
+      height: 2.2,
+      rotation,
+      dressing: { runDepth: 0.8, runs: [{ length: 3, turn: 'right' }, { length: 2 }] },
+    });
+    layer.setItems([item]);
+    boundsCheck(scene, item);
+    const meshes = scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture');
+    const world = (x: number, y: number, z: number) =>
+      new Vector3(
+        4 + x * Math.cos(rotation) + z * Math.sin(rotation),
+        y,
+        4 - x * Math.sin(rotation) + z * Math.cos(rotation),
+      );
+    const down = (x: number, z: number) =>
+      new Ray(world(x, 5, z), new Vector3(0, -1, 0)).intersectsMeshes(meshes);
+    // Local frame: main run along the back, return on the right, void on the left.
+    assert.equal(down(-0.4, 0.4).length, 0, 'inside corner');
+    assert.ok(down(1.1, 0.4).length > 0, 'return run');
+    assert.ok(down(0, -0.6).length > 0, 'main run');
+  }
   cleanup();
 });
 
