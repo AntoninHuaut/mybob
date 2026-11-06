@@ -125,6 +125,58 @@ test('face distances stop at solid walls and furniture, respecting a full-height
   );
 });
 
+test('neighbour gaps are real distances, capped and group-aware', () => {
+  const table = createFurniture({
+    id: 'table',
+    kind: 'table',
+    width: 1,
+    depth: 1,
+    position: [3, 2],
+  });
+  // Voisin en diagonale : aucun des 4 rayons ne l'atteint, seule la cote
+  // réelle entre empreintes doit apparaître (coin à coin : 0,14 m).
+  const diagonal = createFurniture({
+    id: 'side',
+    name: 'Table d’appoint',
+    kind: 'side-table',
+    width: 0.4,
+    depth: 0.4,
+    position: [3.8, 2.8],
+  });
+  const gaps = furnitureDistances(table, room, [table, diagonal]);
+  const side = gaps.find((d) => d.label === 'Table d’appoint');
+  assert.ok(side, 'la cote du voisin diagonal doit exister');
+  near(side!.distance, Math.SQRT2 * 0.1);
+  // Deux chaises de son ensemble ne sont jamais cotées ; le voisin seul reste.
+  const chairs = [
+    { ...createFurniture({ id: 'c1', position: [2.2, 2] }), groupId: 'ensemble' },
+    { ...createFurniture({ id: 'c2', position: [3.8, 2] }), groupId: 'ensemble' },
+  ];
+  const linked = { ...table, groupId: 'ensemble' };
+  const withGroup = furnitureDistances(linked, room, [linked, ...chairs, diagonal]);
+  assert.equal(
+    withGroup.filter((d) => d.label === 'Canapé' || d.label === 'Table').length,
+    0,
+    'aucun membre de l’ensemble ne doit être coté',
+  );
+  assert.ok(
+    withGroup.some((d) => d.label === 'Table d’appoint'),
+    'le voisin hors ensemble reste coté',
+  );
+  // Au-delà d’un mètre, aucune cote de voisin.
+  const far = createFurniture({ id: 'far', width: 0.4, depth: 0.4, position: [5.2, 4.2] });
+  assert.equal(
+    furnitureDistances(table, room, [table, far]).filter(
+      (d) =>
+        d.label !== 'Devant' &&
+        d.label !== 'Derrière' &&
+        d.label !== 'À gauche' &&
+        d.label !== 'À droite',
+    ).length,
+    0,
+  );
+});
+
 test('wall snapping retains contact without penetrating a wall', () => {
   const item = createFurniture({ width: 1, depth: 0.6, position: [3, 0.7] });
   const result = snapFurniture(item, room, [], 0.15);

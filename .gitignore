@@ -11,3 +11,4 @@ test-results/
 *.pdf
 *.zip
 *.tar.gz
+*:Zone.Identifier

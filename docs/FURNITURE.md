@@ -28,7 +28,7 @@ Les anciennes positions invalides importées ne sont pas déplacées silencieuse
 
 Les distances partent des centres des quatre faces. Les enveloppes de passage et d’ouverture sont réglables ; les alertes d’intersection et de débattement sont des aides géométriques conservatrices, sans certification réglementaire. Le module de livraison théorique ne tient compte ni de l’inclinaison, ni de l’emballage, ni des virages du trajet ; il n’est plus exposé comme alerte de placement. Les marges de passage sont facultatives, sans valeur imposée à l’ajout.
 
-Lors du placement, seules les distances vers les obstacles sont affichées (« Écart ») ; les dimensions du meuble restent consultables dans sa fiche.
+Lors du placement, seules les distances vers les obstacles sont affichées (« Écart ») ; les dimensions du meuble restent consultables dans sa fiche. En plus des quatre axes vers les murs, le meuble sélectionné reçoit une cote réelle (points les plus proches des empreintes) vers chacun de ses voisins hors ensemble lié dans un rayon d’1 m — au maximum trois. Les membres d’un même ensemble lié (table + chaises) ne sont jamais cotés entre eux : l’ensemble se déplace comme un bloc. Les écarts ≤ 2 cm restent masqués.
 
 Les aménagements sont sauvegardés localement par maison et par niveau. L’export du projet inclut les meubles. Les références déjà présentes dans les anciens fichiers restent compatibles, mais ne sont plus proposées dans l’interface. Une erreur de sauvegarde est signalée si la mémoire locale est indisponible ou pleine. Conserver un export pour transférer ou sauvegarder le travail.
 

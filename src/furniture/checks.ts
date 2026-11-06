@@ -260,6 +260,65 @@ function raySegment(from: Point2, direction: Point2, a: Point2, b: Point2): numb
 }
 
 /** Distances from the four face centres, not a claim of minimum walking clearance. */
+/** Distance maximale à un voisin pour afficher une cote (hors murs et hors ensemble lié). */
+export const NEIGHBOR_GAP_RANGE = 1;
+/** Nombre maximal de voisins cotés simultanément autour de la sélection. */
+export const NEIGHBOR_GAP_LIMIT = 3;
+/** En dessous de cet écart, les cotes sont considérées « au contact » et masquées. */
+export const GAP_DISPLAY_EPS = 0.02;
+
+const pointOnSegment = (point: Point2, from: Point2, to: Point2): Point2 => {
+  const dx = to[0] - from[0],
+    dz = to[1] - from[1];
+  const length = dx * dx + dz * dz;
+  if (length === 0) return [...from] as Point2;
+  const t = Math.max(
+    0,
+    Math.min(1, ((point[0] - from[0]) * dx + (point[1] - from[1]) * dz) / length),
+  );
+  return [from[0] + dx * t, from[1] + dz * t];
+};
+
+/** Paire de points les plus proches sur deux segments (croisement exclu en amont). */
+function closestSegmentPoints(a1: Point2, a2: Point2, b1: Point2, b2: Point2) {
+  const pairs: [Point2, Point2][] = [
+    [[...a1] as Point2, pointOnSegment(a1, b1, b2)],
+    [[...a2] as Point2, pointOnSegment(a2, b1, b2)],
+    [[...b1] as Point2, pointOnSegment(b1, a1, a2)],
+    [[...b2] as Point2, pointOnSegment(b2, a1, a2)],
+  ];
+  let best: { distance: number; from: Point2; to: Point2 } | undefined;
+  for (const [from, to] of pairs) {
+    const distance = Math.hypot(to[0] - from[0], to[1] - from[1]);
+    if (!best || distance < best.distance) best = { distance, from, to };
+  }
+  return best!;
+}
+
+/** Écart réel entre deux(ensembles de) empreintes : points les plus proches, 0 si chevauchement. */
+function footprintGap(
+  a: FurnitureItem,
+  b: FurnitureItem,
+): { distance: number; from: Point2; to: Point2 } {
+  const partsA = footprintParts(a),
+    partsB = footprintParts(b);
+  for (const part of partsA)
+    for (const other of partsB)
+      if (polygonsOverlap(part, other)) return { distance: 0, from: part[0], to: part[0] };
+  let best: { distance: number; from: Point2; to: Point2 } | undefined;
+  for (const part of partsA)
+    for (let i = 0; i < part.length; i++) {
+      const pa1 = part[i],
+        pa2 = part[(i + 1) % part.length];
+      for (const other of partsB)
+        for (let j = 0; j < other.length; j++) {
+          const candidate = closestSegmentPoints(pa1, pa2, other[j], other[(j + 1) % other.length]);
+          if (!best || candidate.distance < best.distance) best = candidate;
+        }
+    }
+  return best!;
+}
+
 export function furnitureDistances(
   item: FurnitureItem,
   level: Level,
@@ -287,16 +346,26 @@ export function furnitureDistances(
       direction: [Math.cos(item.rotation), -Math.sin(item.rotation)],
     },
   ];
+  // Un ensemble lié (table + chaises) se déplace comme un bloc : ses distances
+  // internes ne servent ni d'obstacle ni de cote.
+  const ensemble = new Set(
+    items
+      .filter((other) => item.groupId !== undefined && other.groupId === item.groupId)
+      .map((other) => other.id),
+  );
   const floor = itemBase(item, level);
   const obstacles = [
     ...wallSolids(level)
       .filter((s) => s.top > floor + EPS && s.bottom < floor + item.height - EPS)
       .map((s) => s.polygon),
     ...items
-      .filter((other) => other.id !== item.id && verticalOverlap(item, other, level))
+      .filter(
+        (other) =>
+          other.id !== item.id && !ensemble.has(other.id) && verticalOverlap(item, other, level),
+      )
       .flatMap(footprintParts),
   ];
-  return definitions.flatMap(({ label, local, direction }) => {
+  const faceDistances = definitions.flatMap(({ label, local, direction }) => {
     const from = localToWorld(item, ...local);
     if (obstacles.some((polygon) => pointInPolygon(from, polygon)))
       return [{ label, distance: 0, from, to: [...from] as Point2 }];
@@ -316,6 +385,16 @@ export function furnitureDistances(
       },
     ];
   });
+  const neighbourGaps: FurnitureDistance[] = [];
+  for (const other of items) {
+    if (ensemble.has(other.id) || other.id === item.id) continue;
+    if (!verticalOverlap(item, other, level)) continue;
+    const gap = footprintGap(item, other);
+    if (gap.distance > GAP_DISPLAY_EPS && gap.distance <= NEIGHBOR_GAP_RANGE)
+      neighbourGaps.push({ label: other.name, distance: gap.distance, from: gap.from, to: gap.to });
+  }
+  neighbourGaps.sort((a, b) => a.distance - b.distance);
+  return [...faceDistances, ...neighbourGaps.slice(0, NEIGHBOR_GAP_LIMIT)];
 }
 
 /** Visual guide shown while the magnet attaches the item to a wall or a neighbour. */
