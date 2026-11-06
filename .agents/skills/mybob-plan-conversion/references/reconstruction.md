@@ -2,7 +2,7 @@
 
 ## Private measurement ledger
 
-Keep one machine-readable ledger per house with its private outputs. Record source filename, SHA-256, one-based PDF page, revision and explicit datum/axis convention. Personal titles and paths do not belong in generic skill examples/tests.
+Keep one machine-readable ledger per house with its private outputs (`reference-documents/`, `artifacts/plan-review/`, or `public/projects/private-*.json` for a project file). Record source filename, SHA-256, one-based PDF page, revision and explicit datum/axis convention. Personal titles and paths do not belong in generic skill examples/tests.
 
 Each observation needs an ID, element IDs, face/axis endpoints, raw text, metres, evidence class (printed, derived, scaled, assumed), page/crop and uncertainty. Derived observations include equations and input observation IDs. Scaled observations include pixel endpoints, calibration anchors, independent X/Z scales and maximum calibration residual. Round to measurement precision; half-thickness axes can legitimately require half-centimetres.
 
@@ -21,7 +21,7 @@ For a wall starting at z=0.17 with a printed jamb chain establishing z=3.29, off
 
 Generate a private SVG/PNG projection with wall solids, jambs, room contours and IDs. Match source orientation and aspect ratio. Calibrate against printed dimensions on both axes with at least three non-collinear anchors and independent check anchors. Scans can have unequal X/Z scales or skew: document corrections and residuals. Never warp individual rooms to fit the output.
 
-Blend the projection over a readable crop and inspect the whole plan plus enlarged disputed joins. Record residuals for corners, partition junctions and jambs. Translate pixel uncertainty into metres before judging discrepancies. Prioritize printed cotes over apparently exact tracing. Keep contradictions visible in the ledger/report.
+Render pages and contact sheets with `scripts/render_pages.py`; see `references/pdf-extraction.md` for rotated-page coordinate frames and scale deduction. Blend the projection over a readable crop and inspect the whole plan plus enlarged disputed joins. Record residuals for corners, partition junctions and jambs. Translate pixel uncertainty into metres before judging discrepancies. Prioritize printed cotes over apparently exact tracing. Keep contradictions visible in the ledger/report.
 
 ## Passages and moving joinery
 

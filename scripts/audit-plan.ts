@@ -5,14 +5,19 @@ import earcut from 'earcut';
 import { validateProject } from '../src/model/validate';
 import {
   alongWall,
+  pointInOrOnPolygon,
   pointInPolygon,
   polygonArea,
   traversable,
   wallLength,
 } from '../src/model/geometry';
-import type { HouseProject, Point2, Wall } from '../src/model/types';
+import type { HouseProject, Level, Point2, Wall } from '../src/model/types';
 
 const EPS = 1e-9;
+const TOUCH = 0.02; // m, endpoints closer than this are considered joined
+const NEAR_GAP = 0.3; // m, endpoints this close but not joined are suspicious
+const GRID = 0.1; // m, connectivity grid
+const MAX_CELLS = 400_000;
 const cross = (a: Point2, b: Point2, c: Point2) =>
   (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
 
@@ -91,11 +96,118 @@ function distanceToPolygon(point: Point2, polygon: Point2[]): number {
   );
 }
 
+function distanceToOutline(point: Point2, outline: Point2[]): number {
+  return Math.min(
+    ...outline.map((a, i) => {
+      const b = outline[(i + 1) % outline.length];
+      const dx = b[0] - a[0],
+        dz = b[1] - a[1];
+      const t = Math.max(
+        0,
+        Math.min(1, ((point[0] - a[0]) * dx + (point[1] - a[1]) * dz) / (dx * dx + dz * dz)),
+      );
+      return Math.hypot(point[0] - a[0] - t * dx, point[1] - a[1] - t * dz);
+    }),
+  );
+}
+
+/** Collinear walls whose spans overlap: duplicated or doubled partitions. */
+function duplicateWalls(walls: Wall[]): { a: Wall; b: Wall; overlap: number }[] {
+  const result: { a: Wall; b: Wall; overlap: number }[] = [];
+  for (let i = 0; i < walls.length; i++)
+    for (let j = i + 1; j < walls.length; j++) {
+      const a = walls[i],
+        b = walls[j];
+      const la = wallLength(a),
+        lb = wallLength(b);
+      if (la < EPS || lb < EPS) continue;
+      const da: Point2 = [(a.end[0] - a.start[0]) / la, (a.end[1] - a.start[1]) / la];
+      const db: Point2 = [(b.end[0] - b.start[0]) / lb, (b.end[1] - b.start[1]) / lb];
+      if (Math.abs(da[0] * db[1] - da[1] * db[0]) > 0.01) continue;
+      const offset = Math.abs(
+        (b.start[0] - a.start[0]) * da[1] - (b.start[1] - a.start[1]) * da[0],
+      );
+      if (offset > TOUCH) continue;
+      const project = (p: Point2) => (p[0] - a.start[0]) * da[0] + (p[1] - a.start[1]) * da[1];
+      const b0 = project(b.start),
+        b1 = project(b.end);
+      const overlap = Math.min(la, Math.max(b0, b1)) - Math.max(0, Math.min(b0, b1));
+      if (overlap > 0.05) result.push({ a, b, overlap });
+    }
+  return result;
+}
+
+interface Grid {
+  cell: number;
+  x0: number;
+  z0: number;
+  cols: number;
+  rows: number;
+  passable: Uint8Array;
+}
+
+function buildGrid(level: Level, solids: Point2[][], cell = GRID): Grid {
+  const xs = level.outline.map((p) => p[0]),
+    zs = level.outline.map((p) => p[1]);
+  const x0 = Math.min(...xs),
+    z0 = Math.min(...zs);
+  let cols = Math.ceil((Math.max(...xs) - x0) / cell);
+  let rows = Math.ceil((Math.max(...zs) - z0) / cell);
+  while (cols * rows > MAX_CELLS) {
+    cell *= 1.5;
+    cols = Math.ceil((Math.max(...xs) - x0) / cell);
+    rows = Math.ceil((Math.max(...zs) - z0) / cell);
+  }
+  const passable = new Uint8Array(cols * rows);
+  for (let r = 0; r < rows; r++)
+    for (let c = 0; c < cols; c++) {
+      const p: Point2 = [x0 + (c + 0.5) * cell, z0 + (r + 0.5) * cell];
+      if (!pointInPolygon(p, level.outline)) continue;
+      if (solids.some((solid) => pointInPolygon(p, solid))) continue;
+      passable[r * cols + c] = 1;
+    }
+  return { cell, x0, z0, cols, rows, passable };
+}
+
+function reachable(grid: Grid, start: Point2): Uint8Array {
+  const reached = new Uint8Array(grid.cols * grid.rows);
+  const cellOf = (p: Point2): [number, number] => [
+    Math.floor((p[0] - grid.x0) / grid.cell),
+    Math.floor((p[1] - grid.z0) / grid.cell),
+  ];
+  const [sc, sr] = cellOf(start);
+  const queue: number[] = [];
+  const seed = (c: number, r: number) => {
+    if (c < 0 || r < 0 || c >= grid.cols || r >= grid.rows) return;
+    const index = r * grid.cols + c;
+    if (!grid.passable[index] || reached[index]) return;
+    reached[index] = 1;
+    queue.push(index);
+  };
+  seed(sc, sr);
+  // A spawn placed on a wall or a hair outside the outline: seed the nearest passable cell.
+  if (!queue.length)
+    for (let radius = 1; radius <= Math.ceil(1 / grid.cell) && !queue.length; radius++)
+      for (let dr = -radius; dr <= radius; dr++)
+        for (let dc = -radius; dc <= radius; dc++) seed(sc + dc, sr + dr);
+  while (queue.length) {
+    const index = queue.pop()!;
+    const c = index % grid.cols,
+      r = Math.floor(index / grid.cols);
+    seed(c + 1, r);
+    seed(c - 1, r);
+    seed(c, r + 1);
+    seed(c, r - 1);
+  }
+  return reached;
+}
+
 export function auditPlan(project: HouseProject) {
   const checked = validateProject(project);
   const issues: { level: string; kind: string; ids: string[]; value: number; unit: string }[] = [];
   const levels = checked.levels.map((level) => {
     const walls = level.walls.map((wall) => ({ wall, solids: wallFootprints(wall) }));
+    const allSolids = walls.flatMap((entry) => entry.solids);
     const rooms = level.rooms.map((room) => {
       const area = polygonArea(room.polygon);
       for (const { wall, solids } of walls) {
@@ -137,6 +249,36 @@ export function auditPlan(project: HouseProject) {
             unit: 'm²',
           });
       }
+    for (const { a, b, overlap } of duplicateWalls(level.walls))
+      issues.push({
+        level: level.id,
+        kind: 'duplicate-wall',
+        ids: [a.id, b.id],
+        value: overlap,
+        unit: 'm',
+      });
+    // Wall ends that stop just short of another wall or of the outline: the classic
+    // "almost joined" gap that leaves a sliver of floor or a hole in a partition.
+    for (const { wall } of walls) {
+      for (const end of [wall.start, wall.end]) {
+        const toOutline = distanceToOutline(end, level.outline);
+        if (toOutline <= TOUCH) continue;
+        let nearest = Infinity;
+        for (const other of walls) {
+          if (other.wall.id === wall.id) continue;
+          for (const solid of other.solids)
+            nearest = Math.min(nearest, distanceToPolygon(end, solid));
+        }
+        if (nearest > TOUCH && nearest <= NEAR_GAP)
+          issues.push({
+            level: level.id,
+            kind: 'wall-endpoint-gap',
+            ids: [wall.id],
+            value: nearest,
+            unit: 'm',
+          });
+      }
+    }
     for (const { id, point } of [
       { id: 'spawn', point: level.spawn.position },
       ...level.rooms.map((r) => ({ id: r.id, point: r.viewpoint })),
@@ -153,6 +295,37 @@ export function auditPlan(project: HouseProject) {
           });
       }
     }
+    if (!level.rooms.some((room) => pointInOrOnPolygon(level.spawn.position, room.polygon)))
+      issues.push({
+        level: level.id,
+        kind: 'spawn-outside-room',
+        ids: ['spawn'],
+        value: 0,
+        unit: 'm²',
+      });
+    // Floor-plane connectivity: grid flood fill from the spawn through floor-level
+    // traversable openings. Approximate by construction; door leaves are not modelled.
+    const grid = buildGrid(level, allSolids);
+    const reached = reachable(grid, level.spawn.position);
+    const reachedRooms: string[] = [];
+    for (const room of level.rooms) {
+      let hit = false;
+      for (let r = 0; r < grid.rows && !hit; r++)
+        for (let c = 0; c < grid.cols && !hit; c++) {
+          if (!reached[r * grid.cols + c]) continue;
+          const p: Point2 = [grid.x0 + (c + 0.5) * grid.cell, grid.z0 + (r + 0.5) * grid.cell];
+          if (pointInPolygon(p, room.polygon)) hit = true;
+        }
+      if (hit) reachedRooms.push(room.id);
+      else
+        issues.push({
+          level: level.id,
+          kind: 'room-unreachable',
+          ids: [room.id],
+          value: 0,
+          unit: 'm²',
+        });
+    }
     const openings = level.walls.flatMap((wall) =>
       (wall.openings ?? []).map((opening) => ({
         id: opening.id,
@@ -164,7 +337,7 @@ export function auditPlan(project: HouseProject) {
         height: opening.height,
       })),
     );
-    return { id: level.id, rooms, openings };
+    return { id: level.id, rooms, openings, reachedRooms, gridCell: grid.cell };
   });
   return {
     project: checked.id,
@@ -172,7 +345,8 @@ export function auditPlan(project: HouseProject) {
     sourceVerified: false,
     browserInspected: false,
     limitations: [
-      'Floor-plane audit only; no connectivity, swing, roof or complete wall-join verification.',
+      'Floor-plane audit only; no door-leaf swing, roof or complete wall-join verification.',
+      'Connectivity is a grid flood fill through floor-level traversable openings; it does not model door leaves, thresholds or furniture.',
       'Area residuals require evidence review, not automatic resizing.',
     ],
     levels,
