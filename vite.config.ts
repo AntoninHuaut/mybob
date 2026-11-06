@@ -1,14 +1,23 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { defineConfig } from 'vite';
 
 // Personal project data is opt-in, never part of a normal deployment.
 export default defineConfig(({ mode }) => {
   const publicBuild = mode !== 'private';
+  const privateProjects = publicBuild
+    ? []
+    : readdirSync(new URL('./public/projects', import.meta.url))
+        .filter((name) => /^private-.*\.json$/.test(name))
+        .sort()
+        .map((name) => `/projects/${name}`);
   return {
     // Deep Babylon imports must share one shader registry in the development server.
     optimizeDeps: { exclude: ['@babylonjs/core'] },
     publicDir: publicBuild ? false : 'public',
-    define: { __PUBLIC_BUILD__: JSON.stringify(publicBuild) },
+    define: {
+      __PUBLIC_BUILD__: JSON.stringify(publicBuild),
+      __PRIVATE_PROJECTS__: JSON.stringify(privateProjects),
+    },
     plugins: publicBuild
       ? [
           {

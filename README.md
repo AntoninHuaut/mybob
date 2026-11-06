@@ -1,6 +1,6 @@
 # Maison — Atelier 3D
 
-Application de visite de maisons en 3D pour ordinateur, réalisée avec **Babylon.js 9**, TypeScript et Vite. Le moteur est indépendant des projets : la maison reconstruite depuis les plans VP et un studio fictif utilisent exactement le même code.
+Application de visite de maisons en 3D pour ordinateur, réalisée avec **Babylon.js 9**, TypeScript et Vite. Le moteur est indépendant des projets : un plan importé et le studio fictif utilisent exactement le même code.
 
 ## Reprise avec un nouvel agent
 
@@ -15,7 +15,7 @@ pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
-Ouvrir l’adresse indiquée par Vite. Par défaut, seul le studio de démonstration est embarqué ; importer sa maison localement. `npm run dev:private` charge le modèle personnel depuis le dépôt privé. L’application utilise WebGPU par défaut quand le navigateur expose un adaptateur matériel, avec repli automatique sur WebGL (rendu logiciel, navigateur automatisé ou démarrage trop lent) ; `?webgl=1` force WebGL. L’accélération graphique reste nécessaire. Aucun compte ni serveur de données n’est nécessaire en local.
+Ouvrir l’adresse indiquée par Vite. Par défaut, seul le studio de démonstration est embarqué ; importer sa maison localement. `npm run dev:private` charge un plan personnel local. L’application utilise WebGPU par défaut quand le navigateur expose un adaptateur matériel, avec repli automatique sur WebGL (rendu logiciel, navigateur automatisé ou démarrage trop lent) ; `?webgl=1` force WebGL. L’accélération graphique reste nécessaire. Aucun compte ni serveur de données n’est nécessaire en local.
 
 ```sh
 npm test
@@ -25,7 +25,7 @@ npm run format:check
 
 Le dossier `dist/` contient la version statique déployable. Les dépendances et les données de maison sont intégrées ou servies localement ; Google Fonts est facultatif et possède des polices de repli système.
 
-Tests navigateur automatisés : `pnpm exec playwright install chromium`, puis `pnpm run test:e2e`. Vingt exécutions couvrent les parcours essentiels en Chromium ordinateur et mobile simulé. Voir [le guide E2E](docs/E2E.md) pour les scénarios, rapports et limites.
+Tests navigateur automatisés : `pnpm exec playwright install chromium`, puis `pnpm run test:e2e`. Voir [le guide E2E](docs/E2E.md).
 
 Le build normal est **public et limité à la démonstration**. La commande `npm run ci` exécute tous les contrôles et vérifie qu’aucun plan personnel n’est présent dans l’artefact. Configuration Cloudflare Pages et GitHub Actions : [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
@@ -55,7 +55,7 @@ La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable e
 ## Fichiers importants
 
 ```text
-public/projects/private-project.json  Plan personnel local (git-ignoré, jamais commité)
+public/projects/private-*.json  Plans personnels locaux (git-ignorés, jamais commités)
 public/projects/studio-demo.json Démonstration publique
 src/model/types.ts              Format versionné des projets
 src/model/validate.ts           Validation à l’import
@@ -68,18 +68,15 @@ src/ui/                        Plan miniature, icônes et formatage
 src/main.ts                    Interface et gestion des projets
 tests/model.test.ts             Contrôles de géométrie et de collisions avec Babylon NullEngine
 docs/PROJECT-FORMAT.md          Ajouter une autre maison
-docs/MODEL-NOTES.md             Sources, précision et limites
 ```
 
 ## Périmètre de cette version
 
-Rez-de-chaussée, garage, visite, portes, plan, mesures et projets multiples. L’atelier permet maintenant d’ajouter des meubles paramétriques cotés, de les déplacer, de vérifier leurs espaces et de sauvegarder/exporter l’aménagement. Les canapés peuvent avoir un angle ou une méridienne, les téléviseurs une hauteur de pose, et les meubles sont contrôlés contre les murs. L’ajout se fait par dimensions ; les anciennes options photo et lien marchand ont été retirées. Voir [docs/FURNITURE.md](docs/FURNITURE.md). Le terrain et l’enveloppe extérieure sont inclus ; l’aménagement des combles reste hors périmètre.
+Niveaux multiples, visite, portes, plan, mesures et projets multiples. L’atelier permet maintenant d’ajouter des meubles paramétriques cotés, de les déplacer, de vérifier leurs espaces et de sauvegarder/exporter l’aménagement. Les canapés peuvent avoir un angle ou une méridienne, les téléviseurs une hauteur de pose, et les meubles sont contrôlés contre les murs. L’ajout se fait par dimensions ; les anciennes options photo et lien marchand ont été retirées. Voir [docs/FURNITURE.md](docs/FURNITURE.md). Le terrain et l’enveloppe extérieure sont inclus ; l’aménagement des combles reste hors périmètre.
 
-**La reconstruction n’est pas encore un relevé exact de l’existant.** Plusieurs cotes principales sont reprises du plan, mais les raccords de l’entrée de la chambre 1, du dégagement et du hall restent à confirmer. Les surfaces au plan et celles calculées sur les contours du modèle sont affichées séparément. Voir `docs/MODEL-NOTES.md`.
+**Un projet importé n’est pas un relevé exact de l’existant.** Les cotes viennent du document de référence, mais les raccords entre pièces et murs restent à confirmer projet par projet. Les surfaces annoncées au plan et celles calculées sur les contours du modèle sont affichées séparément.
 
-Les plans et photos fournis par le propriétaire ne sont pas inclus dans les sources ni dans le site. Le dépôt GitHub `AntoninHuaut/mybob` est privé. Le build Cloudflare Pages embarque seulement la démonstration ; la maison personnelle est importée et conservée localement dans le navigateur.
-
-Les corrections issues des revues indépendantes sont résumées dans [docs/REVIEW.md](docs/REVIEW.md). Le détail des cotes vérifiées et des écarts d’origine est conservé dans [docs/GEOMETRY-AUDIT.md](docs/GEOMETRY-AUDIT.md).
+Aucun plan ni photo personnel n’est inclus dans les sources ni dans le site. Le build Cloudflare Pages embarque seulement la démonstration ; un projet personnel est importé et conservé localement dans le navigateur.
 
 Le téléphone permet de consulter la vue 3D et le plan en pleine largeur, avec un panneau des pièces repliable. La visite en déplacement reste destinée à l’ordinateur avec clavier et souris. Les textes, le focus et les dialogues ont été repris lors de la revue d’accessibilité.
 

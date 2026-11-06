@@ -738,7 +738,7 @@ function renderRoomDetail() {
   const room = selectedRoom;
   if (!room) {
     el('#room-detail').innerHTML = roomSummaryHtml(viewer.level, {
-      atPlanProject: current.id === 'private-project',
+      areasFromPlan: viewer.level.rooms.some((r) => r.planArea !== undefined),
       icon,
     });
     return;
@@ -1557,11 +1557,11 @@ function wireViewportControls() {
 
 async function start() {
   try {
+    const projectPaths = __PUBLIC_BUILD__
+      ? ['/projects/studio-demo.json']
+      : [...__PRIVATE_PROJECTS__, '/projects/studio-demo.json'];
     const loaded = await Promise.all(
-      (__PUBLIC_BUILD__
-        ? ['/projects/studio-demo.json']
-        : ['/projects/private-project.json', '/projects/studio-demo.json']
-      ).map(async (path) => {
+      projectPaths.map(async (path) => {
         const response = await fetch(path);
         if (!response.ok) throw new Error('Impossible de charger les données de la maison.');
         return validateProject(await response.json());

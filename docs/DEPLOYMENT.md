@@ -6,9 +6,9 @@
 
 Les meubles, réglages solaires et projets importés sont traités et conservés dans le navigateur. Leur export reste un fichier personnel. Ces données ne sont pas envoyées à Cloudflare par l’application. Un changement d’origine de site ne transfère pas le stockage du navigateur : **exporter le projet et son aménagement depuis l’ancien site privé avant la migration**, puis importer ce fichier sur le nouveau site.
 
-Le dépôt GitHub reste privé. Le rendre public exposerait aussi son historique et le modèle de maison présent dans les sources : ce n’est pas nécessaire pour Cloudflare Pages.
+Le dépôt GitHub est public et ne contient aucun plan personnel : les projets personnels vivent dans `public/projects/private-*.json`, git-ignorés, et leur historique a été purgé.
 
-Le service de build Cloudflare aura accès aux sources du dépôt privé, donc aussi au modèle personnel présent dans ce dépôt. La séparation garantit son absence du site distribué au public ; elle ne cache pas ces sources au fournisseur chargé de les compiler.
+Le service de build Cloudflare compile ces sources publiques ; la séparation garantit l’absence de données personnelles du site distribué.
 
 Pour utiliser le vrai plan localement, de manière explicite :
 
@@ -23,7 +23,7 @@ Le résultat de `build:private` ne doit pas être publié sur un site public. `n
 
 Toutes les modifications passent par une branche `codex/` et une MR vers `main`. Aucun push direct ni fusion avec CI distante en attente ou en échec. Les tests locaux ne remplacent pas les checks du dernier commit de la MR. Le propriétaire autorise l’auto-merge GitHub lorsque les checks requis sont verts : l’activer pour les changements terminés et validés, sans redemander une permission par MR. Cloudflare ne doit recevoir la branche de production qu’après cette validation ; ses pipelines de build restent techniquement indépendants de GitHub Actions.
 
-Protection GitHub de `main` activée le 5 novembre 2026 et relue par API : MR obligatoire, check « Tests, types, build et confidentialité » exigé depuis GitHub Actions, branche à jour (`strict`), règles appliquées aux administrateurs, force-push et suppression interdits. Aucune approbation formelle supplémentaire n’est imposée au dépôt individuel. L’auto-merge attend ces checks et ne constitue pas un contournement. Ces réglages serveur ne sont pas contenus dans le diff Git.
+Protection GitHub de `main` : MR obligatoire, check « Tests, types, build et confidentialité » exigé depuis GitHub Actions, branche à jour (`strict`), règles appliquées aux administrateurs, force-push et suppression interdits. L’auto-merge attend ces checks et ne constitue pas un contournement. Ces réglages serveur ne sont pas contenus dans le diff Git.
 
 Le workflow `.github/workflows/ci.yml` s’exécute sur les pushes vers `main`, les pull requests visant `main` et sur lancement manuel. Il utilise Node 24, pnpm 12.15.0 et `pnpm install --frozen-lockfile` avec `pnpm-lock.yaml`. Le passage à pnpm remplace l’ancienne installation `npm ci`.
 
@@ -31,7 +31,7 @@ Contrôles : mise en forme, tests, vérification TypeScript, compilation publiqu
 
 Les Actions ont uniquement `contents: read`, aucun secret Cloudflare, une limite de 15 minutes et annulent les exécutions devenues obsolètes sur la même branche.
 
-Après le contrôle public, GitHub partage le build avec trois runners qui exécutent les douze E2E en parallèle, quatre par lot, en formats ordinateur/mobile. Chromium headless shell est mis en cache par version. Le check obligatoire « Tests, types, build et confidentialité » agrège le build et les trois lots : tout échec ou lot ignoré bloque sa réussite et l’auto-merge. Les rapports et traces d’échec sont archivés sept jours. Voir `docs/E2E.md`. Cette étape supplémentaire n’est pas incluse dans `npm run ci` côté Cloudflare : les deux pipelines restent indépendants, mais la protection de `main` empêche désormais de fusionner une PR avant le résultat E2E.
+Après le contrôle public, GitHub partage le build avec trois runners qui exécutent les tests E2E en parallèle (`--shard`), en Chromium ordinateur. Chromium headless shell est mis en cache par version. Le check obligatoire « Tests, types, build et confidentialité » agrège le build et les trois lots : tout échec ou lot ignoré bloque sa réussite et l’auto-merge. Les rapports et traces d’échec sont archivés sept jours. Voir `docs/E2E.md`. Cette étape n’est pas incluse dans `npm run ci` côté Cloudflare : les deux pipelines restent indépendants.
 
 ## Connexion Cloudflare Pages
 
@@ -53,6 +53,6 @@ Le fichier `wrangler.toml` déclare le dossier de sortie Pages. Aucun jeton Clou
 
 ## État de la connexion
 
-La connexion GitHub → Cloudflare Pages est active sur `main`. Le site est `https://mybob-9rj.pages.dev/`. Le 5 novembre 2026, le propriétaire a rendu la production accessible et conservé Cloudflare Access sur les previews. Ne pas modifier ces restrictions pour tester. Vérifier les checks GitHub CI et Cloudflare du commit précis avant d’annoncer une publication. Aucun ancien hébergement Sites n’est la cible de livraison.
+La connexion GitHub → Cloudflare Pages est active sur `main`. Le site est `https://mybob-9rj.pages.dev/`. Cloudflare Access protège les previews ; ne pas modifier ces restrictions pour tester. Vérifier les checks GitHub CI et Cloudflare du commit précis avant d’annoncer une publication.
 
 La recherche de commune du réglage Soleil contacte Open-Meteo uniquement après un clic explicite et transmet seulement le nom recherché. Les coordonnées choisies, plans et meubles restent dans le stockage local et les exports.

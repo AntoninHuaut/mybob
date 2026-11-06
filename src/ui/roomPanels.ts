@@ -40,7 +40,7 @@ export function roomListNote(hasPlanAreas: boolean): string {
 /** Fiche « le projet en un regard » quand aucune pièce n'est sélectionnée. */
 export function roomSummaryHtml(
   level: Level,
-  options: { atPlanProject: boolean; icon: PanelIcon },
+  options: { areasFromPlan: boolean; icon: PanelIcon },
 ): string {
   const living = level.rooms
     .filter((r) => r.kind !== 'garage')
@@ -48,7 +48,7 @@ export function roomSummaryHtml(
   const garage = level.rooms
     .filter((r) => r.kind === 'garage')
     .reduce((sum, r) => sum + (r.planArea ?? polygonArea(r.polygon)), 0);
-  return `<div class="eyebrow">LE PROJET EN UN REGARD</div><div class="project-stats"><div><strong>${number(living)}</strong><span>m² habitables${options.atPlanProject ? ' au plan' : ''}</span></div><div><strong>${number(level.ceilingHeight)}</strong><span>m sous plafond</span></div></div>${garage ? `<div class="garage-stat">${options.icon('door', 15)} Garage <span>${area(garage)}</span></div>` : ''}<p class="detail-hint">Sélectionnez une pièce pour la découvrir.</p>`;
+  return `<div class="eyebrow">LE PROJET EN UN REGARD</div><div class="project-stats"><div><strong>${number(living)}</strong><span>m² habitables${options.areasFromPlan ? ' au plan' : ''}</span></div><div><strong>${number(level.ceilingHeight)}</strong><span>m sous plafond</span></div></div>${garage ? `<div class="garage-stat">${options.icon('door', 15)} Garage <span>${area(garage)}</span></div>` : ''}<p class="detail-hint">Sélectionnez une pièce pour la découvrir.</p>`;
 }
 
 export function roomDetailHtml(room: Room, level: Level, icon: PanelIcon): string {

@@ -41,15 +41,6 @@ L’application ouvre actuellement directement la démonstration ; il n’existe
 
 Les illustrations décoratives ont `alt=""` lorsque le texte adjacent nomme déjà Bob ; si une image porte seule une information, fournir un texte de remplacement utile. Pas d’animation requise. Si une animation est ajoutée ultérieurement, respecter `prefers-reduced-motion`.
 
-## 5. Vérification et critères d’acceptation
-
-- **Identité** : MyBob apparaît dans l’en-tête et le titre du navigateur ; Bob est reconnaissable dans le panneau projet et l’aide, sans ressembler à une copie d’un personnage existant. Le texte reste compréhensible sans les images.
-- **Parcours** : ouvrir la démonstration, importer un projet fictif, sélectionner un niveau, ajouter et modifier un meuble, annuler, exporter/réimporter ; vérifier que le statut local et les erreurs restent exacts. Aucun plan personnel requis pour ces essais.
-- **Interface réelle** : inspecter dans un navigateur ordinateur, puis à largeur réduite et en faible hauteur ; vérifier en-tête, panneau défilant, aide, focus clavier, dialogue de meuble, Plan et vue 3D. Noter dimensions, navigateur et scénarios réellement inspectés. Les tests DOM et NullEngine ne remplacent pas cette inspection.
-- **Accessibilité** : parcourir les contrôles au clavier ; vérifier focus visible, noms accessibles, ordre de lecture, images décoratives, contrastes texte/fond et lisibilité à zoom 200 %. Tester le repli sans police ou image chargée.
-- **Automatisation** : adapter les tests DOM uniquement aux comportements nouveaux utiles et les E2E aux points d’entrée et parcours affectés ; exécuter `pnpm run ci` et `pnpm run test:e2e` avec Node 24. Vérifier le build public et son allowlist, ainsi que `git diff --check`.
-- **Livraison** : mettre à jour le journal local `docs/HANDOFF.md` (git-ignoré) et `docs/UI-REFINEMENT.md` selon le comportement réel. Ouvrir une PR `codex/` vers `main`, vérifier les checks requis sur son dernier commit ; n’annoncer un déploiement qu’après succès GitHub et Cloudflare Pages.
-
 ## Découpage conseillé
 
 1. **Création visuelle** : pistes, choix de Bob, assets finaux et notice de provenance.

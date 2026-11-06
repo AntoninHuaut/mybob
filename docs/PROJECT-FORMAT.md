@@ -119,7 +119,7 @@ Une pièce est un contour intérieur fini indépendant des murs. `polygon` sert 
 
 Les catégories sont `living`, `bedroom`, `bathroom`, `circulation`, `garage`, `storage`. Le garage reçoit un sol gris ; les autres pièces utilisent le carrelage imitation parquet. Le projet peut fournir un objet facultatif `finishes` avec les couleurs hexadécimales `wallColor`, `floorTint`, `garageColor` et `joineryColor`. Les textures différentes par pièce et leur édition visuelle sont des extensions à venir.
 
-Une pièce peut déclarer `floorOffset`, entre −1 et 0 m, pour un sol plus bas que le niveau. La surface de référence est alors réellement découpée, puis remplacée par un sol à cette cote ; les collisions et le point de vue suivent ce sol. Le plafond conserve sa cote de niveau : le garage à [cote retirée] bénéficie donc de [cote retirée] libres sous un plafond à [cote retirée]. Les seuils jusqu’à 20 cm disposent d’une aide locale au franchissement si aucune porte ou aucun mur ne barre le passage. Cela ne remplace pas un modèle d’escalier pour les différences plus importantes.
+Une pièce peut déclarer `floorOffset`, entre −1 et 0 m, pour un sol plus bas que le niveau. La surface de référence est alors réellement découpée, puis remplacée par un sol à cette cote ; les collisions et le point de vue suivent ce sol. Le plafond conserve sa cote de niveau : une pièce abaissée gagne donc de la hauteur libre sous un plafond inchangé. Les seuils jusqu’à 20 cm disposent d’une aide locale au franchissement si aucune porte ou aucun mur ne barre le passage. Cela ne remplace pas un modèle d’escalier pour les différences plus importantes.
 
 ## Ajouter et sauvegarder
 

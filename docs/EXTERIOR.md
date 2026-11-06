@@ -4,15 +4,15 @@ Le terrain est une donnée optionnelle `site` du projet importé. Le moteur ne c
 
 ## Sources et précision
 
-La [planche] du PDF donne la parcelle de [cote retirée], les côtés de [cote retirée] / [cote retirée] / [cote retirée] / [cote retirée] et l’implantation à [cote retirée] de la borne avant gauche, sur la limite latérale. Le quadrilatère reconstitué respecte ces longueurs et la surface à moins de 1 cm / 0,01 m² près. La limite latérale est supposée rectiligne et alignée sur le mur nord du RDC. Ces coordonnées reconstituées ne constituent pas un relevé de géomètre ; les angles ne sont pas cotés dans le document raster.
+Le terrain vient entièrement des données du projet : `boundary` décrit le contour de la parcelle, `declaredArea` conserve la surface annoncée par le document de référence, et `elevation` fixe la cote du terrain relative au sol du niveau. La surface calculée depuis `boundary` est affichée séparément de `declaredArea` ; un écart entre les deux signale une saisie approximative et n’est jamais corrigé en redimensionnant la parcelle. Ces coordonnées ne constituent pas un relevé de géomètre.
 
-Le terrain est volontairement plat à [cote retirée] par rapport au sol fini habitable ([niveau retiré] et [niveau retiré] du plan de masse). Le plan prévoit aussi des points plus bas près de la limite et du garage : ces pentes, talus et rampes restent simplifiés. La zone de gravillons avant reprend l’intention du stationnement de [cote retirée] ; ses raccords et le chemin piéton sont indicatifs.
+Le terrain est plat par défaut. Un projet peut déclarer des points plus bas près d’une limite ou d’une pièce abaissée : ces pentes, talus et rampes restent simplifiés. Les surfaces `gravel` et `path` reprennent l’intention du stationnement et du chemin piéton ; leurs raccords sont indicatifs.
 
-Les façades de la [planche] indiquent deux pignons, côté ouest et sud, avec un raccord en croupe au nord-est. Quatre pans continus décrivent la toiture en L ; leur projection couvre l’enveloppe de toiture sans trou ni chevauchement. Les hauteurs d’égout [cote retirée] et de faîtage [cote retirée] sont reprises de la coupe A-A par rapport au RDC. L’entrée en retrait est couverte. Les débords, gouttières, épaisseurs et charpente ne sont pas représentés. La notice annonce [pente retirée] ; en l’absence de débords modélisés, la pente graphique est indicative et n’est pas présentée comme une cote vérifiée.
+La toiture est décrite par `roofs` : sommets, faces planes et pignons. Le format accepte plusieurs pans, des raccords en croupe et des hauteurs d’égout et de faîtage quelconques ; leur projection doit couvrir l’enveloppe de toiture sans trou ni chevauchement. Une entrée en retrait est couverte. Les débords, gouttières, épaisseurs et charpente ne sont pas représentés. La pente déclarée n’est pas reproduite à l’identique : elle reste indicative et n’est pas présentée comme une cote vérifiée.
 
-Les couleurs extérieures approchent l’enduit beige ocre et l’ardoise décrits dans la notice, sans valeur colorimétrique certifiée. Les faces intérieures restent blanches. La menuiserie bicolore extérieure anthracite / intérieure blanche et les portes RAL 5008 ne sont pas encore reproduites : les menuiseries existantes restent simplifiées.
+Les couleurs extérieures viennent de `facadeColor` et `roofColor`, sans valeur colorimétrique certifiée. Les faces intérieures restent blanches. Les menuiseries bicolores et les teintes de porte ne sont pas encore reproduites : les menuiseries existantes restent simplifiées.
 
-Les photos de chantier servent à vérifier les ouvertures et volumes intérieurs. Les vues du terrain sont celles de la planche d’insertion 10 ; aucune photo extérieure récente supplémentaire n’a été fournie. Aucune clôture ou plantation n’a donc été inventée. Le gazon présente une texture de bruit fine, déterministe et générée localement, sans téléchargement d’images.
+Les documents de référence servent à vérifier les ouvertures et volumes intérieurs. Aucune clôture ni plantation n’est inventée : seules les surfaces déclarées sont rendues. Le gazon présente une texture de bruit fine, déterministe et générée localement, sans téléchargement d’images.
 
 ## Format optionnel
 
@@ -40,14 +40,8 @@ site?: {
 
 Ce format accepte une autre parcelle et une autre enveloppe de toiture sans réécrire le moteur. Les polygones doivent être simples, les accès restent dans la parcelle et l’emprise du RDC doit y tenir. Les faces de toiture doivent être planes, non dégénérées, sans croisement et ne référencer que des indices entiers valides. Les couleurs et nombres sont vérifiés à l’import. Le format de projet reste en version 1 : les projets sans `site` continuent de fonctionner.
 
-`buildExterior(project, level, scene)` retourne un groupe indépendant et ses maillages : terrain et accès, façades identifiées par `metadata.wallId`, toiture/pignons initialement masqués, limites horizontales et hauteur maximale. La vue contrôle la visibilité des faces extérieures en même temps que celle des murs en coupe. Le gazon est évidé sous la maison, y compris quand le mur touche la limite de parcelle ; il ne traverse donc pas le garage abaissé.
+`buildExterior(project, level, scene)` retourne un groupe indépendant et ses maillages : terrain et accès, façades identifiées par `metadata.wallId`, toiture/pignons initialement masqués, limites horizontales et hauteur maximale. La vue contrôle la visibilité des faces extérieures en même temps que celle des murs en coupe. Le gazon est évidé sous la maison, y compris quand le mur touche la limite de parcelle ; il ne traverse donc pas une pièce abaissée.
 
 Les ouvertures des façades utilisent la même cote de sol adjacente que les murs intérieurs, quelle que soit la catégorie de pièce abaissée. En visite, le plafond visible participe aux ombres solaires même lorsque la toiture extérieure est masquée. L'aperçu reste simplifié et ne simule pas la lumière indirecte, la météo ou les bâtiments voisins.
 
 Le départ d'une visite vérifie les triangles projetés du mobilier avec la marge du visiteur : le creux libre d'un canapé en L et les espaces autour d'un meuble tourné restent accessibles. Le test se déclenche au choix de la destination, pas à chaque image. Les collisions pendant le déplacement restent celles des maillages Babylon.
-
-## Vérification automatisée
-
-Les tests contrôlent la surface et les quatre longueurs de la parcelle, l’implantation, l’aire exacte du gazon après évidement, l’absence de gazon sous le garage, le dégagement de sa porte, la couverture et les hauteurs de toiture, l’élimination de géométries invalides, le nettoyage de la scène et la compatibilité des projets sans terrain. Ces contrôles géométriques ne remplacent pas une inspection visuelle dans un navigateur WebGL.
-
-`tests/scene-review.test.ts` vérifie aussi les ouvertures d'une pièce habitable abaissée, l'occultation par le plafond et les départs de visite autour de meubles concaves ou tournés.
