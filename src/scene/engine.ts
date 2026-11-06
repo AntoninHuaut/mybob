@@ -28,6 +28,31 @@ async function adapterIsSoftware(adapter: unknown): Promise<boolean> {
 }
 
 /**
+ * Rodage WebGPU : 250 ms d'écoute des erreurs non capturées du device.
+ * Babylon v9 n'expose pas d'observable public ; le device brut reste la source.
+ */
+async function failsUnderWatchdog(engine: AbstractEngine): Promise<boolean> {
+  const device = (engine as unknown as { _device?: { onuncapturederror: unknown } })._device;
+  if (!device || typeof device.onuncapturederror === 'undefined') return false;
+  return new Promise<boolean>((resolve) => {
+    let settled = false;
+    const onerror = () => {
+      if (settled) return;
+      settled = true;
+      device.onuncapturederror = null;
+      resolve(true);
+    };
+    device.onuncapturederror = onerror;
+    setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      device.onuncapturederror = null;
+      resolve(false);
+    }, 250);
+  });
+}
+
+/**
  * WebGPU by default when a real hardware adapter answers quickly; WebGL otherwise.
  * A software adapter, an automated browser (`navigator.webdriver`, used by the E2E
  * suite) or a slow startup falls back silently; `?webgl=1` forces WebGL.
@@ -51,7 +76,11 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractE
           stencil: true,
           powerPreference: 'high-performance',
         });
-        if (await withTimeout(engine.initAsync(), 4000)) return engine;
+        const initialised = await withTimeout(engine.initAsync(), 4000);
+        // Un driver peut répondre à l'init puis échouer à la première écriture
+        // (validation WebGPU : clearQuad/write_buffer). On observe le device
+        // pendant un court rodage : la moindre erreur disqualifie le WebGPU.
+        if (initialised && !(await failsUnderWatchdog(engine))) return engine;
         engine.dispose();
       }
     } catch {
