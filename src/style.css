@@ -1377,6 +1377,41 @@ kbd {
   gap: 8px;
   margin-top: 8px;
 }
+.variant-thumbnails {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+.variant-thumbnail {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  background: #fffef9;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: inherit;
+  cursor: pointer;
+}
+.variant-thumbnail:hover {
+  border-color: #37695c;
+}
+.variant-thumbnail.active {
+  border-color: #37695c;
+  box-shadow: 0 0 0 1px #37695c inset;
+}
+.variant-thumbnail svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+.variant-thumbnail span {
+  font-size: 11px;
+  color: #263b31;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .variant-actions button {
   padding: 7px 10px;
   border: 1px solid var(--line);

@@ -485,6 +485,7 @@ function mountFurniture() {
   if (!variantsPanel)
     variantsPanel = new VariantsPanel(el('#variants-panel'), {
       getBook: () => layoutSession.book(current.id),
+      getLevel: () => viewer.level,
       onSelect: (id) => changeVariant(() => layoutSession.select(current.id, id), true),
       onDuplicate: (name) => changeVariant(() => layoutSession.duplicate(current.id, name), true),
       onRename: (name) => changeVariant(() => layoutSession.rename(current.id, name), false),
