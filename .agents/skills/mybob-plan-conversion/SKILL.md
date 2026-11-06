@@ -35,6 +35,13 @@ places before concluding on a thickness: a window interrupts the wall and shows
 its frame where the face should be, which reads as a thinner wall. This is how a
 0.34 m wall was once mistaken for a 0.21 m one.
 
+Render large enough for the thinnest partition. A 7 cm wall needs about ten
+pixels between its two faces, so the required resolution depends on the printed
+scale: 200 dpi suffices at 1/50, but a 1/75 drawing needs 300 dpi. Below that the
+faces merge into one line and the wall reads as absent — five walls of a 1/75
+plan were reported missing at 120 dpi and all five reappeared at 300 dpi.
+`compare_plan.py` warns when the thinnest declared wall falls under eight pixels.
+
 ## Three layers, one gate
 
 Keep extraction, decision and construction separate so a wrong guess cannot hide
