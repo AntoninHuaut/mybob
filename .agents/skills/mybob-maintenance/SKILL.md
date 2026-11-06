@@ -29,6 +29,8 @@ Use this repository-local skill when changing the house viewer, furniture UI, pr
 
 Reproduce with a minimal generic project where possible. Keep world units in metres and UI units in centimetres. Test constraints against the occupied parts of an L sofa, including rotation and the floor level; an overall rectangle can reject valid placements. Group operations must remain atomic. Untouched measurements must retain their exact stored values.
 
+Audit the fixtures you rely on before trusting a green suite. `public/projects/maison-atelier.json` feeds about ten test files and the public-build check; it carried fifteen geometry defects while every test passed, because no test asserted its geometric coherence. Run `scripts/audit-plan.ts` on a fixture you are about to build tests on, and treat a fixture defect as a test defect: a suite built on broken geometry cannot tell correct from incorrect. When you fix a fixture, recompute any `planArea` from the corrected polygon, since `tests/model.test.ts` requires them to agree within a square centimetre.
+
 For form/keyboard bugs, use the existing Happy DOM tests. Cover cancellation, actual event routing and no accidental movement while interacting with UI controls. For mesh/camera changes use NullEngine tests. Do not describe either as screenshot/browser QA. If a graphical browser is available locally, check Plan, overview, exterior, walk, add/edit dialogs and narrow viewport layouts.
 
 Check both day and night, multiple time zones and project switches when changing sunlight. Solar settings must not infer personal location; only explicit town searches send text to Open-Meteo, and never house geometry. Plan stays neutral; partial-wall overview suppresses misleading full-wall shadows.
