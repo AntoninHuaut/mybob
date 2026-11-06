@@ -115,7 +115,7 @@ jobs:
           else
             echo "Les bibliothèques système de Chromium sont déjà disponibles"
           fi
-      - name: Test public build in desktop and mobile Chromium
+      - name: Test public build in desktop Chromium
         run: pnpm run test:e2e:built --shard=${{ matrix.shard }}/3
       - name: Upload E2E report and failure traces
         if: ${{ !cancelled() }}

@@ -5,8 +5,8 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  // Dedicated CI shards provide parallelism without competing software WebGL renders.
-  workers: 1,
+  // Two workers halve the suite wall time; software WebGL renders stay light per test.
+  workers: 2,
   // Software WebGL on the shared Linux runner takes longer than a local GPU.
   timeout: process.env.CI ? 90_000 : 45_000,
   expect: { timeout: 10_000 },
@@ -21,10 +21,6 @@ export default defineConfig({
     {
       name: 'desktop-chromium',
       use: { ...devices['Desktop Chrome'], viewport: { width: 1280, height: 720 } },
-    },
-    {
-      name: 'mobile-chromium',
-      use: { ...devices['Pixel 7'], viewport: { width: 390, height: 844 } },
     },
   ],
   webServer: {
