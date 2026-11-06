@@ -224,7 +224,10 @@ export function buildHouse(
         stair.start[0] + (dx / run) * along,
         height / 2,
         stair.start[1] + (dz / run) * along,
-        materials.wood,
+        // Structural tone: a wood flight would be indistinguishable from the
+        // floor in the orthographic plan view, where every tread top face is
+        // lit identically.
+        materials.slab,
       );
       step.rotation.y = angle;
     }
