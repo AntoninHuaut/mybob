@@ -101,7 +101,13 @@ input time instead of discovering them one by one:
   This single mistake accounted for most of the defects found in three separate
   reconstructions; check it before reading any area residual;
 - `planArea` is optional and positive; it is the printed value, never a target to
-  reach by moving walls.
+  reach by moving walls. Record **which** printed value it is: a room polygon is a
+  floor, so it compares to the usable area (SU), not the habitable area (SH).
+  Plans often print both, and their difference is the under-slope or under-stair
+  part below 1.80 m of headroom. Comparing a floor to an SH manufactures a
+  residual that reads like a geometry error: a hall printed `SH 5.19 / SU 6.97`
+  showed +2.08 against the SH and +0.30 against the SU, with nothing wrong in the
+  model.
 
 ## Verify and iterate
 
@@ -123,6 +129,8 @@ For source comparison use `python scripts/overlay-plan.py project.json calibrati
 The audit reports polygon intersections, room areas, world opening endpoints, wall clearance, duplicate walls, endpoint gaps and a grid flood fill from the spawn through floor-level traversable openings (`reachedRooms`). It subtracts floor-level traversable openings from wall footprints; windows stay solid. It does not establish source fidelity, door-leaf swing clearance, thresholds, furniture or complete wall-join correctness. Never auto-adjust geometry just to make its report green.
 
 A `reachedRooms` count is only meaningful once the walls are closed. A gap left between two rooms lets the flood fill through and reports full connectivity while no door serves the area; close the wall first, then read the count. A residual you cannot derive from the printed dimensions is a finding, not a rounding error: state the range the ambiguity produces and mark it unresolved instead of moving a wall until the number matches.
+
+Read the audit's own flags before reporting. It returns `sourceVerified: false` and `browserInspected: false` because it checks internal consistency, not fidelity to the plan. A clean report means "no overlap, no unjoined wall, no unreachable room" — nothing more. Announcing a corrected level on that basis is the mistake that hides every other one.
 
 ## Deliver an honest completion state
 

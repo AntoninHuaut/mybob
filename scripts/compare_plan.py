@@ -106,8 +106,9 @@ def compare_wall(wall, pixels, calibration, scale):
     for fraction in SAMPLE_FRACTIONS:
         px, pz = x0 + ux * length * fraction, z0 + uz * length * fraction
         u, v = to_pixel(px, pz, calibration)
-        du = (nx * scale) / steps
-        dv = (nz * scale) / steps
+        # Un pas = un pixel : la normale unitaire du monde donne directement la
+        # direction en pixels, l'échelle ne sert qu'à reconvertir en mètres.
+        du, dv = nx, nz
         runs = dark_runs(pixels, u - du * steps / 2, v - dv * steps / 2, du, dv, steps)
         if not runs:
             continue
@@ -214,7 +215,60 @@ def covered(band, walls):
     return None
 
 
+def self_test():
+    """Vérifie les quatre verdicts sur un plan synthétique, sans dépendre d'un PDF."""
+    from PIL import ImageDraw
+
+    scale, origin = 100.0, (50.0, 50.0)
+    image = Image.new("L", (400, 300), 255)
+    draw = ImageDraw.Draw(image)
+
+    def stroke(x0, z0, x1, z1):
+        draw.line(
+            [(origin[0] + x0 * scale, origin[1] + z0 * scale),
+             (origin[0] + x1 * scale, origin[1] + z1 * scale)],
+            fill=0,
+            width=2,
+        )
+
+    # Un mur vertical à x=1,00 d'épaisseur 0,20 : deux faces à 0,90 et 1,10.
+    stroke(0.9, 0.5, 0.9, 2.5)
+    stroke(1.1, 0.5, 1.1, 2.5)
+
+    pixels = {"data": image.load(), "size": image.size}
+    calibration = (scale, origin[0], scale, origin[1])
+
+    def wall(wall_id, x, thickness):
+        return {
+            "id": wall_id,
+            "start": [x, 0.6],
+            "end": [x, 2.4],
+            "thickness": thickness,
+        }
+
+    cases = [
+        ("bon", wall("bon", 1.0, 0.2), "aligné"),
+        ("invente", wall("invente", 2.0, 0.2), "aucune contrepartie dans le plan"),
+        ("epais", wall("epais", 1.0, 0.3), "épaisseur divergente"),
+        ("decale", wall("decale", 1.08, 0.2), "décalé"),
+    ]
+    failures = []
+    for label, candidate, expected in cases:
+        result = compare_wall(candidate, pixels, calibration, scale)
+        verdict = result["verdict"] if result else "écarté"
+        status = "ok" if verdict == expected else "ÉCHEC"
+        print(f"  {status:5} {label:8} attendu={expected:32} obtenu={verdict}")
+        if verdict != expected:
+            failures.append(label)
+    if failures:
+        raise SystemExit(f"auto-test en échec : {', '.join(failures)}")
+    print("auto-test : 4 verdicts conformes")
+    return 0
+
+
 def main(argv):
+    if "--self-test" in argv:
+        return self_test()
     if len(argv) < 4:
         print(__doc__)
         return 2
