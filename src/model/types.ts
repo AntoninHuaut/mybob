@@ -32,6 +32,19 @@ export interface Room {
   planArea?: number;
   note?: string;
 }
+export interface Stair {
+  id: string;
+  /** Axis of the straight flight, from the first riser to the last. */
+  start: Point2;
+  end: Point2;
+  /** Clear width, centred on the axis. */
+  width: number;
+  /** Number of risers; the last one lands on the level above. */
+  steps: number;
+  /** Total rise from this level's floor to the level above, in metres. */
+  rise: number;
+  note?: string;
+}
 export interface Level {
   id: string;
   name: string;
@@ -40,6 +53,10 @@ export interface Level {
   outline: Point2[];
   walls: Wall[];
   rooms: Room[];
+  /** Straight flights rising from this level to the one above. */
+  stairs?: Stair[];
+  /** Openings in this level's floor and slab, such as the stairwell arriving from below. */
+  floorVoids?: Point2[][];
   lights: { id: string; position: Point2; provisional?: boolean }[];
   spawn: { position: Point2; yaw: number };
 }

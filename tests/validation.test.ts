@@ -268,3 +268,55 @@ test('containment handles concave boundary vertices and permits valid shared edg
     true,
   );
 });
+
+test('import accepts a straight flight and a stairwell opening', () => {
+  const valid = structuredClone(original);
+  valid.levels[0].stairs = [
+    { id: 'escalier', start: [1, 1], end: [1, 4], width: 0.9, steps: 15, rise: 2.8 },
+  ];
+  valid.levels[0].floorVoids = [
+    [
+      [0.5, 0.5],
+      [1.5, 0.5],
+      [1.5, 4.5],
+      [0.5, 4.5],
+    ],
+  ];
+  assert.doesNotThrow(() => validateProject(valid));
+});
+
+test('import rejects a flight that cannot be climbed', () => {
+  expectInvalid((p) => {
+    p.levels[0].stairs = [
+      { id: 'giron-court', start: [1, 1], end: [1, 1.6], width: 0.9, steps: 15, rise: 2.8 },
+    ];
+  }, /Giron inférieur/);
+  expectInvalid((p) => {
+    p.levels[0].stairs = [
+      { id: 'marche-haute', start: [1, 1], end: [1, 5], width: 0.9, steps: 8, rise: 2.8 },
+    ];
+  }, /Hauteur de marche/);
+  expectInvalid((p) => {
+    p.levels[0].stairs = [
+      { id: 'sans-marche', start: [1, 1], end: [1, 4], width: 0.9, steps: 0, rise: 2.8 },
+    ];
+  }, /Escalier invalide/);
+});
+
+test('import rejects a stair or a stairwell outside the level outline', () => {
+  expectInvalid((p) => {
+    p.levels[0].stairs = [
+      { id: 'dehors', start: [1, 1], end: [1, 40], width: 0.9, steps: 15, rise: 2.8 },
+    ];
+  }, /contour du niveau/);
+  expectInvalid((p) => {
+    p.levels[0].floorVoids = [
+      [
+        [-50, 0],
+        [-49, 0],
+        [-49, 1],
+        [-50, 1],
+      ],
+    ];
+  }, /trémie/);
+});

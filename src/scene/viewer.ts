@@ -244,7 +244,17 @@ export class HouseViewer {
     shadow.bias = 0.001;
     shadow.normalBias = 0.025;
     shadow.setDarkness(0.2);
-    this.house = buildHouse(level, scene, createMaterials(scene, project.finishes), shadow);
+    // The level above owns the stairwell opening: it also pierces this ceiling.
+    const above = project.levels
+      .filter((candidate) => candidate.elevation > level.elevation)
+      .sort((a, b) => a.elevation - b.elevation)[0];
+    this.house = buildHouse(
+      level,
+      scene,
+      createMaterials(scene, project.finishes),
+      shadow,
+      above?.floorVoids ?? [],
+    );
     this.exterior = buildExterior(project, level, scene);
     if (project.site && this.exterior) {
       this.exteriorFrame = siteOverviewLevel(level, project.site, this.exterior.height);
