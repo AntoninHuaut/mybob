@@ -25,6 +25,14 @@ and label/surface cross-checks. Use the printed surface schedule as a cross-chec
 (the sum of the rooms must reach the printed total); never derive linear
 dimensions from advertised areas.
 
+To confront a model with the source without going through the model's own
+geometry, measure the rendered plan directly: `scripts/measure_plan.py` scans
+lines across the image and reports wall bands in metres, merging the two faces
+of a hatched partition and discarding thin dimension lines. Measure at several
+places before concluding on a thickness: a window interrupts the wall and shows
+its frame where the face should be, which reads as a thinner wall. This is how a
+0.34 m wall was once mistaken for a 0.21 m one.
+
 ## Three layers, one gate
 
 Keep extraction, decision and construction separate so a wrong guess cannot hide
