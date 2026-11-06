@@ -13,7 +13,7 @@ import {
   unlinkFurniture,
 } from './groups';
 import { fitFurnitureResize } from './resize';
-import { checkFurniture, snapFurniture } from './checks';
+import { checkFurniture } from './checks';
 import { findFurniturePlacement, getBuildingPlacementIssues } from './placement';
 
 const geometryChanged = (before: FurnitureItem | undefined, after: FurnitureItem) =>
@@ -109,19 +109,6 @@ export class FurnitureEditorDraft {
 
   unlink(): void {
     this.stage(unlinkFurniture(this.current, this.requireSelected().id));
-  }
-
-  snap(): void {
-    const selected = this.requireSelected();
-    if (selected.locked)
-      throw new Error('Ce meuble est verrouillé. Déverrouillez-le avant de le déplacer.');
-    const next = snapFurniture(selected, this.level, this.current, 0.3);
-    if (
-      Math.hypot(next.position[0] - selected.position[0], next.position[1] - selected.position[1]) <
-      0.00001
-    )
-      throw new Error('Rapprochez le meuble d’un mur ou d’un autre meuble avant de l’aligner.');
-    this.stage(applyFurnitureTransform(this.current, next));
   }
 
   private preferredRoom(item: FurnitureItem): Room | undefined {

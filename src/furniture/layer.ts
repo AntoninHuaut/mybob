@@ -15,7 +15,8 @@ import type { Observer } from '@babylonjs/core/Misc/observable';
 import { floorElevationAt } from '../model/geometry';
 import type { Level, Point2 } from '../model/types';
 import { footprintParts, televisionDimensions, type FurnitureItem } from './model';
-import { furnitureDistances } from './checks';
+import { furnitureDistances, type SnapGuide, type SnapResult } from './checks';
+import { circulationBands, CIRCULATION_TIGHT } from './circulation';
 import { constrainGroupDrag, groupMembers } from './groups';
 import { layoutLabels, type LabelRect } from '../ui/labelLayout';
 
@@ -35,6 +36,7 @@ interface Drag {
   start: Point2;
   moved: boolean;
   floor: number;
+  guide?: SnapGuide;
 }
 
 /** Metres throughout. Furniture front is local +Z; yaw follows Babylon rotation.y. */
@@ -44,13 +46,16 @@ export class FurnitureLayer {
   onChange?: (items: FurnitureItem[], final: boolean) => void;
   onDragState?: (dragging: boolean) => void;
   onDragBlocked?: (reason: string) => void;
-  snapPlacement?: (item: FurnitureItem, items: FurnitureItem[]) => FurnitureItem;
+  snapPlacement?: (item: FurnitureItem, items: FurnitureItem[]) => SnapResult;
   private items: FurnitureItem[] = [];
   private visuals = new Map<string, Visual>();
   private selected?: string;
   private mode: 'overview' | 'plan' | 'walk' = 'overview';
   private overlays: FurnitureOverlays = { distances: false, clearances: false, openings: false };
   private overlayRoot?: TransformNode;
+  private circulation = false;
+  private circulationRoot?: TransformNode;
+  private circulationMaterials: StandardMaterial[] = [];
   private overlayMaterials: StandardMaterial[] = [];
   private observer: Observer<PointerInfo>;
   private labelObserver: Observer<Scene>;
@@ -117,6 +122,7 @@ export class FurnitureLayer {
       this.finishDrag();
     if (this.selected && !ids.has(this.selected)) this.selected = undefined;
     this.drawOverlays();
+    this.drawCirculation();
   }
 
   select(id: string | undefined): void {
@@ -134,11 +140,95 @@ export class FurnitureLayer {
             ? new Plane(0, 1, 0, -10000)
             : null;
     this.drawOverlays();
+    this.drawCirculation();
   }
 
   setOverlays(overlays: FurnitureOverlays): void {
     this.overlays = { ...overlays };
     this.drawOverlays();
+  }
+
+  setCirculation(enabled: boolean): void {
+    this.circulation = enabled;
+    this.drawCirculation();
+  }
+
+  /** Passage strips are informative only; they never block a placement. */
+  private drawCirculation(): void {
+    this.circulationRoot?.dispose();
+    this.circulationRoot = undefined;
+    for (const material of this.circulationMaterials) material.dispose(false, true);
+    this.circulationMaterials = [];
+    if (!this.circulation || this.mode === 'walk') return;
+    this.circulationRoot = new TransformNode('furniture:circulation', this.scene);
+    for (const band of circulationBands(this.items, this.level)) {
+      const item = this.items.find((candidate) => candidate.id === band.itemId);
+      if (!item) continue;
+      const y = floorElevationAt(this.level, item.position) + 0.03;
+      const tight = band.distance < CIRCULATION_TIGHT;
+      const color = tight ? new Color3(0.8, 0.24, 0.18) : new Color3(0.91, 0.56, 0.15);
+      const strip = MeshBuilder.CreatePlane(
+        'furniture:circulation-strip',
+        {
+          width: Math.max(0.04, band.rect.maxX - band.rect.minX),
+          height: Math.max(0.04, band.rect.maxZ - band.rect.minZ),
+        },
+        this.scene,
+      );
+      strip.parent = this.circulationRoot;
+      strip.rotation.x = Math.PI / 2;
+      strip.position.set(
+        (band.rect.minX + band.rect.maxX) / 2,
+        y,
+        (band.rect.minZ + band.rect.maxZ) / 2,
+      );
+      strip.isPickable = false;
+      const material = new StandardMaterial('furniture:circulation-strip', this.scene);
+      material.emissiveColor = color;
+      material.diffuseColor = color;
+      material.alpha = 0.28;
+      material.disableLighting = true;
+      this.circulationMaterials.push(material);
+      strip.material = material;
+      if (typeof document === 'undefined') continue;
+      const texture = new DynamicTexture(
+        'furniture:circulation-label',
+        { width: 256, height: 64 },
+        this.scene,
+        false,
+      );
+      texture.hasAlpha = true;
+      texture.drawText(
+        `${Math.round(band.distance * 100)} cm`,
+        null,
+        44,
+        'bold 32px sans-serif',
+        '#ffffff',
+        tight ? '#8a2a20' : '#7a5510',
+        true,
+      );
+      const labelMaterial = new StandardMaterial('furniture:circulation-label', this.scene);
+      labelMaterial.diffuseTexture = texture;
+      labelMaterial.emissiveColor = Color3.White();
+      labelMaterial.disableLighting = true;
+      labelMaterial.backFaceCulling = false;
+      this.circulationMaterials.push(labelMaterial);
+      const label = MeshBuilder.CreatePlane(
+        'furniture:circulation-label',
+        { width: 0.72, height: 0.18 },
+        this.scene,
+      );
+      label.parent = this.circulationRoot;
+      label.position.set(
+        (band.rect.minX + band.rect.maxX) / 2,
+        y + 0.1,
+        (band.rect.minZ + band.rect.maxZ) / 2,
+      );
+      label.material = labelMaterial;
+      label.billboardMode = Mesh.BILLBOARDMODE_ALL;
+      label.isPickable = false;
+      label.metadata = { kind: 'furniture-overlay', measurementKind: 'gap', priority: 170 };
+    }
   }
 
   /** Pixel obstacles for room labels in Plan: selected footprint and distance tags. */
@@ -594,7 +684,8 @@ export class FurnitureLayer {
           structuredClone(candidate),
           structuredClone(constrained),
         );
-        constrained = constrainGroupDrag(constrained, item.id, snapped.position, this.level);
+        this.drag.guide = snapped.guide;
+        constrained = constrainGroupDrag(constrained, item.id, snapped.item.position, this.level);
       }
       const anchor = constrained.find((member) => member.id === item.id)!;
       if (
@@ -604,7 +695,7 @@ export class FurnitureLayer {
         if (Math.hypot(position[0] - item.position[0], position[1] - item.position[1]) >= 0.015)
           this.reportBlockedDrag(
             movedBeforeSnap
-              ? 'Accrochage actif : déplacez davantage le pointeur ou désactivez la grille et les murs proches.'
+              ? 'Accrochage actif : déplacez davantage le pointeur ou maintenez Alt pour suspendre l’aimantation.'
               : 'Déplacement arrêté par le bâtiment ou un meuble lié. Vérifiez les murs, le contour et la hauteur des membres de l’ensemble.',
           );
         return;
@@ -707,6 +798,13 @@ export class FurnitureLayer {
           point(left, back),
         ],
         color,
+      );
+    const magnet = this.drag?.guide;
+    if (magnet && this.drag?.moved)
+      line(
+        'furniture:snap-guide',
+        [magnet.from, magnet.to].map(([x, z]) => new Vector3(x, y, z)),
+        new Color3(0.93, 0.62, 0.16),
       );
     const hw = item.width / 2,
       hd = item.depth / 2;
@@ -823,6 +921,10 @@ export class FurnitureLayer {
       window.removeEventListener('blur', this.release);
     }
     this.clearOverlays();
+    this.circulationRoot?.dispose();
+    this.circulationRoot = undefined;
+    for (const material of this.circulationMaterials) material.dispose(false, true);
+    this.circulationMaterials = [];
     for (const visual of this.visuals.values()) this.destroyVisual(visual);
     this.visuals.clear();
   }

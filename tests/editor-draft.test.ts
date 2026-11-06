@@ -96,29 +96,6 @@ test('all changed group members must fit before an update is staged', () => {
   assert.deepEqual(source, before);
 });
 
-test('snap is staged and a no-op alignment gives a useful error without changing state', () => {
-  const item = createFurniture({
-    id: 'table',
-    kind: 'table',
-    width: 1,
-    depth: 0.6,
-    position: [0.8, 3],
-  });
-  const source = [item],
-    draft = new FurnitureEditorDraft(source, level, item.id);
-  draft.snap();
-  near(draft.selected!.position[0], 0.7);
-  near(source[0].position[0], 0.8);
-  const far = new FurnitureEditorDraft(
-    [createFurniture({ id: 'far', position: [3, 3] })],
-    level,
-    'far',
-  );
-  const before = far.items;
-  assert.throws(() => far.snap(), /Rapprochez/);
-  assert.deepEqual(far.items, before);
-});
-
 test('duplicate selects a new unlinked copy, finds space in the same room and leaves the source intact', () => {
   const source = linkFurniture([stand(), tv()], 'stand', 'tv'),
     before = structuredClone(source);
@@ -192,7 +169,6 @@ test('locks apply inside the draft and failed operations preserve all staged cha
   assert.deepEqual(draft.items, before);
   const locked = new FurnitureEditorDraft(source, level, 'tv');
   assert.throws(() => locked.remove(), /verrouillé/);
-  assert.throws(() => locked.snap(), /verrouillé/);
   assert.equal(locked.items.length, 2);
 });
 

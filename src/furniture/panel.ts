@@ -28,7 +28,6 @@ export interface FurniturePanelAdapter {
   canUndo(): boolean;
   canRedo(): boolean;
   onOverlays(options: { distances: boolean; clearances: boolean; openings: boolean }): void;
-  onSnap(id: string): void;
   getChecks(): { itemId: string; severity: 'warning' | 'error'; message: string }[];
   onToast(message: string): void;
   onDialogState?(open: boolean): void;
@@ -180,7 +179,7 @@ export class FurniturePanel {
         </details>
       </form>
       <div data-group-controls>${this.groupControls(item)}</div>
-      <details class="furniture-more-actions"><summary>Autres actions</summary><div class="furniture-actions">${item.kind === 'tv-stand' ? '<button type="button" data-furniture-action="add-tv">Ajouter une TV dessus</button>' : ''}<button type="button" data-furniture-action="snap"${disabled(item.locked)}>Placer contre un mur</button><button type="button" data-furniture-action="duplicate">Dupliquer</button><button type="button" data-furniture-action="delete" class="furniture-delete">Retirer le meuble</button></div></details>
+      <details class="furniture-more-actions"><summary>Autres actions</summary><div class="furniture-actions">${item.kind === 'tv-stand' ? '<button type="button" data-furniture-action="add-tv">Ajouter une TV dessus</button>' : ''}<button type="button" data-furniture-action="duplicate">Dupliquer</button><button type="button" data-furniture-action="delete" class="furniture-delete">Retirer le meuble</button></div></details>
       <div class="furniture-edit-status" role="status"></div>
       <div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button class="primary-button" type="submit" form="furniture-edit-form">Enregistrer</button></div></section>`;
   }
@@ -284,7 +283,6 @@ export class FurniturePanel {
         if (form && !this.stageForm(form)) return;
         if (action === 'link' && other) this.draft.link(other);
         else if (action === 'unlink') this.draft.unlink();
-        else if (action === 'snap') this.draft.snap();
         else if (action === 'duplicate') this.draft.duplicate();
         else if (action === 'add-tv') this.draft.addTelevision();
         else if (action === 'delete') this.draft.remove();
@@ -348,8 +346,6 @@ export class FurniturePanel {
           (form.elements.namedItem(name) as HTMLInputElement).disabled = false;
         updateSofaFields(form, item.kind);
         updateTelevisionFields(form, item.kind);
-        this.editDialog.querySelector<HTMLButtonElement>('[data-furniture-action=snap]')!.disabled =
-          false;
       }
     }
     if (input.name === 'sofaShape') {

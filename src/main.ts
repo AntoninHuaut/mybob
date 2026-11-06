@@ -29,7 +29,7 @@ import {
   validateFurnitureList,
   type FurnitureItem,
 } from './furniture/model';
-import { checkFurniture, snapFurniture } from './furniture/checks';
+import { checkFurniture } from './furniture/checks';
 import { findFurniturePlacement, getBuildingPlacementIssues } from './furniture/placement';
 import {
   applyFurnitureTransform,
@@ -51,6 +51,7 @@ let current: HouseProject;
 let selectedRoom: Room | undefined;
 let showLabels = true;
 let showDimensions = false;
+let showCirculation = false;
 let ceiling = false;
 let exteriorView = false;
 let lights = true;
@@ -64,6 +65,7 @@ let variantsPanel: VariantsPanel | undefined;
 let arrangementPanel: ArrangementPanel | undefined;
 let arrangedIds: string[] = [];
 let snapSettings = { ...defaultSnapSettings };
+let magnetSuspended = false;
 let furnitureLayer: FurnitureLayer | undefined;
 let furniturePanel: FurniturePanel | undefined;
 let selectedFurnitureId: string | undefined;
@@ -247,21 +249,6 @@ function openTableChairs() {
   });
 }
 
-function snapSelectedFurniture(id: string) {
-  const items = currentFurniture(),
-    item = items.find((candidate) => candidate.id === id);
-  if (!item || item.locked) return;
-  const snapped = snapFurniture(item, viewer.level, items, 0.3);
-  if (
-    Math.hypot(snapped.position[0] - item.position[0], snapped.position[1] - item.position[1]) <
-    0.001
-  ) {
-    toast('Rapprochez le meuble du mur (moins de 30 cm), puis réessayez.');
-    return;
-  }
-  updateFurniture(snapped);
-}
-
 function updateFurnitureContext() {
   const toolbar = el('#furniture-context-toolbar');
   const item = furnitureContextItem;
@@ -288,7 +275,6 @@ function updateFurnitureContext() {
   toolbar
     .querySelectorAll<HTMLButtonElement>('[data-rotate-selected]')
     .forEach((button) => (button.disabled = item.locked));
-  el<HTMLButtonElement>('#snap-selected-furniture').disabled = item.locked;
   el<HTMLButtonElement>('#undo-selected-furniture').disabled = !furnitureHistory.canUndo;
   el<HTMLButtonElement>('#redo-selected-furniture').disabled = !furnitureHistory.canRedo;
   el('#table-chairs').hidden = item.kind !== 'table';
@@ -335,11 +321,12 @@ function mountFurniture() {
   furnitureLayer = new FurnitureLayer(viewer.scene, viewer.level);
   furnitureLayer.setItems(items);
   furnitureLayer.setOverlays(overlays);
+  furnitureLayer.setCirculation(showCirculation);
   furnitureLayer.onSelect = selectFurniture;
   furnitureLayer.onEdit = openFurnitureEditor;
   furnitureLayer.onDragBlocked = toast;
   furnitureLayer.snapPlacement = (item, candidates) =>
-    snapDraggedFurniture(item, viewer.level, candidates, snapSettings);
+    snapDraggedFurniture(item, viewer.level, candidates, snapSettings, !magnetSuspended);
   furnitureLayer.onDragState = (dragging) => {
     draggingFurniture = dragging;
     if (dragging) viewer.orbit.detachControl();
@@ -411,7 +398,6 @@ function mountFurniture() {
       onRedo: () => {
         if (furnitureHistory.redo()) syncFurniture();
       },
-      onSnap: snapSelectedFurniture,
       onOverlays: (options) => {
         overlays = options;
         furnitureLayer?.setOverlays(options);
@@ -534,7 +520,14 @@ function syncDisplayControls() {
   activeButton('#tool-measure', measuring);
   activeButton('#tool-labels', showLabels);
   activeButton('#tool-ceiling', ceiling && mode === 'overview');
-  for (const id of ['tool-measure', 'tool-labels', 'tool-dimensions', 'tool-ceiling']) {
+  activeButton('#tool-circulation', showCirculation);
+  for (const id of [
+    'tool-measure',
+    'tool-labels',
+    'tool-dimensions',
+    'tool-circulation',
+    'tool-ceiling',
+  ]) {
     el<HTMLButtonElement>(`#${id}`).disabled =
       mode === 'walk' ||
       exteriorView ||
@@ -1019,9 +1012,6 @@ function wireFurnitureToolbar() {
   el('#duplicate-selected-furniture').addEventListener('click', () => {
     if (selectedFurnitureId) duplicateFurniture(selectedFurnitureId);
   });
-  el('#snap-selected-furniture').addEventListener('click', () => {
-    if (selectedFurnitureId) snapSelectedFurniture(selectedFurnitureId);
-  });
   el('#delete-selected-furniture').addEventListener('click', () => {
     if (!selectedFurnitureId) return;
     if (commitFurniture(currentFurniture().filter((item) => item.id !== selectedFurnitureId)))
@@ -1113,6 +1103,20 @@ function wireNavigationControls() {
 }
 
 function wireKeyboardShortcuts() {
+  // L'aimantation se suspend en maintenant Alt pendant le glisser ; sans effet ailleurs.
+  window.addEventListener('keydown', (event) => {
+    if (event.key !== 'Alt') return;
+    magnetSuspended = true;
+    if (draggingFurniture) event.preventDefault();
+  });
+  window.addEventListener('keyup', (event) => {
+    if (event.key !== 'Alt') return;
+    magnetSuspended = false;
+    if (draggingFurniture) event.preventDefault();
+  });
+  window.addEventListener('blur', () => {
+    magnetSuspended = false;
+  });
   window.addEventListener(
     'keydown',
     (event) => {
@@ -1368,6 +1372,11 @@ function wireViewportControls() {
     el('#width-label').hidden = !showDimensions;
     el('#depth-label').hidden = !showDimensions;
   });
+  el('#tool-circulation').addEventListener('click', () => {
+    showCirculation = !showCirculation;
+    activeButton('#tool-circulation', showCirculation);
+    furnitureLayer?.setCirculation(showCirculation);
+  });
   el('#tool-solar').addEventListener('click', () => solarPanel.open());
   el('#tool-lights').addEventListener('click', () => {
     lights = !lights;
@@ -1412,7 +1421,7 @@ function wireViewportControls() {
   el('#help').addEventListener('click', () =>
     openDialog(
       'PRENDRE EN MAIN L’ATELIER',
-      `<div class="bob-help"><img src="${bobPlan}" alt=""><div><h2>Faites comme chez vous.</h2><p>Moi, c’est Bob. Voici quelques repères pour explorer et aménager votre maison.</p></div></div><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>ZQSD ou WASD pour déplacer la vue, Maj pour accélérer. Glissez avec le bouton gauche pour tourner, le bouton droit pour déplacer ; utilisez la molette pour zoomer. Les flèches déplacent aussi la vue quand aucun meuble n’est sélectionné.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte, F pour modifier le meuble visé. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure ; les mesures confirmées restent affichées jusqu’à « Effacer les mesures ».</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau Meubles, puis glissez-le dans la scène. Dans la fenêtre de modification, les changements restent en aperçu jusqu’à validation ; Annuler conserve l’aménagement précédent. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Affichage des murs</h3><p>Dans Navigation, choisissez Automatique, Murs complets ou Murs bas pour dégager la vue. La visite conserve les murs complets.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
+      `<div class="bob-help"><img src="${bobPlan}" alt=""><div><h2>Faites comme chez vous.</h2><p>Moi, c’est Bob. Voici quelques repères pour explorer et aménager votre maison.</p></div></div><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>ZQSD ou WASD pour déplacer la vue, Maj pour accélérer. Glissez avec le bouton gauche pour tourner, le bouton droit pour déplacer ; utilisez la molette pour zoomer. Les flèches déplacent aussi la vue quand aucun meuble n’est sélectionné.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte, F pour modifier le meuble visé. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure ; les mesures confirmées restent affichées jusqu’à « Effacer les mesures ».</p></div><div>${icon('circulation', 24)}<h3>Circulation</h3><p>Activez « Circulation » pour voir l’espace restant autour du lit, du canapé et de la table : rouge sous 60 cm, ambre jusqu’à 80 cm. Indicatif, jamais bloquant.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau Meubles, puis glissez-le dans la scène. Dans la fenêtre de modification, les changements restent en aperçu jusqu’à validation ; Annuler conserve l’aménagement précédent. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Pendant le glisser, le meuble s’aimante aux murs et aligne centres et bords avec les autres meubles ; maintenez Alt pour suspendre l’aimantation. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Affichage des murs</h3><p>Dans Navigation, choisissez Automatique, Murs complets ou Murs bas pour dégager la vue. La visite conserve les murs complets.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
     ),
   );
   el('#source-info').addEventListener('click', () => {

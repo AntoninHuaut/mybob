@@ -93,7 +93,6 @@ function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa
     onEdit: (id) => panel.openEdit(id),
     onDialogState: (open) => dialogStates.push(open),
     onOverlays: () => {},
-    onSnap: () => {},
     getChecks: () => checks,
     onToast: () => {},
     onLink: () => {},
@@ -480,15 +479,16 @@ test('removing a furniture item requires saving and can be cancelled', async () 
 });
 
 test('failed popup actions show an inline error and leave the draft form open', () => {
-  const { window, editor, getItems, applied, cleanup } = setup();
+  const { window, setItems, panel, editor, applied, cleanup } = setup();
   try {
+    setItems([{ ...createFurniture({ id: 'locked', position: [3, 3] }), locked: true }]);
+    panel.openEdit('locked');
     editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
     editor
-      .querySelector('[data-furniture-action=snap]')!
+      .querySelector('[data-furniture-action=delete]')!
       .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     assert.ok(editor.hasAttribute('open'));
-    assert.match(editor.querySelector('.furniture-edit-status')!.textContent!, /Rapprochez/);
-    assert.equal(getItems()[0].position[0], 3);
+    assert.match(editor.querySelector('.furniture-edit-status')!.textContent!, /verrouill/);
     assert.equal(applied.length, 0);
   } finally {
     cleanup();

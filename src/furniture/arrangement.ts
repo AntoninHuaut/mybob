@@ -3,16 +3,15 @@ import { bounds } from '../model/geometry';
 import { footprintParts, validateFurnitureList, type FurnitureItem } from './model';
 import { applyFurnitureTransform, constrainGroupDrag, groupMembers } from './groups';
 import { getBuildingPlacementIssues } from './placement';
-import { snapFurniture } from './checks';
+import { snapFurnitureDetailed, type SnapGuide, type SnapResult } from './checks';
 
 export type ArrangementAxis = 'x' | 'z';
 export type AlignmentEdge = 'min' | 'center' | 'max';
 export interface SnapSettings {
   grid: boolean;
-  walls: boolean;
   gridSize: number;
 }
-export const defaultSnapSettings: SnapSettings = { grid: false, walls: false, gridSize: 0.1 };
+export const defaultSnapSettings: SnapSettings = { grid: false, gridSize: 0.1 };
 
 function units(items: FurnitureItem[], ids: string[]) {
   const selected = new Set(ids);
@@ -104,14 +103,19 @@ export function distributeFurniture(
   return validatePlacement(items, next, level);
 }
 
-/** items already contains the candidate drag transform, including its linked members. */
+/**
+ * items already contains the candidate drag transform, including its linked members.
+ * The magnet (wall contact plus centre/edge alignment with neighbours) is always
+ * active during the drag unless suspended (Alt); the grid stays an opt-in setting.
+ */
 export function snapDraggedFurniture(
   item: FurnitureItem,
   level: Level,
   items: FurnitureItem[],
   settings: SnapSettings,
-): FurnitureItem {
-  if (item.locked || (!settings.grid && !settings.walls)) return structuredClone(item);
+  magnet = true,
+): SnapResult {
+  if (item.locked || (!settings.grid && !magnet)) return { item: structuredClone(item) };
   let next = structuredClone(item);
   if (
     settings.grid &&
@@ -122,21 +126,28 @@ export function snapDraggedFurniture(
     next.position = next.position.map(
       (value) => Math.round(value / settings.gridSize) * settings.gridSize,
     ) as [number, number];
-  if (settings.walls) next = snapFurniture(next, level, [], 0.12);
+  let guide: SnapGuide | undefined;
+  if (magnet) {
+    const dragged = new Set(groupMembers(items, item.id).map((member) => member.id));
+    const neighbours = items.filter((other) => !dragged.has(other.id));
+    const snapped = snapFurnitureDetailed(next, level, neighbours, 0.12);
+    next = snapped.item;
+    guide = snapped.guide;
+  }
   try {
     const base = items.map((other) => (other.id === item.id ? structuredClone(item) : other));
     const moved = constrainGroupDrag(base, item.id, next.position, level);
     const snapped = moved.find((other) => other.id === item.id)!;
     if (snapped.position.some((value, axis) => Math.abs(value - next.position[axis]) > 1e-7))
-      return structuredClone(item);
+      return { item: structuredClone(item) };
     if (
       groupMembers(moved, item.id).some(
         (member) => getBuildingPlacementIssues(member, level).length,
       )
     )
-      return structuredClone(item);
-    return snapped;
+      return { item: structuredClone(item) };
+    return { item: snapped, guide };
   } catch {
-    return structuredClone(item);
+    return { item: structuredClone(item) };
   }
 }

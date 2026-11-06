@@ -113,16 +113,13 @@ test('invalid building placement and insufficient distribution room reject the w
   );
 });
 
-test('disabled snapping preserves exact position; grid and wall snapping are independent', () => {
+test('magnet suspended or grid-only keeps control, default settings magnetize to walls', () => {
   const item = chair('a', 2.12345, 3.45678);
-  assert.deepEqual(snapDraggedFurniture(item, level, [item], defaultSnapSettings), item);
-  const grid = snapDraggedFurniture(item, level, [item], {
-    grid: true,
-    walls: false,
-    gridSize: 0.1,
-  });
-  near(grid.position[0], 2.1);
-  near(grid.position[1], 3.5);
+  const untouched = snapDraggedFurniture(item, level, [item], defaultSnapSettings, false);
+  assert.deepEqual(untouched.item, item);
+  const grid = snapDraggedFurniture(item, level, [item], { grid: true, gridSize: 0.1 }, false);
+  near(grid.item.position[0], 2.1);
+  near(grid.item.position[1], 3.5);
   const walled = {
     ...level,
     walls: [
@@ -135,20 +132,43 @@ test('disabled snapping preserves exact position; grid and wall snapping are ind
     ],
   };
   const nearWall = chair('a', 0.67, 4.12345);
-  const snapped = snapDraggedFurniture(nearWall, walled, [nearWall], {
-    grid: false,
-    walls: true,
-    gridSize: 0.1,
-  });
-  near(snapped.position[0], 0.6);
-  near(snapped.position[1], nearWall.position[1]);
+  const snapped = snapDraggedFurniture(nearWall, walled, [nearWall], defaultSnapSettings);
+  near(snapped.item.position[0], 0.6);
+  near(snapped.item.position[1], nearWall.position[1]);
+  assert.equal(snapped.guide?.kind, 'wall');
+});
+
+test('magnet aligns centres and edges with a neighbour and reports the guide', () => {
+  const sofa = { ...chair('a', 4.05, 2), kind: 'sofa' as const };
+  const neighbour = chair('b', 4.02, 4);
+  const centreAligned = snapDraggedFurniture(sofa, level, [sofa, neighbour], defaultSnapSettings);
+  near(centreAligned.item.position[0], 4.02);
+  assert.equal(centreAligned.guide?.kind, 'align');
+  const edgeSource = chair('a', 5.55, 2);
+  const edgeNeighbour = chair('b', 5.52, 4);
+  const edgeAligned = snapDraggedFurniture(
+    edgeSource,
+    level,
+    [edgeSource, edgeNeighbour],
+    defaultSnapSettings,
+  );
+  near(edgeAligned.item.position[0], 5.52);
+  assert.equal(edgeAligned.guide?.kind, 'align');
+  const suspended = snapDraggedFurniture(
+    edgeSource,
+    level,
+    [edgeSource, edgeNeighbour],
+    defaultSnapSettings,
+    false,
+  );
+  assert.deepEqual(suspended.item, edgeSource);
 });
 
 test('snapping preserves a candidate whose group is locked or would cross a wall', () => {
   const item = { ...chair('a', 2.14, 2), groupId: 'g' };
   const partner = { ...chair('b', 4.14, 2), groupId: 'g', locked: true };
   assert.deepEqual(
-    snapDraggedFurniture(item, level, [item, partner], { grid: true, walls: false, gridSize: 1 }),
+    snapDraggedFurniture(item, level, [item, partner], { grid: true, gridSize: 1 }).item,
     item,
   );
   const wall = {
@@ -164,7 +184,7 @@ test('snapping preserves a candidate whose group is locked or would cross a wall
   };
   const candidate = { ...chair('a', 3.2, 3), width: 0.1 };
   assert.deepEqual(
-    snapDraggedFurniture(candidate, wall, [candidate], { grid: true, walls: false, gridSize: 1 }),
+    snapDraggedFurniture(candidate, wall, [candidate], { grid: true, gridSize: 1 }).item,
     candidate,
   );
 });

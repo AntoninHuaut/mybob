@@ -136,8 +136,10 @@ test('drag snapping moves a linked assembly atomically and never runs on a selec
   layer.snapPlacement = (item) => {
     snapped++;
     return {
-      ...item,
-      position: item.position.map((value) => Math.round(value * 2) / 2) as [number, number],
+      item: {
+        ...item,
+        position: item.position.map((value) => Math.round(value * 2) / 2) as [number, number],
+      },
     };
   };
   down();
@@ -249,7 +251,7 @@ test('snapping that holds an intended movement reports once without committing a
   const { layer, changes, down, move, up, cleanup } = setup(assembly(), 'stand');
   const messages: string[] = [];
   layer.onDragBlocked = (reason) => messages.push(reason);
-  layer.snapPlacement = (item) => ({ ...item, position: [2, 3] });
+  layer.snapPlacement = (item) => ({ item: { ...item, position: [2, 3] } });
   down();
   move(2.05, 3);
   move(2.1, 3);

@@ -318,6 +318,29 @@ export function furnitureDistances(
   });
 }
 
+/** Visual guide shown while the magnet attaches the item to a wall or a neighbour. */
+export interface SnapGuide {
+  kind: 'wall' | 'align';
+  from: Point2;
+  to: Point2;
+}
+export interface SnapResult {
+  item: FurnitureItem;
+  guide?: SnapGuide;
+}
+
+/** Axis-aligned bounding box of world footprint points. */
+export function polygonBounds(points: Point2[]) {
+  const xs = points.map((p) => p[0]),
+    zs = points.map((p) => p[1]);
+  return {
+    minX: Math.min(...xs),
+    maxX: Math.max(...xs),
+    minZ: Math.min(...zs),
+    maxZ: Math.max(...zs),
+  };
+}
+
 /** Snap only translations that keep the object clear of solids and other furniture. */
 export function snapFurniture(
   item: FurnitureItem,
@@ -325,8 +348,23 @@ export function snapFurniture(
   others: FurnitureItem[],
   maxDistance = 0.15,
 ): FurnitureItem {
-  const polygon = footprint(item);
-  const candidates: { distance: number; position: Point2 }[] = [];
+  return snapFurnitureDetailed(item, level, others, maxDistance).item;
+}
+
+/**
+ * Magnet snap: wall contact, position/centre alignment with neighbours and
+ * axis edge alignment (edges side by side or in flush contact). The returned
+ * guide traces the attachment that won so the UI can display it.
+ */
+export function snapFurnitureDetailed(
+  item: FurnitureItem,
+  level: Level,
+  others: FurnitureItem[],
+  maxDistance = 0.15,
+): SnapResult {
+  const polygon = footprint(item),
+    box = polygonBounds(polygon);
+  const candidates: { distance: number; position: Point2; guide: SnapGuide }[] = [];
   for (const wall of level.walls) {
     const dx = wall.end[0] - wall.start[0],
       dz = wall.end[1] - wall.start[1];
@@ -336,6 +374,15 @@ export function snapFurniture(
     const relative = polygon.map((p) => [p[0] - wall.start[0], p[1] - wall.start[1]] as Point2);
     const along = relative.map((p) => dot(p, tangent));
     if (Math.max(...along) < 0 || Math.min(...along) > length) continue;
+    const span: [number, number] = [
+      Math.max(0, Math.min(...along) - 0.1),
+      Math.min(length, Math.max(...along) + 0.1),
+    ];
+    const guide: SnapGuide = {
+      kind: 'wall',
+      from: [wall.start[0] + tangent[0] * span[0], wall.start[1] + tangent[1] * span[0]],
+      to: [wall.start[0] + tangent[0] * span[1], wall.start[1] + tangent[1] * span[1]],
+    };
     const normalCoordinates = relative.map((p) => dot(p, normal));
     for (const shift of [
       wall.thickness / 2 - Math.min(...normalCoordinates),
@@ -345,18 +392,44 @@ export function snapFurniture(
         candidates.push({
           distance: Math.abs(shift),
           position: [item.position[0] + normal[0] * shift, item.position[1] + normal[1] * shift],
+          guide,
         });
     }
   }
   for (const other of others) {
     if (other.id === item.id) continue;
-    for (const axis of [0, 1]) {
-      const delta = other.position[axis] - item.position[axis];
-      if (Math.abs(delta) <= maxDistance) {
-        const position: Point2 = [...item.position];
-        position[axis] += delta;
-        candidates.push({ distance: Math.abs(delta), position });
-      }
+    const otherBox = polygonBounds(footprint(other));
+    for (const axis of [0, 1] as const) {
+      const push = (delta: number, guide: SnapGuide) => {
+        if (Math.abs(delta) <= maxDistance)
+          candidates.push({
+            distance: Math.abs(delta),
+            position: offsetAxis(item.position, axis, delta),
+            guide,
+          });
+      };
+      push(other.position[axis] - item.position[axis], {
+        kind: 'align',
+        from: [(box.minX + box.maxX) / 2, (box.minZ + box.maxZ) / 2],
+        to: [(otherBox.minX + otherBox.maxX) / 2, (otherBox.minZ + otherBox.maxZ) / 2],
+      });
+      const itemEdges = axis === 0 ? [box.minX, box.maxX] : [box.minZ, box.maxZ];
+      const otherEdges =
+        axis === 0 ? [otherBox.minX, otherBox.maxX] : [otherBox.minZ, otherBox.maxZ];
+      const itemMid = axis === 0 ? (box.minZ + box.maxZ) / 2 : (box.minX + box.maxX) / 2;
+      const otherMid =
+        axis === 0 ? (otherBox.minZ + otherBox.maxZ) / 2 : (otherBox.minX + otherBox.maxX) / 2;
+      for (const [itemEdge, otherEdge] of [
+        [itemEdges[0], otherEdges[0]],
+        [itemEdges[1], otherEdges[1]],
+        [itemEdges[1], otherEdges[0]],
+        [itemEdges[0], otherEdges[1]],
+      ])
+        push(otherEdge - itemEdge, {
+          kind: 'align',
+          from: axis === 0 ? [otherEdge, itemMid] : [itemMid, otherEdge],
+          to: axis === 0 ? [otherEdge, otherMid] : [otherMid, otherEdge],
+        });
     }
   }
   for (const candidate of candidates.sort((a, b) => a.distance - b.distance)) {
@@ -366,7 +439,10 @@ export function snapFurniture(
         (issue) => issue.itemId === next.id && issue.severity === 'error',
       )
     )
-      return next;
+      return { item: next, guide: candidate.guide };
   }
-  return structuredClone(item);
+  return { item: structuredClone(item) };
 }
+
+const offsetAxis = (position: Point2, axis: 0 | 1, delta: number): [number, number] =>
+  axis === 0 ? [position[0] + delta, position[1]] : [position[0], position[1] + delta];

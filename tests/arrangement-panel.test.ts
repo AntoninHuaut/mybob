@@ -74,15 +74,15 @@ test('precise placement selects several items, preserves active controls and app
       .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     assert.equal(applied.length, 1);
     assert.equal(items[0].position[1], items[1].position[1]);
-    assert.deepEqual(panel.snapSettings, { grid: false, walls: false, gridSize: 0.1 });
+    assert.deepEqual(panel.snapSettings, { grid: false, gridSize: 0.1 });
     const grid = host.querySelector<DOMInput>('[data-snap-grid]')!;
     grid.checked = true;
     grid.dispatchEvent(new window.Event('change', { bubbles: true }));
-    assert.deepEqual(settings.at(-1), { grid: true, walls: false, gridSize: 0.1 });
+    assert.deepEqual(settings.at(-1), { grid: true, gridSize: 0.1 });
     host.querySelector<DOMInput>('[data-grid-size]')!.value = '';
     grid.checked = false;
     grid.dispatchEvent(new window.Event('change', { bubbles: true }));
-    assert.deepEqual(settings.at(-1), { grid: false, walls: false, gridSize: 0.1 });
+    assert.deepEqual(settings.at(-1), { grid: false, gridSize: 0.1 });
     host
       .querySelector('[data-clear-selection]')!
       .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
