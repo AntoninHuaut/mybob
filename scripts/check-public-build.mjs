@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 const demoName = 'projects/studio-demo.json';
 const privateProject = JSON.parse(
-  await readFile(new URL('../public/projects/private-project.json', import.meta.url), 'utf8'),
+  await readFile(new URL('../public/projects/maison-atelier.json', import.meta.url), 'utf8'),
 );
 const fingerprints = [
   privateProject.source.title,

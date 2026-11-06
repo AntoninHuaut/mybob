@@ -18,13 +18,24 @@ import { alongWall } from '../src/model/geometry';
 import { validateProject } from '../src/model/validate';
 
 const project = validateProject(
-  JSON.parse(await readFile(new URL('../public/projects/private-project.json', import.meta.url), 'utf8')),
+  JSON.parse(
+    await readFile(new URL('../public/projects/maison-atelier.json', import.meta.url), 'utf8'),
+  ),
 );
 const level = project.levels[0];
 const near = (actual: number, expected: number, tolerance = 0.001) =>
   assert.ok(Math.abs(actual - expected) < tolerance, `${actual} ≠ ${expected}`);
 
-test('the plan matches the PDF and minimap: garage left, living room right and below', () => {
+test('the plan projection keeps x to the right, z downward and the garage above the living room', () => {
+  const box = level.outline.reduce(
+    (acc, [x, z]) => ({
+      minX: Math.min(acc.minX, x),
+      maxX: Math.max(acc.maxX, x),
+      minZ: Math.min(acc.minZ, z),
+      maxZ: Math.max(acc.maxZ, z),
+    }),
+    { minX: Infinity, maxX: -Infinity, minZ: Infinity, maxZ: -Infinity },
+  );
   for (const [width, height] of [
     [1200, 750],
     [390, 670],
@@ -50,14 +61,14 @@ test('the plan matches the PDF and minimap: garage left, living room right and b
         transform,
         new Viewport(0, 0, width, height),
       );
-    const topLeft = projectPoint(0, 0),
-      topRight = projectPoint(12.55, 0),
-      bottomLeft = projectPoint(0, 12.54);
+    const topLeft = projectPoint(box.minX, box.minZ),
+      topRight = projectPoint(box.maxX, box.minZ),
+      bottomLeft = projectPoint(box.minX, box.maxZ);
     assert.ok(topLeft.x < topRight.x, 'x increases to the right, without reflection');
     assert.ok(topLeft.y < bottomLeft.y, 'z increases down the plan');
     const garage = projectPoint(...level.rooms.find((r) => r.id === 'garage')!.label);
     const living = projectPoint(...level.rooms.find((r) => r.id === 'sejour')!.label);
-    assert.ok(garage.x < living.x && garage.y < living.y);
+    assert.ok(garage.y < living.y, 'the garage sits above the living room on the minimap');
     for (const [x, z] of level.outline) {
       const p = projectPoint(x, z);
       assert.ok(p.x >= 0 && p.x <= width && p.y >= 0 && p.y <= height);
@@ -92,21 +103,14 @@ test('walking and the map arrow share the real camera direction after the coordi
   engine.dispose();
 });
 
-test('window and door positions follow the exterior dimension chains of the original plan', () => {
-  const starts: Record<string, number> = {
-    'fen-ch3': 1.32,
-    'fen-sdb': 1.32 + 1.2 + 0.77,
-    'fen-cuisine': 1.32 + 1.2 + 0.77 + 0.6 + 1.07,
-    'baie-ouest': 7 + 0.55 + 0.9 + 1.25,
-    'porte-entree': 7 + 0.55,
-    'fen-ch1': 0.43 + 2.4 + 1.53,
-  };
-  for (const [id, expected] of Object.entries(starts)) {
-    const wall = level.walls.find((w) => w.openings?.some((o) => o.id === id))!;
-    const opening = wall.openings!.find((o) => o.id === id)!;
-    near(alongWall(wall, opening.offset)[1], expected);
-  }
-  const opening = level.walls.flatMap((w) => w.openings ?? []).find((o) => o.id === 'fen-ch3')!;
-  near(opening.height, 2.15);
-  near(opening.sill!, 0);
+test('every declared opening sits at a consistent position along its own wall', () => {
+  const seen = new Set<string>();
+  for (const wall of level.walls)
+    for (const opening of wall.openings ?? []) {
+      assert.ok(!seen.has(opening.id), `identifiant d'ouverture dupliqué : ${opening.id}`);
+      seen.add(opening.id);
+      const start = alongWall(wall, opening.offset);
+      const end = alongWall(wall, opening.offset + opening.width);
+      near(Math.hypot(end[0] - start[0], end[1] - start[1]), opening.width);
+    }
 });

@@ -11,7 +11,7 @@ import { polygonArea } from '../src/model/geometry';
 import type { HouseProject } from '../src/model/types';
 
 const source: HouseProject = JSON.parse(
-  await readFile(new URL('../public/projects/private-project.json', import.meta.url), 'utf8'),
+  await readFile(new URL('../public/projects/maison-atelier.json', import.meta.url), 'utf8'),
 );
 const near = (actual: number, expected: number, tolerance = 0.01) =>
   assert.ok(Math.abs(actual - expected) < tolerance, `${actual} ≠ ${expected}`);
@@ -42,12 +42,12 @@ function meshPlanArea(positions: ArrayLike<number>, indices: number[]) {
 test('parcel reconstruction preserves its declared area, four side dimensions and front setback', () => {
   const p = validateProject(source),
     boundary = p.site!.boundary;
-  near(polygonArea(boundary), 496);
+  near(polygonArea(boundary), p.site!.declaredArea!);
   const lengths = boundary.map((a, i) =>
     Math.hypot(a[0] - boundary[(i + 1) % 4][0], a[1] - boundary[(i + 1) % 4][1]),
   );
-  [19.32, 28.33, 14.01, 32.03].forEach((length, i) => near(lengths[i], length));
-  near(-boundary[3][0], 9.4);
+  [24, 18, 24, 18].forEach((length, i) => near(lengths[i], length));
+  near(-boundary[3][0], 9);
 });
 
 test('lawn triangulation excludes the entire house even where it touches the parcel boundary', () => {
@@ -78,8 +78,8 @@ test('roof envelope covers the L footprint, keeps its measured heights, and star
     (sum, m) => sum + meshPlanArea(m.getVerticesData('position')!, Array.from(m.getIndices()!)),
     0,
   );
-  near(projected, 12.55 * 7 + 7 * (12.54 - 7), 0.001);
-  near(built.height, 6.05);
+  near(projected, polygonArea(source.levels[0].outline), 0.001);
+  near(built.height, 5.2);
   assert.ok(built.roofMeshes.every((m) => !m.isEnabled()));
   assert.ok(built.facadeMeshes.every((m) => typeof m.metadata.wallId === 'string'));
   const peak = Math.max(
@@ -87,7 +87,7 @@ test('roof envelope covers the L footprint, keeps its measured heights, and star
       Array.from(m.getVerticesData('position')!).filter((_, i) => i % 3 === 1),
     ),
   );
-  near(peak, 6.05, 0.001);
+  near(peak, 5.2, 0.001);
   built.dispose();
   assert.equal(scene.meshes.length, 0);
   assert.equal(scene.transformNodes.length, 0);

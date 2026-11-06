@@ -12,7 +12,7 @@ import { buildPlanOpenings } from '../src/scene/planOpenings';
 import { HouseViewer } from '../src/scene/viewer';
 
 const project: HouseProject = JSON.parse(
-  await readFile(new URL('../public/projects/private-project.json', import.meta.url), 'utf8'),
+  await readFile(new URL('../public/projects/maison-atelier.json', import.meta.url), 'utf8'),
 );
 const near = (a: number, b: number) => assert.ok(Math.abs(a - b) < 1e-6, `${a} != ${b}`);
 

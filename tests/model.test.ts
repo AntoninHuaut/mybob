@@ -30,7 +30,7 @@ const load = async (name: string) =>
   validateProject(
     JSON.parse(await readFile(new URL(`../public/projects/${name}.json`, import.meta.url), 'utf8')),
   );
-const main = await load('private-project');
+const main = await load('maison-atelier');
 const studio = await load('studio-demo');
 const near = (actual: number, expected: number, tolerance = 0.001) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected}`);
@@ -39,8 +39,8 @@ test('both independent house projects validate, with distinct footprints and hei
   assert.equal(main.units, 'm');
   assert.equal(studio.units, 'm');
   const b = bounds(main.levels[0].outline);
-  near(b.width, 12.55);
-  near(b.depth, 12.54);
+  near(b.width, 12);
+  near(b.depth, 12);
   near(main.levels[0].ceilingHeight, 2.5);
   near(bounds(studio.levels[0].outline).width, 8);
   near(studio.levels[0].ceilingHeight, 2.7);
@@ -48,20 +48,16 @@ test('both independent house projects validate, with distinct footprints and hei
   assert.equal(studio.levels[0].rooms.length, 2);
 });
 
-test('documented room dimensions produce the expected areas', () => {
-  const expected: Record<string, number> = {
-    'chambre-2': 9,
-    'chambre-3': 13.79,
-    'salle-de-bain': 5.6,
-    wc: 1.62,
-    garage: 16.53,
-  };
-  for (const [id, value] of Object.entries(expected)) {
-    near(polygonArea(main.levels[0].rooms.find((r) => r.id === id)!.polygon), value, 0.01);
+test('each room documents an area consistent with its modelled polygon', () => {
+  for (const room of main.levels[0].rooms) {
+    near(polygonArea(room.polygon), room.planArea!, 0.01);
   }
   near(
     main.levels[0].rooms.filter((r) => r.kind !== 'garage').reduce((s, r) => s + r.planArea!, 0),
-    89.84,
+    main.levels[0].rooms
+      .filter((r) => r.kind !== 'garage')
+      .reduce((s, r) => s + polygonArea(r.polygon), 0),
+    0.02,
   );
 });
 

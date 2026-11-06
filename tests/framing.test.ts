@@ -12,7 +12,9 @@ import { usePlanCoordinates } from '../src/scene/coordinates';
 import { validateProject } from '../src/model/validate';
 
 const project = validateProject(
-  JSON.parse(await readFile(new URL('../public/projects/private-project.json', import.meta.url), 'utf8')),
+  JSON.parse(
+    await readFile(new URL('../public/projects/maison-atelier.json', import.meta.url), 'utf8'),
+  ),
 );
 
 test('the full living-room facade and house envelope stay inside the usable overview', () => {

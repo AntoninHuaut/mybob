@@ -36,15 +36,15 @@ test('public build accepts only the application and the generic demonstration', 
 test('public build rejects the personal project even when it is not referenced by the app', () =>
   fixture(async (root) => {
     await copyFile(
-      new URL('../public/projects/private-project.json', import.meta.url),
-      join(root, 'projects/private-project.json'),
+      new URL('../public/projects/maison-atelier.json', import.meta.url),
+      join(root, 'projects/maison-atelier.json'),
     );
     await assert.rejects(verifyPublicBuild(root), /Fichier non prévu/);
   }));
 
 test('public build rejects personal geometry embedded inside a JavaScript asset', () =>
   fixture(async (root) => {
-    await writeFile(join(root, 'assets/app.js'), 'const walls = ["garage-nord"]');
+    await writeFile(join(root, 'assets/app.js'), 'const walls = ["mur-ouest-garage"]');
     await assert.rejects(verifyPublicBuild(root), /Données de maison personnelle/);
   }));
 

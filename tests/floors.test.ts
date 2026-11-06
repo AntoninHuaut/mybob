@@ -14,7 +14,7 @@ import { polygonArea } from '../src/model/geometry';
 import { createWalkCamera, EYE_HEIGHT, prepareWalkStep } from '../src/scene/walkCamera';
 
 const project: HouseProject = JSON.parse(
-  await readFile(new URL('../public/projects/private-project.json', import.meta.url), 'utf8'),
+  await readFile(new URL('../public/projects/maison-atelier.json', import.meta.url), 'utf8'),
 );
 const near = (actual: number, expected: number, tolerance = 0.001) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected}`);

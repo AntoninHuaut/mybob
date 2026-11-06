@@ -12,3 +12,4 @@ test-results/
 *.zip
 *.tar.gz
 *:Zone.Identifier
+public/projects/private-project.json

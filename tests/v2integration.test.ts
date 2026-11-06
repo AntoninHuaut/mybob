@@ -14,7 +14,9 @@ import { validateProject } from '../src/model/validate';
 import { siteOverviewLevel } from '../src/scene/framing';
 
 const project = validateProject(
-  JSON.parse(await readFile(new URL('../public/projects/private-project.json', import.meta.url), 'utf8')),
+  JSON.parse(
+    await readFile(new URL('../public/projects/maison-atelier.json', import.meta.url), 'utf8'),
+  ),
 );
 
 function assertSectionAt(scene: Scene, height: number) {
