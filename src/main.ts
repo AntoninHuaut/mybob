@@ -1639,10 +1639,10 @@ async function start() {
     } catch {
       storageWarning = true;
     }
-    viewer = new HouseViewer(
-      el<HTMLCanvasElement>('#scene'),
-      await createEngine(el<HTMLCanvasElement>('#scene')),
-    );
+    // Le canvas peut être remplacé par createEngine après un échec WebGPU :
+    // l'engine d'abord, puis l'élément courant du DOM.
+    const sceneEngine = await createEngine(el<HTMLCanvasElement>('#scene'));
+    viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'), sceneEngine);
     solarPanel = new SolarPanel({
       onApply: (settings, instant) => {
         viewer.setSolar(settings ? solarPosition(settings, instant) : undefined);

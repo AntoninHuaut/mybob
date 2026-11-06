@@ -57,11 +57,23 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractE
     } catch {
       /* Any WebGPU failure falls back to the proven WebGL engine below. */
     }
+    // Le canvas vient de réclamer son contexte (webgpu) : un élément HTML ne peut
+    // pas en changer de type, le repli WebGL doit donc repartir d'un canvas neuf.
+    const fresh = canvas.cloneNode(false) as HTMLCanvasElement;
+    canvas.replaceWith(fresh);
+    canvas = fresh;
   }
-  return new Engine(
-    canvas,
-    true,
-    { alpha: true, stencil: true, powerPreference: 'high-performance' },
-    false,
-  );
+  try {
+    return new Engine(
+      canvas,
+      true,
+      { alpha: true, stencil: true, powerPreference: 'high-performance' },
+      false,
+    );
+  } catch (error) {
+    console.error(error);
+    throw new Error(
+      'WebGL est indisponible dans ce navigateur. Activez l’accélération graphique (Edge/Chrome : Paramètres → Système) puis rechargez la page.',
+    );
+  }
 }
