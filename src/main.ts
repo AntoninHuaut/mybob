@@ -14,6 +14,8 @@ import { FurniturePanel } from './furniture/panel';
 import { VariantSession, variantsStorageKey, type VariantBook } from './furniture/variants';
 import { VariantsPanel } from './ui/variantsPanel';
 import { ArrangementPanel } from './ui/arrangementPanel';
+import { FurnitureClipboard } from './furniture/clipboard';
+import { chairsAroundTable } from './furniture/tableChairs';
 import { snapDraggedFurniture, defaultSnapSettings } from './furniture/arrangement';
 import { layoutLabels, type LabelBox } from './ui/labelLayout';
 import { exportSceneImage } from './ui/imageExport';
@@ -26,7 +28,12 @@ import {
 } from './furniture/model';
 import { checkFurniture, snapFurniture } from './furniture/checks';
 import { findFurniturePlacement, getBuildingPlacementIssues } from './furniture/placement';
-import { applyFurnitureTransform, linkFurniture, unlinkFurniture } from './furniture/groups';
+import {
+  applyFurnitureTransform,
+  constrainGroupDrag,
+  linkFurniture,
+  unlinkFurniture,
+} from './furniture/groups';
 import type { WallDisplay } from './scene/wallCutaway';
 
 const STORAGE = 'maison-atelier:projects:v1';
@@ -47,6 +54,7 @@ let lights = true;
 let mode: ViewMode = 'overview';
 let toastTimer: ReturnType<typeof setTimeout>;
 let furnitureHistory = new FurnitureHistory();
+const furnitureClipboard = new FurnitureClipboard();
 const furnitureHistories = new Map<string, FurnitureHistory>();
 const layoutSession = new VariantSession();
 let variantsPanel: VariantsPanel | undefined;
@@ -57,6 +65,7 @@ let furnitureLayer: FurnitureLayer | undefined;
 let furniturePanel: FurniturePanel | undefined;
 let selectedFurnitureId: string | undefined;
 let furnitureContextItem: FurnitureItem | undefined;
+let furnitureContextMembers: FurnitureItem[] = [];
 let previewFurniture: FurnitureItem[] | undefined;
 let draggingFurniture = false;
 let overlays: FurnitureOverlays = { distances: true, clearances: false, openings: false };
@@ -159,6 +168,9 @@ function syncFurniture(save = true) {
   furnitureLayer?.setItems(furnitureHistory.items);
   furnitureLayer?.select(selectedFurnitureId);
   furnitureContextItem = furnitureHistory.items.find((item) => item.id === selectedFurnitureId);
+  furnitureContextMembers = furnitureContextItem?.groupId
+    ? furnitureHistory.items.filter((item) => item.groupId === furnitureContextItem!.groupId)
+    : [];
   furniturePanel?.render();
   el('#furniture-tab-count').textContent = String(furnitureHistory.items.length);
   arrangedIds = arrangedIds.filter((id) => furnitureHistory.items.some((item) => item.id === id));
@@ -217,21 +229,62 @@ function rotateSelectedFurniture(degrees: number) {
 function duplicateFurniture(id: string) {
   const item = currentFurniture().find((candidate) => candidate.id === id);
   if (!item) return;
-  const copy = createFurniture({
-    ...item,
-    id: undefined,
-    groupId: undefined,
-    name: `${item.name} (copie)`,
-    locked: false,
-    position: [item.position[0] + 0.2, item.position[1] + 0.2],
-  });
-  const room = viewer.level.rooms.find((room) => pointInPolygon(item.position, room.polygon));
-  const placed = findFurniturePlacement(copy, viewer.level, currentFurniture(), room);
+  const clipboard = new FurnitureClipboard();
+  clipboard.copy(item);
+  placeFurnitureCopy(clipboard.paste()!);
+}
+
+function placeFurnitureCopy(copy: FurnitureItem) {
+  const room = viewer.level.rooms.find((room) => pointInPolygon(copy.position, room.polygon));
+  const placed = findFurniturePlacement(
+    { ...copy, position: [copy.position[0] + 0.2, copy.position[1] + 0.2] },
+    viewer.level,
+    currentFurniture(),
+    room,
+  );
   if (!placed) {
     toast('Pas de place libre pour la copie dans cette pièce.');
     return;
   }
   if (commitFurniture([...currentFurniture(), placed])) selectFurniture(placed.id);
+}
+
+function openTableChairs() {
+  const tableId = selectedFurnitureId;
+  if (!currentFurniture().some((item) => item.id === tableId && item.kind === 'table')) return;
+  openDialog(
+    'Chaises autour de la table',
+    `<h2>Installer des chaises</h2><p>Ajoutez des chaises orientées vers la table, réparties sur ses quatre côtés. Les meubles existants restent en place.</p><form id="table-chairs-form"><div class="furniture-field-grid two"><label class="furniture-field">Nombre de chaises<input name="count" type="number" min="1" max="16" step="1" value="8" required></label><label class="furniture-field">Écart à la table <span>cm</span><input name="gap" type="number" min="0" max="100" step="1" value="5" required></label><label class="furniture-field">Largeur d’une chaise <span>cm</span><input name="width" type="number" min="5" max="2000" step="0.1" value="45" required></label><label class="furniture-field">Profondeur d’une chaise <span>cm</span><input name="depth" type="number" min="5" max="2000" step="0.1" value="50" required></label></div><label><input name="linked" type="checkbox" checked> Lier les chaises à la table</label><p id="table-chairs-status" role="status"></p><div class="furniture-dialog-footer"><button type="button" id="cancel-table-chairs" class="text-button">Annuler</button><button type="submit" class="primary-button">Ajouter les chaises</button></div></form>`,
+  );
+  el('#cancel-table-chairs').addEventListener('click', () =>
+    el<HTMLDialogElement>('#info-dialog').close(),
+  );
+  el('#table-chairs-form').addEventListener('submit', (event) => {
+    event.preventDefault();
+    const form = event.currentTarget as HTMLFormElement;
+    if (!form.reportValidity()) return;
+    const data = new FormData(form);
+    try {
+      const next = chairsAroundTable(
+        currentFurniture(),
+        tableId!,
+        Number(data.get('count')),
+        viewer.level,
+        {
+          width: Number(data.get('width')) / 100,
+          depth: Number(data.get('depth')) / 100,
+          gap: Number(data.get('gap')) / 100,
+          linked: data.get('linked') === 'on',
+        },
+      );
+      if (!commitFurniture(next)) throw new Error('Les chaises ne peuvent pas être placées ici.');
+      el<HTMLDialogElement>('#info-dialog').close();
+      toast('Chaises ajoutées. Ctrl Z annule l’ensemble.');
+    } catch (error) {
+      el('#table-chairs-status').textContent =
+        error instanceof Error ? error.message : 'Ajout impossible.';
+    }
+  });
 }
 
 function snapSelectedFurniture(id: string) {
@@ -266,10 +319,17 @@ function updateFurnitureContext() {
     return;
   }
   el('#furniture-context-name').textContent = item.name;
+  el('#furniture-group-count').hidden = furnitureContextMembers.length < 2;
+  el('#furniture-group-count').textContent = `${furnitureContextMembers.length} liés`;
+  el('#furniture-context-name').title =
+    furnitureContextMembers.length > 1
+      ? furnitureContextMembers.map((member) => member.name).join(' + ')
+      : item.name;
   toolbar
     .querySelectorAll<HTMLButtonElement>('[data-rotate-selected]')
     .forEach((button) => (button.disabled = item.locked));
   el<HTMLButtonElement>('#snap-selected-furniture').disabled = item.locked;
+  el('#table-chairs').hidden = item.kind !== 'table';
   toolbar.hidden = false;
 }
 
@@ -277,6 +337,9 @@ function selectFurniture(id: string | undefined) {
   if (id && exteriorView) setMode('overview');
   selectedFurnitureId = id;
   furnitureContextItem = id ? currentFurniture().find((item) => item.id === id) : undefined;
+  furnitureContextMembers = furnitureContextItem?.groupId
+    ? currentFurniture().filter((item) => item.groupId === furnitureContextItem!.groupId)
+    : [];
   furnitureLayer?.select(id);
   furniturePanel?.render();
 }
@@ -312,6 +375,7 @@ function mountFurniture() {
   furnitureLayer.setOverlays(overlays);
   furnitureLayer.onSelect = selectFurniture;
   furnitureLayer.onEdit = openFurnitureEditor;
+  furnitureLayer.onDragBlocked = toast;
   furnitureLayer.snapPlacement = (item, candidates) =>
     snapDraggedFurniture(item, viewer.level, candidates, snapSettings);
   furnitureLayer.onDragState = (dragging) => {
@@ -959,6 +1023,19 @@ function setNavigationPanel(open: boolean) {
 }
 
 function wireEvents() {
+  const groupCount = document.createElement('span');
+  groupCount.id = 'furniture-group-count';
+  groupCount.hidden = true;
+  el('#furniture-context-name').insertAdjacentElement('afterend', groupCount);
+  const chairsButton = document.createElement('button');
+  chairsButton.id = 'table-chairs';
+  chairsButton.type = 'button';
+  chairsButton.hidden = true;
+  chairsButton.textContent = 'Chaises';
+  chairsButton.title = 'Ajouter des chaises autour de la table';
+  chairsButton.setAttribute('aria-label', chairsButton.title);
+  el('#furniture-context-toolbar').insertBefore(chairsButton, el('#delete-selected-furniture'));
+  chairsButton.addEventListener('click', openTableChairs);
   window.addEventListener('beforeunload', (event) => {
     if (!layoutSession.hasUnsaved) return;
     event.preventDefault();
@@ -1063,13 +1140,32 @@ function wireEvents() {
       )
         return;
       const modifier = event.ctrlKey || event.metaKey;
-      if (modifier && ['KeyZ', 'KeyY'].includes(event.code)) {
+      const shortcut = event.key.toLowerCase();
+      if (modifier && !event.altKey && !event.shiftKey && mode !== 'walk' && !exteriorView) {
+        if (shortcut === 'c') {
+          const item = currentFurniture().find((item) => item.id === selectedFurnitureId);
+          if (item && !window.getSelection()?.toString()) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            furnitureClipboard.copy(item);
+            toast('Meuble copié. Ctrl V pour le coller.');
+            return;
+          }
+        } else if (shortcut === 'v') {
+          const copy = furnitureClipboard.paste();
+          if (copy) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            placeFurnitureCopy(copy);
+            return;
+          }
+        }
+      }
+      if (modifier && !event.altKey && ['z', 'y'].includes(shortcut)) {
         event.preventDefault();
         event.stopImmediatePropagation();
         const changed =
-          event.code === 'KeyY' || event.shiftKey
-            ? furnitureHistory.redo()
-            : furnitureHistory.undo();
+          shortcut === 'y' || event.shiftKey ? furnitureHistory.redo() : furnitureHistory.undo();
         if (changed) syncFurniture();
         return;
       }
@@ -1077,15 +1173,29 @@ function wireEvents() {
         selectFurniture(undefined);
         return;
       }
-      if (
-        mode === 'walk' ||
-        (event.target instanceof HTMLElement &&
-          event.target.closest('button,a,summary,[role=tab],#navigation-panel'))
-      )
-        return;
+      if (mode === 'walk' || exteriorView) return;
       const item = currentFurniture().find((candidate) => candidate.id === selectedFurnitureId);
       if (!item) return;
-      if (item.locked) return;
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (item.locked) {
+          if (!event.repeat)
+            toast(`« ${item.name} » est verrouillé. Déverrouillez-le pour le supprimer.`);
+        } else commitFurniture(currentFurniture().filter((candidate) => candidate.id !== item.id));
+        return;
+      }
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest('button,a,summary,[role=tab],#navigation-panel') &&
+        !event.target.closest('#furniture-context-toolbar,[data-furniture-select]')
+      )
+        return;
+      if (item.locked) {
+        if (!event.repeat && (event.code.startsWith('Arrow') || shortcut === 'r'))
+          toast(`« ${item.name} » est verrouillé. Déverrouillez-le pour le déplacer.`);
+        return;
+      }
       const step = event.shiftKey ? 0.1 : 0.01;
       const delta: Record<string, [number, number]> = {
         ArrowLeft: [-step, 0],
@@ -1097,11 +1207,26 @@ function wireEvents() {
         event.preventDefault();
         event.stopImmediatePropagation();
         const d = delta[event.code];
-        updateFurniture({ ...item, position: [item.position[0] + d[0], item.position[1] + d[1]] });
-      } else if (event.code === 'Delete' || event.code === 'Backspace') {
-        event.preventDefault();
-        commitFurniture(currentFurniture().filter((candidate) => candidate.id !== item.id));
-      } else if (event.code === 'KeyR' && !modifier) {
+        try {
+          const next = constrainGroupDrag(
+            currentFurniture(),
+            item.id,
+            [item.position[0] + d[0], item.position[1] + d[1]],
+            viewer.level,
+          );
+          const moved = next.find((member) => member.id === item.id)!;
+          if (
+            Math.hypot(moved.position[0] - item.position[0], moved.position[1] - item.position[1]) <
+            1e-7
+          ) {
+            if (!event.repeat)
+              toast('Déplacement bloqué par le bâtiment ou un meuble de l’ensemble.');
+          } else commitFurniture(next);
+        } catch (error) {
+          if (!event.repeat)
+            toast(error instanceof Error ? error.message : 'Déplacement impossible.');
+        }
+      } else if (shortcut === 'r' && !modifier) {
         event.preventDefault();
         updateFurniture({
           ...item,

@@ -16,6 +16,8 @@ Dans la popup, toutes les actions de modification, y compris lier, séparer, dup
 
 La barre du meuble sélectionné propose directement les rotations, Dupliquer, Placer contre un mur et Retirer. Ces actions hors popup sont immédiatement annulables. Le clic dans le vide et Échap effacent la sélection ; Ctrl Z reste disponible lorsqu’un bouton garde le focus et sans sélection. La mesure affiche un aperçu après le premier clic, avec accrochage aux axes du plan, Maj pour forcer une ligne droite et Alt pour conserver un angle libre.
 
+Le bloc Ensemble regroupe désormais les noms liés, le choix explicite d’un meuble et la séparation. Les boutons Annuler/Enregistrer sont placés après toutes les actions du brouillon, dans un pied collant. Le texte rappelle qu’une liaison préparée demande encore Enregistrer. La barre annonce « n liés ». Sur une table, Chaises ouvre un dialogue compact de répartition ; Ctrl C/V restent réservés au meuble hors contrôles de saisie et hors dialogue.
+
 La liste affiche un crayon par meuble, un seul compteur dans l’onglet, et des alertes repliées. Aucun espace de passage n’est imposé automatiquement : les marges se renseignent volontairement. Les contrôles de livraison simplifiés ne sont plus présentés comme alertes de placement. Le statut de sauvegarde a rejoint l’en-tête et ne recouvre plus la scène. Les raccourcis de déplacement et de suppression ignorent les contrôles de l’interface.
 
 Le projet intégré s’appelle Démonstration. Une corbeille à côté du sélecteur permet de supprimer un projet importé après confirmation et propose d’abord un export. Elle retire seulement ses données et aménagements locaux ; les exemples intégrés ne sont pas supprimables.

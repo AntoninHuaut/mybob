@@ -203,3 +203,59 @@ test('locking a linked member during a live drag releases the camera and commits
   assert.deepEqual(states, [true, false]);
   cleanup();
 });
+
+test('a locked group member is named without creating a drag or history entry', () => {
+  const items = assembly();
+  items[1].name = 'TV du salon';
+  items[1].locked = true;
+  const { layer, changes, states, down, move, up, cleanup } = setup(items, 'stand');
+  const messages: string[] = [];
+  layer.onDragBlocked = (reason) => messages.push(reason);
+  down();
+  move(3, 3);
+  move(4, 3);
+  up();
+  assert.equal(messages.length, 1);
+  assert.match(messages[0], /TV du salon.*verrouillé/);
+  assert.deepEqual(changes, []);
+  assert.deepEqual(states, []);
+  cleanup();
+});
+
+test('a fully blocked boundary drag reports once per gesture without false history changes', () => {
+  const items = assembly();
+  items[0].position = [11.25, 3];
+  items[1].position = [11.25, 3];
+  const { layer, changes, down, move, up, cleanup } = setup(items, 'stand');
+  const messages: string[] = [];
+  layer.onDragBlocked = (reason) => messages.push(reason);
+  down();
+  move(12, 3);
+  move(13, 3);
+  move(14, 3);
+  up();
+  assert.equal(messages.length, 1);
+  assert.match(messages[0], /bâtiment/);
+  assert.deepEqual(changes, []);
+  down();
+  move(15, 3);
+  up();
+  assert.equal(messages.length, 2);
+  assert.deepEqual(changes, []);
+  cleanup();
+});
+
+test('snapping that holds an intended movement reports once without committing a no-op', () => {
+  const { layer, changes, down, move, up, cleanup } = setup(assembly(), 'stand');
+  const messages: string[] = [];
+  layer.onDragBlocked = (reason) => messages.push(reason);
+  layer.snapPlacement = (item) => ({ ...item, position: [2, 3] });
+  down();
+  move(2.05, 3);
+  move(2.1, 3);
+  up();
+  assert.equal(messages.length, 1);
+  assert.match(messages[0], /Accrochage actif/);
+  assert.deepEqual(changes, []);
+  cleanup();
+});

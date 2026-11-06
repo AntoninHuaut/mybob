@@ -25,7 +25,7 @@ npm run format:check
 
 Le dossier `dist/` contient la version statique déployable. Les dépendances et les données de maison sont intégrées ou servies localement ; Google Fonts est facultatif et possède des polices de repli système.
 
-Tests navigateur automatisés : `pnpm exec playwright install chromium`, puis `pnpm run test:e2e`. Quatorze exécutions couvrent les parcours essentiels en Chromium ordinateur et mobile simulé. Voir [le guide E2E](docs/E2E.md) pour les scénarios, rapports et limites.
+Tests navigateur automatisés : `pnpm exec playwright install chromium`, puis `pnpm run test:e2e`. Vingt exécutions couvrent les parcours essentiels en Chromium ordinateur et mobile simulé. Voir [le guide E2E](docs/E2E.md) pour les scénarios, rapports et limites.
 
 Le build normal est **public et limité à la démonstration**. La commande `npm run ci` exécute tous les contrôles et vérifie qu’aucun plan personnel n’est présent dans l’artefact. Configuration Cloudflare Pages et GitHub Actions : [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
@@ -45,6 +45,7 @@ La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable e
 - Les portes intérieures sont ouvertes au départ. En vue 3D, un clic sur une porte la manipule également.
 - Les projets peuvent être exportés et importés en JSON. Les projets importés sont conservés dans le stockage local du navigateur, sur cet ordinateur. Exporter les fichiers pour les sauvegarder ou les transférer.
 - **Variantes** : dans Meubles, dupliquer et nommer plusieurs aménagements, puis basculer entre eux avec la même caméra. L’export JSON conserve toutes les variantes et tous les niveaux.
+- **Répéter des meubles** : Ctrl C puis Ctrl V copie le meuble sélectionné ; chaque copie est indépendante et annulable. Sur une table, **Chaises** répartit le nombre voulu autour du plateau, avec dimensions réglables et liaison facultative.
 - **Placement précis** : sélectionner plusieurs meubles pour les aligner ou répartir leurs espacements ; activer séparément l’accrochage à une grille réglable ou aux murs pendant le glisser.
 - **Soleil** : après localisation, le panneau dans la scène propose un curseur horaire, Été/Hiver et lever/coucher approximatifs, sans déplacer la caméra.
 - **Image** : télécharger un PNG du Plan ou de la 3D sans panneaux, avec noms/surfaces et dimensions facultatifs.

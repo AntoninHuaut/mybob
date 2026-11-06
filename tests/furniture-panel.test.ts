@@ -353,13 +353,21 @@ test('linking a draft and cancelling leaves the persisted furniture untouched', 
     panel.openEdit('sofa');
     editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
     editor.querySelector<DOMInput>('input[name=name]')!.value = 'Nom en attente';
+    assert.equal(editor.querySelector<DOMSelect>('[data-link-target]')!.value, '');
+    editor
+      .querySelector('[data-furniture-action=link]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.match(editor.querySelector('.furniture-edit-status')!.textContent!, /Choisissez/);
+    assert.equal(getItems()[0].groupId, undefined);
+    editor.querySelector<DOMSelect>('[data-link-target]')!.value = other.id;
     editor
       .querySelector('[data-furniture-action=link]')!
       .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
     assert.equal(getItems()[0].groupId, undefined);
     assert.equal(getItems()[0].name, 'Canapé');
     assert.equal(applied.length, 0);
-    assert.match(editor.querySelector('.furniture-group-controls')!.textContent!, /Ensemble de 2/);
+    assert.match(editor.querySelector('.furniture-group-controls')!.textContent!, /2 meubles/);
+    assert.equal(editor.querySelectorAll('.furniture-group-members li').length, 2);
     editor
       .querySelector('[data-edit-close]')!
       .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
@@ -378,6 +386,7 @@ test('draft link and dimensional changes are applied together in one save', () =
     panel.openEdit('sofa');
     editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
     editor.querySelector<DOMInput>('input[name=width]')!.value = '240';
+    editor.querySelector<DOMSelect>('[data-link-target]')!.value = 'chair';
     editor
       .querySelector('[data-furniture-action=link]')!
       .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));

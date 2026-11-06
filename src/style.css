@@ -1113,6 +1113,14 @@ button svg {
   font-weight: 500;
   text-overflow: ellipsis;
 }
+#furniture-group-count {
+  flex-shrink: 0;
+  padding: 3px 7px;
+  border-radius: 12px;
+  background: #e8efdf;
+  color: #355840;
+  font-size: 11px;
+}
 .furniture-context-toolbar .readout {
   color: var(--secondary);
   font-size: 12px;

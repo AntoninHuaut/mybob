@@ -12,6 +12,38 @@ import { getBuildingPlacementIssues } from '../src/furniture/placement';
 import type { Level } from '../src/model/types';
 
 const near = (a: number, b: number) => assert.ok(Math.abs(a - b) < 0.0001, `${a} ≠ ${b}`);
+
+test('a 10 cm keyboard translation cannot tunnel a small object through a thin wall', () => {
+  const thin: Level = {
+    id: 'thin',
+    name: 'Test',
+    elevation: 0,
+    ceilingHeight: 3,
+    outline: [
+      [0, 0],
+      [10, 0],
+      [10, 8],
+      [0, 8],
+    ],
+    walls: [{ id: 'wall', start: [5, 0], end: [5, 8], thickness: 0.02 }],
+    rooms: [],
+    lights: [],
+    spawn: { position: [2, 2], yaw: 0 },
+  };
+  const item = createFurniture({
+    id: 'small',
+    kind: 'custom',
+    width: 0.05,
+    depth: 0.05,
+    height: 0.1,
+    position: [4.95, 3],
+  });
+  assert.deepEqual(getBuildingPlacementIssues({ ...item, position: [5.05, 3] }, thin), []);
+  const moved = constrainGroupDrag([item], item.id, [5.05, 3], thin)[0];
+  assert.ok(moved.position[0] > 4.95);
+  assert.ok(moved.position[0] < 4.97);
+  assert.deepEqual(getBuildingPlacementIssues(moved, thin), []);
+});
 const level: Level = {
   id: 'room',
   name: 'Pièce',

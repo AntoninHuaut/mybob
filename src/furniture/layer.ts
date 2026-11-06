@@ -43,6 +43,7 @@ export class FurnitureLayer {
   onEdit?: (id: string) => void;
   onChange?: (items: FurnitureItem[], final: boolean) => void;
   onDragState?: (dragging: boolean) => void;
+  onDragBlocked?: (reason: string) => void;
   snapPlacement?: (item: FurnitureItem, items: FurnitureItem[]) => FurnitureItem;
   private items: FurnitureItem[] = [];
   private visuals = new Map<string, Visual>();
@@ -54,6 +55,7 @@ export class FurnitureLayer {
   private observer: Observer<PointerInfo>;
   private labelObserver: Observer<Scene>;
   private drag?: Drag;
+  private dragBlockReported = false;
   private disposed = false;
   private readonly release = () => this.finishDrag();
 
@@ -531,6 +533,7 @@ export class FurnitureLayer {
     }
     if (event.type === PointerEventTypes.POINTERDOWN && event.event.button === 0) {
       this.finishDrag();
+      this.dragBlockReported = false;
       const picked = event.pickInfo?.pickedMesh;
       const id =
         picked?.metadata?.kind === 'furniture' ? (picked.metadata.id as string) : undefined;
@@ -542,7 +545,13 @@ export class FurnitureLayer {
       }
       this.select(item.id);
       this.onSelect?.(item.id);
-      if (groupMembers(this.items, item.id).some((member) => member.locked)) return;
+      const locked = groupMembers(this.items, item.id).find((member) => member.locked);
+      if (locked) {
+        this.reportBlockedDrag(
+          `« ${locked.name} » est verrouillé. Déverrouillez-le pour déplacer cet ensemble.`,
+        );
+        return;
+      }
       const floor = floorElevationAt(this.level, item.position);
       const point = this.groundPoint(floor);
       if (!point) return;
@@ -564,11 +573,21 @@ export class FurnitureLayer {
         Math.hypot(position[0] - this.drag.start[0], position[1] - this.drag.start[1]) < 0.015
       )
         return;
-      if (groupMembers(this.items, item.id).some((member) => member.locked)) {
+      const locked = groupMembers(this.items, item.id).find((member) => member.locked);
+      if (locked) {
+        this.reportBlockedDrag(
+          `« ${locked.name} » est verrouillé. Déverrouillez-le pour déplacer cet ensemble.`,
+        );
         this.finishDrag();
         return;
       }
       let constrained = constrainGroupDrag(this.items, item.id, position, this.level);
+      const beforeSnap = constrained.find((member) => member.id === item.id)!;
+      const movedBeforeSnap =
+        Math.hypot(
+          beforeSnap.position[0] - item.position[0],
+          beforeSnap.position[1] - item.position[1],
+        ) >= 0.00001;
       if (this.snapPlacement) {
         const candidate = constrained.find((member) => member.id === item.id)!;
         const snapped = this.snapPlacement(
@@ -581,8 +600,15 @@ export class FurnitureLayer {
       if (
         Math.hypot(anchor.position[0] - item.position[0], anchor.position[1] - item.position[1]) <
         0.00001
-      )
+      ) {
+        if (Math.hypot(position[0] - item.position[0], position[1] - item.position[1]) >= 0.015)
+          this.reportBlockedDrag(
+            movedBeforeSnap
+              ? 'Accrochage actif : déplacez davantage le pointeur ou désactivez la grille et les murs proches.'
+              : 'Déplacement arrêté par le bâtiment ou un meuble lié. Vérifiez les murs, le contour et la hauteur des membres de l’ensemble.',
+          );
         return;
+      }
       this.drag.moved = true;
       this.items = constrained;
       for (const member of groupMembers(this.items, item.id)) {
@@ -597,6 +623,12 @@ export class FurnitureLayer {
       this.drawOverlays();
       this.onChange?.(structuredClone(this.items), false);
     }
+  }
+
+  private reportBlockedDrag(reason: string) {
+    if (this.dragBlockReported) return;
+    this.dragBlockReported = true;
+    this.onDragBlocked?.(reason);
   }
 
   private groundPoint(y: number): Vector3 | undefined {
@@ -643,14 +675,28 @@ export class FurnitureLayer {
       mesh.parent = root;
       mesh.color = color;
       mesh.isPickable = false;
-      mesh.metadata = { kind: 'furniture-overlay', label };
+      const measurementKind =
+        name === 'furniture:width'
+          ? 'width'
+          : name === 'furniture:depth'
+            ? 'depth'
+            : name === 'furniture:wall-distance'
+              ? 'gap'
+              : undefined;
+      const labelText =
+        label && measurementKind
+          ? `${measurementKind === 'width' ? 'Larg.' : measurementKind === 'depth' ? 'Prof.' : 'Écart'} ${label}`
+          : label;
+      mesh.metadata = { kind: 'furniture-overlay', label, labelText, measurementKind };
       mesh.renderingGroupId = 2;
-      if (label)
+      if (label && labelText)
         this.label(
-          label,
+          labelText,
           points[0].add(points[points.length - 1]).scale(0.5),
           root,
           name === 'furniture:wall-distance' ? 200 - Number.parseFloat(label) : 100,
+          measurementKind === 'gap' ? '#165347' : '#495a5d',
+          measurementKind,
         );
     };
     const rectangle = (
@@ -707,13 +753,13 @@ export class FurnitureLayer {
     line(
       'furniture:width',
       [point(-hw, -hd - 0.13), point(hw, -hd - 0.13)],
-      undefined,
+      new Color3(0.36, 0.43, 0.44),
       `${item.width.toFixed(2)} m`,
     );
     line(
       'furniture:depth',
       [point(hw + 0.13, -hd), point(hw + 0.13, hd)],
-      undefined,
+      new Color3(0.36, 0.43, 0.44),
       `${item.depth.toFixed(2)} m`,
     );
     for (const distance of furnitureDistances(item, this.level, this.items)) {
@@ -730,7 +776,14 @@ export class FurnitureLayer {
     }
   }
 
-  private label(text: string, position: Vector3, root: TransformNode, priority: number): void {
+  private label(
+    text: string,
+    position: Vector3,
+    root: TransformNode,
+    priority: number,
+    background: string,
+    measurementKind?: 'width' | 'depth' | 'gap',
+  ): void {
     // NullEngine tests and server-side validation have no canvas implementation.
     if (typeof document === 'undefined') return;
     const texture = new DynamicTexture(
@@ -740,7 +793,7 @@ export class FurnitureLayer {
       false,
     );
     texture.hasAlpha = true;
-    texture.drawText(text, null, 44, 'bold 32px sans-serif', '#ffffff', '#165347', true);
+    texture.drawText(text, null, 44, 'bold 32px sans-serif', '#ffffff', background, true);
     const material = new StandardMaterial('furniture:dimension-label', this.scene);
     material.diffuseTexture = texture;
     material.emissiveColor = Color3.White();
@@ -761,6 +814,7 @@ export class FurnitureLayer {
     label.metadata = {
       kind: 'furniture-overlay',
       label: text,
+      measurementKind,
       anchor: label.position.asArray(),
       priority,
     };

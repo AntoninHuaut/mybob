@@ -168,7 +168,7 @@ export class FurniturePanel {
 
   private details(item: FurnitureItem) {
     return `<section class="furniture-detail" aria-label="Réglages du meuble">
-      <form class="furniture-edit-form" data-furniture-edit="${esc(item.id)}" data-geometry-locked="${item.locked}">
+      <form id="furniture-edit-form" class="furniture-edit-form" data-furniture-edit="${esc(item.id)}" data-geometry-locked="${item.locked}">
         <label class="furniture-field">Nom<input name="name" value="${esc(item.name)}" maxlength="100" required></label>
         ${dimensionsFields(item)}
         ${item.kind === 'sofa' ? sofaFields(item) : ''}
@@ -178,11 +178,11 @@ export class FurniturePanel {
         <details class="furniture-advanced"${this.editDialog.querySelector<HTMLDetailsElement>('.furniture-advanced')?.open ? ' open' : ''}><summary>Passage et ouverture</summary><p>Les distances sont proposées pour tester votre aménagement ; ajustez-les à votre usage.</p><div class="furniture-field-grid"><label class="furniture-field">Devant <span>cm</span><input name="front" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.front ?? 0)}"></label><label class="furniture-field">Derrière <span>cm</span><input name="back" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.back ?? 0)}"></label><label class="furniture-field">À gauche <span>cm</span><input name="left" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.left ?? 0)}"></label><label class="furniture-field">À droite <span>cm</span><input name="right" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.right ?? 0)}"></label></div><div class="furniture-field-grid two"><label class="furniture-field">Ouverture<select name="openingKind"><option value="none"${!item.opening ? ' selected' : ''}>Aucune</option><option value="hinged"${item.opening?.kind === 'hinged' ? ' selected' : ''}>Porte battante</option><option value="drawer"${item.opening?.kind === 'drawer' ? ' selected' : ''}>Tiroir</option></select></label><label class="furniture-field">Débattement <span>cm</span><input name="reach" type="number" min="0" max="500" step="1" value="${cm(item.opening?.reach ?? 0.6)}"></label></div></details>
         <label class="furniture-lock"><input type="checkbox" name="locked"${checked(item.locked)}> Verrouiller le meuble</label>
         </details>
-        <div class="furniture-edit-status" role="status"></div>
-        <div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button class="primary-button" type="submit">Enregistrer</button></div>
       </form>
       <div data-group-controls>${this.groupControls(item)}</div>
-      <details class="furniture-more-actions"><summary>Autres actions</summary><div class="furniture-actions">${item.kind === 'tv-stand' ? '<button type="button" data-furniture-action="add-tv">Ajouter une TV dessus</button>' : ''}<button type="button" data-furniture-action="snap"${disabled(item.locked)}>Placer contre un mur</button><button type="button" data-furniture-action="duplicate">Dupliquer</button><button type="button" data-furniture-action="delete" class="furniture-delete">Retirer le meuble</button></div></details></section>`;
+      <details class="furniture-more-actions"><summary>Autres actions</summary><div class="furniture-actions">${item.kind === 'tv-stand' ? '<button type="button" data-furniture-action="add-tv">Ajouter une TV dessus</button>' : ''}<button type="button" data-furniture-action="snap"${disabled(item.locked)}>Placer contre un mur</button><button type="button" data-furniture-action="duplicate">Dupliquer</button><button type="button" data-furniture-action="delete" class="furniture-delete">Retirer le meuble</button></div></details>
+      <div class="furniture-edit-status" role="status"></div>
+      <div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button class="primary-button" type="submit" form="furniture-edit-form">Enregistrer</button></div></section>`;
   }
 
   focusDimensions() {
@@ -198,7 +198,7 @@ export class FurniturePanel {
     const members = groupMembers(items, item.id);
     const candidates = items.filter((other) => !members.some((member) => member.id === other.id));
     if (members.length < 2 && !candidates.length) return '';
-    return `<section class="furniture-group-controls">${members.length > 1 ? `<p><strong>Ensemble de ${members.length} meubles</strong><br>${members.map((m) => esc(m.name)).join(' + ')}</p><button type="button" data-furniture-action="unlink">Séparer les meubles</button>` : ''}${candidates.length ? `<details class="furniture-linker"${this.editDialog.querySelector<HTMLDetailsElement>('.furniture-linker')?.open ? ' open' : ''}><summary>Lier à un autre meuble</summary><p>Ils se déplaceront et tourneront ensemble, en gardant leur position relative.</p><label class="furniture-field">Choisir le meuble<select data-link-target>${candidates.map((other) => `<option value="${esc(other.id)}">${esc(other.name)}</option>`).join('')}</select></label><button type="button" data-furniture-action="link">Lier ces meubles</button></details>` : ''}</section>`;
+    return `<section class="furniture-group-controls" aria-label="Ensemble de meubles"><div class="furniture-group-heading"><strong>Ensemble</strong><span>${members.length > 1 ? `${members.length} meubles` : 'Meuble indépendant'}</span></div>${members.length > 1 ? `<ul class="furniture-group-members">${members.map((m) => `<li>${icon('cube', 15)}<span>${esc(m.name)}</span></li>`).join('')}</ul><button type="button" data-furniture-action="unlink">Séparer les meubles</button>` : ''}<p class="furniture-group-note">Déplacement et rotation ensemble. Les changements seront appliqués avec Enregistrer.</p>${candidates.length ? `<details class="furniture-linker"${this.editDialog.querySelector<HTMLDetailsElement>('.furniture-linker')?.open ? ' open' : ''}><summary>Lier à un autre meuble</summary><div class="furniture-link-row"><label class="furniture-field">Meuble à ajouter<select data-link-target><option value="" disabled selected>Choisir un meuble…</option>${candidates.map((other) => `<option value="${esc(other.id)}">${esc(other.name)}</option>`).join('')}</select></label><button type="button" data-furniture-action="link">Ajouter à l’ensemble</button></div></details>` : ''}</section>`;
   }
 
   openEdit(id: string) {
@@ -276,6 +276,10 @@ export class FurniturePanel {
     if (this.editDialog.contains(target) && this.draft) {
       try {
         const other = this.editDialog.querySelector<HTMLSelectElement>('[data-link-target]')?.value;
+        if (action === 'link' && !other) {
+          this.setEditStatus('Choisissez le meuble à ajouter à l’ensemble.');
+          return;
+        }
         const form = this.editDialog.querySelector<HTMLFormElement>('form');
         if (form && !this.stageForm(form)) return;
         if (action === 'link' && other) this.draft.link(other);
@@ -285,7 +289,11 @@ export class FurniturePanel {
         else if (action === 'add-tv') this.draft.addTelevision();
         else if (action === 'delete') this.draft.remove();
         else return;
-        this.renderDraft('Modification préparée. Enregistrez pour l’appliquer, ou annulez.');
+        this.renderDraft(
+          action === 'link'
+            ? 'Liaison préparée. Enregistrez pour déplacer ces meubles ensemble.'
+            : 'Modification préparée. Enregistrez pour l’appliquer, ou annulez.',
+        );
       } catch (error) {
         this.setEditStatus(error instanceof Error ? error.message : 'Cette action est impossible.');
       }

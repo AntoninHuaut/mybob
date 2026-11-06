@@ -280,8 +280,20 @@ test('actions rapides et Ctrl Z fonctionnent sans popup et sans sélection activ
     .click();
   await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(2);
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  // Focus stays on a quick-action button; history shortcuts must still work.
-  await page.keyboard.press('ControlOrMeta+z');
+  // Suppr works while Duplicate keeps focus; no scene click is required.
+  await expect(
+    toolbar.getByRole('button', { name: 'Dupliquer le meuble sélectionné', exact: true }),
+  ).toBeFocused();
+  await page.keyboard.press('Delete');
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
+  // French AZERTY sends logical z on physical KeyW, not KeyZ.
+  await page
+    .locator('body')
+    .dispatchEvent('keydown', { key: 'z', code: 'KeyW', ctrlKey: true, bubbles: true });
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(2);
+  await page
+    .locator('body')
+    .dispatchEvent('keydown', { key: 'z', code: 'KeyW', ctrlKey: true, bubbles: true });
   await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
   await expect(toolbar).not.toBeVisible();
   await page.keyboard.press('ControlOrMeta+z');

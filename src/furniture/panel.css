@@ -563,12 +563,62 @@
 }
 .furniture-group-controls {
   margin-top: 16px;
-  padding: 12px 0 0;
-  border: 0;
-  border-top: 1px solid #e0e5dc;
-  background: transparent;
+  padding: 14px;
+  border: 1px solid #dce4d8;
+  border-radius: 8px;
+  background: #f6f8f2;
   font-size: 13px;
   line-height: 1.6;
+}
+.furniture-group-heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.furniture-group-heading > span {
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: #e8efdf;
+  font-size: 11px;
+}
+.furniture-group-members {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0;
+  margin: 12px 0;
+  list-style: none;
+}
+.furniture-group-members li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border: 1px solid #dce4d8;
+  border-radius: 5px;
+  background: #fffefa;
+  overflow-wrap: anywhere;
+}
+.furniture-group-controls .furniture-group-note {
+  margin: 10px 0 0;
+  color: #687467;
+  font-size: 12px;
+}
+.furniture-link-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  margin-top: 12px;
+}
+.furniture-link-row label {
+  flex: 1 1 190px;
+  min-width: 0;
+}
+.furniture-link-row button {
+  flex: 0 1 auto;
 }
 .furniture-group-controls p {
   margin: 0 0 10px;
@@ -635,8 +685,14 @@
   margin-top: 7px;
 }
 .furniture-edit-dialog .furniture-dialog-footer {
+  position: sticky;
+  bottom: -24px;
+  z-index: 4;
+  padding-bottom: 12px;
   padding-top: 16px;
   border-top: 1px solid #e0e5dc;
+  background: #fffefa;
+  box-shadow: 0 -8px 10px #fffefa;
 }
 .furniture-edit-dialog .furniture-dialog-footer .primary-button {
   min-height: 42px;
