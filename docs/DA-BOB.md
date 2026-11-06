@@ -1,6 +1,6 @@
 # Direction artistique de Bob — pistes de déclinaison
 
-Complément de [docs/IDENTITE-MYBOB.md](IDENTITE-MYBOB.md), issu de la revue du 7 novembre 2026. Ce document est une spécification, pas un livrable final : les illustrations restent à produire et à tester.
+Complément de [docs/IDENTITE-MYBOB.md](IDENTITE-MYBOB.md), issu de la revue du 7 novembre 2026. Ce document est une spécification ; les trois poses vectorielles (« contrainte », « idée », « mesure ») sont livrées dans `src/assets/brand/` (SVG 512 × 768, fond transparent) et restent à contrôler visuellement à l’écran. Leur intégration suit les règles d’usage ci-dessous : seule « mesure » est affichée pour l’instant (barre d’instructions du mode Mesurer) ; « contrainte » et « idée » attendent les messages durables et l’onboarding (#16). Le retouche craie des deux poses PNG existantes reste à faire.
 
 ## Constats sur les assets actuels
 

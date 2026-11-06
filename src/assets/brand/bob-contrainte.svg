@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 768" role="img" aria-label="Bob lève les mains, paumes ouvertes">
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- Ombre au sol -->
+    <ellipse cx="256" cy="722" rx="118" ry="18" fill="#20312E" opacity="0.08" stroke="none"/>
+    <!-- Jambes -->
+    <path d="M214 560h34l-8 148h-38z" fill="#586b5e" stroke="#20312E" stroke-width="5"/>
+    <path d="M298 560h-34l12 148h38z" fill="#586b5e" stroke="#20312E" stroke-width="5"/>
+    <!-- Chaussures -->
+    <path d="M200 690h44c8 0 12 6 12 14H188c0-8 6-14 12-14z" fill="#20312E" stroke="none"/>
+    <path d="M312 690h-44c-8 0-12 6-12 14h68c0-8-6-14-12-14z" fill="#20312E" stroke="none"/>
+    <!-- Surchemise sauge -->
+    <path d="M256 234c-64 0-100 34-100 34l-26 84c-6 20 10 32 26 26l16-8v106h168V370l16 8c16 6 32-6 26-26l-26-84s-36-34-100-34z" fill="#37695c" stroke="#20312E" stroke-width="5"/>
+    <path d="M256 234c-22 0-38 10-38 10l38 34 38-34s-16-10-38-10z" fill="#f7f6f1" stroke="#20312E" stroke-width="5"/>
+    <!-- Bras levés, paumes ouvertes -->
+    <path d="M156 268l-38-52 22-18" fill="none" stroke="#37695c" stroke-width="24"/>
+    <path d="M356 268l38-52-22-18" fill="none" stroke="#37695c" stroke-width="24"/>
+    <circle cx="126" cy="180" r="20" fill="#f2e3d5" stroke="#20312E" stroke-width="5"/>
+    <circle cx="386" cy="180" r="20" fill="#f2e3d5" stroke="#20312E" stroke-width="5"/>
+    <path d="M112 168h28M112 192h28" stroke="#20312E" stroke-width="4"/>
+    <path d="M372 168h28M372 192h28" stroke="#20312E" stroke-width="4"/>
+    <!-- Tête -->
+    <circle cx="256" cy="150" r="60" fill="#f2e3d5" stroke="#20312E" stroke-width="5"/>
+    <path d="M200 128c0-30 26-52 56-52s56 22 56 52c-18-10-38-14-56-14s-38 4-56 14z" fill="#20312E" stroke="none"/>
+    <circle cx="234" cy="156" r="6" fill="#20312E" stroke="none"/>
+    <circle cx="278" cy="156" r="6" fill="#20312E" stroke="none"/>
+    <!-- Sourire understanding -->
+    <path d="M240 180q16 12 32 0" stroke="#20312E" stroke-width="5" fill="none"/>
+    <path d="M226 172q-4-8 4-10" stroke="#20312E" stroke-width="4" fill="none"/>
+    <path d="M286 172q4-8-4-10" stroke="#20312E" stroke-width="4" fill="none"/>
+    <!-- Bouton corail -->
+    <circle cx="256" cy="330" r="7" fill="#d66b4e" stroke="#20312E" stroke-width="3"/>
+  </g>
+</svg>

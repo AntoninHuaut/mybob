@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 768" role="img" aria-label="Bob pointe un mètre ruban vers le sol">
+  <g fill="none" stroke="#20312e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round">
+    <ellipse cx="262" cy="722" rx="104" ry="18" fill="#20312e" opacity="0.08" stroke="none"/>
+    <path d="M220 560h34l-8 148h-38z" fill="#586b5e"/>
+    <path d="M304 560h-34l12 148h38z" fill="#586b5e"/>
+    <path d="M206 690h44c8 0 12 6 12 14h-68c0-8 6-14 12-14z" fill="#20312e" stroke="none"/>
+    <path d="M318 690h-44c-8 0-12 6-12 14h68c0-8-6-14-12-14z" fill="#20312e" stroke="none"/>
+    <!-- Torse légèrement penché -->
+    <path d="M256 234c-64 0-98 34-98 34l-24 84c-6 20 10 32 26 26l16-8 4 106h156l6-106 16 8c16 6 32-6 26-26l-26-84s-36-34-100-34z" fill="#37695c"/>
+    <path d="M256 234c-22 0-38 10-38 10l38 34 38-34s-16-10-38-10z" fill="#f7f6f1"/>
+    <!-- Bras gauche vers le sol, mètre tendu -->
+    <path d="M160 282l-18 84 10 74" stroke="#37695c" stroke-width="24"/>
+    <circle cx="152" cy="452" r="19" fill="#f2e3d5"/>
+    <rect x="128" y="466" width="50" height="40" rx="8" fill="#d66b4e" transform="rotate(14 153 486)"/>
+    <rect x="112" y="512" width="86" height="8" rx="4" fill="#f7f6f1" transform="rotate(80 155 516)"/>
+    <!-- Bras droit le long du corps -->
+    <path d="M354 282l10 108" stroke="#37695c" stroke-width="24"/>
+    <circle cx="366" cy="400" r="19" fill="#f2e3d5"/>
+    <!-- Tête, regard vers le bas -->
+    <circle cx="256" cy="150" r="60" fill="#f2e3d5"/>
+    <path d="M200 128c0-30 26-52 56-52s56 22 56 52c-18-10-38-14-56-14s-38 4-56 14z" fill="#20312e" stroke="none"/>
+    <circle cx="232" cy="168" r="6" fill="#20312e" stroke="none"/>
+    <circle cx="280" cy="168" r="6" fill="#20312e" stroke="none"/>
+    <path d="M242 190q14 10 28 0" stroke-width="5" fill="none"/>
+    <circle cx="256" cy="330" r="7" fill="#d66b4e" stroke-width="3"/>
+  </g>
+</svg>

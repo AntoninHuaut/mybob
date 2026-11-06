@@ -20,6 +20,17 @@ import { ArrangementPanel } from './ui/arrangementPanel';
 import { FurnitureClipboard } from './furniture/clipboard';
 import { chairsAroundTable } from './furniture/tableChairs';
 import { snapDraggedFurniture, defaultSnapSettings } from './furniture/arrangement';
+import {
+  PlanPhotoLayer,
+  defaultPlanPhotoAdjustments,
+  type PlanPhotoAdjustments,
+} from './scene/planPhoto';
+import {
+  deletePlanPhoto,
+  loadPlanPhoto,
+  planPhotoKey,
+  savePlanPhoto,
+} from './scene/planPhotoStore';
 import { layoutLabels, type LabelBox } from './ui/labelLayout';
 import { exportSceneImage } from './ui/imageExport';
 import {
@@ -52,6 +63,10 @@ let selectedRoom: Room | undefined;
 let showLabels = true;
 let showDimensions = false;
 let showCirculation = false;
+let planPhotoLayer: PlanPhotoLayer | undefined;
+let planPhotoActive = false;
+let planPhotoAdjustments: PlanPhotoAdjustments = { ...defaultPlanPhotoAdjustments };
+let planPhotoSaveTimer: ReturnType<typeof setTimeout> | undefined;
 let ceiling = false;
 let exteriorView = false;
 let lights = true;
@@ -297,6 +312,80 @@ function openFurnitureEditor(id: string) {
   furniturePanel?.openEdit(id);
 }
 
+function currentPlanPhotoKey(): string {
+  return planPhotoKey(current.id, viewer.level.id);
+}
+
+function syncPlanPhotoPersistence(): void {
+  if (planPhotoSaveTimer) clearTimeout(planPhotoSaveTimer);
+  planPhotoSaveTimer = setTimeout(() => {
+    const layer = planPhotoLayer;
+    if (!layer?.loaded || !layer.photoBlob) return;
+    void savePlanPhoto(currentPlanPhotoKey(), {
+      blob: layer.photoBlob,
+      adjustments: planPhotoAdjustments,
+      savedAt: Date.now(),
+    }).then((saved) => {
+      if (!saved) toast('Photo non sauvegardée : stockage indisponible.');
+    });
+  }, 400);
+}
+
+function refreshPhotoPanel(): void {
+  const panel = el('#plan-photo-panel');
+  panel.hidden = !(planPhotoActive && planPhotoLayer?.loaded);
+  el<HTMLInputElement>('#plan-photo-opacity').value = String(
+    Math.round(planPhotoAdjustments.opacity * 100),
+  );
+  el('#plan-photo-opacity-value').textContent =
+    `${Math.round(planPhotoAdjustments.opacity * 100)} %`;
+  el<HTMLInputElement>('#plan-photo-scale').value = String(
+    Math.round(planPhotoAdjustments.scale * 100),
+  );
+  el('#plan-photo-scale-value').textContent = `${Math.round(planPhotoAdjustments.scale * 100)} %`;
+  el<HTMLInputElement>('#plan-photo-rotation').value = String(
+    Math.round(planPhotoAdjustments.rotation),
+  );
+  el('#plan-photo-rotation-value').textContent = `${Math.round(planPhotoAdjustments.rotation)}°`;
+  el<HTMLInputElement>('#plan-photo-offset-x').value = planPhotoAdjustments.offsetX.toFixed(2);
+  el<HTMLInputElement>('#plan-photo-offset-z').value = planPhotoAdjustments.offsetZ.toFixed(2);
+  el('#plan-photo-change').hidden = !planPhotoLayer?.loaded;
+  el('#plan-photo-remove').hidden = !planPhotoLayer?.loaded;
+}
+
+function syncPlanPhotoVisibility(): void {
+  const active = planPhotoActive && planPhotoLayer?.loaded === true && mode === 'plan';
+  planPhotoLayer?.setVisible(active);
+  planPhotoLayer?.setInteractive(active);
+  activeButton('#tool-plan-photo', planPhotoActive);
+  refreshPhotoPanel();
+}
+
+/** Une photo de plan par projet et par niveau ; aucune donnée ne quitte le navigateur. */
+function mountPlanPhoto(): void {
+  planPhotoLayer?.dispose();
+  planPhotoLayer = new PlanPhotoLayer(viewer.scene, viewer.level);
+  planPhotoLayer.onDragState = (dragging) => {
+    if (dragging) viewer.orbit.detachControl();
+    else if (mode !== 'walk') viewer.orbit.attachControl(viewer.canvas, true);
+  };
+  planPhotoLayer.onAdjust = (adjustments) => {
+    planPhotoAdjustments = adjustments;
+    refreshPhotoPanel();
+    syncPlanPhotoPersistence();
+  };
+  planPhotoActive = false;
+  planPhotoAdjustments = { ...defaultPlanPhotoAdjustments };
+  void loadPlanPhoto(currentPlanPhotoKey()).then(async (stored) => {
+    if (!stored) return;
+    planPhotoAdjustments = { ...defaultPlanPhotoAdjustments, ...stored.adjustments };
+    await planPhotoLayer?.setBlob(stored.blob);
+    planPhotoLayer?.apply(planPhotoAdjustments);
+    syncPlanPhotoVisibility();
+  });
+  syncPlanPhotoVisibility();
+}
+
 function mountFurniture() {
   let items: FurnitureItem[] = [];
   let restoreError = false;
@@ -457,6 +546,7 @@ function changeVariant(action: () => void, remount: boolean) {
     if (remount) {
       furnitureLayer?.dispose();
       mountFurniture();
+      mountPlanPhoto();
       syncDisplayControls();
     }
   }
@@ -526,12 +616,14 @@ function syncDisplayControls() {
     'tool-labels',
     'tool-dimensions',
     'tool-circulation',
+    'tool-plan-photo',
     'tool-ceiling',
   ]) {
     el<HTMLButtonElement>(`#${id}`).disabled =
       mode === 'walk' ||
       exteriorView ||
       (id === 'tool-ceiling' && mode === 'plan') ||
+      (id === 'tool-plan-photo' && mode !== 'plan') ||
       (measuring && ['tool-labels', 'tool-ceiling'].includes(id));
   }
 }
@@ -581,6 +673,7 @@ function loadProject(id: string, levelId?: string) {
   viewer.setLights(lights);
   viewer.setDimensions(showDimensions);
   mountFurniture();
+  mountPlanPhoto();
   viewer.setEyeHeight(Number(el<HTMLSelectElement>('#eye-height').value));
   viewer.setWallDisplay(el<HTMLSelectElement>('#wall-display').value as WallDisplay);
   el<HTMLInputElement>('#section-height').max = String(viewer.level.ceilingHeight);
@@ -750,6 +843,7 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
     return false;
   }
   furnitureLayer?.setMode(next);
+  syncPlanPhotoVisibility();
   if (selectedRoom && !fromViewer) viewer.focusRoom(selectedRoom.id);
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {
     b.classList.toggle('active', b.dataset.view === next);
@@ -1377,6 +1471,67 @@ function wireViewportControls() {
     activeButton('#tool-circulation', showCirculation);
     furnitureLayer?.setCirculation(showCirculation);
   });
+  el('#tool-plan-photo').addEventListener('click', () => {
+    if (!planPhotoLayer?.loaded) {
+      el<HTMLInputElement>('#plan-photo-file').click();
+      return;
+    }
+    planPhotoActive = !planPhotoActive;
+    syncPlanPhotoVisibility();
+  });
+  el<HTMLInputElement>('#plan-photo-file').addEventListener('change', async (event) => {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    try {
+      if (!planPhotoLayer) return;
+      await planPhotoLayer.setBlob(file);
+      planPhotoAdjustments = { ...defaultPlanPhotoAdjustments };
+      planPhotoLayer.apply(planPhotoAdjustments);
+      planPhotoActive = true;
+      syncPlanPhotoVisibility();
+      syncPlanPhotoPersistence();
+      toast('Photo de plan ajoutée. Ajustez la superposition dans le panneau.');
+    } catch {
+      toast('Image illisible : choisissez un fichier PNG ou JPEG.');
+    }
+  });
+  el('#plan-photo-change').addEventListener('click', () =>
+    el<HTMLInputElement>('#plan-photo-file').click(),
+  );
+  el('#plan-photo-remove').addEventListener('click', () => {
+    void deletePlanPhoto(currentPlanPhotoKey());
+    mountPlanPhoto();
+    planPhotoActive = false;
+    syncPlanPhotoVisibility();
+    toast('Photo retirée pour ce niveau.');
+  });
+  for (const [id, read] of [
+    ['#plan-photo-opacity', (value: number) => ({ opacity: value / 100 })],
+    ['#plan-photo-scale', (value: number) => ({ scale: value / 100 })],
+    ['#plan-photo-rotation', (value: number) => ({ rotation: value })],
+  ] as const) {
+    const control = el<HTMLInputElement>(id);
+    control.addEventListener('input', () => {
+      if (!planPhotoLayer?.loaded) return;
+      planPhotoLayer.apply(read(Number(control.value)));
+    });
+    control.addEventListener('change', syncPlanPhotoPersistence);
+  }
+  for (const [id, axis] of [
+    ['#plan-photo-offset-x', 'offsetX'],
+    ['#plan-photo-offset-z', 'offsetZ'],
+  ] as const) {
+    const control = el<HTMLInputElement>(id);
+    control.addEventListener('change', () => {
+      if (!planPhotoLayer?.loaded) return;
+      const value = Number(control.value);
+      if (!Number.isFinite(value)) return;
+      planPhotoLayer.apply({ [axis]: value } as Partial<PlanPhotoAdjustments>);
+      syncPlanPhotoVisibility();
+    });
+  }
   el('#tool-solar').addEventListener('click', () => solarPanel.open());
   el('#tool-lights').addEventListener('click', () => {
     lights = !lights;

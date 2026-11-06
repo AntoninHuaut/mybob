@@ -423,6 +423,71 @@
 #delete-selected-furniture {
   color: #a34d39;
 }
+.measure-bob {
+  height: 44px;
+  width: auto;
+  align-self: flex-end;
+}
+.plan-photo-panel {
+  position: absolute;
+  z-index: 6;
+  top: 64px;
+  right: 12px;
+  display: grid;
+  gap: 8px;
+  width: 230px;
+  padding: 12px;
+  border: 1px solid #cdddc1;
+  border-radius: 7px;
+  background: #fcfff5f2;
+  color: #476b36;
+  box-shadow: 0 4px 16px #3c512d16;
+  font-size: 12px;
+  line-height: 1.45;
+}
+.plan-photo-panel label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-photo-panel input[type='range'] {
+  flex: 1;
+  min-width: 0;
+}
+.plan-photo-panel output {
+  min-width: 42px;
+  text-align: right;
+}
+.plan-photo-row {
+  display: flex;
+  gap: 8px;
+}
+.plan-photo-row label {
+  flex: 1;
+}
+.plan-photo-row input {
+  width: 100%;
+}
+.plan-photo-panel p {
+  margin: 0;
+  color: #586b5e;
+  font-size: 11px;
+}
+.plan-photo-actions {
+  display: flex;
+  gap: 8px;
+}
+.plan-photo-actions button {
+  flex: 1;
+  padding: 6px 8px;
+  border: 1px solid #cdddc1;
+  border-radius: 6px;
+  background: #fffef9;
+  color: #476b36;
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
 .measure-instructions {
   position: absolute;
   z-index: 6;
