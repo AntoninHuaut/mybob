@@ -375,6 +375,11 @@ dialog p {
     max-width: calc(100% - 24px);
     max-height: calc(100% - 130px);
   }
+  .plan-photo-panel {
+    top: 64px;
+    right: 12px;
+    max-width: calc(100% - 24px);
+  }
   .furniture-context-toolbar {
     max-width: calc(100% - 24px);
   }
