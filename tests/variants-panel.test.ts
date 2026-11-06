@@ -30,9 +30,27 @@ test('variant naming keeps native input while typing, cancels without callbacks 
       onSelect: (id) => actions.push(`select:${id}`),
       onDuplicate: (name) => actions.push(`duplicate:${name}`),
       onRename: (name) => actions.push(`rename:${name}`),
+      onDelete: () => actions.push('delete'),
       onError: (message) => assert.fail(message),
     });
     panel.render();
+    host
+      .querySelector('[data-variant-action=delete]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.match(host.textContent!, /Supprimer « A »/);
+    host
+      .querySelector('[data-variant-action=cancel]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.deepEqual(actions, []);
+    host
+      .querySelector('[data-variant-action=delete]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    host
+      .querySelector('[data-variant-action=confirm-delete]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.deepEqual(actions, ['delete']);
+    actions.length = 0;
+    panel.finishEditing();
     host
       .querySelector('[data-variant-action=duplicate]')!
       .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));

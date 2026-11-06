@@ -157,6 +157,14 @@ export class VariantSession {
     book.variants.find((variant) => variant.id === book.activeId)!.name = title;
     this.persist(projectId);
   }
+  deleteActive(projectId: string) {
+    const book = this.ensure(projectId).book;
+    if (book.variants.length <= 1) throw new Error('Conservez au moins une variante.');
+    const index = book.variants.findIndex((variant) => variant.id === book.activeId);
+    book.variants.splice(index, 1);
+    book.activeId = book.variants[Math.min(index, book.variants.length - 1)].id;
+    this.persist(projectId);
+  }
   capture(projectId: string): Entry | undefined {
     const entry = this.entries.get(projectId);
     return entry ? structuredClone(entry) : undefined;

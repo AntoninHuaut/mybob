@@ -123,7 +123,8 @@ test('overlays are non-pickable, do not allocate a canvas headlessly, and dispos
   layer.setOverlays({ distances: true, clearances: true, openings: true });
   assert.ok(scene.getMeshByName('furniture:clearance'));
   assert.ok(scene.getMeshByName('furniture:opening'));
-  assert.ok(scene.meshes.some((mesh) => mesh.metadata?.label === '2.00 m'));
+  assert.ok(scene.meshes.some((mesh) => mesh.metadata?.measurementKind === 'gap'));
+  assert.equal(scene.getMeshByName('furniture:width'), null);
   assert.ok(
     scene.meshes
       .filter((mesh) => mesh.metadata?.kind === 'furniture-overlay')

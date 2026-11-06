@@ -28,7 +28,7 @@ Les anciennes positions invalides importées ne sont pas déplacées silencieuse
 
 Les distances partent des centres des quatre faces. Les enveloppes de passage et d’ouverture sont réglables ; les alertes d’intersection et de débattement sont des aides géométriques conservatrices, sans certification réglementaire. Le module de livraison théorique ne tient compte ni de l’inclinaison, ni de l’emballage, ni des virages du trajet ; il n’est plus exposé comme alerte de placement. Les marges de passage sont facultatives, sans valeur imposée à l’ajout.
 
-Les pastilles de dimensions indiquent « Larg. » et « Prof. » en ardoise ; les distances vers un obstacle indiquent « Écart » en vert. Une profondeur de 0,60 m décrit donc la taille du meuble et ne varie pas lorsqu’on le déplace.
+Lors du placement, seules les distances vers les obstacles sont affichées (« Écart ») ; les dimensions du meuble restent consultables dans sa fiche.
 
 Les aménagements sont sauvegardés localement par maison et par niveau. L’export du projet inclut les meubles. Les références déjà présentes dans les anciens fichiers restent compatibles, mais ne sont plus proposées dans l’interface. Une erreur de sauvegarde est signalée si la mémoire locale est indisponible ou pleine. Conserver un export pour transférer ou sauvegarder le travail.
 

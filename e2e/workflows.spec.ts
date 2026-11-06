@@ -182,6 +182,17 @@ test('variantes indépendantes, annuler/rétablir et confirmation du nom inchang
   await furnishings(page);
   await expect(select.locator('option:checked')).toHaveText('Option E2E');
   await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(0);
+  await variants.getByRole('button', { name: 'Supprimer', exact: true }).click();
+  await variants.getByRole('button', { name: 'Annuler', exact: true }).click();
+  await expect(select.locator('option')).toHaveCount(2);
+  await variants.getByRole('button', { name: 'Supprimer', exact: true }).click();
+  await variants.getByRole('button', { name: 'Confirmer la suppression' }).click();
+  await expect(select.locator('option:checked')).toHaveText('Aménagement initial');
+  await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
+  await expect(variants.getByRole('button', { name: 'Supprimer', exact: true })).toBeDisabled();
+  await page.reload();
+  await furnishings(page);
+  await expect(select.locator('option')).toHaveCount(1);
 });
 
 test('export JSON puis import dans un navigateur vierge restaurent toutes les variantes', async ({

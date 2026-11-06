@@ -486,6 +486,7 @@ function mountFurniture() {
       onSelect: (id) => changeVariant(() => layoutSession.select(current.id, id), true),
       onDuplicate: (name) => changeVariant(() => layoutSession.duplicate(current.id, name), true),
       onRename: (name) => changeVariant(() => layoutSession.rename(current.id, name), false),
+      onDelete: () => changeVariant(() => layoutSession.deleteActive(current.id), true),
       onError: toast,
     });
   variantsPanel.render();

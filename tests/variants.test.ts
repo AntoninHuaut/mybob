@@ -29,6 +29,28 @@ function setup() {
   };
 }
 
+test('deleting a variant keeps the other layouts and always leaves one active', () => {
+  const { cleanup } = setup();
+  try {
+    const session = new VariantSession();
+    session.register('house', ['ground', 'upper']);
+    const sofa = createFurniture({ id: 'sofa', kind: 'sofa' });
+    session.save('house', 'upper', [sofa]);
+    session.duplicate('house', 'Alternative');
+    session.save('house', 'upper', []);
+    session.deleteActive('house');
+    assert.equal(session.active('house').name, 'Aménagement initial');
+    assert.equal(session.load('house', 'upper')[0].id, 'sofa');
+    assert.throws(() => session.deleteActive('house'), /au moins une variante/);
+    const restored = new VariantSession();
+    restored.register('house', ['ground', 'upper']);
+    assert.equal(restored.book('house').variants.length, 1);
+    assert.equal(restored.load('house', 'upper')[0].id, 'sofa');
+  } finally {
+    cleanup();
+  }
+});
+
 test('variants migrate every legacy level without overwriting its backup and retain precise independent layouts', () => {
   const { data, cleanup } = setup();
   try {

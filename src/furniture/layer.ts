@@ -675,18 +675,8 @@ export class FurnitureLayer {
       mesh.parent = root;
       mesh.color = color;
       mesh.isPickable = false;
-      const measurementKind =
-        name === 'furniture:width'
-          ? 'width'
-          : name === 'furniture:depth'
-            ? 'depth'
-            : name === 'furniture:wall-distance'
-              ? 'gap'
-              : undefined;
-      const labelText =
-        label && measurementKind
-          ? `${measurementKind === 'width' ? 'Larg.' : measurementKind === 'depth' ? 'Prof.' : 'Écart'} ${label}`
-          : label;
+      const measurementKind = name === 'furniture:wall-distance' ? 'gap' : undefined;
+      const labelText = label && measurementKind ? `Écart ${label}` : label;
       mesh.metadata = { kind: 'furniture-overlay', label, labelText, measurementKind };
       mesh.renderingGroupId = 2;
       if (label && labelText)
@@ -695,7 +685,7 @@ export class FurnitureLayer {
           points[0].add(points[points.length - 1]).scale(0.5),
           root,
           name === 'furniture:wall-distance' ? 200 - Number.parseFloat(label) : 100,
-          measurementKind === 'gap' ? '#165347' : '#495a5d',
+          '#165347',
           measurementKind,
         );
     };
@@ -750,18 +740,6 @@ export class FurnitureLayer {
       rectangle('furniture:opening', -hw, hw, hd, hd + reach, color);
     }
     if (!this.overlays.distances) return;
-    line(
-      'furniture:width',
-      [point(-hw, -hd - 0.13), point(hw, -hd - 0.13)],
-      new Color3(0.36, 0.43, 0.44),
-      `${item.width.toFixed(2)} m`,
-    );
-    line(
-      'furniture:depth',
-      [point(hw + 0.13, -hd), point(hw + 0.13, hd)],
-      new Color3(0.36, 0.43, 0.44),
-      `${item.depth.toFixed(2)} m`,
-    );
     for (const distance of furnitureDistances(item, this.level, this.items)) {
       if (distance.distance <= 0.02) continue;
       line(
@@ -782,7 +760,7 @@ export class FurnitureLayer {
     root: TransformNode,
     priority: number,
     background: string,
-    measurementKind?: 'width' | 'depth' | 'gap',
+    measurementKind?: 'gap',
   ): void {
     // NullEngine tests and server-side validation have no canvas implementation.
     if (typeof document === 'undefined') return;

@@ -6,7 +6,7 @@ import { FurnitureLayer } from '../src/furniture/layer';
 import { createFurniture } from '../src/furniture/model';
 import type { Level } from '../src/model/types';
 
-test('a constant furniture depth is distinguishable from an equal gap that changes when moved', () => {
+test('only gaps are displayed and update when furniture moves', () => {
   const level: Level = {
     id: 'generic',
     name: 'Pièce',
@@ -38,16 +38,15 @@ test('a constant furniture depth is distinguishable from an equal gap that chang
   layer.setOverlays({ distances: true, clearances: false, openings: false });
   const overlay = (name: string) =>
     scene.meshes.filter((mesh) => mesh.name === name).map((mesh) => mesh.metadata);
-  assert.equal(overlay('furniture:width')[0].labelText, 'Larg. 1.20 m');
-  assert.equal(overlay('furniture:depth')[0].labelText, 'Prof. 0.60 m');
-  assert.equal(overlay('furniture:depth')[0].measurementKind, 'depth');
+  assert.equal(overlay('furniture:width').length, 0);
+  assert.equal(overlay('furniture:depth').length, 0);
   assert.ok(
     overlay('furniture:wall-distance').some(
       (meta) => meta.labelText === 'Écart 0.60 m' && meta.measurementKind === 'gap',
     ),
   );
   layer.setItems([{ ...item, position: [1.5, 3] }]);
-  assert.equal(overlay('furniture:depth')[0].labelText, 'Prof. 0.60 m');
+  assert.equal(overlay('furniture:depth').length, 0);
   assert.ok(overlay('furniture:wall-distance').some((meta) => meta.labelText === 'Écart 0.90 m'));
   assert.ok(!overlay('furniture:wall-distance').some((meta) => meta.labelText === 'Écart 0.60 m'));
   layer.dispose();
