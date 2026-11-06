@@ -29,15 +29,21 @@ export interface SofaConfiguration {
   seatDepth: number;
   returnWidth: number;
 }
-/** Present only for a corner dressing; a straight run keeps the plain depth. */
-export interface DressingConfiguration {
-  /** Side of the return run, viewed from the front: left is local negative X. */
-  side: 'left' | 'right';
-  /** Depth of the main run, measured from the back. */
-  runDepth: number;
-  /** Width of the return run. */
-  returnWidth: number;
+/** One straight run of a dressing, along a wall. */
+export interface DressingRun {
+  /** Extent along the run's axis, in metres; the shared corner square is included. */
+  length: number;
+  /** Quarter turn at the end of this run. Absent on the last run. */
+  turn?: 'left' | 'right';
 }
+/** A dressing is a chain of runs of equal depth; width and depth follow the chain. */
+export interface DressingConfiguration {
+  /** Depth shared by every run, in metres. */
+  runDepth: number;
+  runs: DressingRun[];
+}
+/** One choice for the user: walk-in, low tray, or a closed corner cabin. */
+export type ShowerType = 'italienne' | 'bac' | 'cabine';
 export interface FurnitureItem {
   id: string;
   name: string;
@@ -49,6 +55,8 @@ export interface FurnitureItem {
   elevation?: number;
   sofa?: SofaConfiguration;
   dressing?: DressingConfiguration;
+  /** Shower only: walk-in, low tray or closed corner cabin. */
+  showerType?: ShowerType;
   /** Display diagonal only; chassis dimensions remain editable approximations. */
   tvDiagonalInches?: number;
   position: Point2;
@@ -196,20 +204,40 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
     }
     if (item.dressing !== undefined) {
       const dressing = item.dressing;
+      const runs = dressing.runs;
       if (
         item.kind !== 'dressing' ||
         !record(dressing) ||
-        !['left', 'right'].includes(dressing.side) ||
         !finite(dressing.runDepth) ||
         dressing.runDepth < 0.2 ||
-        dressing.runDepth > item.depth - 0.05 ||
-        !finite(dressing.returnWidth) ||
-        dressing.returnWidth < 0.2 ||
-        dressing.returnWidth > item.width - 0.05
+        dressing.runDepth > 20 ||
+        !Array.isArray(runs) ||
+        runs.length < 1 ||
+        runs.length > 12 ||
+        !runs.every(
+          (run, index) =>
+            record(run) &&
+            finite(run.length) &&
+            run.length >= 0.2 &&
+            run.length <= 20 &&
+            (run.turn === undefined
+              ? index === runs.length - 1
+              : index < runs.length - 1 && (run.turn === 'left' || run.turn === 'right')),
+        )
       )
         fail(
-          'Vérifiez les mesures : la profondeur totale du côté en retour doit dépasser celle du linéaire, et la largeur du retour doit être inférieure à la largeur totale.',
+          'Un dressing décrit un à douze tronçons de 20 cm à 20 m, avec un angle uniquement entre deux tronçons.',
         );
+      const bounds = dressingBounds(dressing.runDepth, runs);
+      if (
+        Math.abs(bounds.width - item.width) > 0.001 ||
+        Math.abs(bounds.depth - item.depth) > 0.001
+      )
+        fail('Les dimensions hors tout du dressing ne correspondent pas à ses tronçons.');
+    }
+    if (item.showerType !== undefined) {
+      if (item.kind !== 'shower' || !['italienne', 'bac', 'cabine'].includes(item.showerType))
+        fail('Le type de douche est invalide.');
     }
     if (
       !Array.isArray(item.position) ||
@@ -321,16 +349,17 @@ export function createFurniture(input: FurnitureInput = {}): FurnitureItem {
       returnWidth: Math.min(0.9, item.width / 3),
       ...input.sofa,
     };
-  if (input.dressing) {
-    // A corner needs room for the return run in front of the main one.
-    if (input.depth === undefined) item.depth = 1.2;
+  if (kind === 'dressing') {
     item.dressing = {
-      side: 'left',
-      runDepth: Math.min(0.6, item.depth * 0.55),
-      returnWidth: Math.min(0.6, item.width / 3),
+      runDepth: Math.min(0.6, item.depth),
+      runs: [{ length: item.width }],
       ...input.dressing,
     };
+    const bounds = dressingBounds(item.dressing.runDepth, item.dressing.runs);
+    item.width = bounds.width;
+    item.depth = bounds.depth;
   }
+  if (kind === 'shower') item.showerType = input.showerType ?? 'bac';
   return validateFurnitureList([item])[0];
 }
 
@@ -379,6 +408,67 @@ function cornerParts(
   ];
 }
 
+export interface DressingPlacement {
+  /** Start of the run on the wall side, in the chain's own frame. */
+  start: Point2;
+  /** Unit direction along the run. */
+  direction: Point2;
+  length: number;
+  depth: number;
+}
+
+/**
+ * Walks the chain from the origin: the wall stays on the left of the direction,
+ * so the run extends into the room and each turn is a quarter turn at its end.
+ */
+export function dressingPlacements(runDepth: number, runs: DressingRun[]): DressingPlacement[] {
+  const placements: DressingPlacement[] = [];
+  let x = 0,
+    z = 0,
+    dx = 1,
+    dz = 0;
+  for (const run of runs) {
+    placements.push({ start: [x, z], direction: [dx, dz], length: run.length, depth: runDepth });
+    x += dx * run.length;
+    z += dz * run.length;
+    if (run.turn === 'left') [dx, dz] = [dz, -dx];
+    else if (run.turn === 'right') [dx, dz] = [-dz, dx];
+  }
+  return placements;
+}
+
+/** One convex rectangle per run, in the chain's own frame. Corners are shared. */
+export function dressingStrips(runDepth: number, runs: DressingRun[]): Point2[][] {
+  return dressingPlacements(runDepth, runs).map(({ start, direction, length, depth }) => {
+    const [dx, dz] = direction;
+    const rx = -dz,
+      rz = dx;
+    const end: Point2 = [start[0] + dx * length, start[1] + dz * length];
+    return [
+      start,
+      [start[0] + rx * depth, start[1] + rz * depth],
+      [end[0] + rx * depth, end[1] + rz * depth],
+      end,
+    ];
+  });
+}
+
+/** Overall size of the chain, plus the offset that centres it on the item position. */
+export function dressingBounds(runDepth: number, runs: DressingRun[]) {
+  const points = dressingStrips(runDepth, runs).flat();
+  if (!points.length) return { width: 0, depth: 0, centerX: 0, centerZ: 0 };
+  const minX = Math.min(...points.map((point) => point[0]));
+  const maxX = Math.max(...points.map((point) => point[0]));
+  const minZ = Math.min(...points.map((point) => point[1]));
+  const maxZ = Math.max(...points.map((point) => point[1]));
+  return {
+    width: maxX - minX,
+    depth: maxZ - minZ,
+    centerX: (minX + maxX) / 2,
+    centerZ: (minZ + maxZ) / 2,
+  };
+}
+
 /** Convex occupied pieces. The empty inside corner of an L is deliberately excluded. */
 export function footprintParts(item: FurnitureItem): Point2[][] {
   if (item.kind === 'sofa' && item.sofa) {
@@ -386,8 +476,11 @@ export function footprintParts(item: FurnitureItem): Point2[][] {
     return cornerParts(item, seatDepth, returnWidth, side);
   }
   if (item.kind === 'dressing' && item.dressing) {
-    const { runDepth, returnWidth, side } = item.dressing;
-    return cornerParts(item, runDepth, returnWidth, side);
+    const { runDepth, runs } = item.dressing;
+    const { centerX, centerZ } = dressingBounds(runDepth, runs);
+    return dressingStrips(runDepth, runs).map((strip) =>
+      strip.map(([x, z]) => localToWorld(item, x - centerX, z - centerZ)),
+    );
   }
   return [footprint(item)];
 }

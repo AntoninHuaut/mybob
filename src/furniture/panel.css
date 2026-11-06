@@ -561,6 +561,54 @@
   height: auto;
   max-height: 170px;
 }
+.dressing-runs {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+.dressing-run {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) minmax(0, 1fr) 30px;
+  align-items: end;
+  gap: 8px;
+}
+.dressing-run > .furniture-field {
+  align-self: stretch;
+  grid-template-rows: minmax(1.4em, 1fr) auto;
+  align-items: end;
+  margin-top: 0;
+}
+.dressing-run-index {
+  display: grid;
+  place-items: center;
+  height: 38px;
+  color: #6b7f6a;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.dressing-remove-run {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 38px;
+  border-radius: 5px;
+  color: #8a6a58;
+}
+.dressing-remove-run:hover {
+  background: #f6efea;
+  color: #885d49;
+}
+.dressing-add-run {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border: 1px dashed #c3d3b8;
+  border-radius: 6px;
+  color: #4a6b3c;
+  font-size: 13px;
+}
+.dressing-add-run:hover {
+  background: #f1f6ec;
+}
 .furniture-group-controls {
   margin-top: 16px;
   padding: 14px;

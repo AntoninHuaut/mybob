@@ -262,7 +262,7 @@ test('the add menu groups every furniture kind under a room category', () => {
   }
 });
 
-test('a dressing is added straight or as a corner with its return measurements', () => {
+test('a dressing is added as a chain of runs with derived overall dimensions', () => {
   const { window, panel, added, cleanup } = setup();
   try {
     panel.openAdd();
@@ -270,50 +270,105 @@ test('a dressing is added straight or as a corner with its return measurements',
     const kind = form.elements.namedItem('kind') as unknown as DOMInput;
     kind.value = 'dressing';
     kind.dispatchEvent(new window.Event('change', { bubbles: true }));
-    const shape = form.elements.namedItem('dressingShape') as unknown as DOMSelect;
-    assert.equal(shape.value, 'straight');
-    assert.ok(!form.querySelector('[data-dressing-fields]')!.hasAttribute('hidden'));
-    assert.ok(form.querySelector('[data-dressing-config]')!.hasAttribute('hidden'));
-    assert.equal(form.querySelector('[data-depth-label]')!.textContent, 'Profondeur');
-    shape.value = 'corner';
-    shape.dispatchEvent(new window.Event('change', { bubbles: true }));
-    assert.ok(!form.querySelector('[data-dressing-config]')!.hasAttribute('hidden'));
-    assert.equal(form.querySelector('[data-depth-label]')!.textContent, 'Profondeur du linéaire');
-    assert.equal((form.elements.namedItem('depth') as unknown as DOMInput).value, '60');
-    assert.equal(
-      (form.elements.namedItem('dressingReturnDepth') as unknown as DOMInput).value,
-      '120',
-    );
-    assert.equal(
-      (form.elements.namedItem('dressingReturnWidth') as unknown as DOMInput).value,
-      '60',
-    );
+    const field = (name: string) => form.elements.namedItem(name) as unknown as DOMInput;
+    assert.equal(field('dressingRunLength0').value, '180');
+    assert.equal(field('dressingRunDepth').value, '60');
+    assert.equal(field('width').value, '180');
+    assert.equal(field('depth').value, '60');
+    assert.ok(field('width').disabled, 'overall width follows the runs');
+    assert.ok(field('depth').disabled, 'overall depth follows the runs');
+    assert.equal(form.querySelector('[data-depth-label]')!.textContent, 'Profondeur hors tout');
+
+    form
+      .querySelector('[data-dressing-add]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(field('dressingRunLength1').value, '120');
+    const turn = form.elements.namedItem('dressingRunTurn0') as unknown as DOMSelect;
+    assert.equal(turn.value, 'right');
+    assert.ok(!turn.disabled, 'the first run now carries a corner');
+    assert.ok((form.elements.namedItem('dressingRunTurn1') as unknown as DOMSelect).disabled);
+    assert.equal(field('depth').value, '120');
+
     form.reportValidity = () => true;
     form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     assert.equal(added.length, 1);
-    assert.deepEqual(added[0].dressing, { side: 'left', runDepth: 0.6, returnWidth: 0.6 });
-    assert.equal(added[0].depth, 1.2);
+    assert.deepEqual(added[0].dressing, {
+      runDepth: 0.6,
+      runs: [{ length: 1.8, turn: 'right' }, { length: 1.2 }],
+    });
     assert.equal(added[0].width, 1.8);
+    assert.equal(added[0].depth, 1.2);
   } finally {
     cleanup();
   }
 });
 
-test('editing a corner dressing keeps untouched return measurements exact', () => {
+test('removing a run keeps the chain valid and the last run without a corner', () => {
+  const { window, panel, cleanup } = setup();
+  try {
+    panel.openAdd();
+    const form = window.document.querySelector<DOMForm>('#furniture-add-form')!;
+    const kind = form.elements.namedItem('kind') as unknown as DOMInput;
+    kind.value = 'dressing';
+    kind.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const add = form.querySelector('[data-dressing-add]')!;
+    add.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    add.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.ok(form.elements.namedItem('dressingRunLength2'));
+    form
+      .querySelector('[data-dressing-remove="1"]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(form.elements.namedItem('dressingRunLength2'), null);
+    assert.equal(
+      (form.elements.namedItem('dressingRunTurn1') as unknown as DOMSelect).disabled,
+      true,
+    );
+    assert.equal(form.querySelectorAll('[data-dressing-remove]').length, 2);
+  } finally {
+    cleanup();
+  }
+});
+
+test('editing a dressing keeps untouched run lengths exact', () => {
   const { window, editor, panel, getItems, cleanup } = setup(true, 'dressing');
   try {
     panel.openEdit('sofa');
     const form = editor.querySelector<DOMForm>('form')!;
-    const shape = form.elements.namedItem('dressingShape') as unknown as DOMSelect;
-    assert.equal(shape.value, 'straight');
-    shape.value = 'corner';
-    shape.dispatchEvent(new window.Event('change', { bubbles: true }));
-    assert.ok(!form.querySelector('[data-dressing-config]')!.hasAttribute('hidden'));
+    const field = (name: string) => form.elements.namedItem(name) as unknown as DOMInput;
+    assert.equal(field('dressingRunLength0').value, '180');
+    form
+      .querySelector('[data-dressing-add]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    field('dressingRunLength1').value = '90';
     form.reportValidity = () => true;
     form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
     const saved = getItems()[0];
-    assert.deepEqual(saved.dressing, { side: 'left', runDepth: 0.6, returnWidth: 0.6 });
-    assert.equal(saved.depth, 1.2);
+    assert.deepEqual(saved.dressing, {
+      runDepth: 0.6,
+      runs: [{ length: 1.8, turn: 'right' }, { length: 0.9 }],
+    });
+    assert.equal(saved.width, 1.8);
+    assert.equal(saved.depth, 0.9);
+  } finally {
+    cleanup();
+  }
+});
+
+test('a shower offers three simple types', () => {
+  const { window, panel, added, cleanup } = setup();
+  try {
+    panel.openAdd();
+    const form = window.document.querySelector<DOMForm>('#furniture-add-form')!;
+    const kind = form.elements.namedItem('kind') as unknown as DOMInput;
+    kind.value = 'shower';
+    kind.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const type = form.elements.namedItem('showerType') as unknown as DOMSelect;
+    assert.equal(type.value, 'bac');
+    assert.ok(!form.querySelector('[data-shower-fields]')!.hasAttribute('hidden'));
+    type.value = 'italienne';
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(added[0].showerType, 'italienne');
   } finally {
     cleanup();
   }
