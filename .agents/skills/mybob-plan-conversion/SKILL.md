@@ -7,7 +7,7 @@ description: Reconstruct or regenerate Mybob house JSON from architectural PDFs 
 
 Deliver a faithful, traceable reconstruction within the current schema. An importable JSON is only the first technical gate. Do not promote guessed geometry to a completed conversion because it passes validation.
 
-Read `AGENTS.md`, `docs/HANDOFF.md`, `docs/PROJECT-FORMAT.md`, `src/model/types.ts` and `src/model/validate.ts`. Follow the maintenance skill for repository changes. Keep original plans, rendered pages, evidence ledgers, overlays and personal generated bundles in ignored directories (`reference-documents/`, `artifacts/plan-review/`). Never add them to the public asset allowlist.
+Read `AGENTS.md`, the local passation journal `docs/HANDOFF.md` (git-ignored, present on the owner's clone), `docs/PROJECT-FORMAT.md`, `src/model/types.ts` and `src/model/validate.ts`. Follow the maintenance skill for repository changes. Keep original plans, rendered pages, evidence ledgers, overlays and personal generated bundles in ignored directories (`reference-documents/`, `artifacts/plan-review/`). Never add them to the public asset allowlist.
 
 ## Establish evidence before generating
 

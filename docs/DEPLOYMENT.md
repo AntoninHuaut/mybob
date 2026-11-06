@@ -2,7 +2,7 @@
 
 ## Publication publique, données de maison locales
 
-`npm run build` produit désormais une application publique avec **uniquement le studio de démonstration**. Vite ne copie pas le dossier `public/` : un plugin embarque explicitement le favicon et `studio-demo.json`. Le vrai plan `private-project.json`, les PDF et les photos de chantier ne font pas partie de cet artefact.
+`npm run build` produit désormais une application publique avec **uniquement le studio de démonstration**. Vite ne copie pas le dossier `public/` : un plugin embarque explicitement le favicon et `studio-demo.json`. Tout plan personnel (`public/projects/private-*.json`, git-ignoré), les PDF et les photos de chantier ne font pas partie de cet artefact.
 
 Les meubles, réglages solaires et projets importés sont traités et conservés dans le navigateur. Leur export reste un fichier personnel. Ces données ne sont pas envoyées à Cloudflare par l’application. Un changement d’origine de site ne transfère pas le stockage du navigateur : **exporter le projet et son aménagement depuis l’ancien site privé avant la migration**, puis importer ce fichier sur le nouveau site.
 

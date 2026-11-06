@@ -4,7 +4,7 @@ Application de visite de maisons en 3D pour ordinateur, réalisée avec **Babylo
 
 ## Reprise avec un nouvel agent
 
-Lire [AGENTS.md](AGENTS.md), [le guide de passation locale](docs/HANDOFF.md) et [le skill de maintenance](.agents/skills/mybob-maintenance/SKILL.md). **Exporter son projet depuis le navigateur actuel avant de passer en local** : le dépôt ne contient pas l’aménagement sauvegardé dans ce navigateur.
+Lire [AGENTS.md](AGENTS.md) et [le skill de maintenance](.agents/skills/mybob-maintenance/SKILL.md) ; le guide de passation est un fichier local git-ignoré sur le clone de l'owner. **Exporter son projet depuis le navigateur actuel avant de passer en local** : le dépôt ne contient pas l’aménagement sauvegardé dans ce navigateur.
 
 ## Démarrer
 
@@ -55,8 +55,8 @@ La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable e
 ## Fichiers importants
 
 ```text
-public/projects/private-project.json    Premier projet, dimensions et hypothèses
-public/projects/studio-demo.json Second projet indépendant
+public/projects/private-project.json  Plan personnel local (git-ignoré, jamais commité)
+public/projects/studio-demo.json Démonstration publique
 src/model/types.ts              Format versionné des projets
 src/model/validate.ts           Validation à l’import
 src/model/geometry.ts           Calculs en mètres

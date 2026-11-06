@@ -1,13 +1,13 @@
 # Mybob / Maison — agent instructions
 
-Read [docs/HANDOFF.md](docs/HANDOFF.md) first, then the relevant technical docs. For maintenance and releases, follow [.agents/skills/mybob-maintenance/SKILL.md](.agents/skills/mybob-maintenance/SKILL.md). These files replace reliance on any previous chat context.
+Read the local passation journal `docs/HANDOFF.md` first (git-ignored: present on the owner's clone, never committed), then the relevant technical docs. For maintenance and releases, follow [.agents/skills/mybob-maintenance/SKILL.md](.agents/skills/mybob-maintenance/SKILL.md). These files replace reliance on any previous chat context.
 
 ## Product and privacy
 
 - French UI; desktop keyboard/mouse is the primary target. Babylon.js + TypeScript + Vite, modular JSON projects and parametric furniture, metres internally.
 - Keep the application adaptable to other houses. Never hardcode the owner's house dimensions or identifiers into scene/UI logic.
 - The owner explicitly wants their house **absent from the deployed site**. Public builds include only the fictitious demonstration. Personal plans are imported locally. Preserve the allowlist in `vite.config.ts` and `scripts/check-public-build.mjs`.
-- The owner explicitly wants their house **absent from the repository and the deployed site**. The repository is public: the personal plan `private-project.json` must never be committed (git-ignored; the owner keeps a local copy for `dev:private`), and its Git history has been purged before publication. Public builds include only the fictitious demonstrations. Personal plans are imported locally. Preserve the allowlist in `vite.config.ts` and `scripts/check-public-build.mjs`. Never commit original PDF/photos, secrets or generated private bundles.
+- The owner explicitly wants their house **absent from the repository and the deployed site**. The repository is public: personal plans live in `public/projects/private-*.json` — git-ignored, never committed (the owner keeps a local copy of `private-project.json` for `dev:private`), and their Git history has been purged before publication. Public builds include only the fictitious demonstrations. Personal plans are imported locally. Preserve the allowlist in `vite.config.ts` and `scripts/check-public-build.mjs`. Never commit original PDF/photos, secrets or generated private bundles.
 - No account/backend/cloud storage for house data. Browser localStorage is per origin and browser profile. Exports are the migration/backup mechanism.
 - Cloudflare **Pages**, connected to GitHub `main`, is the deployment path. Do not replace it with Workers, Netlify or Sites. Access restrictions are managed in the owner's Cloudflare account.
 
