@@ -31,6 +31,16 @@ import {
   planPhotoKey,
   savePlanPhoto,
 } from './scene/planPhotoStore';
+import { MeasureBar } from './ui/measureBar';
+import { desktopHint, modeTitle, touchHint as touchHintText } from './ui/modeChrome';
+import {
+  roomDetailHtml,
+  roomHeightHtml,
+  roomListNote,
+  roomRowsHtml,
+  roomSummaryHtml,
+  sceneLabelsHtml,
+} from './ui/roomPanels';
 import { layoutLabels, type LabelBox } from './ui/labelLayout';
 import { exportSceneImage } from './ui/imageExport';
 import {
@@ -67,6 +77,7 @@ let planPhotoLayer: PlanPhotoLayer | undefined;
 let planPhotoActive = false;
 let planPhotoAdjustments: PlanPhotoAdjustments = { ...defaultPlanPhotoAdjustments };
 let planPhotoSaveTimer: ReturnType<typeof setTimeout> | undefined;
+const measureBar = new MeasureBar();
 let ceiling = false;
 let exteriorView = false;
 let lights = true;
@@ -606,7 +617,7 @@ function syncDisplayControls() {
   furnitureLayer?.setMode(
     mode === 'walk' || exteriorView || measuring || viewer.goToMode ? 'walk' : mode,
   );
-  el('#measure-instructions').hidden = !measuring;
+  measureBar.setActive(measuring);
   activeButton('#tool-measure', measuring);
   activeButton('#tool-labels', showLabels);
   activeButton('#tool-ceiling', ceiling && mode === 'overview');
@@ -713,28 +724,11 @@ function loadProject(id: string, levelId?: string) {
   }
 }
 
-const roomIcon = (room: Room) =>
-  room.kind === 'garage'
-    ? 'door'
-    : room.kind === 'circulation'
-      ? 'walk'
-      : room.kind === 'storage'
-        ? 'layers'
-        : 'plan';
-const hasSurfaceDifference = (room: Room) =>
-  room.planArea !== undefined && Math.abs(polygonArea(room.polygon) - room.planArea) > 0.1;
 function renderRooms() {
-  el('#room-list').innerHTML = viewer.level.rooms
-    .map(
-      (r) =>
-        `<button class="room-row${r.id === selectedRoom?.id ? ' selected' : ''}" data-room="${esc(r.id)}"><span class="room-icon">${icon(roomIcon(r), 17)}</span><span class="room-name">${esc(r.name)}</span><span class="room-area">${number(r.planArea ?? polygonArea(r.polygon))}<small>m²</small>${hasSurfaceDifference(r) ? '<sup title="Le contour reconstruit reste à vérifier">*<span class="sr-only">Contour reconstruit à vérifier</span></sup>' : ''}</span>${icon('chevron', 13)}</button>`,
-    )
-    .join('');
+  el('#room-list').innerHTML = roomRowsHtml(viewer.level.rooms, selectedRoom?.id, icon);
   const note = document.createElement('p');
   note.className = 'room-list-note';
-  note.textContent = viewer.level.rooms.some((r) => r.planArea !== undefined)
-    ? 'Surfaces du plan · * contour à vérifier'
-    : 'Surfaces calculées depuis le modèle';
+  note.textContent = roomListNote(viewer.level.rooms.some((r) => r.planArea !== undefined));
   el('#room-list').append(note);
   document
     .querySelectorAll<HTMLButtonElement>('[data-room]')
@@ -754,20 +748,13 @@ function selectRoom(id: string, move = true) {
 function renderRoomDetail() {
   const room = selectedRoom;
   if (!room) {
-    const living = viewer.level.rooms
-      .filter((r) => r.kind !== 'garage')
-      .reduce((sum, r) => sum + (r.planArea ?? polygonArea(r.polygon)), 0);
-    const garage = viewer.level.rooms
-      .filter((r) => r.kind === 'garage')
-      .reduce((sum, r) => sum + (r.planArea ?? polygonArea(r.polygon)), 0);
-    el('#room-detail').innerHTML =
-      `<div class="eyebrow">LE PROJET EN UN REGARD</div><div class="project-stats"><div><strong>${number(living)}</strong><span>m² habitables${current.id === 'private-project' ? ' au plan' : ''}</span></div><div><strong>${number(viewer.level.ceilingHeight)}</strong><span>m sous plafond</span></div></div>${garage ? `<div class="garage-stat">${icon('door', 15)} Garage <span>${area(garage)}</span></div>` : ''}<p class="detail-hint">Sélectionnez une pièce pour la découvrir.</p>`;
+    el('#room-detail').innerHTML = roomSummaryHtml(viewer.level, {
+      atPlanProject: current.id === 'private-project',
+      icon,
+    });
     return;
   }
-  const computed = polygonArea(room.polygon);
-  const difference = hasSurfaceDifference(room);
-  el('#room-detail').innerHTML =
-    `<div class="eyebrow">Pièce sélectionnée <button id="clear-room" aria-label="Désélectionner la pièce">${icon('close', 14)}</button></div><h2>${esc(room.name)}</h2><div class="room-detail-area">${area(room.planArea ?? computed)} <span>${room.planArea !== undefined ? 'au plan' : 'calculés'}</span></div><div class="detail-data"><span>Surface reconstruite</span><strong>${area(computed)}</strong></div>${difference ? '<p class="precision-note">Raccords à vérifier : les deux surfaces diffèrent.</p>' : ''}<p class="room-note">${esc(room.note ?? 'Dimensions en mètres, entre les faces intérieures des murs finis.')}</p><button id="visit-room" class="visit-room">Visiter cette pièce ${icon('arrow', 16)}</button>`;
+  el('#room-detail').innerHTML = roomDetailHtml(room, viewer.level, icon);
   el('#visit-room').addEventListener('click', () => {
     if (setMode('walk')) {
       viewer.focusRoom(room.id);
@@ -776,7 +763,7 @@ function renderRoomDetail() {
   });
   const height = document.createElement('div');
   height.className = 'detail-data';
-  height.innerHTML = `<span>Hauteur libre</span><strong>${number(viewer.level.ceilingHeight - (room.floorOffset ?? 0))} m</strong>`;
+  height.innerHTML = roomHeightHtml(room, viewer.level);
   el('#visit-room').before(height);
   el('#clear-room').addEventListener('click', () => {
     const previous = selectedRoom?.id;
@@ -790,12 +777,7 @@ function renderRoomDetail() {
 }
 
 function renderLabels() {
-  el('#scene-labels').innerHTML = viewer.level.rooms
-    .map(
-      (r) =>
-        `<button class="scene-label${r.id === selectedRoom?.id ? ' selected' : ''}" data-label="${esc(r.id)}"><span>${esc(r.name)}</span><small>${area(r.planArea ?? polygonArea(r.polygon))}</small></button>`,
-    )
-    .join('');
+  el('#scene-labels').innerHTML = sceneLabelsHtml(viewer.level.rooms, selectedRoom?.id);
   document
     .querySelectorAll<HTMLButtonElement>('[data-label]')
     .forEach((b) => b.addEventListener('click', () => selectRoom(b.dataset.label!)));
@@ -850,20 +832,7 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
     b.setAttribute('aria-pressed', String(b.dataset.view === next));
   });
   el('#viewport').classList.toggle('walking', next === 'walk');
-  const titles = {
-    overview: ['VOTRE MAISON, EN PERSPECTIVE', 'Vue 3D', 'Explorez les volumes, à votre rythme.'],
-    plan: [
-      'LES VOLUMES, À L’ÉCHELLE',
-      'Plan de la maison',
-      'Retrouvez la disposition et les proportions des pièces.',
-    ],
-    walk: [
-      'À HAUTEUR DE REGARD',
-      'Visite intérieure',
-      `Une visite à ${number(Number(el<HTMLSelectElement>('#eye-height').value))} m du sol.`,
-    ],
-  };
-  const title = titles[next];
+  const title = modeTitle(next, number(Number(el<HTMLSelectElement>('#eye-height').value)));
   el('#view-eyebrow').textContent = title[0];
   el('#view-title').textContent = title[1];
   el('#view-subtitle').textContent = title[2];
@@ -871,25 +840,18 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
   el('#resume-walk').hidden = true;
   el('#crosshair').hidden = next !== 'walk';
   el('#scene-labels').hidden = next === 'walk' || !showLabels || (ceiling && next === 'overview');
-  el('#control-hint').innerHTML =
-    next === 'walk'
-      ? `<kbd>ZQSD</kbd><span>ou flèches</span><i></i><kbd>E</kbd><span>Portes</span><i></i><kbd>Échap</kbd><span>Libérer la souris</span>`
-      : next === 'plan'
-        ? `<kbd>ZQSD</kbd><span>Déplacer la vue · Maj pour accélérer</span><i></i>${icon('mouse-left', 17)}<span>Glisser pour déplacer</span><i></i>${icon('mouse-wheel', 17)}<span>Molette pour zoomer</span>`
-        : `<kbd>ZQSD</kbd><span>Déplacer la vue</span><i></i>${icon('mouse-left', 17)}<span>Glisser gauche pour tourner</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span><i></i>${icon('mouse-wheel', 17)}<span>Molette pour zoomer</span>`;
+  el('#control-hint').innerHTML = desktopHint(next, {
+    mouseLeft: icon('mouse-left', 17),
+    mouseRight: icon('mouse-right', 17),
+    mouseWheel: icon('mouse-wheel', 17),
+  });
   const touchHint = document.createElement('span');
   touchHint.className = 'touch-hint';
-  touchHint.textContent =
-    next === 'plan'
-      ? 'Glisser pour déplacer · Pincer pour zoomer'
-      : next === 'walk'
-        ? 'Glisser pour regarder · Clavier pour marcher'
-        : 'Glisser pour tourner · Deux doigts pour déplacer ou zoomer';
+  touchHint.textContent = touchHintText(next);
   el('#control-hint').append(touchHint);
   syncDisplayControls();
   if (next !== 'walk' && !fromViewer) viewer.canvas.focus({ preventScroll: true });
-  el('#measure-instructions').hidden = true;
-  el('#measure-label').hidden = true;
+  measureBar.hide();
   el('#width-label').hidden = !showDimensions || next === 'walk';
   el('#depth-label').hidden = !showDimensions || next === 'walk';
   el('#door-prompt').hidden = true;
@@ -1547,12 +1509,15 @@ function wireViewportControls() {
     viewer.setMeasureMode(false);
     syncDisplayControls();
   };
-  el('#end-measure').addEventListener('click', endMeasure);
-  el('#clear-measures').addEventListener('click', () => {
-    if (viewer.clearPinnedMeasurements()) {
-      toast('Mesures épinglées effacées.');
-      el('#clear-measures').hidden = true;
-    }
+  measureBar.wire({
+    onEnd: endMeasure,
+    onClear: () => {
+      if (viewer.clearPinnedMeasurements()) {
+        toast('Mesures épinglées effacées.');
+        return true;
+      }
+      return false;
+    },
   });
   el('#tool-measure').addEventListener('click', () => {
     if (ceiling && mode === 'overview') {
@@ -1563,7 +1528,7 @@ function wireViewportControls() {
     }
     viewer.setMeasureMode(!viewer.measureMode);
     syncDisplayControls();
-    el('#measure-instructions span').textContent = 'Cliquez sur deux points du sol.';
+    measureBar.resetPrompt();
   });
   el('#mini-plan').addEventListener('click', () => setMode('plan'));
   el('#capture-mouse').addEventListener('click', () => {
@@ -1678,19 +1643,7 @@ async function start() {
       el('#resume-walk').hidden = true;
       el<HTMLCanvasElement>('#scene').focus();
     };
-    viewer.onMeasure = (measurement) => {
-      el('#measure-label').hidden = !measurement?.b;
-      el('#clear-measures').hidden = !measurement || Boolean(measurement.preview);
-      if (measurement?.distance !== undefined) {
-        el('#measure-label').textContent =
-          `${number(measurement.distance)} m${measurement.aligned ? ' · droit' : ''}`;
-        el('#measure-instructions span').textContent = measurement.preview
-          ? 'Cliquez pour confirmer · Maj : droit · Alt : libre'
-          : 'Un nouveau clic commence une autre mesure.';
-      } else if (measurement)
-        el('#measure-instructions span').textContent =
-          'Déplacez le pointeur · Maj : droit · Alt : libre';
-    };
+    viewer.onMeasure = (measurement) => measureBar.sync(measurement);
     viewer.onFrame = (frame) => {
       if (!current) return;
       updateFurnitureContext();
@@ -1781,9 +1734,7 @@ async function start() {
           midpoint,
           floorElevationAt(viewer.level, midpoint) - viewer.level.elevation + 0.1,
         );
-        el('#measure-label').style.left = `${p.x}px`;
-        el('#measure-label').style.top = `${p.y}px`;
-        el('#measure-label').hidden = !p.visible;
+        measureBar.moveTo(p);
       }
       if (mode === 'walk') {
         el('#door-prompt').hidden = !frame.nearDoor || !el('#walk-start').hidden;
