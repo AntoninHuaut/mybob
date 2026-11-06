@@ -8,6 +8,7 @@ export type FurnitureKind =
   | 'chair'
   | 'bed'
   | 'wardrobe'
+  | 'dressing'
   | 'desk'
   | 'cabinet'
   | 'custom'
@@ -16,12 +17,25 @@ export type FurnitureKind =
   | 'coffee-table'
   | 'bookcase'
   | 'ottoman'
-  | 'side-table';
+  | 'side-table'
+  | 'toilet'
+  | 'shower'
+  | 'bathtub'
+  | 'vanity';
 export interface SofaConfiguration {
   shape: 'corner' | 'chaise';
   /** Side viewed from the front: left is local negative X. */
   side: 'left' | 'right';
   seatDepth: number;
+  returnWidth: number;
+}
+/** Present only for a corner dressing; a straight run keeps the plain depth. */
+export interface DressingConfiguration {
+  /** Side of the return run, viewed from the front: left is local negative X. */
+  side: 'left' | 'right';
+  /** Depth of the main run, measured from the back. */
+  runDepth: number;
+  /** Width of the return run. */
   returnWidth: number;
 }
 export interface FurnitureItem {
@@ -34,6 +48,7 @@ export interface FurnitureItem {
   /** Height of the object's base above the finished floor, in metres. */
   elevation?: number;
   sofa?: SofaConfiguration;
+  dressing?: DressingConfiguration;
   /** Display diagonal only; chassis dimensions remain editable approximations. */
   tvDiagonalInches?: number;
   position: Point2;
@@ -65,6 +80,7 @@ export const FURNITURE_PRESETS: Record<
   chair: { name: 'Chaise', width: 0.45, depth: 0.5, height: 0.85 },
   bed: { name: 'Lit', width: 1.6, depth: 2, height: 0.55 },
   wardrobe: { name: 'Armoire', width: 1.2, depth: 0.6, height: 2 },
+  dressing: { name: 'Dressing', width: 1.8, depth: 0.6, height: 2.2 },
   desk: { name: 'Bureau', width: 1.2, depth: 0.6, height: 0.75 },
   cabinet: { name: 'Commode', width: 0.9, depth: 0.45, height: 0.9 },
   custom: { name: 'Meuble sur mesure', width: 1, depth: 0.6, height: 0.8 },
@@ -81,7 +97,25 @@ export const FURNITURE_PRESETS: Record<
   bookcase: { name: 'Bibliothèque', width: 0.8, depth: 0.3, height: 1.8 },
   ottoman: { name: 'Pouf', width: 0.65, depth: 0.65, height: 0.42 },
   'side-table': { name: 'Table d’appoint', width: 0.5, depth: 0.5, height: 0.5 },
+  toilet: { name: 'WC', width: 0.38, depth: 0.65, height: 0.78 },
+  shower: { name: 'Douche', width: 0.9, depth: 0.9, height: 2 },
+  bathtub: { name: 'Baignoire', width: 1.7, depth: 0.75, height: 0.58 },
+  vanity: { name: 'Meuble vasque', width: 0.8, depth: 0.5, height: 0.85 },
 };
+
+/** Menu order. Every kind must appear exactly once; the panel renders these groups. */
+export const FURNITURE_CATEGORIES: { title: string; kinds: FurnitureKind[] }[] = [
+  {
+    title: 'Salon',
+    kinds: ['sofa', 'coffee-table', 'side-table', 'ottoman', 'tv-stand', 'tv', 'bookcase'],
+  },
+  { title: 'Salle à manger', kinds: ['table', 'chair'] },
+  { title: 'Chambre', kinds: ['bed', 'wardrobe', 'cabinet'] },
+  { title: 'Dressing', kinds: ['dressing'] },
+  { title: 'Bureau', kinds: ['desk'] },
+  { title: 'Salle de bain', kinds: ['toilet', 'shower', 'bathtub', 'vanity'] },
+  { title: 'Autre', kinds: ['custom'] },
+];
 
 export class FurnitureValidationError extends Error {}
 const finite = (value: unknown): value is number =>
@@ -160,6 +194,23 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
           'Vérifiez les mesures : la profondeur totale du côté allongé doit dépasser celle du corps du canapé, et la largeur du retour doit être inférieure à la largeur totale.',
         );
     }
+    if (item.dressing !== undefined) {
+      const dressing = item.dressing;
+      if (
+        item.kind !== 'dressing' ||
+        !record(dressing) ||
+        !['left', 'right'].includes(dressing.side) ||
+        !finite(dressing.runDepth) ||
+        dressing.runDepth < 0.2 ||
+        dressing.runDepth > item.depth - 0.05 ||
+        !finite(dressing.returnWidth) ||
+        dressing.returnWidth < 0.2 ||
+        dressing.returnWidth > item.width - 0.05
+      )
+        fail(
+          'Vérifiez les mesures : la profondeur totale du côté en retour doit dépasser celle du linéaire, et la largeur du retour doit être inférieure à la largeur totale.',
+        );
+    }
     if (
       !Array.isArray(item.position) ||
       item.position.length !== 2 ||
@@ -221,8 +272,9 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
   return structuredClone(input as FurnitureItem[]);
 }
 
-export type FurnitureInput = Omit<Partial<FurnitureItem>, 'sofa'> & {
+export type FurnitureInput = Omit<Partial<FurnitureItem>, 'sofa' | 'dressing'> & {
   sofa?: Partial<SofaConfiguration>;
+  dressing?: Partial<DressingConfiguration>;
 };
 
 export function createFurniture(input: FurnitureInput = {}): FurnitureItem {
@@ -269,6 +321,16 @@ export function createFurniture(input: FurnitureInput = {}): FurnitureItem {
       returnWidth: Math.min(0.9, item.width / 3),
       ...input.sofa,
     };
+  if (input.dressing) {
+    // A corner needs room for the return run in front of the main one.
+    if (input.depth === undefined) item.depth = 1.2;
+    item.dressing = {
+      side: 'left',
+      runDepth: Math.min(0.6, item.depth * 0.55),
+      returnWidth: Math.min(0.6, item.width / 3),
+      ...input.dressing,
+    };
+  }
   return validateFurnitureList([item])[0];
 }
 
@@ -302,16 +364,32 @@ function rectangle(
   ];
 }
 
-/** Convex occupied pieces. The empty inside corner of an L is deliberately excluded. */
-export function footprintParts(item: FurnitureItem): Point2[][] {
-  if (item.kind !== 'sofa' || !item.sofa) return [footprint(item)];
-  const { seatDepth, returnWidth, side } = item.sofa;
-  const seatFront = -item.depth / 2 + seatDepth;
+/** Two convex pieces: the full-width back run and the forward return. */
+function cornerParts(
+  item: FurnitureItem,
+  runDepth: number,
+  returnWidth: number,
+  side: 'left' | 'right',
+): Point2[][] {
+  const runFront = -item.depth / 2 + runDepth;
   const left = side === 'left' ? -item.width / 2 : item.width / 2 - returnWidth;
   return [
-    rectangle(item, -item.width / 2, -item.depth / 2, item.width / 2, seatFront),
-    rectangle(item, left, seatFront, left + returnWidth, item.depth / 2),
+    rectangle(item, -item.width / 2, -item.depth / 2, item.width / 2, runFront),
+    rectangle(item, left, runFront, left + returnWidth, item.depth / 2),
   ];
+}
+
+/** Convex occupied pieces. The empty inside corner of an L is deliberately excluded. */
+export function footprintParts(item: FurnitureItem): Point2[][] {
+  if (item.kind === 'sofa' && item.sofa) {
+    const { seatDepth, returnWidth, side } = item.sofa;
+    return cornerParts(item, seatDepth, returnWidth, side);
+  }
+  if (item.kind === 'dressing' && item.dressing) {
+    const { runDepth, returnWidth, side } = item.dressing;
+    return cornerParts(item, runDepth, returnWidth, side);
+  }
+  return [footprint(item)];
 }
 
 export class FurnitureHistory {

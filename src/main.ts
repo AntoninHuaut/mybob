@@ -1349,7 +1349,7 @@ function wireProjectControls() {
     if (!project) return;
     openDialog(
       'SUPPRIMER CE PROJET',
-      `<h2>Supprimer « ${esc(project.name)} » ?</h2><p>Ce projet et les aménagements de ses niveaux seront supprimés de cet ordinateur. Exportez une copie pour les conserver.</p><button type="button" class="text-button" id="export-before-delete">${icon('export', 17)} Exporter avant de supprimer</button><button type="button" class="primary-button" id="confirm-delete-project">Supprimer le projet</button><button type="button" class="text-button" id="cancel-delete-project">Annuler</button>`,
+      `<h2>Supprimer « ${esc(project.name)} » ?</h2><p>Ce projet et les aménagements de ses niveaux seront supprimés de cet ordinateur. Exportez une copie pour les conserver.</p><div class="dialog-actions"><button type="button" class="text-button dialog-actions-start" id="export-before-delete">${icon('export', 17)} Exporter une copie</button><button type="button" class="text-button" id="cancel-delete-project">Annuler</button><button type="button" class="danger-button" id="confirm-delete-project">Supprimer le projet</button></div>`,
     );
     el('#export-before-delete').addEventListener('click', downloadProject);
     el('#cancel-delete-project').addEventListener('click', () =>

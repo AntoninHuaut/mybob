@@ -7,7 +7,7 @@ import {
   HTMLFormElement as DOMForm,
   HTMLSelectElement as DOMSelect,
 } from 'happy-dom';
-import { createFurniture, type FurnitureItem } from '../src/furniture/model';
+import { createFurniture, FURNITURE_PRESETS, type FurnitureItem } from '../src/furniture/model';
 
 // Unit tests exercise the DOM controller; styles and WebGL are intentionally absent.
 registerHooks({
@@ -237,6 +237,83 @@ test('single selection stays compact and a double-click opens the dimensional ed
     assert.ok(editor.hasAttribute('open'));
     assert.ok(editor.querySelector('.furniture-edit-form'));
     assert.ok(editor.querySelector('input[name=width]'));
+  } finally {
+    cleanup();
+  }
+});
+
+test('the add menu groups every furniture kind under a room category', () => {
+  const { window, panel, cleanup } = setup();
+  try {
+    panel.openAdd();
+    const select = window.document.querySelector<DOMSelect>(
+      '#furniture-add-form select[name=kind]',
+    )!;
+    const groups = Array.from(select.querySelectorAll('optgroup'));
+    assert.ok(groups.length > 1, 'the flat list is replaced by categories');
+    for (const group of groups) assert.ok(group.getAttribute('label'));
+    const kinds = groups.flatMap((group) =>
+      Array.from(group.querySelectorAll('option')).map((option) => option.value),
+    );
+    assert.deepEqual([...kinds].sort(), Object.keys(FURNITURE_PRESETS).sort());
+    assert.equal(new Set(kinds).size, kinds.length, 'no kind is listed twice');
+  } finally {
+    cleanup();
+  }
+});
+
+test('a dressing is added straight or as a corner with its return measurements', () => {
+  const { window, panel, added, cleanup } = setup();
+  try {
+    panel.openAdd();
+    const form = window.document.querySelector<DOMForm>('#furniture-add-form')!;
+    const kind = form.elements.namedItem('kind') as unknown as DOMInput;
+    kind.value = 'dressing';
+    kind.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const shape = form.elements.namedItem('dressingShape') as unknown as DOMSelect;
+    assert.equal(shape.value, 'straight');
+    assert.ok(!form.querySelector('[data-dressing-fields]')!.hasAttribute('hidden'));
+    assert.ok(form.querySelector('[data-dressing-config]')!.hasAttribute('hidden'));
+    assert.equal(form.querySelector('[data-depth-label]')!.textContent, 'Profondeur');
+    shape.value = 'corner';
+    shape.dispatchEvent(new window.Event('change', { bubbles: true }));
+    assert.ok(!form.querySelector('[data-dressing-config]')!.hasAttribute('hidden'));
+    assert.equal(form.querySelector('[data-depth-label]')!.textContent, 'Profondeur du linéaire');
+    assert.equal((form.elements.namedItem('depth') as unknown as DOMInput).value, '60');
+    assert.equal(
+      (form.elements.namedItem('dressingReturnDepth') as unknown as DOMInput).value,
+      '120',
+    );
+    assert.equal(
+      (form.elements.namedItem('dressingReturnWidth') as unknown as DOMInput).value,
+      '60',
+    );
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(added.length, 1);
+    assert.deepEqual(added[0].dressing, { side: 'left', runDepth: 0.6, returnWidth: 0.6 });
+    assert.equal(added[0].depth, 1.2);
+    assert.equal(added[0].width, 1.8);
+  } finally {
+    cleanup();
+  }
+});
+
+test('editing a corner dressing keeps untouched return measurements exact', () => {
+  const { window, editor, panel, getItems, cleanup } = setup(true, 'dressing');
+  try {
+    panel.openEdit('sofa');
+    const form = editor.querySelector<DOMForm>('form')!;
+    const shape = form.elements.namedItem('dressingShape') as unknown as DOMSelect;
+    assert.equal(shape.value, 'straight');
+    shape.value = 'corner';
+    shape.dispatchEvent(new window.Event('change', { bubbles: true }));
+    assert.ok(!form.querySelector('[data-dressing-config]')!.hasAttribute('hidden'));
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    const saved = getItems()[0];
+    assert.deepEqual(saved.dressing, { side: 'left', runDepth: 0.6, returnWidth: 0.6 });
+    assert.equal(saved.depth, 1.2);
   } finally {
     cleanup();
   }

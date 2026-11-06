@@ -2,11 +2,11 @@ import './panel.css';
 import type { Level, Point2 } from '../model/types';
 import { escapeHtml as esc } from '../ui/format';
 import { icon } from '../ui/icons';
-import { measurementsFromForm, sofaDiagram } from './measurements';
+import { measurementsFromForm, dressingDiagram, sofaDiagram } from './measurements';
 import { groupMembers } from './groups';
 import { FurnitureEditorDraft } from './editorDraft';
 import { televisionDimensions } from './television';
-import { createFurniture, type FurnitureItem } from './model';
+import { createFurniture, FURNITURE_CATEGORIES, type FurnitureItem } from './model';
 
 export interface FurniturePanelAdapter {
   getItems(): FurnitureItem[];
@@ -39,8 +39,9 @@ const KINDS: Record<FurnitureItem['kind'], string> = {
   chair: 'Chaise',
   bed: 'Lit',
   wardrobe: 'Armoire',
+  dressing: 'Dressing',
   desk: 'Bureau',
-  cabinet: 'Meuble de rangement',
+  cabinet: 'Commode',
   custom: 'Volume sur mesure',
   'tv-stand': 'Meuble TV',
   tv: 'Téléviseur',
@@ -48,6 +49,10 @@ const KINDS: Record<FurnitureItem['kind'], string> = {
   bookcase: 'Bibliothèque',
   ottoman: 'Pouf',
   'side-table': 'Table d’appoint',
+  toilet: 'WC',
+  shower: 'Douche',
+  bathtub: 'Baignoire',
+  vanity: 'Meuble vasque',
 };
 const cm = (meters: number) => Math.round(meters * 1000) / 10;
 const degrees = (radians: number) =>
@@ -60,8 +65,42 @@ function disabled(value: boolean) {
   return value ? ' disabled' : '';
 }
 
+/** Grouped by room so the list stays readable as the catalogue grows. */
+function kindOptions(selected: FurnitureItem['kind']) {
+  return FURNITURE_CATEGORIES.map(
+    (category) =>
+      `<optgroup label="${esc(category.title)}">${category.kinds
+        .map(
+          (kind) =>
+            `<option value="${kind}"${kind === selected ? ' selected' : ''}>${KINDS[kind]}</option>`,
+        )
+        .join('')}</optgroup>`,
+  ).join('');
+}
+
+/** Depth of the main body: the sofa and the corner dressing store it in their shape. */
+const bodyDepth = (item: FurnitureItem) =>
+  item.sofa?.seatDepth ?? item.dressing?.runDepth ?? item.depth;
+
 function dimensionsFields(item: FurnitureItem) {
-  return `<fieldset class="furniture-tv-fields" data-tv-fields${item.kind === 'tv' ? '' : ' hidden disabled'}${item.locked ? ' disabled' : ''}><legend>Taille de l’écran</legend><label class="furniture-field">Diagonale <span>pouces</span><input name="tvDiagonal" type="number" min="5" max="300" step="0.1" placeholder="Ex. 55" value="${item.tvDiagonalInches ?? ''}"></label><p class="furniture-form-note" data-tv-size-note>Écran 16:9. Le pied et les bordures sont estimés ; les dimensions exactes restent ajustables ci-dessous.</p></fieldset><details class="furniture-dimensions" data-dimensions${item.kind === 'tv' ? '' : ' open'}><summary${item.kind === 'tv' ? '' : ' hidden'}>Dimensions exactes (facultatif)</summary><div class="furniture-field-grid"><label class="furniture-field">Largeur <span>cm</span><input name="width" type="number" min="5" max="2000" step="0.1" value="${cm(item.width)}" required${disabled(item.locked)}></label><label class="furniture-field"><span data-depth-label>${item.kind === 'sofa' ? 'Profondeur du corps' : 'Profondeur'}</span><span>cm</span><input name="depth" type="number" min="5" max="2000" step="0.1" value="${cm(item.sofa?.seatDepth ?? item.depth)}" required${disabled(item.locked)}></label><label class="furniture-field">Hauteur <span>cm</span><input name="height" type="number" min="5" max="1000" step="0.1" value="${cm(item.height)}" required${disabled(item.locked)}></label></div></details>`;
+  return `<fieldset class="furniture-tv-fields" data-tv-fields${item.kind === 'tv' ? '' : ' hidden disabled'}${item.locked ? ' disabled' : ''}><legend>Taille de l’écran</legend><label class="furniture-field">Diagonale <span>pouces</span><input name="tvDiagonal" type="number" min="5" max="300" step="0.1" placeholder="Ex. 55" value="${item.tvDiagonalInches ?? ''}"></label><p class="furniture-form-note" data-tv-size-note>Écran 16:9. Le pied et les bordures sont estimés ; les dimensions exactes restent ajustables ci-dessous.</p></fieldset><details class="furniture-dimensions" data-dimensions${item.kind === 'tv' ? '' : ' open'}><summary${item.kind === 'tv' ? '' : ' hidden'}>Dimensions exactes (facultatif)</summary><div class="furniture-field-grid"><label class="furniture-field">Largeur <span>cm</span><input name="width" type="number" min="5" max="2000" step="0.1" value="${cm(item.width)}" required${disabled(item.locked)}></label><label class="furniture-field"><span data-depth-label>${depthLabel(item.kind, Boolean(item.sofa || item.dressing))}</span><span>cm</span><input name="depth" type="number" min="5" max="2000" step="0.1" value="${cm(bodyDepth(item))}" required${disabled(item.locked)}></label><label class="furniture-field">Hauteur <span>cm</span><input name="height" type="number" min="5" max="1000" step="0.1" value="${cm(item.height)}" required${disabled(item.locked)}></label></div></details>`;
+}
+function depthLabel(kind: string, corner: boolean) {
+  if (kind === 'sofa') return 'Profondeur du corps';
+  if (kind === 'dressing' && corner) return 'Profondeur du linéaire';
+  return 'Profondeur';
+}
+/** The depth field means the main run once a shape adds a return in front of it. */
+function syncDepthLabel(form: HTMLFormElement, kind: string) {
+  const label = form.querySelector<HTMLElement>('[data-depth-label]');
+  if (!label) return;
+  const corner =
+    kind === 'sofa'
+      ? (form.elements.namedItem('sofaShape') as HTMLSelectElement | null)?.value !== 'straight'
+      : kind === 'dressing'
+        ? (form.elements.namedItem('dressingShape') as HTMLSelectElement | null)?.value === 'corner'
+        : false;
+  label.textContent = depthLabel(kind, corner);
 }
 function updateTelevisionFields(form: HTMLFormElement, kind: string, reset = false) {
   const fields = form.querySelector<HTMLFieldSetElement>('[data-tv-fields]');
@@ -81,7 +120,7 @@ function updateTelevisionFields(form: HTMLFormElement, kind: string, reset = fal
 
 function sofaFields(item: FurnitureItem) {
   const sofa = item.sofa;
-  return `<fieldset class="furniture-sofa-fields" data-sofa-fields${item.locked ? ' disabled' : ''}${item.kind === 'sofa' ? '' : ' hidden'}><legend>Forme du canapé</legend><label class="furniture-field">Configuration<select name="sofaShape"><option value="straight"${!sofa ? ' selected' : ''}>Canapé droit</option><option value="corner"${sofa?.shape === 'corner' ? ' selected' : ''}>Canapé d’angle avec dossier en retour</option><option value="chaise"${sofa?.shape === 'chaise' ? ' selected' : ''}>Canapé avec méridienne</option></select></label><div class="furniture-sofa-config" data-sofa-config${sofa ? '' : ' hidden'}><label class="furniture-field">Retour vu de face<select name="sofaSide"><option value="left"${sofa?.side !== 'right' ? ' selected' : ''}>À gauche</option><option value="right"${sofa?.side === 'right' ? ' selected' : ''}>À droite</option></select></label><div class="furniture-field-grid two"><label class="furniture-field">Profondeur totale <span>cm</span><input type="number" name="returnDepth" min="5" max="2000" step="0.1" value="${cm(sofa ? item.depth : Math.max(1.8, item.depth + 0.6))}"></label><label class="furniture-field">Largeur du retour <span>cm</span><input type="number" name="returnWidth" min="5" max="2000" step="0.1" value="${cm(sofa?.returnWidth ?? 0.9)}"></label></div><p class="furniture-form-note">Les deux profondeurs partent de l’arrière du dossier. Saisissez la profondeur totale du côté allongé, pas la différence. La largeur du retour est celle de la place allongée vue de face.</p><div class="sofa-diagram" data-sofa-diagram></div></div></fieldset>`;
+  return `<fieldset class="furniture-shape-fields" data-sofa-fields${item.locked ? ' disabled' : ''}${item.kind === 'sofa' ? '' : ' hidden'}><legend>Forme du canapé</legend><label class="furniture-field">Configuration<select name="sofaShape"><option value="straight"${!sofa ? ' selected' : ''}>Canapé droit</option><option value="corner"${sofa?.shape === 'corner' ? ' selected' : ''}>Canapé d’angle avec dossier en retour</option><option value="chaise"${sofa?.shape === 'chaise' ? ' selected' : ''}>Canapé avec méridienne</option></select></label><div class="furniture-shape-config" data-sofa-config${sofa ? '' : ' hidden'}><label class="furniture-field">Retour vu de face<select name="sofaSide"><option value="left"${sofa?.side !== 'right' ? ' selected' : ''}>À gauche</option><option value="right"${sofa?.side === 'right' ? ' selected' : ''}>À droite</option></select></label><div class="furniture-field-grid two"><label class="furniture-field">Profondeur totale <span>cm</span><input type="number" name="returnDepth" min="5" max="2000" step="0.1" value="${cm(sofa ? item.depth : Math.max(1.8, item.depth + 0.6))}"></label><label class="furniture-field">Largeur du retour <span>cm</span><input type="number" name="returnWidth" min="5" max="2000" step="0.1" value="${cm(sofa?.returnWidth ?? 0.9)}"></label></div><p class="furniture-form-note">Les deux profondeurs partent de l’arrière du dossier. Saisissez la profondeur totale du côté allongé, pas la différence. La largeur du retour est celle de la place allongée vue de face.</p><div class="shape-diagram" data-sofa-diagram></div></div></fieldset>`;
 }
 function updateSofaFields(form: HTMLFormElement, kind: string, expandDepth = false) {
   const fields = form.querySelector<HTMLFieldSetElement>('[data-sofa-fields]');
@@ -96,8 +135,6 @@ function updateSofaFields(form: HTMLFormElement, kind: string, expandDepth = fal
       '[data-sofa-config] input, [data-sofa-config] select',
     )
     .forEach((input) => (input.disabled = kind !== 'sofa' || shape === 'straight'));
-  const depthLabel = form.querySelector<HTMLElement>('[data-depth-label]');
-  if (depthLabel) depthLabel.textContent = kind === 'sofa' ? 'Profondeur du corps' : 'Profondeur';
   if (expandDepth && kind === 'sofa' && shape !== 'straight') {
     const total = form.elements.namedItem('returnDepth') as HTMLInputElement;
     const body = Number((form.elements.namedItem('depth') as HTMLInputElement).value);
@@ -106,6 +143,33 @@ function updateSofaFields(form: HTMLFormElement, kind: string, expandDepth = fal
   const diagram = form.querySelector<HTMLElement>('[data-sofa-diagram]');
   if (diagram && kind === 'sofa' && shape !== 'straight')
     diagram.innerHTML = sofaDiagram(new FormData(form));
+}
+
+function dressingFields(item: FurnitureItem) {
+  const dressing = item.dressing;
+  return `<fieldset class="furniture-shape-fields" data-dressing-fields${item.locked ? ' disabled' : ''}${item.kind === 'dressing' ? '' : ' hidden'}><legend>Forme du dressing</legend><label class="furniture-field">Configuration<select name="dressingShape"><option value="straight"${!dressing ? ' selected' : ''}>Dressing droit (penderie)</option><option value="corner"${dressing ? ' selected' : ''}>Dressing d’angle avec retour</option></select></label><div class="furniture-shape-config" data-dressing-config${dressing ? '' : ' hidden'}><label class="furniture-field">Retour vu de face<select name="dressingSide"><option value="left"${dressing?.side !== 'right' ? ' selected' : ''}>À gauche</option><option value="right"${dressing?.side === 'right' ? ' selected' : ''}>À droite</option></select></label><div class="furniture-field-grid two"><label class="furniture-field">Profondeur totale <span>cm</span><input type="number" name="dressingReturnDepth" min="5" max="2000" step="0.1" value="${cm(dressing ? item.depth : Math.max(1.2, item.depth + 0.6))}"></label><label class="furniture-field">Largeur du retour <span>cm</span><input type="number" name="dressingReturnWidth" min="5" max="2000" step="0.1" value="${cm(dressing?.returnWidth ?? 0.6)}"></label></div><p class="furniture-form-note">Les deux profondeurs partent du fond. Saisissez la profondeur totale du côté en retour, pas la différence. La largeur du retour est celle de l’aile vue de face.</p><div class="shape-diagram" data-dressing-diagram></div></div></fieldset>`;
+}
+function updateDressingFields(form: HTMLFormElement, kind: string, expandDepth = false) {
+  const fields = form.querySelector<HTMLFieldSetElement>('[data-dressing-fields]');
+  if (!fields) return;
+  fields.hidden = kind !== 'dressing';
+  fields.disabled = kind !== 'dressing' || form.dataset.geometryLocked === 'true';
+  const shape = (form.elements.namedItem('dressingShape') as HTMLSelectElement).value;
+  form.querySelector<HTMLElement>('[data-dressing-config]')!.hidden =
+    kind !== 'dressing' || shape !== 'corner';
+  form
+    .querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+      '[data-dressing-config] input, [data-dressing-config] select',
+    )
+    .forEach((input) => (input.disabled = kind !== 'dressing' || shape !== 'corner'));
+  if (expandDepth && kind === 'dressing' && shape === 'corner') {
+    const total = form.elements.namedItem('dressingReturnDepth') as HTMLInputElement;
+    const body = Number((form.elements.namedItem('depth') as HTMLInputElement).value);
+    if (Number(total.value) <= body + 5) total.value = String(Math.max(120, body + 60));
+  }
+  const diagram = form.querySelector<HTMLElement>('[data-dressing-diagram]');
+  if (diagram && kind === 'dressing' && shape === 'corner')
+    diagram.innerHTML = dressingDiagram(new FormData(form));
 }
 
 export class FurniturePanel {
@@ -170,7 +234,8 @@ export class FurniturePanel {
       <form id="furniture-edit-form" class="furniture-edit-form" data-furniture-edit="${esc(item.id)}" data-geometry-locked="${item.locked}">
         <label class="furniture-field">Nom<input name="name" value="${esc(item.name)}" maxlength="100" required></label>
         ${dimensionsFields(item)}
-        ${item.kind === 'sofa' ? sofaFields(item) : ''}
+        ${sofaFields(item)}
+        ${dressingFields(item)}
         <details class="furniture-placement"><summary>Placement et options</summary>
         <label class="furniture-field">Hauteur de pose au-dessus du sol <span>cm</span><input name="elevation" type="number" min="0" max="2000" step="0.1" value="${cm(item.elevation ?? 0)}"${disabled(item.locked)}></label>
         <div class="furniture-field-grid"><label class="furniture-field">Position X <span>cm</span><input name="x" type="number" min="-100000" max="100000" step="0.1" value="${cm(item.position[0])}" required${disabled(item.locked)}></label><label class="furniture-field">Position Z <span>cm</span><input name="z" type="number" min="-100000" max="100000" step="0.1" value="${cm(item.position[1])}" required${disabled(item.locked)}></label><label class="furniture-field">Rotation <span>°</span><input name="rotation" type="number" min="-3600" max="3600" step="0.1" value="${degrees(item.rotation)}" required${disabled(item.locked)}></label></div>
@@ -222,7 +287,9 @@ export class FurniturePanel {
     if (item) {
       const form = this.editDialog.querySelector<HTMLFormElement>('form')!;
       updateSofaFields(form, item.kind);
+      updateDressingFields(form, item.kind);
       updateTelevisionFields(form, item.kind, true);
+      syncDepthLabel(form, item.kind);
     }
     this.setEditStatus(message);
   }
@@ -330,7 +397,9 @@ export class FurniturePanel {
       (form.elements.namedItem('tvDiagonal') as HTMLInputElement).value = '';
     }
     updateSofaFields(form, kind);
+    updateDressingFields(form, kind);
     updateTelevisionFields(form, kind);
+    syncDepthLabel(form, kind);
   };
 
   private change = (event: Event) => {
@@ -345,12 +414,21 @@ export class FurniturePanel {
         for (const name of ['width', 'depth', 'height', 'elevation', 'x', 'z', 'rotation'])
           (form.elements.namedItem(name) as HTMLInputElement).disabled = false;
         updateSofaFields(form, item.kind);
+        updateDressingFields(form, item.kind);
         updateTelevisionFields(form, item.kind);
+        syncDepthLabel(form, item.kind);
       }
     }
     if (input.name === 'sofaShape') {
       const form = input.closest<HTMLFormElement>('form');
       if (form) updateSofaFields(form, 'sofa', true);
+    }
+    if (input.name === 'dressingShape') {
+      const form = input.closest<HTMLFormElement>('form');
+      if (form) {
+        updateDressingFields(form, 'dressing', true);
+        syncDepthLabel(form, 'dressing');
+      }
     }
     const key = input.dataset.furnitureOverlay as keyof typeof this.overlays | undefined;
     if (key) {
@@ -416,7 +494,12 @@ export class FurniturePanel {
       if (unchanged('depth')) next.sofa.seatDepth = item.sofa?.seatDepth ?? item.depth;
       if (item.sofa && unchanged('returnWidth')) next.sofa.returnWidth = item.sofa.returnWidth;
       if (item.sofa && unchanged('returnDepth')) next.depth = item.depth;
-    } else if (unchanged('depth')) next.depth = item.sofa?.seatDepth ?? item.depth;
+    } else if (next.dressing) {
+      if (unchanged('depth')) next.dressing.runDepth = item.dressing?.runDepth ?? item.depth;
+      if (item.dressing && unchanged('dressingReturnWidth'))
+        next.dressing.returnWidth = item.dressing.returnWidth;
+      if (item.dressing && unchanged('dressingReturnDepth')) next.depth = item.depth;
+    } else if (unchanged('depth')) next.depth = bodyDepth(item);
     if (unchanged('x')) next.position[0] = item.position[0];
     if (unchanged('z')) next.position[1] = item.position[1];
     if (unchanged('rotation')) next.rotation = item.rotation;
@@ -456,19 +539,13 @@ export class FurniturePanel {
     if (this.editDialog.open) this.editDialog.close();
     const initial = createFurniture({ kind: 'sofa' });
     this.dialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-add-title">Ajouter un meuble</h2><button type="button" class="icon-button" data-add-close aria-label="Fermer">${icon('close', 20)}</button></div><p>Renseignez ses dimensions réelles.${this.adapter.getAddRoomName?.() ? ` Placement dans : <strong>${esc(this.adapter.getAddRoomName()!)}</strong>.` : ''} Vous pourrez ensuite le déplacer dans la maison.</p>
-      <form id="furniture-add-form"><div class="furniture-field-grid two"><label class="furniture-field">Type de meuble<select name="kind">${Object.entries(
-        KINDS,
-      )
-        .map(
-          ([value, title]) =>
-            `<option value="${value}"${value === initial.kind ? ' selected' : ''}>${title}</option>`,
-        )
-        .join(
-          '',
-        )}</select></label><label class="furniture-field">Nom<input name="name" value="${esc(initial.name)}" maxlength="100" required></label></div>${dimensionsFields(initial)}<label class="furniture-field">Hauteur de pose au-dessus du sol <span>cm</span><input name="elevation" type="number" min="0" max="2000" step="0.1" value="${cm(initial.elevation ?? 0)}"></label>${sofaFields(initial)}<p class="furniture-form-note">Les valeurs proposées sont des exemples. Remplacez-les par les mesures du meuble, poignées et accoudoirs compris.</p><label class="furniture-field furniture-tone-field">Teinte du volume<input name="color" type="color" value="${initial.color}"><span>Une teinte de repérage pour le volume simplifié.</span></label>
+      <form id="furniture-add-form"><div class="furniture-field-grid two"><label class="furniture-field">Type de meuble<select name="kind">${kindOptions(initial.kind)}</select></label><label class="furniture-field">Nom<input name="name" value="${esc(initial.name)}" maxlength="100" required></label></div>${dimensionsFields(initial)}<label class="furniture-field">Hauteur de pose au-dessus du sol <span>cm</span><input name="elevation" type="number" min="0" max="2000" step="0.1" value="${cm(initial.elevation ?? 0)}"></label>${sofaFields(initial)}${dressingFields(initial)}<p class="furniture-form-note">Les valeurs proposées sont des exemples. Remplacez-les par les mesures du meuble, poignées et accoudoirs compris.</p><label class="furniture-field furniture-tone-field">Teinte du volume<input name="color" type="color" value="${initial.color}"><span>Une teinte de repérage pour le volume simplifié.</span></label>
       <div class="furniture-add-status" role="status"></div><div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-add-close>Annuler</button><button type="submit" class="primary-button">Ajouter dans la maison ${icon('arrow', 17)}</button></div></form>`;
-    updateSofaFields(this.dialog.querySelector<HTMLFormElement>('form')!, initial.kind);
-    updateTelevisionFields(this.dialog.querySelector<HTMLFormElement>('form')!, initial.kind, true);
+    const form = this.dialog.querySelector<HTMLFormElement>('form')!;
+    updateSofaFields(form, initial.kind);
+    updateDressingFields(form, initial.kind);
+    updateTelevisionFields(form, initial.kind, true);
+    syncDepthLabel(form, initial.kind);
     this.dialog.showModal();
     this.adapter.onDialogState?.(true);
   }
@@ -490,10 +567,15 @@ export class FurniturePanel {
       (form.elements.namedItem('sofaSide') as HTMLSelectElement).value = 'left';
       (form.elements.namedItem('returnDepth') as HTMLInputElement).value = '180';
       (form.elements.namedItem('returnWidth') as HTMLInputElement).value = '90';
+      (form.elements.namedItem('dressingShape') as HTMLSelectElement).value = 'straight';
+      (form.elements.namedItem('dressingSide') as HTMLSelectElement).value = 'left';
+      (form.elements.namedItem('dressingReturnDepth') as HTMLInputElement).value = '120';
+      (form.elements.namedItem('dressingReturnWidth') as HTMLInputElement).value = '60';
       (form.elements.namedItem('elevation') as HTMLInputElement).value = String(
         cm(preset.elevation ?? 0),
       );
       updateSofaFields(form, input.value);
+      updateDressingFields(form, input.value);
       for (const key of ['width', 'depth', 'height'] as const)
         (form.elements.namedItem(key) as HTMLInputElement).value = String(cm(preset[key]));
       (form.elements.namedItem('name') as HTMLInputElement).value = preset.name;
@@ -502,9 +584,18 @@ export class FurniturePanel {
         preset.tvDiagonalInches ?? '',
       );
       updateTelevisionFields(form, input.value, true);
+      syncDepthLabel(form, input.value);
     }
     if (input.name === 'sofaShape')
       updateSofaFields(form, (form.elements.namedItem('kind') as HTMLSelectElement).value, true);
+    if (input.name === 'dressingShape') {
+      updateDressingFields(
+        form,
+        (form.elements.namedItem('kind') as HTMLSelectElement).value,
+        true,
+      );
+      syncDepthLabel(form, (form.elements.namedItem('kind') as HTMLSelectElement).value);
+    }
   };
 
   private submitAdd = (event: Event) => {
