@@ -110,6 +110,38 @@ test('corner and chaise sofas have no pickable or colliding mesh in the L void o
   cleanup();
 });
 
+test('a corner dressing leaves its inside corner empty on either side', () => {
+  const { scene, layer, cleanup } = setup();
+  for (const side of ['left', 'right'] as const)
+    for (const rotation of [0, Math.PI / 2, Math.PI / 3]) {
+      const item = createFurniture({
+        kind: 'dressing',
+        position: [4, 4],
+        width: 3,
+        depth: 2,
+        height: 2.2,
+        rotation,
+        dressing: { side, runDepth: 0.8, returnWidth: 1 },
+      });
+      layer.setItems([item]);
+      boundsCheck(scene, item);
+      const meshes = scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture');
+      const world = (x: number, y: number, z: number) =>
+        new Vector3(
+          4 + x * Math.cos(rotation) + z * Math.sin(rotation),
+          y,
+          4 - x * Math.sin(rotation) + z * Math.cos(rotation),
+        );
+      const down = (x: number, z: number) =>
+        new Ray(world(x, 5, z), new Vector3(0, -1, 0)).intersectsMeshes(meshes);
+      const sign = side === 'left' ? -1 : 1;
+      assert.equal(down(-sign * 0.75, 0.6).length, 0, `${side}: inside corner`);
+      assert.ok(down(sign, 0.6).length > 0, `${side}: return run`);
+      assert.ok(down(0, -0.7).length > 0, `${side}: main run`);
+    }
+  cleanup();
+});
+
 test('changing sofa side rebuilds its actual mesh while moving or elevating reuses it', () => {
   const { scene, layer, cleanup } = setup();
   const item = createFurniture({

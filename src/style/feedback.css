@@ -118,6 +118,37 @@ dialog p {
   font-size: 13px;
   line-height: 1.7;
 }
+/* Confirmation footer: the safe action stays left, the destructive one is explicit. */
+.dialog-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+  padding-top: 16px;
+  border-top: 1px solid #e0e5dc;
+}
+.dialog-actions .dialog-actions-start {
+  margin-right: auto;
+}
+.danger-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  min-height: 44px;
+  padding: 11px 16px;
+  border-radius: 7px;
+  background: #8c3a2b;
+  color: white;
+  font-size: 14px;
+  font-weight: 500;
+}
+.danger-button:hover {
+  background: #742d21;
+  color: white;
+}
 .help-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -414,6 +445,21 @@ dialog p {
   }
   dialog h2 {
     font-size: 24px;
+  }
+  .dialog-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .dialog-actions .dialog-actions-start {
+    margin-right: 0;
+  }
+  /* The header collapses text buttons to icons; a dialog keeps its labels. */
+  .dialog-actions .text-button {
+    width: auto;
+    padding: 10px 12px;
+  }
+  .dialog-actions > button {
+    justify-content: center;
   }
   .help-grid {
     grid-template-columns: 1fr;

@@ -38,7 +38,9 @@ Les zones de maison encore incertaines restent signalées dans les notes du mod�
 
 ## Types et configurations
 
-Les quatorze catégories comprennent les meubles TV, téléviseurs, tables basses, bibliothèques, poufs et tables d’appoint. Sélectionner un canapé puis choisir sa forme : droit, angle avec dossier en retour, ou méridienne ouverte. Le côté est décrit en regardant le canapé de face. Les dimensions hors tout restent largeur, profondeur et hauteur ; le corps principal et la largeur du retour définissent le vide du L. Les collisions utilisent les deux parties occupées et laissent ce vide disponible pour une table.
+Les dix-neuf catégories sont regroupées par pièce dans le menu Type de meuble : Salon, Salle à manger, Chambre, Dressing, Bureau, Salle de bain et Autre. La salle de bain propose WC, douche, baignoire et meuble vasque ; le dressing se choisit droit (penderie) ou d’angle avec retour. Sélectionner un canapé puis choisir sa forme : droit, angle avec dossier en retour, ou méridienne ouverte. Le côté est décrit en regardant le canapé de face. Les dimensions hors tout restent largeur, profondeur et hauteur ; le corps principal et la largeur du retour définissent le vide du L. Les collisions utilisent les deux parties occupées et laissent ce vide disponible pour une table.
+
+Le dressing d’angle suit la même convention que le canapé : la profondeur saisie est celle du linéaire principal, la profondeur totale celle du côté en retour, toutes deux mesurées depuis le fond. Le vide intérieur du L reste libre, par exemple pour un siège. Un dressing droit conserve une seule profondeur. Les volumes de sanitaires sont des repères simplifiés : remplacez les mesures proposées par celles du modèle réel.
 
 La hauteur de pose est relative au sol fini. Le bouton Ajouter une TV dessus d’un meuble TV place un téléviseur à sa cote supérieure. Les dimensions proposées restent à remplacer par celles du modèle réel.
 
