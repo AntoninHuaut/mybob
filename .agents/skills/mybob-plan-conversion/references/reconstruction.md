@@ -23,6 +23,14 @@ Generate a private SVG/PNG projection with wall solids, jambs, room contours and
 
 Blend the projection over a readable crop and inspect the whole plan plus enlarged disputed joins. Record residuals for corners, partition junctions and jambs. Translate pixel uncertainty into metres before judging discrepancies. Prioritize printed cotes over apparently exact tracing. Keep contradictions visible in the ledger/report.
 
+## Passages and moving joinery
+
+A floor-polygon audit ignores door leaves. Build the actual house in Babylon NullEngine and check the collision meshes with the visitor radius, including frames and moving panels. A grid flood-fill can diagnose disconnected rooms; use level-relative elevations and world bounds correctly, validate the spawn before seeding it, and record grid spacing and approximation limits. Keep this separate from real-browser traversal.
+
+Read `poseDoor` in `src/scene/buildHouse.ts`: omitted hinge/swing fields still produce a definite default pose. Verify the interpreted symbol against the resulting leaf position, and keep spawns/viewpoints clear of the leaf as well as wall solids. Check wardrobes have an intended access opening and that a perpendicular return does not obstruct a jamb. A window or dotted stair outline must not become a passage or partition by accident.
+
+For adjacent doors on a tight landing, test the relevant open/closed combinations. A single all-open flood-fill can report a false disconnection when one open leaf temporarily obstructs another doorway. Preserve source-supported swings and document any required door operation; do not reverse the source swing just to make the all-open configuration pass. Investigate initial defaults that leave a visitor trapped. Record which rooms are reachable in each tested state, rather than claiming all doors were walked through.
+
 ## Delivery evidence
 
 Distinguish schema-valid, geometry-audited, source-compared and browser-inspected. List actual files/checks/residuals, not merely validated. Include old/new dimensions and stable-ID changes with evidence references. Separate schema limitations, missing evidence and defects. Preserve prior JSON and never touch user localStorage as a side effect of generating a file.
