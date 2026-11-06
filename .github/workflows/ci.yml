@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
     inputs:
       arm_runner:
-        description: 'Exécuter sur un runner Linux ARM64 auto-hébergé'
+        description: 'Exécuter le build sur le runner ARM64 du homelab'
         type: boolean
         default: false
 
@@ -22,18 +22,24 @@ concurrency:
 jobs:
   build:
     name: Tests unitaires et build public
-    runs-on: ${{ fromJSON(inputs.arm_runner && '["self-hosted", "Linux", "ARM64"]' || '["ubuntu-latest"]') }}
+    runs-on: ${{ (inputs.arm_runner || (github.event_name == 'push' && github.actor == 'AntoninHuaut')) && 'mybob-arm64' || 'ubuntu-latest' }}
     timeout-minutes: 15
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5
       - name: Node.js
         uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5
+        env:
+          RUNNER_TOOL_CACHE: ${{ runner.temp }}/tool-cache
         with:
           node-version-file: .node-version
           package-manager-cache: false
       - name: pnpm
-        run: npm install --global pnpm@12.15.0
+        env:
+          NPM_CONFIG_PREFIX: ${{ runner.temp }}/npm-global
+        run: |
+          echo "$NPM_CONFIG_PREFIX/bin" >> "$GITHUB_PATH"
+          npm install --global pnpm@12.15.0
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Verify formatting
@@ -55,7 +61,7 @@ jobs:
   e2e:
     name: E2E shard ${{ matrix.shard }}/3
     needs: build
-    runs-on: ${{ fromJSON(inputs.arm_runner && '["self-hosted", "Linux", "ARM64"]' || '["ubuntu-latest"]') }}
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     strategy:
       fail-fast: false
@@ -127,7 +133,7 @@ jobs:
     name: Tests, types, build et confidentialité
     if: ${{ always() }}
     needs: [build, e2e]
-    runs-on: ${{ fromJSON(inputs.arm_runner && '["self-hosted", "Linux", "ARM64"]' || '["ubuntu-latest"]') }}
+    runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
       - name: Require build and all E2E shards
