@@ -8,6 +8,8 @@ export interface SceneImageOptions {
   projectName: string;
   levelName: string;
   variantName?: string;
+  transparent?: boolean;
+  header?: boolean;
 }
 
 export function exportImageSize(width: number, height: number) {
@@ -41,32 +43,37 @@ export async function exportSceneImage(
 ): Promise<Blob> {
   const captured = viewer.captureCanvas(options.dimensions);
   const size = exportImageSize(captured.width, captured.height);
+  const header = options.header === false ? 0 : size.header;
   const output = document.createElement('canvas');
   output.width = size.width;
-  output.height = size.sceneHeight + size.header;
+  output.height = size.sceneHeight + header;
   const context = output.getContext('2d');
   if (!context) throw new Error('Export image indisponible dans ce navigateur.');
-  context.fillStyle = '#edf0e9';
-  context.fillRect(0, 0, output.width, output.height);
-  context.drawImage(captured, 0, size.header, size.width, size.sceneHeight);
-  context.fillStyle = '#ffffff';
-  context.fillRect(0, 0, size.width, size.header);
-  context.fillStyle = '#244c40';
-  context.font = '600 18px sans-serif';
-  context.fillText(options.projectName, 18, 26, size.width - 36);
-  context.font = '13px sans-serif';
-  context.fillText(
-    [
-      options.levelName,
-      options.variantName,
-      viewer.mode === 'plan' ? 'Plan' : viewer.mode === 'walk' ? 'Visite' : 'Vue 3D',
-    ]
-      .filter(Boolean)
-      .join(' · '),
-    18,
-    48,
-    size.width - 36,
-  );
+  if (!options.transparent) {
+    context.fillStyle = '#edf0e9';
+    context.fillRect(0, 0, output.width, output.height);
+  }
+  context.drawImage(captured, 0, header, size.width, size.sceneHeight);
+  if (header > 0) {
+    context.fillStyle = '#ffffff';
+    context.fillRect(0, 0, size.width, header);
+    context.fillStyle = '#244c40';
+    context.font = '600 18px sans-serif';
+    context.fillText(options.projectName, 18, 26, size.width - 36);
+    context.font = '13px sans-serif';
+    context.fillText(
+      [
+        options.levelName,
+        options.variantName,
+        viewer.mode === 'plan' ? 'Plan' : viewer.mode === 'walk' ? 'Visite' : 'Vue 3D',
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      18,
+      48,
+      size.width - 36,
+    );
+  }
   const sx = size.width / viewer.canvas.clientWidth,
     sy = size.sceneHeight / viewer.canvas.clientHeight;
   const project = (point: [number, number], height?: number) => {
@@ -88,9 +95,9 @@ export async function exportSceneImage(
     context.font = '600 13px sans-serif';
     const width = context.measureText(text).width + 16;
     context.fillStyle = '#ffffff';
-    context.fillRect(x - width / 2, y - 12 + size.header, width, 24);
+    context.fillRect(x - width / 2, y - 12 + header, width, 24);
     context.fillStyle = '#174c3d';
-    context.fillText(text, x - width / 2 + 8, y + 5 + size.header);
+    context.fillText(text, x - width / 2 + 8, y + 5 + header);
     return { x: x - width / 2, y: y - 12, width, height: 24 };
   };
   if (options.dimensions && viewer.mode !== 'walk') {

@@ -8,7 +8,7 @@ import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
-import { Engine } from '@babylonjs/core/Engines/engine';
+import { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
@@ -96,7 +96,7 @@ export function findEditableFurniture(camera: UniversalCamera, scene: Scene, dis
 }
 
 export class HouseViewer {
-  readonly engine: Engine;
+  readonly engine: AbstractEngine;
   scene!: Scene;
   orbit!: ArcRotateCamera;
   walk!: UniversalCamera;
@@ -126,6 +126,7 @@ export class HouseViewer {
   private planOpenings?: PlanOpenings;
   private dimensions: LinesMesh[] = [];
   private measureMeshes: AbstractMesh[] = [];
+  private pinnedMeasurements: AbstractMesh[] = [];
   private measureLine?: LinesMesh;
   private measureCursor?: Point2;
   private keyState = new Set<string>();
@@ -145,13 +146,11 @@ export class HouseViewer {
   private pointerLockError = () => this.onPointerLockError?.();
   private orbitPointerDown = (event: PointerEvent) => this.recoverOrbitControls(event);
 
-  constructor(readonly canvas: HTMLCanvasElement) {
-    this.engine = new Engine(
-      canvas,
-      true,
-      { alpha: true, stencil: true, powerPreference: 'high-performance' },
-      false,
-    );
+  constructor(
+    readonly canvas: HTMLCanvasElement,
+    engine: AbstractEngine,
+  ) {
+    this.engine = engine;
     this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 1.6));
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas.parentElement!);
@@ -183,6 +182,7 @@ export class HouseViewer {
     this.measurement = undefined;
     this.measureMode = false;
     this.measureMeshes = [];
+    this.pinnedMeasurements = [];
     this.measureLine = undefined;
     this.measureCursor = undefined;
     this.dimensions = [];
@@ -703,6 +703,7 @@ export class HouseViewer {
       this.capturing = true;
       for (const mesh of this.dimensions) set(mesh, dimensions && this.mode !== 'walk');
       for (const mesh of this.measureMeshes) if (!dimensions) set(mesh, false);
+      for (const mesh of this.pinnedMeasurements) if (!dimensions) set(mesh, false);
       for (const mesh of this.scene.meshes) {
         if (mesh.metadata?.kind !== 'furniture-overlay') continue;
         const dimension = !!mesh.metadata.label || mesh.name === 'furniture:dimension-label';
@@ -1005,7 +1006,20 @@ export class HouseViewer {
     dot.material = this.house.highlights.values().next().value?.material ?? null;
     dot.isPickable = false;
     this.measureMeshes.push(dot);
+    if (!this.measurement.preview) {
+      this.pinnedMeasurements.push(...this.measureMeshes);
+      this.measureMeshes = [];
+      this.measureLine = undefined;
+    }
     this.onMeasure?.(this.measurement);
+  }
+
+  /** Validated measurements stay on the floor until explicitly cleared. */
+  clearPinnedMeasurements(): boolean {
+    const had = this.pinnedMeasurements.length > 0;
+    this.pinnedMeasurements.forEach((mesh) => mesh.dispose());
+    this.pinnedMeasurements = [];
+    return had;
   }
 
   private buildDimensions() {

@@ -5,6 +5,7 @@ import { appTemplate } from './ui/appTemplate';
 import { confirmImportReplacement } from './ui/confirmImport';
 import { solarPosition } from './scene/solar';
 import { HouseViewer, type ViewMode } from './scene/viewer';
+import { createEngine } from './scene/engine';
 import type { HouseProject, Room } from './model/types';
 import { validateProject } from './model/validate';
 import { bounds, floorElevationAt, pointInPolygon, polygonArea } from './model/geometry';
@@ -1262,7 +1263,7 @@ function wireProjectControls() {
   el('#export-image').addEventListener('click', () => {
     openDialog(
       'EXPORTER UNE IMAGE',
-      `<h2>Garder cette vue</h2><p>Image PNG de la caméra actuelle, sans les panneaux de l’interface. Le fichier est généré sur cet ordinateur.</p><div class="image-export-options"><label><input id="image-labels" type="checkbox" ${showLabels && mode !== 'walk' ? 'checked' : ''}> Noms et surfaces des pièces</label><label><input id="image-dimensions" type="checkbox" ${showDimensions && mode !== 'walk' ? 'checked' : ''} ${mode === 'walk' ? 'disabled' : ''}> Dimensions extérieures</label></div><p id="image-export-status" role="status"></p><button id="download-scene-image" class="primary-button">Télécharger le PNG</button>`,
+      `<h2>Garder cette vue</h2><p>Image PNG de la caméra actuelle, sans les panneaux de l’interface. Le fichier est généré sur cet ordinateur.</p><div class="image-export-options"><label><input id="image-labels" type="checkbox" ${showLabels && mode !== 'walk' ? 'checked' : ''}> Noms et surfaces des pièces</label><label><input id="image-dimensions" type="checkbox" ${showDimensions && mode !== 'walk' ? 'checked' : ''} ${mode === 'walk' ? 'disabled' : ''}> Dimensions extérieures</label><label><input id="image-transparent" type="checkbox"> Fond transparent</label><label><input id="image-header" type="checkbox" checked> Cartouche projet</label></div><p id="image-export-status" role="status"></p><button id="download-scene-image" class="primary-button">Télécharger le PNG</button>`,
     );
     el<HTMLButtonElement>('#download-scene-image').addEventListener('click', async (event) => {
       const button = event.currentTarget as HTMLButtonElement;
@@ -1271,6 +1272,8 @@ function wireProjectControls() {
         await exportSceneImage(viewer, {
           labels: el<HTMLInputElement>('#image-labels').checked,
           dimensions: el<HTMLInputElement>('#image-dimensions').checked,
+          transparent: el<HTMLInputElement>('#image-transparent').checked,
+          header: el<HTMLInputElement>('#image-header').checked,
           projectName: current.name,
           levelName: viewer.level.name,
           variantName: layoutSession.active(current.id).name,
@@ -1381,6 +1384,12 @@ function wireViewportControls() {
     syncDisplayControls();
   };
   el('#end-measure').addEventListener('click', endMeasure);
+  el('#clear-measures').addEventListener('click', () => {
+    if (viewer.clearPinnedMeasurements()) {
+      toast('Mesures épinglées effacées.');
+      el('#clear-measures').hidden = true;
+    }
+  });
   el('#tool-measure').addEventListener('click', () => {
     if (ceiling && mode === 'overview') {
       ceiling = false;
@@ -1403,7 +1412,7 @@ function wireViewportControls() {
   el('#help').addEventListener('click', () =>
     openDialog(
       'PRENDRE EN MAIN L’ATELIER',
-      `<div class="bob-help"><img src="${bobPlan}" alt=""><div><h2>Faites comme chez vous.</h2><p>Moi, c’est Bob. Voici quelques repères pour explorer et aménager votre maison.</p></div></div><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>ZQSD ou WASD pour déplacer la vue, Maj pour accélérer. Glissez avec le bouton gauche pour tourner, le bouton droit pour déplacer ; utilisez la molette pour zoomer. Les flèches déplacent aussi la vue quand aucun meuble n’est sélectionné.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte, F pour modifier le meuble visé. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau Meubles, puis glissez-le dans la scène. Dans la fenêtre de modification, les changements restent en aperçu jusqu’à validation ; Annuler conserve l’aménagement précédent. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Affichage des murs</h3><p>Dans Navigation, choisissez Automatique, Murs complets ou Murs bas pour dégager la vue. La visite conserve les murs complets.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
+      `<div class="bob-help"><img src="${bobPlan}" alt=""><div><h2>Faites comme chez vous.</h2><p>Moi, c’est Bob. Voici quelques repères pour explorer et aménager votre maison.</p></div></div><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>ZQSD ou WASD pour déplacer la vue, Maj pour accélérer. Glissez avec le bouton gauche pour tourner, le bouton droit pour déplacer ; utilisez la molette pour zoomer. Les flèches déplacent aussi la vue quand aucun meuble n’est sélectionné.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte, F pour modifier le meuble visé. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure ; les mesures confirmées restent affichées jusqu’à « Effacer les mesures ».</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau Meubles, puis glissez-le dans la scène. Dans la fenêtre de modification, les changements restent en aperçu jusqu’à validation ; Annuler conserve l’aménagement précédent. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Affichage des murs</h3><p>Dans Navigation, choisissez Automatique, Murs complets ou Murs bas pour dégager la vue. La visite conserve les murs complets.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
     ),
   );
   el('#source-info').addEventListener('click', () => {
@@ -1466,7 +1475,10 @@ async function start() {
     } catch {
       storageWarning = true;
     }
-    viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'));
+    viewer = new HouseViewer(
+      el<HTMLCanvasElement>('#scene'),
+      await createEngine(el<HTMLCanvasElement>('#scene')),
+    );
     solarPanel = new SolarPanel({
       onApply: (settings, instant) => {
         viewer.setSolar(settings ? solarPosition(settings, instant) : undefined);
@@ -1504,6 +1516,7 @@ async function start() {
     };
     viewer.onMeasure = (measurement) => {
       el('#measure-label').hidden = !measurement?.b;
+      el('#clear-measures').hidden = !measurement || Boolean(measurement.preview);
       if (measurement?.distance !== undefined) {
         el('#measure-label').textContent =
           `${number(measurement.distance)} m${measurement.aligned ? ' · droit' : ''}`;

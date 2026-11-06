@@ -42,6 +42,7 @@ test('measurement preview updates one line, commits the snapped end and resets c
     scene,
     level,
     measureMeshes: [],
+    pinnedMeasurements: [],
     measureMode: true,
     house: { highlights: new Map() },
     canvas: { classList: { toggle() {} } },
@@ -68,10 +69,13 @@ test('measurement preview updates one line, commits the snapped end and resets c
   assert.deepEqual(viewer.measurement?.b, [3, 1]);
   input.addMeasurement([4, 4]);
   assert.deepEqual(viewer.measurement?.a, [4, 4]);
-  assert.equal(scene.meshes.length, 1);
+  assert.equal(scene.meshes.length, 4);
   viewer.setMeasureMode(false);
   assert.equal(viewer.measurement, undefined);
-  assert.equal(scene.meshes.length, 0);
+  assert.equal(scene.meshes.length, 3);
   assert.equal(changes.at(-1), undefined);
+  assert.equal(viewer.clearPinnedMeasurements(), true);
+  assert.equal(scene.meshes.length, 0);
+  assert.equal(viewer.clearPinnedMeasurements(), false);
   engine.dispose();
 });

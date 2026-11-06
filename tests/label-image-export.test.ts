@@ -77,6 +77,7 @@ test('capture restores dimensions, furniture overlays and animation guard after 
     engine: { getRenderWidth: () => 1200, getRenderHeight: () => 800 },
     dimensions: [dimension],
     measureMeshes: [],
+    pinnedMeasurements: [],
     paused: false,
     capturing: false,
     mode: 'plan',

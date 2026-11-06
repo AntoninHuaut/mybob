@@ -15,7 +15,7 @@ pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
-Ouvrir l’adresse indiquée par Vite. Par défaut, seul le studio de démonstration est embarqué ; importer sa maison localement. `npm run dev:private` charge le modèle personnel depuis le dépôt privé. L’application nécessite WebGL et l’accélération graphique. Aucun compte ni serveur de données n’est nécessaire en local.
+Ouvrir l’adresse indiquée par Vite. Par défaut, seul le studio de démonstration est embarqué ; importer sa maison localement. `npm run dev:private` charge le modèle personnel depuis le dépôt privé. L’application utilise WebGPU par défaut quand le navigateur expose un adaptateur matériel, avec repli automatique sur WebGL (rendu logiciel, navigateur automatisé ou démarrage trop lent) ; `?webgl=1` force WebGL. L’accélération graphique reste nécessaire. Aucun compte ni serveur de données n’est nécessaire en local.
 
 ```sh
 npm test
@@ -40,7 +40,7 @@ La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable e
 - **Visite** : ZQSD, WASD ou flèches pour marcher, souris pour regarder, Maj pour accélérer, E pour ouvrir ou fermer une porte proche. Échap libère la souris.
 - En cas de refus de capture de souris, cliquer dans la scène et glisser avec le bouton gauche pour regarder.
 - Cliquer sur une pièce dans la liste ou le plan miniature, puis sur **Visiter cette pièce**, pour s’y rendre.
-- **Mesurer** : premier clic sur le sol, aperçu du segment et de sa distance au déplacement, second clic pour confirmer. Alignement automatique près des axes du plan ; Maj force une ligne droite, Alt conserve l’angle libre. Un troisième clic commence une nouvelle mesure. Il ne s’agit pas d’un accrochage aux arêtes ni d’une cotation d’exécution.
+- **Mesurer** : premier clic sur le sol, aperçu du segment et de sa distance au déplacement, second clic pour confirmer. Alignement automatique près des axes du plan ; Maj force une ligne droite, Alt conserve l’angle libre. Un troisième clic commence une nouvelle mesure ; les mesures confirmées restent affichées et « Effacer les mesures » les retire. Il ne s’agit pas d’un accrochage aux arêtes ni d’une cotation d’exécution.
 - **Actions du meuble** : modifier, tourner, dupliquer, placer contre un mur et retirer sont accessibles dans la barre de sélection. Cliquer ailleurs dans la scène ou appuyer sur Échap désélectionne. Ctrl Z annule la dernière modification même sans sélection ou avec un bouton actif ; les champs de texte et fenêtres d’édition conservent leur comportement natif.
 - Les portes intérieures sont ouvertes au départ. En vue 3D, un clic sur une porte la manipule également.
 - Les projets peuvent être exportés et importés en JSON. Les projets importés sont conservés dans le stockage local du navigateur, sur cet ordinateur. Exporter les fichiers pour les sauvegarder ou les transférer.
@@ -49,6 +49,8 @@ La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable e
 - **Placement précis** : sélectionner plusieurs meubles pour les aligner ou répartir leurs espacements ; activer séparément l’accrochage à une grille réglable ou aux murs pendant le glisser.
 - **Soleil** : après localisation, le panneau dans la scène propose un curseur horaire, Été/Hiver et lever/coucher approximatifs, sans déplacer la caméra. « Animer la journée » déroule l’ensoleillement en 12 secondes ; toute manipulation manuelle l’arrête.
 - **Image** : télécharger un PNG du Plan ou de la 3D sans panneaux, avec noms/surfaces et dimensions facultatifs.
+- **Soleil** : après localisation, le panneau dans la scène propose un curseur horaire, Été/Hiver et lever/coucher approximatifs, sans déplacer la caméra.
+- **Image** : télécharger un PNG du Plan ou de la 3D sans panneaux, avec noms/surfaces et dimensions facultatifs ; fond transparent et cartouche projet en option.
 
 ## Fichiers importants
 
