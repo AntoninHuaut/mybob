@@ -25,6 +25,42 @@ and label/surface cross-checks. Use the printed surface schedule as a cross-chec
 (the sum of the rooms must reach the printed total); never derive linear
 dimensions from advertised areas.
 
+## Three layers, one gate
+
+Keep extraction, decision and construction separate so a wrong guess cannot hide
+behind a valid JSON.
+
+1. **Extraction** — `scripts/extract_plan_evidence.py` turns a PDF into a
+   deterministic registry: pages, classified labels (dimensions, openings, sills,
+   room areas, levels, slopes), surface tables, and dimension chains with their
+   closure residual and the scale deduced from the label centres alone. A chain
+   counts as closed only when its contiguous segments sum to the printed total;
+   wall thicknesses and isolated dimensions are reported separately instead of
+   being folded into the sum.
+2. **Decision** — one record per wall face and per opening, each carrying an
+   evidence class (`printed`, `derived`, `scaled`, `assumed`) and an `unresolved`
+   flag. `scripts/derive_plan_decisions.py` writes a conservative skeleton: it
+   claims `printed` only when a contiguous run of printed segments reproduces the
+   length, or the opening width and height, within a centimetre, uniquely, and
+   from a closed chain.
+3. **Construction and verification** — generator, `validateProject`,
+   `scripts/audit-plan.ts`, overlay, browser.
+
+`scripts/check-plan-decisions.ts` is the gate between layers 2 and 3. It rejects
+a face resting on an unclosed chain, a printed claim without a chain reference, a
+missing decision for a wall or an opening, and an opening offset that contradicts
+its chain once the wall origin is declared. It exits non-zero while any decision
+stays unresolved: construction does not start on a guess.
+
+```sh
+uvx --from pymupdf python scripts/extract_plan_evidence.py plan.pdf artifacts/plan-review/registry.json --pages 13,14
+uvx --from pymupdf python scripts/derive_plan_decisions.py project.json artifacts/plan-review/registry.json rdc artifacts/plan-review/decisions.json
+node --import tsx scripts/check-plan-decisions.ts artifacts/plan-review/decisions.json project.json artifacts/plan-review/registry.json
+```
+
+The registry and the decisions file carry real plan data: keep them in the
+ignored directories, never in the repository.
+
 Classify dimensions as printed, derived, scaled or assumed. Keep each value's page, endpoints, equation and uncertainty. Derived values refer to independently transcribed dimensions, not output JSON. Resolve contradictory chains using revisions and measurement conventions; do not silently average them. Never derive linear dimensions from advertised areas.
 
 ## Build from shared constraints
