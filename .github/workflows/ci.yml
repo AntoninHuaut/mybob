@@ -41,6 +41,10 @@ jobs:
         run: npm run format:check
       - name: Test geometry, navigation, furniture and imports
         run: npm test
+      - name: Test the plan comparison helper
+        run: |
+          python3 -m pip install --quiet pillow
+          python3 scripts/compare_plan.py --self-test
       - name: Check types and build public application
         run: npm run build
       - name: Ensure personal house data is absent from publication
