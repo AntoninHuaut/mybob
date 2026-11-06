@@ -1,7 +1,7 @@
 import './style.css';
-import bob from './assets/brand/bob-portrait.png';
 import bobPlan from './assets/brand/bob-plan.png';
 import { SolarPanel } from './ui/solarPanel';
+import { appTemplate } from './ui/appTemplate';
 import { confirmImportReplacement } from './ui/confirmImport';
 import { solarPosition } from './scene/solar';
 import { HouseViewer, type ViewMode } from './scene/viewer';
@@ -73,50 +73,7 @@ let draggingFurniture = false;
 let overlays: FurnitureOverlays = { distances: true, clearances: false, openings: false };
 let syncingViewerMode = false;
 
-el('#app').innerHTML = `
-  <header class="app-header">
-    <button id="toggle-sidebar" class="mobile-menu-button" aria-controls="project-sidebar" aria-expanded="false" aria-label="Afficher les pièces et projets">${icon('layers', 20)}</button>
-    <a class="brand" href="#" aria-label="MyBob, revenir à la vue d’ensemble"><span>My<span class="brand-bob">Bob</span></span></a>
-    <div class="header-separator"></div><div class="project-breadcrumb"><span id="header-project">Votre espace</span>${icon('chevron', 13)}<span id="header-level">Rez-de-chaussée</span></div>
-    <div class="header-actions"><span id="layout-status" class="layout-status" role="status" title="Aménagement sauvegardé sur cet ordinateur" aria-label="Aménagement sauvegardé sur cet ordinateur">Sauvegardé</span><button class="text-button" id="export-project" title="Exporter les données du projet">${icon('export', 17)}<span>Exporter</span></button><button class="text-button" id="export-image" title="Exporter une image de la vue" aria-label="Exporter une image de la vue">${icon('image', 17)}<span>Image</span></button><button class="icon-button" id="help" title="Aide et commandes" aria-label="Aide et commandes">${icon('help')}</button></div>
-  </header>
-  <div class="workspace">
-    <button class="sidebar-backdrop" aria-label="Fermer le panneau des pièces" hidden></button>
-    <aside class="sidebar" id="project-sidebar" aria-label="Projets et pièces">
-      <section class="project-section"><div class="bob-welcome"><img src="${bob}" alt="" class="bob-welcome-image"><p><strong>Bonjour, moi c’est Bob.</strong><br>Faisons de la place à vos idées.</p></div><div class="eyebrow">Mon projet</div><label for="project-select" class="sr-only">Choisir une maison</label><div class="project-select-row"><div class="select-wrap"><span class="select-icon">${icon('house', 20)}</span><select id="project-select"></select>${icon('down', 15)}</div><button id="remove-project" class="project-delete icon-button" disabled title="Les projets fournis ne peuvent pas être supprimés" aria-label="Supprimer le projet importé">${icon('trash', 18)}</button></div><p id="project-description" class="muted"></p><p id="demo-notice" class="demo-notice" hidden>Vous consultez une démonstration. Importez le fichier JSON de votre maison pour afficher votre projet. Il reste dans ce navigateur.</p><button id="import-project" class="import-button">${icon('plus', 16)} Importer ma maison</button><p class="project-privacy">Fichier JSON · conservé sur cet ordinateur</p><input type="file" id="import-file" accept="application/json,.json" hidden/></section>
-      <div class="sidebar-tabs" role="tablist" aria-label="Outils du projet"><button type="button" id="sidebar-house-tab" role="tab" aria-selected="true" aria-controls="house-panel" tabindex="0">${icon('house', 17)} Maison</button><button type="button" id="sidebar-furniture-tab" role="tab" aria-selected="false" aria-controls="furniture-workspace-panel" tabindex="-1">${icon('layers', 17)} Meubles <span id="furniture-tab-count">0</span></button></div>
-      <section id="house-panel" role="tabpanel" aria-labelledby="sidebar-house-tab" tabindex="0">
-<section class="level-section"><div class="eyebrow">Pièces <span id="room-count"></span></div><label for="level-select" class="sr-only">Choisir le niveau</label><div class="level-selector">${icon('layers', 17)}<select id="level-select"></select><span class="level-dot"></span></div><div id="room-list" class="room-list"></div></section>
-      <section class="room-detail" id="room-detail"></section>
-      </section>
-      <section id="furniture-workspace-panel" role="tabpanel" aria-labelledby="sidebar-furniture-tab" tabindex="0" hidden><section id="variants-panel" aria-label="Variantes d’aménagement"></section><section id="furniture-panel" aria-label="Aménager la maison"></section><section id="arrangement-panel" aria-label="Placement précis"></section></section>
-
-      <div class="sidebar-bottom"><button class="source-button" id="source-info">${icon('info', 17)}<span>Plans et précision<small>Cotes, hypothèses et points à vérifier</small></span>${icon('chevron', 15)}</button></div>
-    </aside>
-    <main class="viewport" id="viewport" aria-label="Atelier de visite 3D">
-      <canvas id="scene" tabindex="0" aria-label="Vue 3D de la maison. Utilisez le bouton Visite pour vous déplacer au clavier."></canvas>
-      <div class="viewport-top"><div class="view-heading"><span class="eyebrow" id="view-eyebrow">VOTRE MAISON, EN PERSPECTIVE</span><h1 id="view-title">Vue 3D</h1><p id="view-subtitle">Explorez les volumes, à votre rythme.</p></div><div class="view-switch" role="group" aria-label="Mode de visualisation"><button data-view="overview" class="active" aria-pressed="true">${icon('cube', 17)}Vue 3D</button><button id="view-exterior" aria-pressed="false" hidden>${icon('house', 17)}Extérieur</button><button data-view="plan" aria-pressed="false">${icon('plan', 17)}Plan</button><button data-view="walk" aria-pressed="false">${icon('walk', 17)}Visite</button></div></div>
-      <div class="floating-tools" role="group" aria-label="Options d’affichage"><button class="tool-button" id="tool-navigation" title="Réglages de navigation" aria-controls="navigation-panel" aria-expanded="false">${icon('compass')}<span>Navigation</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-measure" aria-pressed="false" title="Mesurer une distance au sol">${icon('ruler')}<span>Mesurer</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-solar" title="Soleil selon le lieu, la date et l’heure" aria-haspopup="dialog">${icon('sun')}<span>Soleil</span></button><button class="tool-button active" id="tool-labels" aria-pressed="true" title="Afficher les noms des pièces">${icon('label')}<span>Pièces</span></button><button class="tool-button" id="tool-dimensions" aria-pressed="false" title="Afficher les dimensions extérieures">${icon('plan')}<span>Cotes</span></button><button class="tool-button active" id="tool-lights" aria-pressed="true" title="Allumer les éclairages intérieurs">${icon('bulb')}<span>Éclairages intérieurs</span></button><button class="tool-button" id="tool-ceiling" aria-pressed="false" title="Afficher le plafond en vue 3D">${icon('roof')}<span>Plafond</span></button><div class="tool-divider"></div><button class="tool-button" id="tool-reset" title="Recentrer la vue">${icon('reset')}<span>Recentrer</span></button></div>
-      <section class="navigation-settings navigation-panel" id="navigation-panel" aria-label="Navigation et caméra" hidden><div class="navigation-panel-heading"><strong>Navigation</strong><button type="button" id="close-navigation" class="icon-button" aria-label="Fermer les réglages de navigation">${icon('close', 18)}</button></div><div class="navigation-settings-body"><button id="go-to" class="visit-room" aria-pressed="false">Cliquer pour entrer ici</button><p>Choisissez un point libre du sol, puis explorez au clavier.</p><label>Vitesse de marche <output id="walk-speed-value">2,8 m/s</output><input id="walk-speed" type="range" min="1" max="5" step="0.2" value="2.8"></label><label>Sensibilité de la souris <output id="look-sensitivity-value">100 %</output><input id="look-sensitivity" type="range" min="50" max="200" step="10" value="100"></label><small>Maj pour marcher plus vite. Ces réglages sont conservés sur cet ordinateur.</small><label>Hauteur du regard<select id="eye-height"><option value="1.65">Debout · 1,65 m</option><option value="1.15">Assis · 1,15 m</option><option value="0.95">À 0,95 m</option><option value="1.80">À 1,80 m</option></select></label><label>Affichage des murs<select id="wall-display"><option value="auto">Automatique</option><option value="full">Murs complets</option><option value="low">Murs bas</option></select></label><label class="navigation-check"><input type="checkbox" id="section-enable"> Vue en coupe</label><label>Hauteur de coupe <output id="section-value">1,20 m</output><input id="section-height" type="range" min="0.4" max="2.5" step="0.05" value="1.2" disabled></label><small>En automatique, les murs gênants s’abaissent selon la vue. La visite conserve les volumes complets.</small></div></section>
-      <div id="scene-labels" class="scene-labels"></div>
-      <div id="furniture-context-toolbar" class="furniture-context-toolbar" role="group" aria-label="Actions du meuble sélectionné" hidden><span id="furniture-context-name"></span><button type="button" id="undo-selected-furniture" aria-label="Annuler la dernière modification" title="Annuler · Ctrl Z">↶</button><button type="button" id="redo-selected-furniture" aria-label="Rétablir la modification" title="Rétablir · Ctrl Maj Z">↷</button><button type="button" id="edit-selected-furniture" aria-label="Modifier le meuble sélectionné" title="Modifier le meuble">${icon('edit', 16)}</button><button type="button" data-rotate-selected="-90" aria-label="Tourner le meuble de 90 degrés vers la gauche" title="Tourner de 90° vers la gauche">↶ 90°</button><button type="button" data-rotate-selected="90" aria-label="Tourner le meuble de 90 degrés vers la droite" title="Tourner de 90° vers la droite">↷ 90°</button><button type="button" data-rotate-selected="15" aria-label="Tourner le meuble de 15 degrés" title="Rotation précise de 15°">+15°</button><button type="button" id="duplicate-selected-furniture" aria-label="Dupliquer le meuble sélectionné" title="Dupliquer le meuble">${icon('copy', 17)}</button><button type="button" id="snap-selected-furniture" aria-label="Placer le meuble sélectionné contre un mur" title="Placer contre un mur">${icon('wall-snap', 17)}</button><button type="button" id="delete-selected-furniture" aria-label="Retirer le meuble sélectionné" title="Retirer le meuble">${icon('trash', 17)}</button></div>
-      <div class="dimension-label" id="width-label" hidden></div><div class="dimension-label" id="depth-label" hidden></div>
-      <div id="measure-label" class="measurement-label" hidden></div>
-      <div id="measure-instructions" class="measure-instructions" hidden>${icon('ruler', 17)}<span>Cliquez sur deux points du sol.</span><button id="end-measure" aria-label="Quitter la mesure">${icon('close', 15)}</button></div>
-      <div id="crosshair" class="crosshair" hidden></div>
-      <div id="door-prompt" class="door-prompt" hidden><kbd>E</kbd> Ouvrir / fermer la porte</div><div id="furniture-edit-prompt" class="door-prompt" hidden><kbd>F</kbd> Modifier le meuble</div>
-      <div id="walk-start" class="walk-start" hidden><div class="walk-start-icon">${icon('walk', 25)}</div><h2>Bienvenue chez vous.</h2><p>Avancez avec <strong>ZQSD</strong> ou les <strong>flèches</strong>.<br>Regardez autour de vous avec la souris.</p><button class="primary-button" id="capture-mouse">Entrer dans la visite ${icon('arrow', 17)}</button><small>Échap pour libérer la souris · E pour une porte</small></div>
-      <button id="resume-walk" class="resume-walk" hidden>${icon('mouse', 17)} Reprendre la visite</button>
-      <div class="orientation" title="Direction du haut du document de référence"><span>HAUT DU PLAN</span><svg id="orientation-arrow" width="23" height="23" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 6 18-6-4-6 4Z" fill="currentColor"/></svg></div>
-      <div class="mini-card"><div class="mini-heading"><span>VOUS REPÉRER</span><button id="mini-plan" aria-label="Ouvrir la vue en plan" title="Vue en plan">${icon('plan', 15)}</button></div><div id="minimap"></div><div class="mini-caption" id="mini-caption">Rez-de-chaussée</div></div>
-      <div class="bottom-controls"><div class="control-hint" id="control-hint"><kbd>ZQSD</kbd><span>Déplacer la vue</span><i></i>${icon('mouse-left', 17)}<span>Glisser gauche pour tourner</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span></div><div class="scale-note"><span class="scale-line"></span> Dimensions en mètres</div></div>
-      <div class="loading" id="loading"><div class="loading-mark">${icon('house', 35)}</div><span>Votre maison prend forme…</span></div>
-      <div id="fatal-error" class="fatal-error" hidden></div>
-    </main>
-  </div>
-  <div class="toast" id="toast" role="status" hidden></div>
-  <dialog id="info-dialog" aria-labelledby="dialog-eyebrow"><div class="dialog-heading"><span class="eyebrow" id="dialog-eyebrow"></span><button id="close-dialog" class="icon-button" aria-label="Fermer">${icon('close')}</button></div><div id="dialog-content"></div></dialog>
-`;
+el('#app').innerHTML = appTemplate();
 
 function toast(message: string) {
   clearTimeout(toastTimer);
@@ -1029,6 +986,14 @@ function setNavigationPanel(open: boolean) {
 }
 
 function wireEvents() {
+  wireFurnitureToolbar();
+  wireNavigationControls();
+  wireKeyboardShortcuts();
+  wireProjectControls();
+  wireViewportControls();
+}
+
+function wireFurnitureToolbar() {
   const groupCount = document.createElement('span');
   groupCount.id = 'furniture-group-count';
   groupCount.hidden = true;
@@ -1061,6 +1026,9 @@ function wireEvents() {
     if (commitFurniture(currentFurniture().filter((item) => item.id !== selectedFurnitureId)))
       toast('Meuble retiré. Annulez depuis Meubles ou avec Ctrl Z.');
   });
+}
+
+function wireNavigationControls() {
   el('#tool-navigation').addEventListener('click', () =>
     setNavigationPanel(el('#navigation-panel').hidden),
   );
@@ -1141,6 +1109,9 @@ function wireEvents() {
   };
   el('#section-enable').addEventListener('change', updateSection);
   el('#section-height').addEventListener('input', updateSection);
+}
+
+function wireKeyboardShortcuts() {
   window.addEventListener(
     'keydown',
     (event) => {
@@ -1248,6 +1219,9 @@ function wireEvents() {
     },
     true,
   );
+}
+
+function wireProjectControls() {
   el('#toggle-sidebar').addEventListener('click', () =>
     setSidebar(el('#toggle-sidebar').getAttribute('aria-expanded') !== 'true'),
   );
@@ -1373,6 +1347,9 @@ function wireEvents() {
       }
     });
   });
+}
+
+function wireViewportControls() {
   el('#tool-reset').addEventListener('click', () => {
     viewer.reset();
     toast('Vue recentrée.');
