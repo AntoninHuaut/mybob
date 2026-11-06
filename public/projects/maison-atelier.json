@@ -336,15 +336,47 @@
         },
         {
           "id": "mur-cloison-06",
-          "start": [3, 9],
-          "end": [5.75, 9],
+          "start": [0, 9],
+          "end": [5.9, 9],
           "thickness": 0.15,
           "openings": [
             {
+              "id": "porte-degagement",
+              "kind": "door",
+              "offset": 1.5,
+              "width": 0.85,
+              "height": 2.05,
+              "sill": 0
+            },
+            {
               "id": "porte-sdb",
               "kind": "door",
-              "offset": 1.3,
+              "offset": 4.3,
               "width": 0.8,
+              "height": 2.05,
+              "sill": 0
+            }
+          ]
+        },
+        {
+          "id": "mur-cloison-07",
+          "start": [0, 6],
+          "end": [6, 6],
+          "thickness": 0.15,
+          "openings": [
+            {
+              "id": "porte-chambre-1",
+              "kind": "door",
+              "offset": 1.5,
+              "width": 0.85,
+              "height": 2.05,
+              "sill": 0
+            },
+            {
+              "id": "porte-sejour-chambre-2",
+              "kind": "door",
+              "offset": 4.0,
+              "width": 0.85,
               "height": 2.05,
               "sill": 0
             }
@@ -358,140 +390,140 @@
           "kind": "garage",
           "polygon": [
             [0.1, 0.1],
-            [5.9, 0.1],
-            [5.9, 3],
-            [0.1, 3]
+            [5.875, 0.1],
+            [5.875, 2.975],
+            [0.1, 2.975]
           ],
           "label": [3, 1.5],
           "viewpoint": [3, 1.5],
           "floorOffset": -0.12,
-          "planArea": 16.82
+          "planArea": 16.6031
         },
         {
           "id": "sejour",
           "name": "Séjour",
           "kind": "living",
           "polygon": [
-            [0.3, 3.1],
-            [5.9, 3.1],
-            [5.9, 5.9],
-            [0.3, 5.9]
+            [0.1, 3.125],
+            [5.875, 3.125],
+            [5.875, 5.925],
+            [0.1, 5.925]
           ],
           "label": [3, 4.5],
           "viewpoint": [3, 4.5],
-          "planArea": 15.68
+          "planArea": 16.17
         },
         {
           "id": "piece-cuisine",
           "name": "Cuisine",
           "kind": "living",
           "polygon": [
-            [6, 0.1],
-            [8.9, 0.1],
-            [8.9, 3],
-            [6, 3]
+            [6.025, 0.1],
+            [8.925, 0.1],
+            [8.925, 2.975],
+            [6.025, 2.975]
           ],
           "label": [7.6, 1.6],
           "viewpoint": [7.6, 1.6],
-          "planArea": 8.41
+          "planArea": 8.3375
         },
         {
           "id": "piece-cellier",
           "name": "Cellier",
           "kind": "storage",
           "polygon": [
-            [9.1, 0.1],
+            [9.075, 0.1],
             [11.9, 0.1],
-            [11.9, 3],
-            [9.1, 3]
+            [11.9, 2.975],
+            [9.075, 2.975]
           ],
           "label": [10.4, 1.6],
           "viewpoint": [10.4, 1.6],
-          "planArea": 8.12
+          "planArea": 8.1219
         },
         {
           "id": "piece-bureau",
           "name": "Bureau",
           "kind": "bedroom",
           "polygon": [
-            [6, 3.1],
-            [8.9, 3.1],
-            [8.9, 5.9],
-            [6, 5.9]
+            [6.025, 3.125],
+            [8.925, 3.125],
+            [8.925, 5.9],
+            [6.025, 5.9]
           ],
           "label": [7.6, 4.5],
           "viewpoint": [7.6, 4.5],
-          "planArea": 8.12
+          "planArea": 8.0475
         },
         {
           "id": "piece-atelier",
           "name": "Atelier",
           "kind": "storage",
           "polygon": [
-            [9.1, 3.1],
-            [11.9, 3.1],
+            [9.075, 3.125],
+            [11.9, 3.125],
             [11.9, 5.9],
-            [9.1, 5.9]
+            [9.075, 5.9]
           ],
           "label": [10.4, 4.5],
           "viewpoint": [10.4, 4.5],
-          "planArea": 7.84
+          "planArea": 7.8394
         },
         {
           "id": "piece-chambre-1",
           "name": "Chambre 1",
           "kind": "bedroom",
           "polygon": [
-            [0.1, 6.1],
-            [3, 6.1],
-            [3, 9.4],
-            [0.1, 9.4]
+            [0.1, 6.075],
+            [2.925, 6.075],
+            [2.925, 8.925],
+            [0.1, 8.925]
           ],
           "label": [1.6, 7.8],
           "viewpoint": [1.6, 7.8],
-          "planArea": 9.57
+          "planArea": 8.0512
         },
         {
           "id": "piece-degagement",
           "name": "Dégagement",
           "kind": "circulation",
           "polygon": [
-            [0.1, 9.5],
-            [3, 9.5],
-            [3, 11.9],
+            [0.1, 9.075],
+            [2.925, 9.075],
+            [2.925, 11.9],
             [0.1, 11.9]
           ],
           "label": [1.6, 10.6],
           "viewpoint": [1.6, 10.6],
-          "planArea": 6.96
+          "planArea": 7.9806
         },
         {
           "id": "piece-chambre-2",
           "name": "Chambre 2",
           "kind": "bedroom",
           "polygon": [
-            [3.1, 6.1],
-            [5.9, 6.1],
-            [5.9, 9],
-            [3.1, 9]
+            [3.075, 6.075],
+            [5.9, 6.075],
+            [5.9, 8.925],
+            [3.075, 8.925]
           ],
           "label": [4.4, 7.6],
           "viewpoint": [4.4, 7.6],
-          "planArea": 8.12
+          "planArea": 8.0513
         },
         {
           "id": "piece-sdb",
           "name": "Salle de bains",
           "kind": "bathroom",
           "polygon": [
-            [3.1, 9],
-            [5.9, 9],
+            [3.075, 9.075],
+            [5.9, 9.075],
             [5.9, 11.9],
-            [3.1, 11.9]
+            [3.075, 11.9]
           ],
           "label": [4.4, 10.4],
           "viewpoint": [4.4, 10.4],
-          "planArea": 8.12
+          "planArea": 7.9806
         }
       ],
       "lights": [
