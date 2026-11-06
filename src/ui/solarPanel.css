@@ -226,6 +226,17 @@
   gap: 3px;
   margin-top: 9px;
 }
+.solar-timeline-play-row {
+  display: flex;
+  margin-top: 6px;
+}
+.solar-timeline-play-row button {
+  flex: 1;
+}
+.solar-timeline-play-row button[aria-pressed='true'] {
+  background: #37695c;
+  color: #f7f6f1;
+}
 .solar-timeline-slider input {
   width: 100%;
   margin: 0;

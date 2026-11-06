@@ -457,6 +457,37 @@ test('scene timeline stays hidden without an explicit location and tracks real D
   }
 });
 
+test('day animation button toggles and any manual slider input stops it', () => {
+  const ctx = setup();
+  try {
+    const host = document.createElement('div');
+    document.body.append(host);
+    ctx.panel.mountTimeline(host);
+    ctx.panel.load({
+      ...structuredClone(fixture),
+      solar: { ...location, instant: '2026-07-01T10:30:00.000Z' },
+    });
+    const play = host.querySelector<HTMLButtonElement>('[data-solar-timeline-play]')!;
+    assert.equal(play.textContent, 'Animer la journée');
+    assert.equal(play.getAttribute('aria-pressed'), 'false');
+    play.click();
+    assert.equal(play.textContent, 'Arrêter');
+    assert.equal(play.getAttribute('aria-pressed'), 'true');
+    const slider = host.querySelector<HTMLInputElement>('[data-solar-timeline-slider]')!;
+    slider.value = '100';
+    slider.dispatchEvent(new ctx.window.Event('input', { bubbles: true }) as unknown as Event);
+    assert.equal(play.textContent, 'Animer la journée');
+    assert.equal(play.getAttribute('aria-pressed'), 'false');
+    play.click();
+    assert.equal(play.textContent, 'Arrêter');
+    ctx.panel.load({ ...structuredClone(fixture), id: 'timeline-no-solar', solar: undefined });
+    assert.equal(play.textContent, 'Animer la journée');
+    assert.equal(play.getAttribute('aria-pressed'), 'false');
+  } finally {
+    ctx.cleanup();
+  }
+});
+
 test('season shortcuts preserve local clock time and use the configured hemisphere', () => {
   const ctx = setup();
   try {

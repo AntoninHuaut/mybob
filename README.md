@@ -47,7 +47,7 @@ La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable e
 - **Variantes** : dans Meubles, dupliquer et nommer plusieurs aménagements, puis basculer entre eux avec la même caméra ; chaque variante affiche un aperçu en plan du niveau courant. L’export JSON conserve toutes les variantes et tous les niveaux.
 - **Répéter des meubles** : Ctrl C puis Ctrl V copie le meuble sélectionné ; chaque copie est indépendante et annulable. Sur une table, **Chaises** répartit le nombre voulu autour du plateau, avec dimensions réglables et liaison facultative.
 - **Placement précis** : sélectionner plusieurs meubles pour les aligner ou répartir leurs espacements ; activer séparément l’accrochage à une grille réglable ou aux murs pendant le glisser.
-- **Soleil** : après localisation, le panneau dans la scène propose un curseur horaire, Été/Hiver et lever/coucher approximatifs, sans déplacer la caméra.
+- **Soleil** : après localisation, le panneau dans la scène propose un curseur horaire, Été/Hiver et lever/coucher approximatifs, sans déplacer la caméra. « Animer la journée » déroule l’ensoleillement en 12 secondes ; toute manipulation manuelle l’arrête.
 - **Image** : télécharger un PNG du Plan ou de la 3D sans panneaux, avec noms/surfaces et dimensions facultatifs.
 
 ## Fichiers importants
