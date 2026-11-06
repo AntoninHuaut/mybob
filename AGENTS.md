@@ -25,6 +25,8 @@ Use Node 24, `pnpm install --frozen-lockfile`, and `pnpm run ci` for a release. 
 
 All changes must go through a pull request (MR) from a `codex/` branch to `main`. Do not commit or push changes directly to `main`. A local test pass is not a substitute for the remote CI. Never merge while any required check is pending, failed, cancelled or missing; verify the checks for the exact latest PR commit. The owner authorizes auto-merge through GitHub once required CI checks pass; enable it for completed, validated changes without asking again. Never bypass branch protections or required checks.
 
+Never block on CI with long sleeps. Push, enable auto-merge, then continue other work; check `gh pr checks` afterwards. A `sleep` longer than about 30 s is a smell: do something useful instead.
+
 Use existing app architecture instead of rewriting the renderer or migrating frameworks. When the user asks for independent agent reviews, delegation is appropriate; otherwise follow the current session's delegation rules. Complete authorized fixes, but never claim a deployment until GitHub CI and the Cloudflare Pages check succeed for the pushed commit.
 
 Update the handoff and relevant docs when behavior changes. Never place credentials, Cloudflare Access OTPs, private email lists or API tokens in documentation.
