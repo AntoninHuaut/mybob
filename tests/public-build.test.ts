@@ -24,6 +24,7 @@ async function fixture(run: (root: string) => Promise<void>) {
 test('public build accepts only the application and the generic demonstration', () =>
   fixture(async (root) => {
     await writeFile(join(root, 'assets/app.js'), 'console.log("atelier")');
+    await writeFile(join(root, 'assets/bob-test.png'), 'image');
     const files = await verifyPublicBuild(root);
     assert.ok(files.includes('index.html'));
     assert.deepEqual(
@@ -54,4 +55,10 @@ test('public build rejects original documents and missing demonstrations', () =>
     await rm(join(root, 'plans.pdf'));
     await rm(join(root, 'projects/studio-demo.json'));
     await assert.rejects(verifyPublicBuild(root), /démonstration absente/);
+  }));
+
+test('public build rejects unapproved image assets', () =>
+  fixture(async (root) => {
+    await writeFile(join(root, 'assets/personal-photo.png'), 'image');
+    await assert.rejects(verifyPublicBuild(root), /Fichier non prévu/);
   }));

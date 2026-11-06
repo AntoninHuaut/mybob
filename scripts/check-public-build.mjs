@@ -27,7 +27,8 @@ export async function verifyPublicBuild(directory) {
       const name = relative(root, path).replaceAll('\\', '/');
       const allowed =
         ['index.html', 'favicon.svg', demoName].includes(name) ||
-        /^assets\/[\w.-]+\.(?:js|css|woff2?)$/.test(name);
+        /^assets\/[\w.-]+\.(?:js|css|woff2?)$/.test(name) ||
+        /^assets\/bob-[\w-]+\.png$/.test(name);
       if (!allowed) throw new Error(`Fichier non prévu pour la publication : ${name}`);
       if (/\.(?:js|json|html|css|svg)$/.test(name)) {
         const source = await readFile(path, 'utf8');

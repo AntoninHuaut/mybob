@@ -361,3 +361,23 @@ test('mesure avec aperçu, alignement droit et validation au second clic', async
   await page.keyboard.press('Escape');
   await expect(page.locator('#measure-label')).not.toBeVisible();
 });
+test('MyBob accueille et présente les commandes sans masquer le projet', async ({
+  page,
+}, testInfo) => {
+  await expect(page).toHaveTitle(/MyBob/);
+  const menu = page.locator('#toggle-sidebar');
+  if ((await menu.getAttribute('aria-expanded')) !== 'true') await menu.click();
+  await expect(page.getByText('Bonjour, moi c’est Bob.')).toBeVisible();
+  await expect(page.locator('.bob-welcome img')).toHaveJSProperty('naturalWidth', 384);
+  await expect(page.getByRole('button', { name: 'Importer ma maison' })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('mybob-projet.png') });
+  if ((await menu.getAttribute('aria-expanded')) === 'true' && (await menu.isVisible()))
+    await menu.click();
+  await page.getByRole('button', { name: 'Aide et commandes' }).click();
+  const dialog = page.getByRole('dialog', { name: 'PRENDRE EN MAIN L’ATELIER' });
+  await expect(dialog.getByText(/Moi, c’est Bob/)).toBeVisible();
+  await expect(dialog.getByText('Vue 3D', { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath('mybob-aide.png') });
+  await dialog.getByRole('button', { name: 'Fermer' }).click();
+  await expect(dialog).not.toBeVisible();
+});

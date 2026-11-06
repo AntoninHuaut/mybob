@@ -1,5 +1,7 @@
 # Interface : privilégier la maison
 
+La marque MyBob figure dans l’en-tête ; Bob accueille dans le panneau projet et présente l’aide. Les illustrations sont décoratives, les commandes restent accessibles et les données restent locales. Le titre de l’onglet porte également le nom MyBob.
+
 Le Plan dispose maintenant les noms de pièces en évitant le meuble sélectionné, les tags de distance et les commandes superposées. Les distances gardent une taille de 24 px ; leurs étiquettes sont déplacées à proximité ou masquées en manque de place, sans changer les lignes ni les valeurs.
 
 Le Plan se déplace au glisser simple (souris ou doigt) et se zoome au pincement ou à la molette. Les gestes 3D restent ceux de Babylon. En faible hauteur, la colonne d’outils défile pour laisser toutes les commandes accessibles. Les indications de navigation s’adaptent aux pointeurs tactiles ; la marche en Visite nécessite toujours un clavier. Valider le nom inchangé d’une variante ferme son formulaire sans écriture superflue.

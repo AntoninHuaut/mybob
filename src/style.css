@@ -1,8 +1,5 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750&display=swap');
-
 :root {
   font-family:
-    'DM Sans',
     system-ui,
     -apple-system,
     sans-serif;
@@ -104,7 +101,7 @@ button svg {
   align-items: center;
   text-decoration: none;
   color: #2c4436;
-  font-family: 'Manrope', sans-serif;
+  font-family: system-ui, sans-serif;
   font-size: 22px;
   font-weight: 750;
   letter-spacing: -1px;
@@ -1876,4 +1873,42 @@ dialog p {
     animation: none !important;
     transition: none !important;
   }
+}
+
+/* Bob accompanies the project without covering the scene. */
+.bob-welcome {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: -3px 0 14px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #edf3ed;
+}
+.bob-welcome-image {
+  width: 54px;
+  height: 72px;
+  object-fit: contain;
+  flex: none;
+}
+.bob-welcome p {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.bob-help {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 18px;
+}
+.bob-help img {
+  width: 92px;
+  height: 130px;
+  object-fit: contain;
+  flex: none;
+}
+.bob-help h2,
+.bob-help p {
+  margin: 0 0 8px;
 }
