@@ -13,6 +13,8 @@ Read `AGENTS.md`, the local passation journal `docs/HANDOFF.md` (git-ignored, pr
 
 Inventory actual source files, SHA-256 hashes, page counts, drawing titles, project identifiers, dates and revisions. Separate different houses and superseded drawings. Verify files exist locally: old summaries, existing JSON and model notes cannot replace the source. If an essential source is unavailable, continue independent audit work and request that source; do not call a regenerated old JSON source-verified.
 
+Check whether the source is a vector drawing or a scan before promising a pipeline. `page.get_text()` and `page.get_drawings()` answer it in one call: a vector PDF yields dimension text and strokes, a scan yields neither. The extraction layer (`extract_plan_evidence.py`) and the decision layer need text; the verification layer (`measure_plan.py`, `compare_plan.py`, the overlay) reads pixels and works on both. On a scan, the evidence ledger has to be built by hand from the rendered image, and the printed scale must be read from the cartouche because there is no chain to deduce it from — a 1/75 scan is 105 px/m at 200 dpi, not the 157 px/m of a 1/50 drawing.
+
 Render floor plans, sections, elevations and site plans. Inspect readable crops including symbols and dimension endpoints. Extraction/OCR is only an aid. Follow [references/reconstruction.md](references/reconstruction.md) for the measurement ledger, coordinate construction and source overlay workflow. Complete the envelope and partition ledger before final geometry; revisit it when checks expose contradictions.
 
 For paging through a multi-page PDF (individual renders plus labelled contact
@@ -32,6 +34,13 @@ of a hatched partition and discarding thin dimension lines. Measure at several
 places before concluding on a thickness: a window interrupts the wall and shows
 its frame where the face should be, which reads as a thinner wall. This is how a
 0.34 m wall was once mistaken for a 0.21 m one.
+
+Render large enough for the thinnest partition. A 7 cm wall needs about ten
+pixels between its two faces, so the required resolution depends on the printed
+scale: 200 dpi suffices at 1/50, but a 1/75 drawing needs 300 dpi. Below that the
+faces merge into one line and the wall reads as absent — five walls of a 1/75
+plan were reported missing at 120 dpi and all five reappeared at 300 dpi.
+`compare_plan.py` warns when the thinnest declared wall falls under eight pixels.
 
 ## Three layers, one gate
 

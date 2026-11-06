@@ -28,6 +28,7 @@ SAMPLE_FRACTIONS = (0.15, 0.3, 0.45, 0.6, 0.75, 0.85)
 MIN_WALL_LENGTH = 0.3  # m, en dessous on ne peut pas échantillonner
 MERGE_GAP = 0.26  # m, deux traits plus proches appartiennent au même mur
 MIN_BAND, MAX_BAND = 0.05, 0.55
+MIN_WALL_PIXELS = 8  # en dessous, les deux faces d'une cloison se confondent
 FACE_TOLERANCE = 0.08  # m, écart accepté entre une face lue et sa position attendue
 OFFSET_TOLERANCE = 0.05  # m, décalage d'axe accepté
 THICKNESS_TOLERANCE = 0.06  # m, écart d'épaisseur accepté
@@ -284,6 +285,14 @@ def main(argv):
     image = Image.open(config["image"]).convert("L")
     pixels = {"data": image.load(), "size": image.size}
     scale = calibration[0]
+
+    thinnest = min((wall["thickness"] for wall in level["walls"]), default=0.0)
+    if thinnest * scale < MIN_WALL_PIXELS:
+        print(
+            f"attention : la cloison la plus fine fait {thinnest * scale:.1f} px "
+            f"à cette résolution ({scale:.0f} px/m). Rendre le plan plus grand, "
+            f"sinon ses deux faces se confondent et le mur paraît absent."
+        )
 
     walls = [compare_wall(wall, pixels, calibration, scale) for wall in level["walls"]]
     walls = [wall for wall in walls if wall]
