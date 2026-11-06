@@ -78,7 +78,6 @@ let planPhotoActive = false;
 let planPhotoAdjustments: PlanPhotoAdjustments = { ...defaultPlanPhotoAdjustments };
 let planPhotoSaveTimer: ReturnType<typeof setTimeout> | undefined;
 const measureBar = new MeasureBar();
-let ceiling = false;
 let exteriorView = false;
 let lights = true;
 let mode: ViewMode = 'overview';
@@ -607,12 +606,7 @@ function syncDisplayControls() {
   overviewButton.classList.toggle('active', mode === 'overview' && !exteriorView);
   overviewButton.setAttribute('aria-pressed', String(mode === 'overview' && !exteriorView));
   el('#scene-labels').hidden =
-    mode === 'walk' ||
-    exteriorView ||
-    !showLabels ||
-    measuring ||
-    viewer.goToMode ||
-    (ceiling && mode === 'overview');
+    mode === 'walk' || exteriorView || !showLabels || measuring || viewer.goToMode;
   el<HTMLButtonElement>('#go-to').disabled = mode === 'walk';
   furnitureLayer?.setMode(
     mode === 'walk' || exteriorView || measuring || viewer.goToMode ? 'walk' : mode,
@@ -620,7 +614,6 @@ function syncDisplayControls() {
   measureBar.setActive(measuring);
   activeButton('#tool-measure', measuring);
   activeButton('#tool-labels', showLabels);
-  activeButton('#tool-ceiling', ceiling && mode === 'overview');
   activeButton('#tool-circulation', showCirculation);
   for (const id of [
     'tool-measure',
@@ -628,14 +621,12 @@ function syncDisplayControls() {
     'tool-dimensions',
     'tool-circulation',
     'tool-plan-photo',
-    'tool-ceiling',
   ]) {
     el<HTMLButtonElement>(`#${id}`).disabled =
       mode === 'walk' ||
       exteriorView ||
-      (id === 'tool-ceiling' && mode === 'plan') ||
       (id === 'tool-plan-photo' && mode !== 'plan') ||
-      (measuring && ['tool-labels', 'tool-ceiling'].includes(id));
+      (measuring && id === 'tool-labels');
   }
 }
 
@@ -677,10 +668,8 @@ function loadProject(id: string, levelId?: string) {
   solarPanel.load(p);
   selectedRoom = undefined;
   mode = 'overview';
-  ceiling = false;
   exteriorView = false;
   el<HTMLButtonElement>('#view-exterior').hidden = !p.site;
-  viewer.setCeiling(false);
   viewer.setLights(lights);
   viewer.setDimensions(showDimensions);
   mountFurniture();
@@ -839,7 +828,7 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
   el('#walk-start').hidden = next !== 'walk';
   el('#resume-walk').hidden = true;
   el('#crosshair').hidden = next !== 'walk';
-  el('#scene-labels').hidden = next === 'walk' || !showLabels || (ceiling && next === 'overview');
+  el('#scene-labels').hidden = next === 'walk' || !showLabels;
   el('#control-hint').innerHTML = desktopHint(next, {
     mouseLeft: icon('mouse-left', 17),
     mouseRight: icon('mouse-right', 17),
@@ -1500,11 +1489,6 @@ function wireViewportControls() {
     activeButton('#tool-lights', lights);
     viewer.setLights(lights);
   });
-  el('#tool-ceiling').addEventListener('click', () => {
-    ceiling = !ceiling;
-    viewer.setCeiling(ceiling);
-    syncDisplayControls();
-  });
   const endMeasure = () => {
     viewer.setMeasureMode(false);
     syncDisplayControls();
@@ -1520,12 +1504,6 @@ function wireViewportControls() {
     },
   });
   el('#tool-measure').addEventListener('click', () => {
-    if (ceiling && mode === 'overview') {
-      ceiling = false;
-      viewer.setCeiling(false);
-      activeButton('#tool-ceiling', false);
-      el('#scene-labels').hidden = !showLabels;
-    }
     viewer.setMeasureMode(!viewer.measureMode);
     syncDisplayControls();
     measureBar.resetPrompt();
@@ -1647,8 +1625,7 @@ async function start() {
     viewer.onFrame = (frame) => {
       if (!current) return;
       updateFurnitureContext();
-      const labelsVisible =
-        mode !== 'walk' && showLabels && !viewer.measureMode && !(ceiling && mode === 'overview');
+      const labelsVisible = mode !== 'walk' && showLabels && !viewer.measureMode;
       el('#orientation-arrow').style.transform =
         `rotate(${frame.planUpDegrees + (solarPanel.settings?.northAngleDeg ?? 0)}deg)`;
       const labelBoxes: LabelBox[] = [];

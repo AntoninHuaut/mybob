@@ -490,10 +490,6 @@ export class HouseViewer {
     this.lightOn = enabled;
     this.updateLighting();
   }
-  setCeiling(enabled: boolean) {
-    this.ceilingOn = enabled;
-    this.updateLighting();
-  }
   setDimensions(enabled: boolean) {
     this.dimensionOn = enabled;
     this.dimensions.forEach((m) => m.setEnabled(enabled && this.mode !== 'walk'));
@@ -723,10 +719,8 @@ export class HouseViewer {
     const interior = this.mode === 'walk';
     const plan = this.mode === 'plan';
     this.updateShadowPolicy();
-    this.house.ceiling.setEnabled(interior || (this.ceilingOn && this.mode === 'overview'));
-    this.house.fixtures.forEach((f) =>
-      f.setEnabled(interior || (this.ceilingOn && this.mode === 'overview')),
-    );
+    this.house.ceiling.setEnabled(interior);
+    this.house.fixtures.forEach((f) => f.setEnabled(interior));
     this.house.pointLights.forEach((l) => l.setEnabled(this.lightOn && !plan));
     if (plan) {
       this.planLighting ??= {
