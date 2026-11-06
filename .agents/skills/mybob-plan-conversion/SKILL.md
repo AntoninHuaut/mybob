@@ -86,6 +86,12 @@ input time instead of discovering them one by one:
 - openings must fit under the wall or ceiling height, doors/sliding/garage start
   at floor level, and every opening is at least 10 cm wide and high;
 - room polygons, labels and viewpoints must stay inside the level outline;
+- room polygons stop at the **finished faces** of walls, never on their axes. A
+  polygon that reaches the axis overlaps the wall by half its thickness: the
+  audit reports `room-solid-wall` and the room area silently grows. Compute each
+  face as `axis ± thickness / 2` and use it on both sides of every partition.
+  This single mistake accounted for most of the defects found in three separate
+  reconstructions; check it before reading any area residual;
 - `planArea` is optional and positive; it is the printed value, never a target to
   reach by moving walls.
 
@@ -95,7 +101,7 @@ Run these checks on the actual deliverable:
 
 1. Run `validateProject`, then the deterministic audit below. It reports room/room overlaps, room/solid-wall intersections, duplicate collinear walls, wall ends that stop just short of another wall, rooms no floor-level passage reaches, a spawn outside every room, visitor clearance and declared-area residuals. Resolve accidental overlaps, doubled partitions, almost-joined wall ends and blocked passages. Investigate area residuals; retain `planArea` separately and explain differences with evidence. Area agreement alone is insufficient.
 2. Compare a generated plan with the source using an independently calibrated overlay. Inspect perimeter steps, partition junctions, jambs and asymmetric anchors that detect mirroring. Record residuals and source pixel uncertainty. Never calibrate to the output geometry.
-3. Import in a real browser. Inspect every level in Plan and overview, exterior if supplied, and walk through available doors. Check corners, duplicate/overhanging walls, floating/blocked openings, floor datums, spawn clearance and ceiling/roof relationships. Record screenshots and actual views inspected. NullEngine and DOM tests do not replace visual review.
+3. Import in a real browser. Inspect every level in Plan and overview, exterior if supplied, and walk through available doors. Check corners, duplicate/overhanging walls, floating/blocked openings, floor datums, spawn clearance and ceiling/roof relationships. Record screenshots and actual views inspected. NullEngine and DOM tests do not replace visual review. Confirm that new geometry reads in the **Plan** projection, not only in 3D: an orthographic top view lights every horizontal face identically, so a flight of steps sharing the floor material becomes invisible, as does any object whose top face matches the surface below it. Give such geometry a distinct material and verify it on a screenshot rather than by reasoning about the scene.
 4. Correct the ledger/model and repeat affected checks. Run applicable CI/privacy checks; release only via the repository PR workflow.
 
 From the repository root with Node 24 and locked dependencies installed:
@@ -107,6 +113,8 @@ node --import tsx scripts/audit-plan.ts artifacts/plan-review/house.json > artif
 For source comparison use `python scripts/overlay-plan.py project.json calibration.json overlay.png`; the calibration JSON supplies `image`, `level`, three non-collinear `anchors` and independent `checks`, each with `world: [x,z]` and `pixel: [u,v]`. The helper requires Pillow and writes a calibration residual report alongside the overlay. Source rendering and anchor interpretation remain explicit inputs.
 
 The audit reports polygon intersections, room areas, world opening endpoints, wall clearance, duplicate walls, endpoint gaps and a grid flood fill from the spawn through floor-level traversable openings (`reachedRooms`). It subtracts floor-level traversable openings from wall footprints; windows stay solid. It does not establish source fidelity, door-leaf swing clearance, thresholds, furniture or complete wall-join correctness. Never auto-adjust geometry just to make its report green.
+
+A `reachedRooms` count is only meaningful once the walls are closed. A gap left between two rooms lets the flood fill through and reports full connectivity while no door serves the area; close the wall first, then read the count. A residual you cannot derive from the printed dimensions is a finding, not a rounding error: state the range the ambiguity produces and mark it unresolved instead of moving a wall until the number matches.
 
 ## Deliver an honest completion state
 
