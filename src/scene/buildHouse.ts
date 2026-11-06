@@ -104,6 +104,7 @@ export function buildHouse(
   scene: Scene,
   materials: Materials,
   shadow?: ShadowGenerator,
+  ceilingVoids: Point2[][] = [],
 ): HouseScene {
   const root = new TransformNode(`level:${level.id}`, scene);
   root.position.y = level.elevation;
@@ -132,20 +133,23 @@ export function buildHouse(
   const separateFloorRooms = level.rooms.filter(
     (room) => room.kind === 'garage' || (room.floorOffset ?? 0) !== 0,
   );
-  const floor = polygonMesh(
-    'finished-floor',
-    level.outline,
-    0,
-    scene,
-    separateFloorRooms.map((room) => room.polygon),
-  );
+  const floor = polygonMesh('finished-floor', level.outline, 0, scene, [
+    ...separateFloorRooms.map((room) => room.polygon),
+    ...(level.floorVoids ?? []),
+  ]);
   floor.parent = root;
   floor.material = materials.wood;
   floor.receiveShadows = true;
   floor.checkCollisions = true;
   floor.metadata = { kind: 'floor' };
   const slabBottom = Math.min(0, ...level.rooms.map((room) => room.floorOffset ?? 0)) - 0.17;
-  const bottom = polygonMesh('slab-bottom', level.outline, slabBottom, scene);
+  const bottom = polygonMesh(
+    'slab-bottom',
+    level.outline,
+    slabBottom,
+    scene,
+    level.floorVoids ?? [],
+  );
   bottom.parent = root;
   bottom.material = materials.slab;
   for (let i = 0; i < level.outline.length; i++) {
@@ -200,6 +204,30 @@ export function buildHouse(
     highlight.isPickable = false;
     highlight.setEnabled(false);
     highlights.set(room.id, highlight);
+  }
+
+  for (const stair of level.stairs ?? []) {
+    const dx = stair.end[0] - stair.start[0];
+    const dz = stair.end[1] - stair.start[1];
+    const run = Math.hypot(dx, dz);
+    const angle = -Math.atan2(dz, dx);
+    const riser = stair.rise / stair.steps;
+    const tread = run / stair.steps;
+    for (let i = 0; i < stair.steps; i++) {
+      const height = riser * (i + 1);
+      const along = tread * (i + 0.5);
+      const step = box(
+        `stair:${stair.id}:${i}`,
+        tread,
+        height,
+        stair.width,
+        stair.start[0] + (dx / run) * along,
+        height / 2,
+        stair.start[1] + (dz / run) * along,
+        materials.wood,
+      );
+      step.rotation.y = angle;
+    }
   }
 
   const doors: DoorInstance[] = [];
@@ -508,7 +536,7 @@ export function buildHouse(
     poseDoor(instance);
   }
 
-  const ceiling = polygonMesh('ceiling', level.outline, level.ceilingHeight, scene);
+  const ceiling = polygonMesh('ceiling', level.outline, level.ceilingHeight, scene, ceilingVoids);
   ceiling.parent = root;
   ceiling.material = materials.plaster;
   shadow?.addShadowCaster(ceiling);

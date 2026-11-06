@@ -119,13 +119,21 @@ Une pièce est un contour intérieur fini indépendant des murs. `polygon` sert 
 
 Les catégories sont `living`, `bedroom`, `bathroom`, `circulation`, `garage`, `storage`. Le garage reçoit un sol gris ; les autres pièces utilisent le carrelage imitation parquet. Le projet peut fournir un objet facultatif `finishes` avec les couleurs hexadécimales `wallColor`, `floorTint`, `garageColor` et `joineryColor`. Les textures différentes par pièce et leur édition visuelle sont des extensions à venir.
 
-Une pièce peut déclarer `floorOffset`, entre −1 et 0 m, pour un sol plus bas que le niveau. La surface de référence est alors réellement découpée, puis remplacée par un sol à cette cote ; les collisions et le point de vue suivent ce sol. Le plafond conserve sa cote de niveau : une pièce abaissée gagne donc de la hauteur libre sous un plafond inchangé. Les seuils jusqu’à 20 cm disposent d’une aide locale au franchissement si aucune porte ou aucun mur ne barre le passage. Cela ne remplace pas un modèle d’escalier pour les différences plus importantes.
+Une pièce peut déclarer `floorOffset`, entre −1 et 0 m, pour un sol plus bas que le niveau. La surface de référence est alors réellement découpée, puis remplacée par un sol à cette cote ; les collisions et le point de vue suivent ce sol. Le plafond conserve sa cote de niveau : une pièce abaissée gagne donc de la hauteur libre sous un plafond inchangé. Les seuils jusqu’à 20 cm disposent d’une aide locale au franchissement si aucune porte ou aucun mur ne barre le passage. Au-delà, une volée déclarée dans `stairs` décrit le franchissement.
+
+## Escaliers et trémies
+
+Un niveau peut déclarer `stairs`, une liste de volées droites qui montent vers le niveau supérieur. Chaque volée porte `start` et `end` (l’axe, du premier au dernier nez de marche), `width` (largeur dégagée, centrée sur l’axe), `steps` (nombre de marches) et `rise` (hauteur totale franchie, du sol de ce niveau au sol du niveau au-dessus). Le giron vaut la longueur de l’axe divisée par `steps`. La validation refuse un giron inférieur à 15 cm, une marche de plus de 25 cm, et une volée dont une extrémité sort du contour du niveau.
+
+`floorVoids` déclare les ouvertures du plancher de ce niveau, en polygones simples inscrits dans le contour. Une trémie perce le plancher, la dalle et le plafond du niveau inférieur : c’est le niveau supérieur qui la porte, puisqu’elle appartient à son sol.
+
+Le schéma ne décrit que des volées droites. Un escalier balancé, hélicoïdal ou à palier se décompose en plusieurs volées droites : c’est une approximation des marches gagnantes, à déclarer comme telle. Les garde-corps, les limons et les sous-faces ne sont pas modélisés, et la caméra de visite ne gravit pas les marches.
 
 ## Ajouter et sauvegarder
 
 Importer le fichier avec le bouton **Importer ma maison**. Un import ayant le même identifiant demande confirmation avant de remplacer sa version importée précédente ou masquer la version fournie du même projet. Lorsque ce projet est ouvert, la confirmation permet d’exporter d’abord sa version actuelle. Les meubles sont remplacés uniquement pour les niveaux fournis dans l’aménagement importé. Retirer ce projet importé restaure la version fournie, lorsqu’elle existe. Les contours de niveaux et pièces doivent être simples, sans croisement ni arête répétée.
 
-La sauvegarde est locale au navigateur : pas de synchronisation entre appareils. Exporter le projet conserve les dimensions et les hypothèses, pas la caméra courante. Les niveaux multiples sont sélectionnables, mais aucune circulation par escalier n’est développée dans cette version.
+La sauvegarde est locale au navigateur : pas de synchronisation entre appareils. Exporter le projet conserve les dimensions et les hypothèses, pas la caméra courante. Les niveaux multiples sont sélectionnables ; les volées déclarées dans `stairs` sont rendues et bloquent le passage, mais la caméra de visite ne les gravit pas.
 
 L’export peut inclure `furnishing: {version: 1, levels: {...}}`, avec les meubles par identifiant de niveau. Ces données sont validées et sauvegardées séparément à l’import pour éviter de dupliquer les photos dans le stockage des plans.
 

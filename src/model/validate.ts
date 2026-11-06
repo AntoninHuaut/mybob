@@ -234,6 +234,44 @@ export function validateProject(input: unknown): HouseProject {
           fail(`La hauteur libre de la pièce doit être d’au moins 1,80 m : ${r.id}`);
       }
     }
+    if (l.stairs !== undefined) {
+      if (!Array.isArray(l.stairs) || l.stairs.length > 20) fail(`Escaliers invalides : ${l.id}`);
+      for (const stair of l.stairs) {
+        if (!record(stair)) fail(`Chaque escalier du niveau ${l.id} doit être un objet.`);
+        id(stair.id);
+        if (
+          !point(stair.start) ||
+          !point(stair.end) ||
+          !positive(stair.width) ||
+          !Number.isInteger(stair.steps) ||
+          stair.steps < 1 ||
+          stair.steps > 40 ||
+          !positive(stair.rise) ||
+          stair.rise > 10
+        )
+          fail(`Escalier invalide : ${stair.id}`);
+        const run = Math.hypot(stair.end[0] - stair.start[0], stair.end[1] - stair.start[1]);
+        if (run < 0.5) fail(`La volée doit mesurer au moins 50 cm de long : ${stair.id}`);
+        if (run / stair.steps < 0.15)
+          fail(`Giron inférieur à 15 cm : l’escalier n’est pas franchissable : ${stair.id}`);
+        if (stair.rise / stair.steps > 0.25)
+          fail(`Hauteur de marche supérieure à 25 cm : ${stair.id}`);
+        if (!pointInPolygon(stair.start, l.outline) || !pointInPolygon(stair.end, l.outline))
+          fail(`L’escalier doit rester dans le contour du niveau : ${stair.id}`);
+        if (stair.note !== undefined && typeof stair.note !== 'string')
+          fail(`La note d’escalier doit être un texte : ${stair.id}`);
+      }
+    }
+    if (l.floorVoids !== undefined) {
+      if (!Array.isArray(l.floorVoids) || l.floorVoids.length > 20)
+        fail(`Trémies invalides : ${l.id}`);
+      for (const voidPolygon of l.floorVoids) {
+        if (!validPolygon(voidPolygon) || !polygonInsidePolygon(voidPolygon, l.outline))
+          fail(
+            `Une trémie doit être un polygone simple inscrit dans le contour du niveau : ${l.id}`,
+          );
+      }
+    }
     if (
       !record(l.spawn) ||
       !point(l.spawn.position) ||
