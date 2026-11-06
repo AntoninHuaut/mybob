@@ -6,11 +6,6 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      arm_runner:
-        description: 'Exécuter le build sur le runner ARM64 du homelab'
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -22,7 +17,7 @@ concurrency:
 jobs:
   build:
     name: Tests unitaires et build public
-    runs-on: ${{ (inputs.arm_runner || (github.event_name == 'push' && github.actor == 'AntoninHuaut')) && 'mybob-arm64' || 'ubuntu-latest' }}
+    runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - name: Checkout
