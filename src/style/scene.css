@@ -432,10 +432,12 @@
   position: absolute;
   z-index: 6;
   top: 64px;
-  right: 12px;
+  right: 80px;
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: 8px;
-  width: 230px;
+  width: 252px;
+  max-width: calc(100% - 100px);
   padding: 12px;
   border: 1px solid #cdddc1;
   border-radius: 7px;
@@ -446,12 +448,13 @@
   line-height: 1.45;
 }
 .plan-photo-panel label {
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
 }
 .plan-photo-panel input[type='range'] {
-  flex: 1;
+  width: 100%;
   min-width: 0;
 }
 .plan-photo-panel output {
@@ -459,14 +462,17 @@
   text-align: right;
 }
 .plan-photo-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
 }
 .plan-photo-row label {
-  flex: 1;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 6px;
 }
 .plan-photo-row input {
   width: 100%;
+  min-width: 0;
 }
 .plan-photo-panel p {
   margin: 0;
@@ -475,10 +481,12 @@
 }
 .plan-photo-actions {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .plan-photo-actions button {
-  flex: 1;
+  flex: 1 1 96px;
+  min-width: 0;
   padding: 6px 8px;
   border: 1px solid #cdddc1;
   border-radius: 6px;
