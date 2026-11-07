@@ -152,6 +152,14 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
 - L'extérieur cadre le terrain et le faîtage ; Vue 3D montre la maison ouverte ; Plan masque
   terrain et toiture. Sélectionner une pièce ou ajouter un meuble depuis l'extérieur revient à
   la vue intérieure.
+- La visite sort de la maison : la limite est la parcelle (`site.boundary`), pas l'emprise du
+  niveau. Sans `site`, l'emprise reste la limite. Le garde-fou de `beforeFrame` ne renvoie au
+  départ que hors parcelle, sous le sol ou au-dessus du plafond ; le sol sous le visiteur est
+  celui de la pièce dedans, celui du terrain plat dehors (`visitorGroundElevation`). Revenir du
+  plan en visite depuis la pelouse garde le point courant (`isParcelDestination`) au lieu de
+  refuser la destination. La toiture est visible en visite : dedans le plafond la masque, dehors
+  elle rend la maison entière. Les murs extérieurs gardent leurs collisions, donc on ne sort que
+  par une porte ouverte.
 
 ## Invariants à ne pas casser
 

@@ -20,7 +20,7 @@ import type { PickingInfo } from '@babylonjs/core/Collisions/pickingInfo';
 import '@babylonjs/core/Culling/ray';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import '@babylonjs/core/Collisions/collisionCoordinator';
-import type { HouseProject, Level, Point2 } from '../model/types';
+import type { HouseProject, Level, Point2, ProjectSite } from '../model/types';
 import { bounds, floorElevationAt, pointInPolygon } from '../model/geometry';
 import {
   buildHouse,
@@ -47,8 +47,11 @@ import type { SolarPosition } from './solar';
 import {
   applyEyeHeight,
   findVisitDestination,
+  isParcelDestination,
   isSceneVisitDestination,
+  isVisitArea,
   sectionPlane,
+  visitorGroundElevation,
 } from './navigation';
 import { cameraYaw, planHeading, setPlanView, stopOrbit, usePlanCoordinates } from './coordinates';
 import {
@@ -129,6 +132,8 @@ export class HouseViewer {
   exterior?: ExteriorScene;
   private exteriorView = false;
   private exteriorFrame?: Level;
+  /** Parcel of the loaded project: the visit may walk on it, outside the house. */
+  private site?: ProjectSite;
   level!: Level;
   mode: ViewMode = 'overview';
   measureMode = false;
@@ -240,6 +245,7 @@ export class HouseViewer {
     this.measureCursor = undefined;
     this.dimensions = [];
     this.level = project.levels.find((l) => l.id === levelId) ?? project.levels[0];
+    this.site = project.site;
     const level = this.level;
     const scene = (this.scene = new Scene(this.engine));
     usePlanCoordinates(scene);
@@ -405,17 +411,19 @@ export class HouseViewer {
     if (!this.scene) return;
     this.orbitTour = undefined;
     if (mode === 'walk') {
-      const point = findVisitDestination(this.scene, this.level, [
-        this.walk.position.x,
-        this.walk.position.z,
-      ]);
+      const current: Point2 = [this.walk.position.x, this.walk.position.z];
+      // Coming back from the plan while standing on the parcel keeps that spot:
+      // the visit is not only an interior viewpoint any more.
+      const point =
+        findVisitDestination(this.scene, this.level, current) ??
+        (isParcelDestination(this.level, this.site, current) ? current : undefined);
       if (!point) {
         this.onDestinationRejected?.();
         return;
       }
       this.walk.position.set(
         point[0],
-        floorElevationAt(this.level, point) + this.eyeHeight,
+        visitorGroundElevation(this.level, this.site, point) + this.eyeHeight,
         point[1],
       );
     }
@@ -427,9 +435,7 @@ export class HouseViewer {
     this.mode = mode;
     if (mode !== 'overview') this.exteriorView = false;
     this.exterior?.root.setEnabled(mode !== 'plan');
-    this.exterior?.roofMeshes.forEach((mesh) =>
-      mesh.setEnabled(this.exteriorView && mode === 'overview'),
-    );
+    this.updateRoofVisibility();
     this.setGoToMode(false);
     this.setMeasureMode(false);
     if (mode === 'walk') {
@@ -614,7 +620,12 @@ export class HouseViewer {
   }
 
   setEyeHeight(heightMeters: number) {
-    this.eyeHeight = applyEyeHeight(this.walk, this.level, heightMeters);
+    this.eyeHeight = applyEyeHeight(
+      this.walk,
+      this.level,
+      heightMeters,
+      visitorGroundElevation(this.level, this.site, [this.walk.position.x, this.walk.position.z]),
+    );
     return this.eyeHeight;
   }
 
@@ -656,13 +667,23 @@ export class HouseViewer {
 
   setExteriorView(enabled: boolean) {
     this.exteriorView = enabled && !!this.exteriorFrame && this.mode === 'overview';
-    this.exterior?.roofMeshes.forEach((mesh) => mesh.setEnabled(this.exteriorView));
+    this.updateRoofVisibility();
     this.setMeasureMode(false);
     this.setGoToMode(false);
     this.updateSection();
     this.updateCutaway();
     this.updateShadowPolicy();
     if (this.mode === 'overview') this.fitOverview();
+  }
+
+  /**
+   * The roof is what makes the house whole from outside: the exterior view shows
+   * it, and so does the visit, which can now step out onto the parcel. Inside, the
+   * ceiling hides it.
+   */
+  private updateRoofVisibility() {
+    const visible = this.mode === 'walk' || (this.exteriorView && this.mode === 'overview');
+    this.exterior?.roofMeshes.forEach((mesh) => mesh.setEnabled(visible));
   }
 
   /**
@@ -1032,10 +1053,11 @@ export class HouseViewer {
     }
     if (this.mode === 'walk') {
       const p = this.walk.position;
-      // Keep the first version inside the modeled level, including when an outside door is open.
+      // The visit may leave the house onto the parcel, but never the modeled ground:
+      // outside the parcel, under the floor, or above the ceiling.
       if (
-        !pointInPolygon([p.x, p.z], this.level.outline) ||
-        p.y < floorElevationAt(this.level, [p.x, p.z]) + 0.7 ||
+        !isVisitArea(this.level, this.site, [p.x, p.z]) ||
+        p.y < visitorGroundElevation(this.level, this.site, [p.x, p.z]) + 0.7 ||
         p.y > this.level.elevation + this.level.ceilingHeight + 1
       )
         this.reset();
