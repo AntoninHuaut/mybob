@@ -571,22 +571,11 @@ export function buildHouse(
         );
       }
     } else {
-      leaf = box(
-        `door-leaf:${o.id}`,
-        width,
-        o.height - 0.035,
-        0.04,
-        (direction * width) / 2,
-        o.height / 2,
-        0,
-        materials.frame,
-        pivot,
-      );
-      leaves.push(leaf);
+      const stile = 0.05;
+      const rail = 0.05;
       if (o.glazed) {
-        // French window: the solid leaf becomes stiles and rails around glass.
-        const stile = 0.05;
-        const rail = 0.05;
+        // French window: stiles and rails around glass, no solid slab. The
+        // pane is the leaf: it rides the hinge like a battant leaf.
         const pane = box(
           `door-pane:${o.id}`,
           width - 2 * stile,
@@ -599,6 +588,7 @@ export function buildHouse(
           pivot,
         );
         pane.receiveShadows = false;
+        leaf = pane;
         leaves.push(pane);
         for (const end of [0, 1] as const) {
           leaves.push(
@@ -628,6 +618,19 @@ export function buildHouse(
             ),
           );
         }
+      } else {
+        leaf = box(
+          `door-leaf:${o.id}`,
+          width,
+          o.height - 0.035,
+          0.04,
+          (direction * width) / 2,
+          o.height / 2,
+          0,
+          materials.frame,
+          pivot,
+        );
+        leaves.push(leaf);
       }
       for (const sign of [-1, 1]) {
         const handle = box(

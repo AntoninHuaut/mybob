@@ -122,6 +122,14 @@ test('a glazed door swings open like a French window and keeps a glass pane', ()
   const stile = scene.getMeshByName('door-stile:porte-fenetre:0')!;
   const rail = scene.getMeshByName('door-rail:porte-fenetre:1')!;
   assert.ok(pane && stile && rail);
+  assert.ok(
+    !scene.getMeshByName('door-leaf:porte-fenetre'),
+    'a glazed door must not keep the solid slab under its glass',
+  );
+  const opening = scene.getMeshByName('jamb:porte-fenetre:1')!;
+  const paneBox = pane.getBoundingInfo().boundingBox;
+  const jambBox = opening.getBoundingInfo().boundingBox;
+  assert.ok(paneBox.maximumWorld.x < jambBox.maximumWorld.x);
   assert.deepEqual(pane.metadata, { kind: 'door', id: 'porte-fenetre' });
   const closed = door.pivot.rotation.y;
   near(closed, 0);
