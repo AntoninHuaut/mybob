@@ -18,6 +18,9 @@ const TOUCH = 0.02; // m, endpoints closer than this are considered joined
 const NEAR_GAP = 0.3; // m, endpoints this close but not joined are suspicious
 const GRID = 0.1; // m, connectivity grid, plafonnée par la cloison la plus fine
 const GRID_SAFETY = 2; // une cellule doit rester plus petite que la demi-épaisseur
+// Un chevauchement pièce/mur plus fin que ça est un arrondi d'ajustement de
+// surface, pas un défaut de plan : 1 cm sur 5 m fait 0,05 m².
+const ROOM_WALL_TOLERANCE = 0.05;
 const MAX_CELLS = 400_000;
 const cross = (a: Point2, b: Point2, c: Point2) =>
   (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
@@ -220,7 +223,7 @@ export function auditPlan(project: HouseProject) {
           (sum, solid) => sum + intersectionArea(room.polygon, solid),
           0,
         );
-        if (overlap > 1e-5)
+        if (overlap > ROOM_WALL_TOLERANCE)
           issues.push({
             level: level.id,
             kind: 'room-solid-wall',

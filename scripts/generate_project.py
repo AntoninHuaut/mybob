@@ -250,6 +250,153 @@ def apply_overrides(walls, overrides):
                     opening[key] = opening_patch[key]
 
 
+def close_walls(walls, tolerance=0.45):
+    """Prolonge un about de mur jusqu'à la face du mur qu'il vise.
+
+    Un plan dessine souvent une cloison qui s'arrête à une poutre ou à un trait,
+    pas à la face du mur. Le vide laisse passer le remplissage et la pièce
+    n'existe plus : sur Sannerville, trois cloisons s'arrêtaient 34 cm avant le
+    mur sud et tout le niveau ne formait qu'une région.
+
+    On prolonge l'about jusqu'à la face la plus proche, dans l'axe du mur, et on
+    rapporte chaque prolongement : c'est un déplacement, pas une lecture.
+    """
+    moves = []
+    for wall in walls:
+        # Un mur extérieur s'arrête au contour : le prolonger le ferait sortir.
+        if wall.get("exterior"):
+            continue
+        along_x = abs(wall["start"][0] - wall["end"][0]) >= abs(
+            wall["start"][1] - wall["end"][1]
+        )
+        along, across = (0, 1) if along_x else (1, 0)
+        for end in ("start", "end"):
+            point = wall[end]
+            direction = 1 if point[along] >= wall["start" if end == "end" else "end"][along] else -1
+            best = None
+            for other in walls:
+                if other is wall:
+                    continue
+                other_along_x = abs(other["start"][0] - other["end"][0]) >= abs(
+                    other["start"][1] - other["end"][1]
+                )
+                if other_along_x == along_x:
+                    continue
+                half = other["thickness"] / 2
+                for face in (other["start"][across] - half, other["start"][across] + half):
+                    gap = (face - point[along]) * direction
+                    if gap <= 1e-6 or gap > tolerance:
+                        continue
+                    # L'autre mur est perpendiculaire : son étendue se lit sur
+                    # l'axe `across` du mur courant.
+                    low, high = sorted((other["start"][across], other["end"][across]))
+                    if not (low - 1e-6 <= point[across] <= high + 1e-6):
+                        continue
+                    if best is None or gap < best[0]:
+                        best = (gap, face)
+            if best is None:
+                continue
+            moves.append(
+                {
+                    "wall": wall["id"],
+                    "end": end,
+                    "from": round(point[along], 4),
+                    "to": round(best[1], 4),
+                    "gap": round(best[0], 4),
+                }
+            )
+            point[along] = round(best[1], 4)
+    return moves
+
+
+def merge_collinear(walls, tolerance=0.02, max_gap=1.5):
+    """Recolle les cloisons qu'un dessin coupe à chaque porte.
+
+    Un plan dessine une cloison en morceaux : le trait s'arrête au tableau de la
+    porte et reprend après. Pour le remplissage, ces morceaux sont des murs
+    séparés, le vide laisse passer et les pièces fusionnent — sur Émiéville en
+    mode généré, tout le niveau ne formait qu'une région de 107,93 m².
+
+    On recolle les morceaux alignés et l'écart devient une baie. La hauteur de
+    cette baie n'est pas lue : elle est posée à la hauteur de porte usuelle et
+    rapportée comme telle.
+    """
+    exterior = [wall for wall in walls if wall.get("exterior")]
+    partitions = [wall for wall in walls if not wall.get("exterior")]
+    groups = {}
+    for wall in partitions:
+        along_x = abs(wall["start"][0] - wall["end"][0]) >= abs(
+            wall["start"][1] - wall["end"][1]
+        )
+        across = 1 if along_x else 0
+        key = (along_x, round(wall["start"][across], 2))
+        groups.setdefault(key, []).append(wall)
+    merged = []
+    added = []
+    for (along_x, _), group in groups.items():
+        along, across = (0, 1) if along_x else (1, 0)
+        group.sort(key=lambda wall: min(wall["start"][along], wall["end"][along]))
+        current = None
+        for wall in group:
+            low, high = sorted((wall["start"][along], wall["end"][along]))
+            if current is None:
+                current = {
+                    "id": wall["id"],
+                    "start": [wall["start"][0], wall["start"][1]],
+                    "end": [wall["end"][0], wall["end"][1]],
+                    "thickness": wall["thickness"],
+                    "openings": list(wall.get("openings") or []),
+                    "_low": low,
+                    "_high": high,
+                }
+                continue
+            gap = low - current["_high"]
+            if gap > max_gap:
+                merged.append(current)
+                current = {
+                    "id": wall["id"],
+                    "start": [wall["start"][0], wall["start"][1]],
+                    "end": [wall["end"][0], wall["end"][1]],
+                    "thickness": wall["thickness"],
+                    "openings": list(wall.get("openings") or []),
+                    "_low": low,
+                    "_high": high,
+                }
+                continue
+            if gap > tolerance:
+                added.append(
+                    {
+                        "wall": current["id"],
+                        "offset": round(current["_high"] - current["_low"], 4),
+                        "width": round(gap, 4),
+                    }
+                )
+                current["openings"].append(
+                    {
+                        "id": f"{current['id']}-gap{len(current['openings']) + 1}",
+                        "kind": "door",
+                        "offset": round(current["_high"] - current["_low"], 4),
+                        "width": round(gap, 4),
+                        "height": 2.1,
+                        "sill": 0.0,
+                    }
+                )
+            current["_high"] = max(current["_high"], high)
+        if current is not None:
+            merged.append(current)
+    result = list(exterior)
+    for wall in merged:
+        low, high = wall.pop("_low"), wall.pop("_high")
+        wall["start"][along_of(wall)] = low
+        wall["end"][along_of(wall)] = high
+        result.append(wall)
+    return result, added
+
+
+def along_of(wall):
+    return 0 if abs(wall["start"][1] - wall["end"][1]) < 1e-9 else 1
+
+
 def split_exterior(walls, registry, pages, frame, outline, tolerance=0.15):
     """Découpe un mur extérieur là où une cloison le rencontre.
 
@@ -648,6 +795,8 @@ def build(
     added = []
     thickness_gaps = []
     partition_gaps = []
+    closed = []
+    rejoined = []
     if merge:
         # Les murs hachurés du modèle sont conservés : seules les cloisons changent.
         walls, _, partition_gaps = merge_partitions(level["walls"], plan["walls"])
@@ -671,7 +820,9 @@ def build(
                     "openings": [],
                 }
             )
+        walls, rejoined = merge_collinear(walls)
         walls = split_exterior(walls, registry, pages, frame, outline)
+        closed = close_walls(walls)
 
     result = json.loads(json.dumps(template))
     target = next(candidate for candidate in result["levels"] if candidate["id"] == level_id)
@@ -685,6 +836,8 @@ def build(
         report["thicknessGaps"] = thickness_gaps
         report["roomMoves"] = moves
         report["partitionGaps"] = partition_gaps
+        report["closed"] = closed
+        report["rejoined"] = rejoined
         report["sill"] = sill
     return result
 
@@ -905,6 +1058,16 @@ def main(argv):
         print(
             f"  pièces recalées sur les faces : {len(moves)} sommet(s), "
             f"le plus grand de {worst['distance']:.3f} m ({worst['room']})"
+        )
+    if report.get("rejoined"):
+        print(
+            f"  cloisons recollées : {len(report['rejoined'])} porte(s) "
+            f"refermée(s) en baie"
+        )
+    for move in report.get("closed") or []:
+        print(
+            f"  {move['wall']} : about prolongé de {move['gap']} m "
+            f"({move['from']} -> {move['to']})"
         )
     for gap in report.get("partitionGaps") or []:
         print(
