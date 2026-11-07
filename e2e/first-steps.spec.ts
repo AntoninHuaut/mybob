@@ -38,6 +38,19 @@ test('tourner autour de la maison ne lève aucune erreur', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
+test('la rotation d’aperçu reste immédiate quand le mouvement est réduit', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.goto('/');
+  const card = page.locator('#start-card');
+  await expect(card).toBeVisible();
+  await card.getByRole('button', { name: /Tourner autour de la maison/ }).click();
+  await expect(card).toBeVisible();
+  await page.waitForTimeout(600);
+  expect(errors).toEqual([]);
+});
+
 test('l’aide courte tient en trois gestes et mène au texte détaillé', async ({ page }) => {
   await page.goto('/');
   await page.locator('#help').click();

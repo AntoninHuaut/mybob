@@ -490,6 +490,12 @@ export class HouseViewer {
   tourOrbit(radians = Math.PI / 3, duration = 1800) {
     if (this.mode !== 'overview' || this.exteriorView || !this.orbit) return false;
     stopOrbit(this.orbit);
+    // Le mouvement est décoratif : sans animation, la rotation reste immédiate.
+    if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
+      this.orbit.alpha += radians;
+      this.orbitTour = undefined;
+      return true;
+    }
     this.orbitTour = {
       from: this.orbit.alpha,
       to: this.orbit.alpha + radians,
