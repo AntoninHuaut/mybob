@@ -107,8 +107,8 @@ def chain_side(chain, origins):
 def edge_for_interval(edges, axis, side, low, high):
     """Arête du contour qui contient un intervalle monde, du côté mesuré.
 
-    Une chaîne de façade peut mesurer plusieurs arêtes à la fois : au sud de
-    Sannerville, le séjour, l'entrée en renfoncement et le garage sont trois
+    Une chaîne de façade peut mesurer plusieurs arêtes à la fois : au sud du
+    plan B, le séjour, l'entrée en renfoncement et le garage sont trois
     arêtes distinctes, et une seule chaîne les couvre toutes. Chercher l'arête
     par le côté seul posait toutes les baies sur la première et perdait les
     autres — l'entrée et le séjour n'avaient plus une seule ouverture.
@@ -364,7 +364,7 @@ def close_walls(walls, tolerance=0.45):
 
     Un plan dessine souvent une cloison qui s'arrête à une poutre ou à un trait,
     pas à la face du mur. Le vide laisse passer le remplissage et la pièce
-    n'existe plus : sur Sannerville, trois cloisons s'arrêtaient 34 cm avant le
+    n'existe plus : sur le plan B, trois cloisons s'arrêtaient 34 cm avant le
     mur sud et tout le niveau ne formait qu'une région.
 
     On prolonge l'about jusqu'à la face la plus proche, dans l'axe du mur, et on
@@ -423,7 +423,7 @@ def merge_collinear(walls, tolerance=0.02, max_gap=1.5):
 
     Un plan dessine une cloison en morceaux : le trait s'arrête au tableau de la
     porte et reprend après. Pour le remplissage, ces morceaux sont des murs
-    séparés, le vide laisse passer et les pièces fusionnent — sur Émiéville en
+    séparés, le vide laisse passer et les pièces fusionnent — sur le plan A en
     mode généré, tout le niveau ne formait qu'une région de 107,93 m².
 
     On recolle les morceaux alignés et l'écart devient une baie. La hauteur de
@@ -509,7 +509,7 @@ def along_of(wall):
 def split_exterior(walls, registry, pages, frame, outline, tolerance=0.15):
     """Découpe un mur extérieur là où une cloison le rencontre.
 
-    Une façade n'a pas une épaisseur : sur Émiéville le nord fait 22 cm côté
+    Une façade n'a pas une épaisseur : sur le plan A le nord fait 22 cm côté
     garage et 34 cm côté chambres. Prendre une seule cote pour toute l'arête
     fait grandir les pièces — 0,65 m² sur chambre-3. On coupe aux jonctions, puis
     chaque tronçon reprend la cote qui le longe.
@@ -611,7 +611,7 @@ def merge_partitions(model_walls, partitions, tolerance=0.15, thickness_gap=0.03
 
     L'épaisseur n'est reprise que si elle concorde. L'aplat du dessin est le mur
     **brut** ; le modèle porte le mur **fini**, doublage compris. Remplacer l'un
-    par l'autre rétrécit la pièce : sur Émiéville, la cloison garage/WC fait
+    par l'autre rétrécit la pièce : sur le plan A, la cloison garage/WC fait
     10,2 cm à l'aplat et 15 cm finie, et la surface imprimée du WC (1,62 m²)
     tranche pour 15 cm. L'écart est rapporté, pas absorbé.
     """

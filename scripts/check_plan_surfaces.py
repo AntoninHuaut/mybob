@@ -108,7 +108,7 @@ def axis_frame(chains, axis, extent=None, dimensions=None):
     les fondre en un seul ajustement. Chacune donne une échelle ; la plus longue
     donne l'origine, parce que c'est la seule qui parte du bord du niveau.
 
-    Sauf quand aucune chaîne ne couvre l'axe. La page 14 de Sannerville n'a
+    Sauf quand aucune chaîne ne couvre l'axe. La page 14 du plan B n'a
     qu'une chaîne verticale partielle (2,78 + 1,27) pour une emprise de 8,50 m :
     l'origine tombait 3,5 m trop bas et toutes les étiquettes de surface se
     projetaient à z négatif. La cote d'ensemble « 8.50 » est alors la seule
