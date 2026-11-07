@@ -26,6 +26,8 @@ from pathlib import Path
 
 TOL = 0.01  # m
 DEFAULT_THICKNESS = 0.34  # m, épaisseur d'un mur extérieur sans cote
+MIN_THICKNESS = 0.06  # m, en dessous ce n'est pas une épaisseur de mur
+MAX_THICKNESS = 0.45  # m, au-dessus non plus
 
 
 def outline_edges(outline):
@@ -124,12 +126,14 @@ def chain_start(chain, origins):
     return (first["at"][along] - first["value"] / 2 * ppm - origin) / ppm
 
 
-def openings_from_chain(chain, wall, origins):
+def openings_from_chain(chain, wall, origins, sill=None):
     """Baies d'une chaîne, ramenées sur l'offset du mur qu'elle mesure.
 
     Les segments d'une chaîne sont ordonnés par abscisse croissante : leur
     intervalle monde se lit directement. L'offset d'une baie se compte depuis le
-    début du mur, qui peut aller dans l'autre sens.
+    début du mur, qui peut aller dans l'autre sens. L'allège vient du plan
+    (« All : 1.10 m ») ; sans elle, la baie est marquée non résolue plutôt que
+    posée à une hauteur inventée.
     """
     along = 0 if chain["axis"] == "horizontal" else 1
     start_world = chain_start(chain, origins)
@@ -156,7 +160,7 @@ def openings_from_chain(chain, wall, origins):
                 "width": round(width, 4),
                 "height": round(height, 4),
                 "kind": "window" if height < 1.6 else "door",
-                "sill": 0.0 if height >= 1.6 else 1.0,
+                "sill": 0.0 if height >= 1.6 else (sill if sill is not None else 0.0),
             }
         )
     return found
@@ -277,7 +281,180 @@ def merge_partitions(model_walls, partitions, tolerance=0.15):
     return merged, added
 
 
-def build(plan, registry, template, level_id, pages, thickness, overrides=None, merge=True):
+def world_frame(chains, outline):
+    """Repère points -> mètres, depuis les chaînes qui portent l'emprise."""
+    origins = envelope_frame(chains, outline)
+    ppm = None
+    for chain in chains:
+        if chain.get("closed") and chain.get("printedPointsPerMetre"):
+            ppm = chain["printedPointsPerMetre"]
+            break
+    if len(origins) < 2 or ppm is None:
+        return None
+    return {"originX": origins[0], "originZ": origins[1], "ppm": ppm}
+
+
+def printed_thickness(registry, pages, edge, frame, tolerance=0.6):
+    """Épaisseur lue sur une cote en centimètres posée contre le mur.
+
+    Une cote de 22, 34 ou 15 contre une façade donne son épaisseur. On ne
+    retient que les cotes perpendiculaires au mur et dont le libellé tombe dans
+    son emprise : c'est une lecture, pas une déduction. Sans cote trouvée, le
+    mur garde l'épaisseur de repli et le script le dit.
+    """
+    if frame is None:
+        return None
+    along_x = edge["axis"] == "horizontal"
+    want_horizontal = not along_x
+    low, high = (
+        sorted((edge["start"][0], edge["end"][0]))
+        if along_x
+        else sorted((edge["start"][1], edge["end"][1]))
+    )
+    axis = edge["start"][1] if along_x else edge["start"][0]
+    best = None
+    for page in registry.get("pages") or []:
+        if pages is not None and page.get("index") not in pages:
+            continue
+        for dimension in (page.get("labels") or {}).get("dimensions") or []:
+            if dimension.get("kind") != "centimetres":
+                continue
+            if bool(dimension.get("horizontal")) != want_horizontal:
+                continue
+            if not MIN_THICKNESS <= dimension["value"] <= MAX_THICKNESS:
+                continue
+            x = (dimension["at"][0] - frame["originX"]) / frame["ppm"]
+            z = (dimension["at"][1] - frame["originZ"]) / frame["ppm"]
+            along, across = (x, z) if along_x else (z, x)
+            if not (low - tolerance <= along <= high + tolerance):
+                continue
+            distance = abs(across - axis)
+            if distance <= tolerance and (best is None or distance < best[0]):
+                best = (distance, dimension["value"])
+    return None if best is None else best[1]
+
+
+def printed_sill(registry, pages):
+    """Allège imprimée la plus fréquente, ou None si le plan n'en donne pas."""
+    counts = {}
+    for page in registry.get("pages") or []:
+        if pages is not None and page.get("index") not in pages:
+            continue
+        for sill in (page.get("labels") or {}).get("sills") or []:
+            value = sill.get("value")
+            if value is not None:
+                counts[value] = counts.get(value, 0) + 1
+    if not counts:
+        return None
+    return max(counts, key=counts.get)
+
+
+def merge_openings(model_walls, generated_walls, tolerance=0.12):
+    """Reporte sur le modèle les baies que les chaînes prouvent et qu'il n'a pas.
+
+    La fusion garde les murs du modèle, qui portent les murs hachurés et les
+    portes intérieures. Elle ne doit pas jeter pour autant les baies lues sur
+    les chaînes : une baie prouvée par une cote et absente du modèle est un
+    manque, pas un choix.
+
+    Une baie est reportée par son intervalle **monde**, pas par son offset : deux
+    murs voisins peuvent être à six centimètres l'un de l'autre, et un offset
+    recopié d'un mur à l'autre poserait la baie hors du mur. La baie doit tenir
+    dans l'emprise du mur d'accueil, sinon elle n'est pas reportée.
+    """
+    added = []
+    for generated in generated_walls:
+        if not generated["openings"]:
+            continue
+        along_x = abs(generated["start"][0] - generated["end"][0]) >= abs(
+            generated["start"][1] - generated["end"][1]
+        )
+        g_start = generated["start"][0] if along_x else generated["start"][1]
+        g_end = generated["end"][0] if along_x else generated["end"][1]
+        g_axis = generated["start"][1] if along_x else generated["start"][0]
+        g_low, g_high = sorted((g_start, g_end))
+        for opening in generated["openings"]:
+            if g_end >= g_start:
+                world_low = g_low + opening["offset"]
+            else:
+                world_low = g_high - opening["offset"] - opening["width"]
+            world_high = world_low + opening["width"]
+            for wall in model_walls:
+                wall_along_x = abs(wall["start"][0] - wall["end"][0]) >= abs(
+                    wall["start"][1] - wall["end"][1]
+                )
+                if wall_along_x != along_x:
+                    continue
+                wall_axis = wall["start"][1] if along_x else wall["start"][0]
+                if abs(wall_axis - g_axis) > tolerance:
+                    continue
+                w_start = wall["start"][0] if along_x else wall["start"][1]
+                w_end = wall["end"][0] if along_x else wall["end"][1]
+                w_low, w_high = sorted((w_start, w_end))
+                if world_low < w_low - tolerance or world_high > w_high + tolerance:
+                    continue
+                offset = world_low - w_start if w_end >= w_start else w_start - world_high
+                duplicate = any(
+                    abs(existing["offset"] - offset) <= tolerance
+                    and abs(existing["width"] - opening["width"]) <= tolerance
+                    for existing in wall["openings"]
+                )
+                if duplicate:
+                    continue
+                copy = json.loads(json.dumps(opening))
+                copy["offset"] = round(max(0.0, offset), 4)
+                wall["openings"].append(copy)
+                added.append({"wall": wall["id"], "offset": copy["offset"]})
+                break
+    return added
+
+
+def compare_thickness(model_walls, generated_walls, tolerance=0.12, gap=0.02):
+    """Écarts d'épaisseur entre les murs du modèle et les cotes du plan.
+
+    La fusion garde les murs du modèle, mais elle ne doit pas taire ce que le
+    plan dit d'autre : un mur dont l'épaisseur déclarée s'écarte de la cote
+    imprimée est signalé, et c'est une surcharge qui le corrige, pas une
+    régénération.
+    """
+    rows = []
+    for generated in generated_walls:
+        along_x = abs(generated["start"][0] - generated["end"][0]) >= abs(
+            generated["start"][1] - generated["end"][1]
+        )
+        g_start = generated["start"][0] if along_x else generated["start"][1]
+        g_end = generated["end"][0] if along_x else generated["end"][1]
+        g_axis = generated["start"][1] if along_x else generated["start"][0]
+        g_low, g_high = sorted((g_start, g_end))
+        for wall in model_walls:
+            wall_along_x = abs(wall["start"][0] - wall["end"][0]) >= abs(
+                wall["start"][1] - wall["end"][1]
+            )
+            if wall_along_x != along_x:
+                continue
+            wall_axis = wall["start"][1] if along_x else wall["start"][0]
+            if abs(wall_axis - g_axis) > tolerance:
+                continue
+            w_start = wall["start"][0] if along_x else wall["start"][1]
+            w_end = wall["end"][0] if along_x else wall["end"][1]
+            w_low, w_high = sorted((w_start, w_end))
+            if abs(w_low - g_low) > 0.3 or abs(w_high - g_high) > 0.3:
+                continue
+            if abs(wall["thickness"] - generated["thickness"]) > gap:
+                rows.append(
+                    {
+                        "wall": wall["id"],
+                        "model": wall["thickness"],
+                        "printed": generated["thickness"],
+                    }
+                )
+            break
+    return rows
+
+
+def build(
+    plan, registry, template, level_id, pages, thickness, overrides=None, merge=True, report=None
+):
     level = next(candidate for candidate in template["levels"] if candidate["id"] == level_id)
     outline = level["outline"]
     chains = [
@@ -288,21 +465,33 @@ def build(plan, registry, template, level_id, pages, thickness, overrides=None, 
     ]
     edges = outline_edges(outline)
     origins = envelope_frame(chains, outline)
+    frame = world_frame(chains, outline)
+    sill = printed_sill(registry, pages)
 
     walls = []
+    read = []
     for index, edge in enumerate(edges):
+        measured = printed_thickness(registry, pages, edge, frame)
+        wall_thickness = thickness if measured is None else measured
+        read.append(
+            {
+                "wall": f"ext-{index + 1}",
+                "thickness": wall_thickness,
+                "printed": measured is not None,
+            }
+        )
         walls.append(
             {
                 "id": f"ext-{index + 1}",
                 "start": [
-                    round(edge["start"][0] + edge["normal"][0] * thickness / 2, 4),
-                    round(edge["start"][1] + edge["normal"][1] * thickness / 2, 4),
+                    round(edge["start"][0] + edge["normal"][0] * wall_thickness / 2, 4),
+                    round(edge["start"][1] + edge["normal"][1] * wall_thickness / 2, 4),
                 ],
                 "end": [
-                    round(edge["end"][0] + edge["normal"][0] * thickness / 2, 4),
-                    round(edge["end"][1] + edge["normal"][1] * thickness / 2, 4),
+                    round(edge["end"][0] + edge["normal"][0] * wall_thickness / 2, 4),
+                    round(edge["end"][1] + edge["normal"][1] * wall_thickness / 2, 4),
                 ],
-                "thickness": thickness,
+                "thickness": wall_thickness,
                 "exterior": True,
                 "openings": [],
             }
@@ -318,13 +507,18 @@ def build(plan, registry, template, level_id, pages, thickness, overrides=None, 
         if edge is None:
             continue
         wall = walls[edges.index(edge)]
-        for opening in openings_from_chain(chain, wall, origins):
+        for opening in openings_from_chain(chain, wall, origins, sill):
             opening["id"] = f"{wall['id']}-o{len(wall['openings']) + 1}"
             wall["openings"].append(opening)
 
+    generated = walls
+    added = []
+    thickness_gaps = []
     if merge:
         # Les murs hachurés du modèle sont conservés : seules les cloisons changent.
         walls = merge_partitions(level["walls"], plan["walls"])[0]
+        added = merge_openings(walls, generated)
+        thickness_gaps = compare_thickness(walls, generated)
     else:
         for index, partition in enumerate(plan["walls"]):
             along = 0 if partition["axis"] == "horizontal" else 1
@@ -350,6 +544,11 @@ def build(plan, registry, template, level_id, pages, thickness, overrides=None, 
         apply_overrides(walls, overrides)
     target["walls"] = walls
     snap_rooms(target["rooms"], walls)
+    if report is not None:
+        report["thickness"] = read
+        report["openingsAdded"] = added
+        report["thicknessGaps"] = thickness_gaps
+        report["sill"] = sill
     return result
 
 
@@ -535,6 +734,7 @@ def main(argv):
     overrides = (
         json.loads(Path(args.overrides).read_text(encoding="utf-8")) if args.overrides else None
     )
+    report = {}
     result = build(
         plan,
         registry,
@@ -544,11 +744,29 @@ def main(argv):
         args.thickness,
         overrides,
         merge=not args.replace,
+        report=report,
     )
     Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     level = next(candidate for candidate in result["levels"] if candidate["id"] == args.level)
     openings = sum(len(wall.get("openings", [])) for wall in level["walls"])
     print(f"{len(level['walls'])} murs, {openings} baies -> {args.out}")
+    read = report.get("thickness") or []
+    printed = sum(1 for item in read if item["printed"])
+    print(f"épaisseurs lues sur le plan : {printed}/{len(read)}")
+    fallback = [item["wall"] for item in read if not item["printed"]]
+    if fallback:
+        print(f"  sans cote, épaisseur de repli : {', '.join(fallback)}")
+    if report.get("sill") is None:
+        print("  allège : aucune cote imprimée, baies de fenêtre posées à 0")
+    else:
+        print(f"  allège imprimée : {report['sill']} m")
+    if report.get("openingsAdded"):
+        print(f"  baies ajoutées depuis les chaînes : {len(report['openingsAdded'])}")
+    for gap in report.get("thicknessGaps") or []:
+        print(
+            f"  {gap['wall']} : épaisseur du modèle {gap['model']} m, "
+            f"cote imprimée {gap['printed']} m"
+        )
     return 0
 
 

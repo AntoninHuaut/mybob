@@ -15,6 +15,8 @@ import hashlib
 import json
 import re
 import sys
+import tempfile
+from pathlib import Path
 
 import pymupdf
 
@@ -311,7 +313,57 @@ def page_record(page, index, skip_vectors):
     }
 
 
+def self_test():
+    """Non-régression sur un PDF synthétique : aucune donnée réelle."""
+    ppm = 2834.6457 / 50  # 1/50 à l'échelle 1:1
+    document = pymupdf.open()
+    page = document.new_page(width=842, height=595)
+    baseline = 200.0
+    # Chaîne horizontale 4,00 + 6,00 = 10,00 m, et sa cote totale juste au-dessus.
+    page.insert_text((100.0, baseline), "4.00", fontsize=8)
+    page.insert_text((100.0 + 5.00 * ppm, baseline), "6.00", fontsize=8)
+    page.insert_text((100.0 + 5.00 * ppm - 10, baseline + 14), "10.00", fontsize=8)
+    page.insert_text((100.0, baseline + 60), "SH : 12.00 m2", fontsize=8)
+    page.insert_text((100.0, baseline + 80), "All : 1.10 m", fontsize=8)
+    page.insert_text((100.0, baseline + 100), "90/2.15", fontsize=8)
+    page.insert_text((100.0, baseline + 120), "Echelle : 1/50", fontsize=8)
+    path = str(Path(tempfile.mkdtemp()) / "self-test-evidence.pdf")
+    document.save(path)
+    record = page_record(pymupdf.open(path)[0], 1, True)
+    failures = []
+    chains = record["chains"]
+    if len(chains) != 1:
+        failures.append(f"{len(chains)} chaîne(s) au lieu de 1")
+    else:
+        chain = chains[0]
+        if abs(chain["sum"] - 10.0) > 0.01:
+            failures.append(f"somme de chaîne {chain['sum']} au lieu de 10.00")
+        if not chain["closed"]:
+            failures.append("chaîne non refermée alors que la cote totale est imprimée")
+        if abs(chain.get("impliedPointsPerMetre", 0) - ppm) > 0.5:
+            failures.append(f"échelle déduite {chain.get('impliedPointsPerMetre')} au lieu de {ppm:.2f}")
+    rooms = record["labels"]["rooms"]
+    if len(rooms) != 1 or abs(rooms[0]["area"] - 12.0) > 0.01:
+        failures.append(f"étiquettes de surface {rooms}")
+    sills = record["labels"]["sills"]
+    if len(sills) != 1 or abs(sills[0]["value"] - 1.1) > 0.01:
+        failures.append(f"allèges {sills}")
+    openings = record["labels"]["openings"]
+    if len(openings) != 1 or abs(openings[0]["width"] - 0.9) > 0.01 or abs(openings[0]["height"] - 2.15) > 0.01:
+        failures.append(f"baies {openings}")
+    if record["cartouche"]["scale"] != "1/50":
+        failures.append(f"échelle du cartouche {record['cartouche']['scale']}")
+    if failures:
+        for failure in failures:
+            print(f"ECHEC {failure}")
+        return 1
+    print("registre de cotes : auto-test réussi")
+    return 0
+
+
 def main(argv):
+    if "--self-test" in argv:
+        return self_test()
     if len(argv) < 3:
         print(__doc__)
         return 2

@@ -37,15 +37,16 @@ approximatif qu'on croit.
 
 ## L'inventaire
 
-| script                     | ce qu'il fait                                        | exactitude                                                              |
-| -------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- |
-| `extract_plan_evidence.py` | lit cotes, chaînes, étiquettes de surface            | **100 %** — lecture, aucune interprétation                              |
-| `check_plan_surfaces.py`   | compare surfaces imprimées et polygones du projet    | **100 %** — calcul, c'est la porte de sortie                            |
-| `compare_plan.py`          | mesure l'encre sous chaque mur du modèle             | **100 %** — mesure, ne corrige rien                                     |
-| `audit-plan.ts`            | cohérence interne du projet                          | **100 %** — calcul                                                      |
-| `check-plan-decisions.ts`  | arithmétique des décisions et rejeu de l'enveloppe   | **100 %** — calcul                                                      |
-| `extract_plan.py`          | cloisons, par l'aplat de couleur du dessin           | **100 % sur les cloisons**, aveugle sur les bandes hachurées            |
-| `generate_project.py`      | murs extérieurs depuis le contour, baies des chaînes | **exact mais incomplet** : n'invente jamais, oublie ce qu'il ne lit pas |
+| script                     | ce qu'il fait                                      | exactitude                                                              |
+| -------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
+| `extract_plan_evidence.py` | lit cotes, chaînes, étiquettes de surface          | **100 %** — lecture, aucune interprétation                              |
+| `check_plan_surfaces.py`   | compare surfaces imprimées et polygones du projet  | **100 %** — calcul, c'est la porte de sortie                            |
+| `plan_faces.py`            | calcule les pièces depuis les murs du niveau       | **100 %** — calcul, aucune détection                                    |
+| `compare_plan.py`          | mesure l'encre sous chaque mur du modèle           | **100 %** — mesure, ne corrige rien                                     |
+| `audit-plan.ts`            | cohérence interne du projet                        | **100 %** — calcul                                                      |
+| `check-plan-decisions.ts`  | arithmétique des décisions et rejeu de l'enveloppe | **100 %** — calcul                                                      |
+| `extract_plan.py`          | cloisons, par l'aplat de couleur du dessin         | **100 % sur les cloisons**, aveugle sur les bandes hachurées            |
+| `generate_project.py`      | murs extérieurs, épaisseurs et baies lues au plan  | **exact mais incomplet** : n'invente jamais, oublie ce qu'il ne lit pas |
 
 Les deux derniers sont les seuls qui produisent de la géométrie. Ils sont
 utilisables parce qu'ils n'inventent rien : `extract_plan.py` ne rend que des
@@ -314,6 +315,16 @@ chaque côté, cloisons depuis la couche géométrie, et pièces recollées sur 
 nouvelles faces de murs. Puis `validateProject`, `scripts/audit-plan.ts`, le
 calque, le navigateur.
 
+Rien n'y est inventé : l'**épaisseur** de chaque mur extérieur est lue sur la
+cote en centimètres posée contre lui (22, 34, 15), l'**allège** sur la cote
+`All : 1.10 m`, la **hauteur** de baie sur son libellé `90/2.15`. Le script dit
+combien de murs il a lus et lesquels gardent une valeur de repli. Sur Émiéville :
+7 murs sur 8, allège 1,10 m.
+
+Attention à l'ambiguïté : deux cotes voisines peuvent décrire le même mur (21 et
+22 pour la même façade, brut et fini). Le script prend la plus proche ; c'est une
+proposition, et c'est une surcharge qui tranche.
+
 Deux limites mesurées sur de vrais plans : **les portes intérieures ne sont pas
 extractibles** — elles sont dessinées en polylignes, pas en arcs, et leurs
 libellés sont du texte vectorisé, donc ni l'arc ni le texte ne se lisent ; et une
@@ -323,6 +334,14 @@ donne aucune baie. Les deux se rapportent comme manquantes, jamais inventées.
 `--replace` jette les murs du modèle et ne garde que ce que le dessin donne. Ne
 pas l'utiliser sur une vraie maison : les murs hachurés et les portes intérieures
 disparaissent, et le garage perd environ un mètre carré. Le défaut est la fusion.
+
+La fusion garde les murs du modèle — ils portent les murs hachurés et les portes
+intérieures — mais elle ne jette plus ce que le dessin a calculé : les **baies**
+prouvées par une chaîne et absentes du modèle sont reportées, par leur intervalle
+monde et non par leur offset (deux murs voisins peuvent être à six centimètres
+l'un de l'autre), et les **écarts d'épaisseur** entre le modèle et la cote
+imprimée sont signalés. Sur Émiéville, le modèle avait déjà les seize baies : la
+fusion n'ajoute rien et le dit.
 
 ## Construire depuis un référentiel commun
 
@@ -406,21 +425,52 @@ niveau à plafond plat, SH et SU coïncident ; sous pente, non.
 
 État mesuré sur Émiéville RDC (page 8, 1/75), tolérance 0,05 m² :
 
-| version                | pièces hors tolérance | garage   | total calculé |
-| ---------------------- | --------------------- | -------- | ------------- |
-| modèle                 | 4                     | exact    | 106,14 m²     |
-| fusion (défaut)        | 5                     | exact    | 106,27 m²     |
-| génération `--replace` | 6                     | −1,04 m² | 105,10 m²     |
+| version                 | pièces hors tolérance | garage   | total calculé |
+| ----------------------- | --------------------- | -------- | ------------- |
+| modèle avant correction | 4                     | exact    | 106,14 m²     |
+| modèle corrigé          | 1                     | exact    | 106,33 m²     |
+| génération `--replace`  | 6                     | −1,04 m² | 105,10 m²     |
 
-Imprimé : 106,33 m². Les quatre écarts du modèle sont `chambre-1` +0,64,
-`degagement` −1,26, `sejour` +0,58, `hall` −0,17. La fusion les hérite : elle
-remplace des murs, pas des surfaces. **Une surface ne s'hérite pas, elle se
-recalcule** — corriger un mur doit faire bouger la pièce, et c'est cette porte
-qui le prouve.
+Imprimé : 106,33 m². Les quatre écarts de départ étaient `chambre-1` +0,64,
+`degagement` −1,26, `sejour` +0,58, `hall` −0,17. Deux cotes imprimées les ont
+résolus : `chambre-1` parce que son décrochement fait **4,05 m** de large et non
+4,77 (3,65 × 2,57 + 4,05 × 0,90 = 13,03), et le dégagement parce que le couloir
+se prolonge jusqu'à z = 5,46 le long du retour de la salle de bains (cote 60).
+Le séjour suivait. Reste le hall, à −0,09, non résolu et documenté.
+
+**Une surface ne s'hérite pas, elle se recalcule** — corriger un mur doit faire
+bouger la pièce, et c'est cette porte qui le prouve.
 
 Un écart de surface ne dit pas _quel_ mur corriger. Il dit qu'il y en a un. La
 table `compare_plan.py --table` donne le candidat : `décalé` d'abord,
 `épaisseur divergente` ensuite.
+
+### Les pièces se calculent depuis les murs
+
+Un polygone de pièce saisi à la main est une opinion. `plan_faces.py` ferme le
+niveau, découpe le plan aux faces de murs, remplit les cellules libres et rend
+la surface exacte de chaque région. Aucune cellule ne peut traverser un mur, donc
+la surface est un calcul, pas une détection.
+
+```sh
+python scripts/plan_faces.py projet.json --level rdc --compare
+```
+
+Il répond à une question que la porte des surfaces ne peut pas poser : **les murs
+ferment-ils vraiment les pièces ?** Sur Émiéville, avant correction, le séjour,
+le dégagement et le hall ne formaient qu'une seule région de 45,46 m² : aucun mur
+ne les séparait. C'est normal — ce sont des zones d'un même espace ouvert — mais
+il faut le savoir avant de lire un écart de surface.
+
+Deux conséquences :
+
+- une **zone ouverte** n'a pas de surface propre. Sa limite est une convention,
+  et le plan peut se contredire. Sur Émiéville, `placard` + `hall` impriment
+  0,60 + 1,73 = 2,33 m² pour un bloc de 1,27 × 1,79 = 2,27 m² : les cotes du plan
+  ne se referment pas sur 0,06 m². On documente l'écart, on ne bouge pas un mur
+  pour faire tomber le nombre ;
+- une pièce dont le polygone diffère de la région sous son centre est un
+  **polygone faux**, pas un mur faux. `--compare` le dit pièce par pièce.
 
 ### L'audit interne
 

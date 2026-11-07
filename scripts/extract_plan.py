@@ -226,7 +226,7 @@ def main(argv):
     parser.add_argument("--scale", type=float, default=None)
     parser.add_argument(
         "--envelope",
-        required=False,
+        required=True,
         help="x0,y0,x1,y1 en points : coin nord-ouest et coin sud-est du niveau",
     )
     if "--self-test" in argv:
@@ -235,8 +235,17 @@ def main(argv):
     scale = args.scale
     if scale is None:
         if args.denominator is None:
-            parser.error("indiquer --denominator (échelle du cartouche) ou --scale")
+            parser.error(
+                "indiquer --scale (points par mètre, déduit des chaînes de cotes) "
+                "ou --denominator (ratio du cartouche, à vérifier)"
+            )
         scale = 2834.6457 / args.denominator
+        print(
+            "attention : --denominator est le ratio du cartouche, une affirmation "
+            "sur la feuille imprimée d'origine. Préférer --scale, déduit des chaînes "
+            "de cotes, et vérifier avec check_plan_surfaces.py.",
+            file=sys.stderr,
+        )
     envelope = tuple(float(value) for value in args.envelope.split(","))
     if len(envelope) != 4:
         parser.error("--envelope attend x0,y0,x1,y1")
