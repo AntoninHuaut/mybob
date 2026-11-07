@@ -45,6 +45,7 @@ export function polygonMesh(
   y: number,
   scene: Scene,
   holes: Point2[][] = [],
+  facing: 1 | -1 = 1,
 ): Mesh {
   const allPoints = [...points];
   const holeIndices: number[] = [];
@@ -55,15 +56,18 @@ export function polygonMesh(
   const positions = allPoints.flatMap(([x, z]) => [x, y, z]);
   const indices = earcut(allPoints.flat(), holeIndices);
   // Match Babylon's native ground winding; Mesh.sideOrientation handles handedness.
+  // `facing` picks the lit side: floors and ground face up, the ceiling faces down
+  // into the room. The winding has to follow, otherwise the geometry buffer hands
+  // SSAO a normal pointing into the slab and the whole ceiling reads as occluded.
   const normals: number[] = [];
   VertexData.ComputeNormals(positions, indices, normals);
-  if (normals[1] < 0)
+  if (normals[1] * facing < 0)
     for (let i = 0; i < indices.length; i += 3)
       [indices[i + 1], indices[i + 2]] = [indices[i + 2], indices[i + 1]];
   const data = new VertexData();
   data.positions = positions;
   data.indices = indices;
-  data.normals = allPoints.flatMap(() => [0, 1, 0]);
+  data.normals = allPoints.flatMap(() => [0, facing, 0]);
   data.uvs = allPoints.flatMap(([x, z]) => [x / 4.8, z / 3.2]);
   const mesh = new Mesh(name, scene);
   data.applyToMesh(mesh);
@@ -543,7 +547,14 @@ export function buildHouse(
     poseDoor(instance);
   }
 
-  const ceiling = polygonMesh('ceiling', level.outline, level.ceilingHeight, scene, ceilingVoids);
+  const ceiling = polygonMesh(
+    'ceiling',
+    level.outline,
+    level.ceilingHeight,
+    scene,
+    ceilingVoids,
+    -1,
+  );
   ceiling.parent = root;
   ceiling.material = materials.plaster;
   shadow?.addShadowCaster(ceiling);
