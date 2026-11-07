@@ -640,7 +640,7 @@ table `compare_plan.py --table` donne le candidat : `décalé` d'abord,
 
 ### Un niveau sous versant
 
-Un niveau de combles ne se lit pas comme un rez-de-chaussée, et trois choses y
+Un niveau de combles ne se lit pas comme un rez-de-chaussée, et quatre choses y
 trompent :
 
 **Le plancher ne va pas jusqu'à la façade.** Le dessin porte un trait à 1,27 m de
@@ -654,34 +654,141 @@ entre ce trait et sa cloison sud, contre 9,38 imprimé.
 6,67 m sur le plan B, et ce n'est pas un mur : elle sépare la SH de l'annexe.
 Ne pas la confondre avec le rampant, et ne pas la poser en cloison.
 
+Pour la retrouver, se méfier du hachurage : un trait mixte se reconnaît à ses
+tronçons courts, mais la hachure d'un mur en produit aussi. Grouper les tronçons
+courts fait donc apparaître de fausses lignes mixtes **dans l'épaisseur des
+murs** — un WC du plan B s'est vu inventer une limite à z = 6,32 qui n'était que
+sa hachure, et une pièce s'est fait couper en deux pour rien. Filtrer par longueur
+cumulée par ligne, et confirmer sur le rendu avant de conclure.
+
 **La page imprime trois tableaux, pas un.** `SURFACES HABITABLES`,
 `SURFACES ANNEXES`, `SURFACES GARAGE`. La surface d'une pièce est
 **SH + annexe** — c'est le plancher, donc la SU. Sur le plan B : dressing 5,51 +
 1,61 = 7,12, salle de bains 7,67 + 1,71 = 9,38. Prendre la SH seule fait
 afficher une fausse erreur sur chaque pièce.
 
+**Le plancher déborde dans les chiens assis.** Un versant percé d'une lucarne
+n'est pas un versant continu : le plancher de la pièce passe sous la lucarne et
+va jusqu'à son mur de fond. Sur le plan B, deux chiens assis de 0,90 m de large
+percent le versant sud (x 2,161..3,060 et 10,181..11,081) et ajoutent **0,75 m²**
+chacun. C'est exactement l'écart des deux chambres 3 : 4,55 × 3,37 = 15,33 plus
+0,77 de lucarne = 16,10 imprimé. Le rampant doit donc être **coupé** à chaque
+baie et le contour du niveau porter les deux avancées. Un rampant continu laisse
+les deux pièces courtes de 0,77 m² et fait croire à une contradiction du plan qui
+n'existe pas.
+
 **Et les surfaces imprimées ne se referment pas toujours.** Sur le plan B, après
-reconstruction depuis les aplats et les traits :
+reconstruction depuis les aplats et les traits, tolérance 0,05 m² :
 
 | pièce           | imprimé | dessin | écart | cause                                                    |
 | --------------- | ------- | ------ | ----- | -------------------------------------------------------- |
 | salle de bains  | 9,38    | 9,37   | −0,01 | —                                                        |
 | chambre 2       | 14,44   | 14,44  | 0,00  | —                                                        |
-| dressing        | 7,12    | 7,04   | −0,08 | placard technique                                        |
-| chambre 3 ouest | 16,10   | 15,33  | −0,77 | 4,55 × 3,37 = 15,33 : le plan se contredit               |
-| chambre 3 est   | 13,90   | 13,11  | −0,79 | surface comptée en rectangle, sans l'about du couloir    |
-| WC              | 1,24    | 2,01   | +0,77 | pièce dessinée 0,85 × 2,39, surface imprimée 0,85 × 1,46 |
-| dégagement      | 4,14    | 3,48   | −0,66 | l'imprimé compte le passage de 0,67 m² à côté de la cage |
+| chambre 3 ouest | 16,10   | 16,12  | +0,02 | 4,55 × 3,37 + 0,75 de lucarne                            |
+| chambre 3 est   | 13,90   | 13,90  | 0,00  | 4,96 × 2,78 − 0,65 d'about du couloir + 0,75 de lucarne  |
+| dressing        | 7,12    | 7,05   | −0,07 | placard technique : 0,25 au dessin, 0,19 dans le tableau |
+| WC              | 1,24    | 2,01   | +0,77 | le tableau compte 0,85 × 1,46, la cote 0,85 × 2,39       |
+| dégagement      | 4,14    | 3,48   | −0,66 | le tableau déplace 0,77 m² du WC vers le dégagement      |
 
-Deux pièces tombent juste, une à 1 %, et quatre s'expliquent par le plan
-lui-même. **On ne redimensionne pas une pièce pour faire tomber le nombre** : on
-garde la géométrie du dessin, on stocke la surface imprimée, et on écrit la cause.
-Un niveau sous versant demande donc sa propre passe de décision, comme le RDC —
-la chaîne ne le devine pas.
+Quatre pièces tombent juste. Les trois autres s'expliquent par le plan lui-même,
+et deux se prouvent par une **somme**. Le WC et le dégagement forment **une seule
+région ouverte** : aucun mur entre eux, seulement une porte de 0,85 m. Le tableau
+coupe cette région ailleurs que le dessin, mais le total tombe : 1,24 + 4,14 =
+5,38 imprimé, 2,01 + 3,48 = 5,49 au dessin, et 0,85 × 2,39 + 3,74 × 0,90 = 5,40
+par les cotes du plan. C'est la répartition qui est arbitraire, pas la surface —
+et c'est pour cela qu'un écart de surface ne dit jamais quel mur corriger. Le
+dressing, lui, bute sur le placard technique : le tableau lui donne 0,19 m², le
+dessin 0,25.
 
-Dernière approximation à déclarer : les fenêtres de toit. L'app ne modélise pas
-de toit, donc un velux se pose sur le rampant, à l'arête basse, avec la largeur
-et la hauteur imprimées. C'est faux de 0,8 m en profondeur et il faut le dire.
+**On ne redimensionne pas une pièce pour faire tomber le nombre** : on garde la
+géométrie du dessin, on stocke la surface imprimée, et on écrit la cause. Un
+niveau sous versant demande donc sa propre passe de décision, comme le RDC — la
+chaîne ne le devine pas.
+
+Dernière approximation à déclarer : les fenêtres de toit et les lucarnes. L'app
+ne modélise pas de toit, donc un velux se pose sur le rampant, à l'arête basse,
+avec la largeur et la hauteur imprimées : c'est faux de 0,8 m en profondeur. Le
+schéma de toiture ne porte que des pans et des pignons, donc **le volume d'une
+lucarne n'existe pas** : son plancher se pose — il est réel et le tableau le
+compte — mais son mur de fond doit rester sous la couverture, à 1,10 m au lieu
+des 2,15 m dessinés, et sa fenêtre perd son allège. Une lucarne montée en pleine
+hauteur traverse le toit de 0,83 m et se voit de l'extérieur.
+
+### Le toit et le terrain se lisent aussi
+
+Un projet sans `site` n'a pas de vue extérieure du tout : le bouton reste caché.
+Le toit n'est pas une décision, il est imprimé — mais sur d'autres pages que le
+plan de niveau.
+
+| ce qu'on cherche              | où c'est imprimé                                                      |
+| ----------------------------- | --------------------------------------------------------------------- |
+| pente du toit                 | coupes : `PENTE = 45.00 °`                                            |
+| hauteur d'égout et de faîtage | coupes et plan de masse : `Egout: +3.43`, `Faitage: +8.11`            |
+| niveau du sol fini            | plan de masse : `RDC: +0.28` sur la référence `±0.00`                 |
+| parcelle et reculs            | plan de masse : `32.60`, `16.00`, `3.61`, `17.35`, `Surface : 522 m²` |
+| couleurs                      | insertion : façade crème, toiture ardoise                             |
+
+**Tout ramener au repère du niveau**, pas à la référence du cartouche. Le plan de
+masse donne `RDC: +0.28` : l'égout à `+3.43` vaut donc **3,15** au-dessus du sol
+fini du RDC, et le faîtage **7,83**. Oublier cette soustraction pose le toit
+28 cm trop haut, et les murs traversent.
+
+**L'avalée se déduit, elle ne se lit pas.** La descente de faîtage à égout vaut
+`7,83 − 3,15 = 4,68`. À 45°, la demi-portée vaut `8,50 / 2 = 4,25`. L'écart,
+**0,43 m**, est le débord de toit. C'est ce qui fait tomber le faîtage au milieu
+du bâtiment.
+
+**Les pignons sont des index**, pas des sommets : `gables: [[6, 2, 7], [8, 3, 9]]`
+pointe dans `vertices`, comme `faces`. Une liste de sommets est rejetée par
+`validate.ts` avec « Géométrie de toiture invalide ».
+
+**La vue extérieure est celle du bâtiment, pas du niveau affiché.** Les façades
+viennent du niveau bas et le toit couvre le reste. Construire l'extérieur depuis
+les combles ne montrait que le toit, et posait la pelouse à leur altitude.
+
+**Les murs d'un niveau sous versant doivent rester sous le toit.** La hauteur
+maximale d'un mur est `toit(z) − plancher`. Sur le plan B, le toit au rampant
+vaut 4,80 pour un plancher à 2,75 : 2,05 m au plus. Un `ceilingHeight` de 2,5
+laissait les cloisons traverser la couverture de 42 cm, visibles de l'extérieur.
+
+#### Vérifier un extérieur déjà posé
+
+Un `site` écrit lors d'une session précédente n'a jamais été comparé au
+document. Le vérifier prend cinq minutes et se fait dans cet ordre, parce que
+chaque étape suppose la précédente :
+
+1. **Les quatre côtés de la parcelle et sa surface.** Calculer les longueurs et
+   l'aire au lacet, comparer aux cotes et à `Surface :`. Un côté faux déplace
+   tout le reste.
+2. **Les reculs.** Distance de chaque côté au contour du niveau. C'est ce qui
+   dit si la parcelle est bien _placée_, et non seulement bien dimensionnée :
+   les longueurs peuvent tomber juste avec la maison au mauvais endroit.
+3. **Les niveaux.** `Egout` et `Faitage` moins `RDC`, comparés aux `y` des
+   sommets de toiture.
+4. **La topologie du toit.** Compter les pignons et les égouts sur les quatre
+   façades, et les retrouver dans `gables` et `faces`. Un pignon de trop se voit
+   de l'extérieur.
+5. **Les surfaces de terrain.** Voir ci-dessous : une seule est cotée.
+
+Sur le plan A, l'étape 2 est celle qui a payé. Les quatre côtés tombaient juste
+(32,03 / 19,32 / 28,33 / 14,01 pour 496 m²), mais il fallait encore vérifier que
+la maison est à **9,40 m** de la limite de 14,01 m — la cote est imprimée — et
+affleurante à celle de 32,03 m, où la chaîne `10,08 | 12,55 | 9,40` place la
+façade de 12,55 m entre deux retours. Les deux autres reculs, 6,40 et 4,04 m,
+se déduisent alors et ne sont cotés nulle part.
+
+**L'égout du dessin n'est pas l'égout coté.** Sur la façade sud du plan A, la
+hauteur mesurée entre l'arête basse des ardoises et le faîtage vaut 3,13 m, pour
+3,32 m cotés. Ce n'est pas une erreur de 19 cm : le trait du dessin est le dessus
+de la gouttière, la cote `Egout` est la ligne d'eau. Un écart de 15 à 20 cm à cet
+endroit est normal — ne pas « corriger » le toit pour le faire tomber.
+
+**Une seule surface de terrain est cotée.** Le plan de masse cote l'entrée
+charretière (`5.00m x 5.00m` sur le plan A, `6.00x6.00m` sur le plan B) et rien
+d'autre : le reste du gravillon, l'accès au garage et le chemin vers l'entrée
+sont dessinés mais pas mesurés. Les écrire est une décision, pas une lecture.
+Les déclarer dans `site.notes` — le panneau « Terrain et extérieur » les
+affiche — plutôt que de les laisser passer pour des cotes.
 
 ### Le toit et le terrain se lisent aussi
 
