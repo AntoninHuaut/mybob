@@ -1,0 +1,37 @@
+{
+  "schemaVersion": 1,
+  "generatedBy": "tests/fixtures/plan-outline (synthétique)",
+  "note": "Une seule chaîne fermée par axe, sans recoupement : l'étendue n'est pas prouvée et le script doit refuser de dériver un contour. Aucune donnée réelle.",
+  "source": { "file": "synthetique", "sha256": "0", "pageCount": 1 },
+  "pages": [
+    {
+      "index": 1,
+      "rotation": 0,
+      "chains": [
+        {
+          "page": 1,
+          "axis": "horizontal",
+          "perpendicular": 60.0,
+          "printedPointsPerMetre": 40.0,
+          "segments": [{ "kind": "linear", "value": 10.0, "text": "10.00", "at": [300.0, 60.0] }],
+          "sum": 10.0,
+          "declaredTotal": { "text": "10.00", "value": 10.0, "at": [300.0, 60.0] },
+          "residual": 0.0,
+          "closed": true
+        },
+        {
+          "page": 1,
+          "axis": "vertical",
+          "perpendicular": 60.0,
+          "printedPointsPerMetre": 40.0,
+          "segments": [{ "kind": "linear", "value": 8.0, "text": "8.00", "at": [60.0, 260.0] }],
+          "sum": 8.0,
+          "declaredTotal": { "text": "8.00", "value": 8.0, "at": [60.0, 260.0] },
+          "residual": 0.0,
+          "closed": true
+        }
+      ],
+      "labels": { "dimensions": [], "openings": [] }
+    }
+  ]
+}

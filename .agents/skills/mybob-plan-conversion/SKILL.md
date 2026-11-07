@@ -43,21 +43,24 @@ approximatif qu'on croit.
 
 ## L'inventaire
 
-| script                     | ce qu'il fait                                      | exactitude                                                              |
-| -------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
-| `extract_plan_evidence.py` | lit cotes, chaînes, étiquettes de surface          | **100 %** — lecture, aucune interprétation                              |
-| `check_plan_surfaces.py`   | compare surfaces imprimées et polygones du projet  | **100 %** — calcul, c'est la porte de sortie                            |
-| `plan_faces.py`            | calcule les pièces depuis les murs du niveau       | **100 %** — calcul, aucune détection                                    |
-| `compare_plan.py`          | mesure l'encre sous chaque mur du modèle           | **100 %** — mesure, ne corrige rien                                     |
-| `audit-plan.ts`            | cohérence interne du projet                        | **100 %** — calcul                                                      |
-| `check-plan-decisions.ts`  | arithmétique des décisions et rejeu de l'enveloppe | **100 %** — calcul                                                      |
-| `extract_plan.py`          | cloisons, par l'aplat de couleur du dessin         | **100 % sur les cloisons**, aveugle sur les bandes hachurées            |
-| `generate_project.py`      | murs extérieurs, épaisseurs et baies lues au plan  | **exact mais incomplet** : n'invente jamais, oublie ce qu'il ne lit pas |
+| script                     | ce qu'il fait                                        | exactitude                                                              |
+| -------------------------- | ---------------------------------------------------- | ----------------------------------------------------------------------- |
+| `extract_plan_evidence.py` | lit cotes, chaînes, étiquettes de surface            | **100 %** — lecture, aucune interprétation                              |
+| `check_plan_surfaces.py`   | compare surfaces imprimées et polygones du projet    | **100 %** — calcul, c'est la porte de sortie                            |
+| `plan_faces.py`            | calcule les pièces depuis les murs du niveau         | **100 %** — calcul, aucune détection                                    |
+| `compare_plan.py`          | mesure l'encre sous chaque mur du modèle             | **100 %** — mesure, ne corrige rien                                     |
+| `audit-plan.ts`            | cohérence interne du projet                          | **100 %** — calcul                                                      |
+| `check-plan-decisions.ts`  | arithmétique des décisions et rejeu de l'enveloppe   | **100 %** — calcul                                                      |
+| `extract_plan.py`          | cloisons, par l'aplat de couleur du dessin           | **100 % sur les cloisons**, aveugle sur les bandes hachurées            |
+| `derive_outline.py`        | contour du niveau, des chaînes fermées et de l'encre | **exact sur le plan A**, refuse le plan B (encoche non séparable)       |
+| `generate_project.py`      | murs extérieurs, épaisseurs et baies lues au plan    | **exact mais incomplet** : n'invente jamais, oublie ce qu'il ne lit pas |
 
-Les deux derniers sont les seuls qui produisent de la géométrie. Ils sont
+Les trois derniers sont les seuls qui produisent de la géométrie. Ils sont
 utilisables parce qu'ils n'inventent rien : `extract_plan.py` ne rend que des
-rectangles remplis, `generate_project.py` ne place une baie que sur une chaîne
-refermée. Ce qu'ils ne savent pas lire manque, et c'est à l'IA de le voir.
+rectangles remplis, `derive_outline.py` ne retient un contour que si chaque
+arête est reproduite par une suite imprimée ou comblée par une épaisseur cotée,
+`generate_project.py` ne place une baie que sur une chaîne refermée. Ce qu'ils
+ne savent pas lire manque, et c'est à l'IA de le voir.
 
 Les **portes intérieures** ne sont dans aucune de ces colonnes : elles ne sont
 pas cotées, donc aucun script ne peut les rendre exactes. Elles se lisent à
@@ -101,12 +104,17 @@ uvx --from pymupdf python scripts/extract_plan_evidence.py plan.pdf registry.jso
 uvx --from pymupdf python scripts/extract_plan.py plan.pdf plan.json \
     --scale 37.795 --envelope x0,y0,x1,y1
 
+# 1 bis. Dériver le contour du niveau, au lieu de l'écrire à la main.
+python scripts/derive_outline.py registry.json outline.json --pages 8 \
+    --pdf plan.pdf --plan plan.json
+
 # 2. Construire : murs extérieurs, cloisons, baies, épaisseurs lues au plan.
-python scripts/generate_project.py plan.json registry.json modele.json rdc out.json --pages 8
+python scripts/generate_project.py plan.json registry.json modele.json rdc out.json \
+    --pages 8 --outline outline.json
 
 # 2 bis. Ou seulement les baies, quand les murs du modèle sont déjà justes.
 python scripts/generate_project.py plan.json registry.json modele.json rdc out.json \
-    --pages 8 --openings-only
+    --pages 8 --openings-only --outline outline.json
 
 # 3. Juger le résultat, pas le dessin.
 python scripts/check_plan_surfaces.py registry.json out.json --level rdc --page 8
@@ -362,6 +370,58 @@ sur un plan à 1/50 et 0,340 m sur un à 1/75. Le dessin est donc fiable pour le
 positions et les épaisseurs ; c'est la _segmentation_ qui est difficile, pas
 l'exactitude.
 
+### 0 bis. Le contour, dérivé des chaînes fermées
+
+Le contour était le dernier élément écrit à la main. `scripts/derive_outline.py`
+le dérive en cinq couches, et **refuse** au lieu de deviner :
+
+1. **Étendues** — par axe, le plus grand total des chaînes fermées, recoupé par
+   une seconde chaîne d'accord ou par l'enveloppe d'`extract_plan.py` (`--plan`).
+   Une chaîne dont le total ne vaut pas l'étendue est **écartée et rapportée** :
+   elle décrit l'intérieur, pas l'enveloppe (le 7,82 d'une profondeur intérieure
+   ne remplace pas les 8,50 d'une emprise).
+2. **Découpes** — positions cumulées intérieures des chaînes ancrées, dans les
+   deux sens de lecture.
+3. **Encre** (`--pdf`) — chaque découpe est cherchée sur la page rendue : la
+   présence d'un mur saute-t-elle de part et d'autre ? Une découpe où elle saute
+   est un épaulement du contour ; une découpe où elle ne saute pas décrit
+   l'intérieur et n'est pas essayée.
+4. **Fermeture** — chaque arête doit être reproduite par une suite contiguë
+   imprimée (0,015 m) ou être une **profondeur comblée** par une épaisseur lue en
+   centimètres au même endroit. Une profondeur sans cote ni épaisseur est refusée.
+5. **Jugement** — les arêtes doivent exister à l'encre, et une encoche de façade
+   est confirmée par un balayage perpendiculaire.
+
+Si plusieurs contours survivent, le script les **liste** au lieu de trancher, et
+`load_outline()` refuse alors de les transmettre : la construction ne commence
+pas sur un contour deviné.
+
+```sh
+python scripts/derive_outline.py artifacts/plan-review/registry.json contour.json \
+    --pages 8 --pdf reference-documents/Plans.pdf --plan artifacts/plan-review/plan.json
+python scripts/derive_plan_decisions.py projet.json registry.json rdc decisions.json \
+    --pages 8 --outline contour.json
+python scripts/generate_project.py plan.json registry.json modele.json rdc out.json \
+    --pages 8 --outline contour.json
+```
+
+**État mesuré.** Plan A (page 8) : le contour sort exactement
+`[[0,0],[12.55,0],[12.55,12.54],[5.55,12.54],[5.55,7],[0,7]]`, et le remplacer
+dans la chaîne ne change aucune surface (9 pièces sur 10 exactes, le hall à
+−0,09 comme avant). Plan B (page 13) : le script **refuse** — 0 contour retenu,
+112 candidats refusés. La façade sud y est tracée en **trait mixte** au droit de
+l'encoche d'entrée, et le hachurage des murs y est trop clairsemé pour qu'une
+sonde perpendiculaire distingue la façade de la ligne de plancher haut. Le
+contour du plan B reste donc une décision, et c'est écrit ici pour que la
+session suivante ne le prenne pas pour une mesure.
+
+**Un trait mixte n'est pas une face de mur.** C'est le piège que la couche encre
+a payé : une ligne en tirets de 9 cm au nu de la façade se lit comme un mur
+continu dès qu'on fusionne les traits proches. `Ink.solid()` mesure la longueur
+du trait continu qui passe par la sonde et rejette tout ce qui est en dessous de
+0,45 m. Le motif est dans la fixture `tests/fixtures/plan-outline/` et dans
+l'auto-test, pas seulement dans ce paragraphe.
+
 ### 1. Extraction
 
 `scripts/extract_plan_evidence.py` transforme un PDF en registre déterministe :
@@ -404,6 +464,35 @@ alors des épaisseurs déclarées. Un mur d'enveloppe en retrait d'une
 demi-épaisseur aux deux bouts du contour est `derived` depuis l'étendue
 d'ensemble imprimée.
 
+**Deux conventions d'about donnent souvent la même longueur.** Un mur de 3,92 m
+entre deux murs de 0,34 m fait 4,09 m qu'on parte de sa face nord ou de sa face
+sud. Trancher par un rang arbitraire écartait la bonne et laissait la face non
+résolue ; toutes les conventions sont donc rendues, et c'est l'ancrage
+positionnel qui choisit. Sur le plan A, ce seul correctif fait passer les faces
+résolues de 2 à 4 et retire deux avertissements « origine du mur non déclarée ».
+
+**Ce que la porte ne peut pas prouver, et qu'il faut dire.** Sur le plan A, après
+dérivation du contour et ce correctif, il reste **21 faces sur 25** non résolues,
+et la porte sort donc encore en erreur sans `--allow-unresolved`. Le compte se
+répartit ainsi, et ce n'est pas un défaut du script :
+
+- **11 faces** sont des murs **sans aucune baie** qui ne portent pas la face du
+  contour. Aucun ancrage ne les atteint : `openings` n'a rien à apparier, et
+  `envelope` ne prouve que les murs qui touchent le côté mesuré. Leur longueur
+  est bien reproduite par une suite imprimée, mais rien ne dit _où_ elle se pose.
+- **6 faces** n'ont que des **portes intérieures** (0,73/2,04), qui ne sont
+  cotées nulle part — voir plus bas.
+- **6 faces** ont une baie imprimée, mais la suite qui reproduit la longueur ne
+  contient pas cette baie : la cote de façade et la cote de baie ne sont pas sur
+  la même ligne.
+
+Les 6 ouvertures non résolues sont exactement les **portes intérieures**. Un
+script ne les rendra jamais exactes : elles se lisent à l'encre et se posent à la
+main. Tant qu'elles restent `scaled`/`unresolved`, la porte est infranchissable
+sur un vrai plan, et c'est le comportement voulu — la construction ne commence
+pas sur une supposition. Le déblocage est une décision à documenter (les classer
+`assumed` avec leur justification), pas un réglage de tolérance.
+
 `scripts/check-plan-decisions.ts` est la porte entre les couches 2 et 3. Il
 recalcule chaque affirmation au lieu de croire sa prose : la portée référencée
 doit sommer à la longueur déclarée, la longueur d'axe du mur doit découler de
@@ -420,12 +509,14 @@ mur déclarée. Il sort en erreur tant qu'une décision reste non résolue : la
 construction ne commence pas sur une supposition. En **fusion**, les murs
 viennent du modèle et la décision ne construit rien : `--allow-unresolved`
 laisse alors passer une face non résolue, jamais une contradiction. Sans ce
-drapeau, la porte est infranchissable sur un vrai plan (23 faces non résolues sur
-41 sur le plan A) et le pipeline documenté ne s'exécute jamais de bout en bout.
+drapeau, la porte est infranchissable sur un vrai plan (21 faces non résolues sur
+25 sur le plan A, après dérivation du contour) et le pipeline documenté ne
+s'exécute jamais de bout en bout.
 
 ```sh
 uvx --from pymupdf python scripts/extract_plan_evidence.py plan.pdf artifacts/plan-review/registry.json --pages 13,14
-uvx --from pymupdf python scripts/derive_plan_decisions.py project.json artifacts/plan-review/registry.json rdc artifacts/plan-review/decisions.json --pages 13
+python scripts/derive_outline.py artifacts/plan-review/registry.json artifacts/plan-review/outline.json --pages 13 --pdf plan.pdf
+uvx --from pymupdf python scripts/derive_plan_decisions.py project.json artifacts/plan-review/registry.json rdc artifacts/plan-review/decisions.json --pages 13 --outline artifacts/plan-review/outline.json
 node --import tsx scripts/check-plan-decisions.ts artifacts/plan-review/decisions.json project.json artifacts/plan-review/registry.json
 ```
 
@@ -439,7 +530,12 @@ garder dans les répertoires ignorés, jamais dans le dépôt.
 `tests/fixtures/plan-reference/` contient le plan de référence synthétique
 (registre, projet, décisions) que `python scripts/derive_plan_decisions.py
 --self-test` et `tests/plan-reference.test.ts` vérifient en CI ; il ne contient
-aucune donnée réelle et doit le rester.
+aucune donnée réelle et doit le rester. `tests/fixtures/plan-outline/` porte les
+trois registres de la couche contour — encoche de coin (motif du plan A), encoche
+de façade à profondeur déduite d'une cote en centimètres (motif du plan B), et
+étendue portée par une seule chaîne — que `python scripts/derive_outline.py
+--self-test` rejoue, PDF synthétique compris. Ces fixtures viennent de vrais
+plans : une fixture inventée rassure à tort.
 
 Classer les cotes en imprimées, dérivées, mises à l'échelle ou supposées. Garder
 pour chaque valeur sa page, ses extrémités, son équation et son incertitude. Les
