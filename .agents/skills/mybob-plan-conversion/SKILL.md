@@ -124,6 +124,13 @@ behind a valid JSON.
    the rooms snapped onto the new wall faces. `validateProject`,
    `scripts/audit-plan.ts`, overlay, browser.
 
+   A generated wall is not final: `--overrides` takes a small file of
+   per-wall patches (`offset`, `thickness`) and per-opening patches (`offset`,
+   `width`, `height`), applied after generation. A correction therefore survives
+   a regeneration, and fixing three walls does not mean redoing the other
+   twenty. `compare_plan.py --table` prints every wall with its verdict, its
+   measured offset and its read thickness, which is the list to work from.
+
    Two limits measured on real plans: **interior doors are not extractable** —
    they are drawn as polylines, not curves, and their labels are outlined text,
    so neither the arc nor the text can be read; and a façade whose openings are

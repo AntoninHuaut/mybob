@@ -320,6 +320,13 @@ def main(argv):
     Path(output_path).write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
 
     print(f"{report['summary']}")
+    if "--table" in argv:
+        print(f"  {'mur':22} {'verdict':32} {'décalage':>9} {'épaisseur lue':>14} {'déclarée':>9}")
+        for wall in walls:
+            print(
+                f"  {wall['id']:22} {wall['verdict']:32} {wall['offset']:9.3f} "
+                f"{wall['width']:14.3f} {wall['declaredThickness']:9.3f}"
+            )
     for wall in walls:
         if wall["verdict"] != "aligné":
             print(f"  {wall['verdict']:32} {wall['id']:22} offset={wall['offset']} largeur={wall['width']}")
