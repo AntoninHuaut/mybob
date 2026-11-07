@@ -14,6 +14,8 @@ import { confirmImportReplacement } from './ui/confirmImport';
 import { solarPosition } from './scene/solar';
 import { HouseViewer, type ViewMode } from './scene/viewer';
 import { createEngine } from './scene/engine';
+import { collectDiagnostics, installDiagnostics } from './scene/diagnostics';
+import { FrameRateMeter } from './ui/frameRate';
 import type { HouseProject, Room } from './model/types';
 import { validateProject } from './model/validate';
 import { bounds, floorElevationAt, pointInPolygon, polygonArea } from './model/geometry';
@@ -62,6 +64,7 @@ const el = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
 let viewer: HouseViewer;
 let solarPanel: SolarPanel;
+let frameRate: FrameRateMeter;
 let projects: HouseProject[] = [];
 let imported: HouseProject[] = [];
 let builtins: HouseProject[] = [];
@@ -1487,6 +1490,7 @@ async function start() {
     // l'engine d'abord, puis l'élément courant du DOM.
     const sceneEngine = await createEngine(el<HTMLCanvasElement>('#scene'));
     viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'), sceneEngine);
+    frameRate = new FrameRateMeter(el('#frame-rate'));
     solarPanel = new SolarPanel({
       onApply: (settings, instant) => {
         viewer.setSolar(settings ? solarPosition(settings, instant) : undefined);
@@ -1525,6 +1529,7 @@ async function start() {
     viewer.onMeasure = (measurement) => measureBar.sync(measurement);
     viewer.onFrame = (frame) => {
       if (!current) return;
+      frameRate.update(performance.now(), viewer.engine.getFps());
       updateFurnitureContext();
       const labelsVisible = mode !== 'walk' && showLabels && !viewer.measureMode;
       el('#orientation-arrow').style.transform =
@@ -1644,6 +1649,14 @@ async function start() {
       /* optional persistence */
     }
     loadProject(initial);
+    installDiagnostics(() =>
+      collectDiagnostics(viewer.engine, viewer.scene, {
+        mode,
+        exterior: exteriorView,
+        environment: viewer.ambience.environment,
+        occlusion: viewer.ambience.occlusion,
+      }),
+    );
     wireEvents();
     el('#loading').hidden = true;
     onboarding = readOnboarding();

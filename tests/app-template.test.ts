@@ -44,3 +44,14 @@ test('la carte de démarrage vit dans la scène et l’aide reste joignable depu
   assert.ok(document.querySelector('#first-steps'), 'l’entrée Premiers pas reste dans la barre');
   assert.ok(document.querySelector('#help'), 'l’aide de l’en-tête reste disponible');
 });
+
+test('le compteur de cadence vit dans le pied de la scène et attend sa première mesure', () => {
+  const document = render();
+  const counter = document.querySelector('#frame-rate');
+  assert.ok(counter, 'le compteur existe');
+  assert.ok(
+    document.querySelector('.bottom-controls')!.contains(counter),
+    'il reste dans le pied de la scène, hors du chemin de la caméra',
+  );
+  assert.ok(counter.hasAttribute('hidden'), 'il n’affiche rien avant la première mesure');
+});
