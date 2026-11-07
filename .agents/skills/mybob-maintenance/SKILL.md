@@ -10,8 +10,8 @@ Use this repository-local skill when changing the house viewer, furniture UI, pr
 ## Establish the working state
 
 1. Read `git status --short` and the recent log. Preserve unrelated user work.
-2. Use Node 24 (`.node-version`). Install locked dependencies with `npm ci` when needed.
-3. Start `npm run dev` for the generic demonstration. Use `npm run dev:private` only when intentionally inspecting the personal house locally. Never publish the private build.
+2. Use Node 24 (`.node-version`). Install locked dependencies with `pnpm install --frozen-lockfile` when needed.
+3. Start `pnpm run dev` for the generic demonstration. Use `pnpm run dev:private` only when intentionally inspecting the personal house locally. Never publish the private build.
 4. For actual customer furnishings, ask them to import/export the JSON using the application. Repository files do not contain the browser's current arrangement. Back up exports before origin changes or storage migrations.
 
 ## Locate the correct layer
@@ -36,7 +36,7 @@ Check both day and night, multiple time zones and project switches when changing
 
 ## Validate and release
 
-1. Format changed files with Prettier and run `npm run ci`. That command checks format, all tests, TypeScript/build and public artefact exclusions.
+1. Format changed files with Prettier. Verify only what the change touches: the zone's unit test file (`node --import tsx --test --test-isolation=none tests/<zone>.test.ts`) or, for a browser workflow, the targeted e2e run of `docs/E2E.md` (`--grep` or single spec file on a built `dist/`). The full e2e suite never runs on this machine: the CI pipeline replays all of it sharded in three. `pnpm run ci` stays the local release gate — format, unit tests, TypeScript/build and public artefact exclusions — and does not run e2e.
 2. Inspect `git diff --check` and the staged diff. Verify no original plans/photos, tokens or private exports entered the public asset allowlist.
 3. Commit a coherent change. Push only within the user's authorized scope. Find the GitHub remote using `git remote -v` (usually `origin` after a fresh clone; it was `github` in the cloud workspace).
 4. Inspect GitHub checks for that exact commit, for example `gh api repos/AntoninHuaut/mybob/commits/<sha>/check-runs`. Both CI and Cloudflare Pages must succeed. The public URL is in `docs/DEPLOYMENT.md`.
