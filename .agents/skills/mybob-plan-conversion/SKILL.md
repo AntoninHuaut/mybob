@@ -22,7 +22,9 @@ l'autorité sur ce qui peut être publié. Ne jamais ajouter de donnée personne
 la liste blanche des ressources publiques.
 
 Les cas de référence de ce document sont anonymisés : **plan A** (RDC, page 8,
-1/75) et **plan B** (RDC page 13, combles page 14, 1/50). Aucun nom de commune,
+1/75) et **plan B** (RDC page 13, combles page 14, 1/50) — pages comptées à
+partir de 1, comme les options `--pages` des scripts du dépôt. Aucun nom de
+commune,
 de constructeur ni de fichier d'origine n'est écrit ici — le dépôt est public.
 Les plans eux-mêmes vivent dans `reference-documents/`, ignoré par git.
 
@@ -223,6 +225,17 @@ repères de page tournée, échelle déduite d'une cote d'ensemble imprimée, et
 recoupement libellé/surface. Utiliser le tableau de surfaces imprimé comme
 recoupement (la somme des pièces doit atteindre le total imprimé) ; ne jamais
 déduire une dimension linéaire d'une surface annoncée.
+
+**Une page se repère par son texte, pas par son numéro d'ancienne note.** Les
+outils du dépôt numérotent à partir de 1 (`--pages 8` ouvre `doc[7]`), pymupdf et
+les outils de forge de `artifacts/plan-review/` à partir de 0, et une note de
+passation peut compter dans n'importe laquelle des deux conventions. Deux pages
+voisines du même constructeur se ressemblent assez pour qu'un calque pressé se
+croie aligné. Localiser la page d'un niveau par un texte qui n'existe que sur
+elle — la surface d'une pièce donnée, un titre de dessin — et consigner ce texte
+dans le registre, pas un numéro hérité. Une passe du soir a rendu la page des
+combles en cherchant celle du rez-de-chaussée : le numéro venait d'une note, la
+page changeait d'index selon la convention.
 
 Pour confronter un modèle à la source sans passer par la géométrie du modèle,
 mesurer directement le plan rendu : `scripts/measure_plan.py` balaye des lignes
@@ -943,6 +956,16 @@ entrées explicites.
 - `décalé` — le mur est au mauvais endroit. C'est celui qui compte.
 - `aucune contrepartie` — le mur est inventé.
 
+Quatre outils de forge persistent dans `artifacts/plan-review/` (ignoré par git)
+et complètent ce calque : `grid.py` rend une planche PDF avec une grille en
+mètres, pour lire une épaisseur ou une cote contre le modèle ; `overlay.py`
+dessine les murs et pièces du projet par-dessus la planche ; `model_plan.py`
+rend un niveau depuis le JSON seul, pour vérifier ce que le modèle dit sans le
+dessin ; `wall_joins.py` liste les abouts de murs qu'aucun autre mur ne couvre.
+Ils prennent l'index de page **à partir de 0** et un repère
+`(ox, oy, échelle)` en points affichés de la page tournée. `wall_joins.py` a
+révélé une cloison flottant hors du plancher que l'audit ne signalait pas.
+
 ### Le navigateur
 
 Importer dans un vrai navigateur. Inspecter chaque niveau en Plan et en vue
@@ -1011,6 +1034,30 @@ des WC n'existait pas — les WC étaient ouverts sur le hall sur 1,60 m — et 
 ne le disait. Ce qui l'a montré est le calque : les murs du modèle en orange
 par-dessus le dessin, et une bande hachurée du dessin sans orange en dessous.
 Faire le calque à chaque passe, pas seulement à la fin.
+
+**Le cas symétrique — un mur que le dessin ne porte pas — est passé trois fois.**
+Une surface reste juste, `reachedRooms` reste complet et l'audit ne dit rien :
+aucune des trois portes ne voit un mur **de trop**. Quatre murs inventés ont
+survécu à trois passes et c'est le propriétaire qui les a vus, sur les deux
+plans, en une seule revue. Deux visages à connaître :
+
+- le mur posé pour fermer un contour : une cloison droite inventée pour qu'un
+  rectangle de pièce tombe à la surface imprimée, alors que le dessin ouvre la
+  pièce en L sur sa voisine (mur double, vide mort de 20 cm au sol) ; et une
+  cloison droite dans un alinéa où le dessin ne porte qu'une cote et un
+  pointillé (deux portes en série vers une même pièce) ;
+- le mur hérité qui flotte ou qui ferme : une cloison entièrement hors du
+  plancher du niveau, dont le plancher s'arrête au rampant, qui pend sous la
+  maison en 3D ; et une cloison qui ferme hermétiquement une cage d'escalier —
+  une volée descend depuis le palier, rien ne peut la murer.
+
+Seuls `compare_plan.py` (« aucune contrepartie ») et le calque orange les voient.
+Un mur de contour inventé vient presque toujours d'un polygone calé sur la
+surface imprimée au lieu d'être calé sur les faces : corriger le polygone,
+garder la surface imprimée dans `planArea`, documenter le résidu — jamais
+l'inverse. Une cage ouverte sur son palier n'est pas un trou : tant que `stairs`
+et `floorVoids` ne sont pas déclarés, elle se rend nue, et c'est un manque
+déclaré, pas un défaut à murer.
 
 ## Livrer un état d'achèvement honnête
 
