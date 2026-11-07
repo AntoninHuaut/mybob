@@ -47,6 +47,10 @@ jobs:
           python3 scripts/compare_plan.py --self-test
       - name: Test the plan decision layer on the reference plan
         run: python3 scripts/derive_plan_decisions.py --self-test
+      - name: Test the plan geometry extractor
+        run: |
+          python3 -m pip install --quiet pymupdf
+          python3 scripts/extract_plan.py --self-test
       - name: Check types and build public application
         run: npm run build
       - name: Ensure personal house data is absent from publication

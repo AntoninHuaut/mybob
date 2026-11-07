@@ -56,6 +56,32 @@ plan were reported missing at 120 dpi and all five reappeared at 300 dpi.
 Keep extraction, decision and construction separate so a wrong guess cannot hide
 behind a valid JSON.
 
+0. **Geometry** — `scripts/extract_plan.py` reads the walls off the drawing
+   itself. On this builder's plans the walls come in two representations, and
+   the difference matters:
+
+   - **partitions** are **filled rectangles** in a CAD-specific flat colour. That
+     colour is a semantic marker, not a geometric property: it gives the
+     thickness and both ends exactly, with no ambiguity against dimension lines.
+     Do not hard-code it — take the most frequent non-white, non-black fill on
+     the page, so another builder's colour still works. The title block often
+     reuses the same fill, so clip to the level envelope.
+   - **exterior walls** are **hatched bands** between two faces, not filled.
+     Their position comes from the closed dimension chains, which give it to the
+     millimetre.
+
+   Four geometric attempts failed on the exterior walls and are worth not
+   repeating: pairing parallel strokes (dimension lines are parallel pairs too,
+   44 walls instead of 25), clustering the hatch (does not respect wall
+   boundaries), ink density between the faces (depends on thickness: 0.25 for a
+   34 cm wall, 0.10 for 7 cm, 0.01 for a dimension line), and morphology plus
+   flood fill (leaks through the doorways — a garage came out at 622 m²).
+
+   The drawing is dimensionally faithful: a 34 cm wall measures 0.339 m drawn on
+   a 1/50 plan and 0.340 m on a 1/75 one. So the drawing can be trusted for
+   positions and thicknesses; it is the _segmentation_ that is hard, not the
+   accuracy.
+
 1. **Extraction** — `scripts/extract_plan_evidence.py` turns a PDF into a
    deterministic registry: pages, classified labels (dimensions, openings, sills,
    room areas, levels, slopes), surface tables, and dimension chains with their
