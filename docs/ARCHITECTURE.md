@@ -41,7 +41,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Caméra de visite       | `src/scene/walkCamera.ts`               | Hauteur du regard, rayon visiteur, vitesse, pas                     |
 | Coupe des murs         | `src/scene/wallCutaway.ts`              | `auto` / `full` / `low`, plans de découpe par matériau              |
 | Ouvertures en plan     | `src/scene/planOpenings.ts`             | Baies et portes dessinées dans la vue Plan, faces de coupe          |
-| Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, TAA, occlusion, bloom, repli sous 24 fps                |
+| Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, TAA, occlusion, bloom                                   |
 | Diagnostic             | `src/scene/diagnostics.ts`              | `mybob.diag()` : moteur, GPU, cadence, résolution, scène            |
 | Mesure                 | `src/scene/measurement.ts`              | Accrochage aux axes du plan                                         |
 | Soleil                 | `src/scene/solar.ts`                    | Équations NOAA, fuseaux IANA                                        |
@@ -62,7 +62,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Panneaux               | `src/ui/roomPanels.ts`, `minimap.ts`    | Liste des pièces, fiche, plan miniature                             |
 | Aide et accueil        | `src/ui/firstSteps.ts`, `onboarding.ts` | Carte « Premiers pas », aide courte et complète                     |
 | Export image           | `src/ui/imageExport.ts`                 | PNG de la caméra, cartouche, options                                |
-| Banc d'essai (dev)     | `src/ui/fxLab.ts`                       | Poussière, chanfrein d'angle, SSAO forcé — jamais dans un build     |
+| Banc d'essai (dev)     | `src/ui/fxLab.ts`                       | Questions de rendu non tranchées — jamais dans un build             |
 | Styles                 | `src/style.css` + `src/style/*.css`     | `chrome`, `scene`, `feedback` ; `furniture/panel.css` pour la popup |
 
 ## Le flux d'une donnée
@@ -134,8 +134,10 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
   à adoucir. Le module reste, le banc d'essai permet de le revérifier.
 - Le banc d'essai (`src/ui/fxLab.ts`) n'existe qu'en développement : `main.ts` l'importe
   derrière `import.meta.env.DEV` et en dynamique, donc Vite le retire entièrement d'un build.
-  Il porte les questions de rendu non tranchées — poussière, chanfrein d'angle, SSAO forcé —
-  pour les juger sur la vraie maison plutôt qu'à l'aveugle.
+  Il porte les questions de rendu non tranchées, pour les juger sur la vraie maison plutôt
+  qu'à l'aveugle. Des particules de poussière y ont été essayées puis retirées : un grain réel
+  fait quelques dizaines de microns, sous un pixel à toute distance, et un sprite assez gros
+  pour se voir lit neige. Aucun réglage ne passe entre les deux.
 - Les surfaces ne sont plus des couleurs unies : plâtre, parquet, béton et acier portent une
   normal map et une roughness map, générées par bruit fractal et tuilées au mètre. Les UV des
   boîtes sont réécrits en mètres par `worldScaleUvs`, sinon un mur de 4 m et une plinthe de
@@ -150,12 +152,13 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
   `imageProcessingEnabled` est faux, sinon le tone mapping serait appliqué deux fois — l'app
   tone-map déjà dans les shaders des matériaux — et ses sous-effets sont configurés avant la
   coupure, qui détruit le post-process et nullifie `imageProcessing`.
-- La cadence est surveillée pendant toute la visite : trois relevés consécutifs sous 24 images
-  par seconde, hors onglet masqué, retirent l'occlusion ; l'environnement et les luminaires
-  restent en place. Un relevé sain remet le compteur à zéro.
+- L'occlusion de la visite est **inconditionnelle** : le sondage qui la retirait sous 24 images
+  par seconde a été supprimé — jugée au banc d'essai, la perte des creux d'angle coûtait plus
+  que quelques images par seconde sur une machine faible. Seul refus restant : un backend sans
+  cibles de rendu multiples, que `createInteriorOcclusion` détecte et mémorise pour ne pas
+  rejeter à chaque entrée en visite. Un GPU lent garde donc l'occlusion et rend moins d'images.
 - La cadence s'affiche en tout petit dans le pied de la scène et passe en ambre sous 24 images
-  par seconde : le repli devient observable sans ouvrir les outils du navigateur. C'est un
-  affichage, pas un réglage de qualité. Pour diagnostiquer une machine lente à distance,
+  par seconde. C'est un affichage, pas un réglage de qualité. Pour diagnostiquer une machine lente à distance,
   `mybob.diag()` imprime moteur, GPU, cadence, résolution réellement rendue, état de l'ambiance
   de visite, taille de la scène et caractéristiques de la machine ; la commande est rappelée au
   démarrage. `mybob.diag()` ne renvoie rien — la console réafficherait la valeur de retour et le
