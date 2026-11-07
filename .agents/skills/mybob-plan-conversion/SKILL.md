@@ -683,6 +683,43 @@ Dernière approximation à déclarer : les fenêtres de toit. L'app ne modélise
 de toit, donc un velux se pose sur le rampant, à l'arête basse, avec la largeur
 et la hauteur imprimées. C'est faux de 0,8 m en profondeur et il faut le dire.
 
+### Le toit et le terrain se lisent aussi
+
+Un projet sans `site` n'a pas de vue extérieure du tout : le bouton reste caché.
+Le toit n'est pas une décision, il est imprimé — mais sur d'autres pages que le
+plan de niveau.
+
+| ce qu'on cherche              | où c'est imprimé                                                      |
+| ----------------------------- | --------------------------------------------------------------------- |
+| pente du toit                 | coupes : `PENTE = 45.00 °`                                            |
+| hauteur d'égout et de faîtage | coupes et plan de masse : `Egout: +3.43`, `Faitage: +8.11`            |
+| niveau du sol fini            | plan de masse : `RDC: +0.28` sur la référence `±0.00`                 |
+| parcelle et reculs            | plan de masse : `32.60`, `16.00`, `3.61`, `17.35`, `Surface : 522 m²` |
+| couleurs                      | insertion : façade crème, toiture ardoise                             |
+
+**Tout ramener au repère du niveau**, pas à la référence du cartouche. Le plan de
+masse donne `RDC: +0.28` : l'égout à `+3.43` vaut donc **3,15** au-dessus du sol
+fini du RDC, et le faîtage **7,83**. Oublier cette soustraction pose le toit
+28 cm trop haut, et les murs traversent.
+
+**L'avalée se déduit, elle ne se lit pas.** La descente de faîtage à égout vaut
+`7,83 − 3,15 = 4,68`. À 45°, la demi-portée vaut `8,50 / 2 = 4,25`. L'écart,
+**0,43 m**, est le débord de toit. C'est ce qui fait tomber le faîtage au milieu
+du bâtiment.
+
+**Les pignons sont des index**, pas des sommets : `gables: [[6, 2, 7], [8, 3, 9]]`
+pointe dans `vertices`, comme `faces`. Une liste de sommets est rejetée par
+`validate.ts` avec « Géométrie de toiture invalide ».
+
+**La vue extérieure est celle du bâtiment, pas du niveau affiché.** Les façades
+viennent du niveau bas et le toit couvre le reste. Construire l'extérieur depuis
+les combles ne montrait que le toit, et posait la pelouse à leur altitude.
+
+**Les murs d'un niveau sous versant doivent rester sous le toit.** La hauteur
+maximale d'un mur est `toit(z) − plancher`. Sur le plan B, le toit au rampant
+vaut 4,80 pour un plancher à 2,75 : 2,05 m au plus. Un `ceilingHeight` de 2,5
+laissait les cloisons traverser la couverture de 42 cm, visibles de l'extérieur.
+
 ### Les pièces se calculent depuis les murs
 
 Un polygone de pièce saisi à la main est une opinion. `plan_faces.py` ferme le

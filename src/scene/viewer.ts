@@ -302,9 +302,15 @@ export class HouseViewer {
       shadow,
       above?.floorVoids ?? [],
     );
-    this.exterior = buildExterior(project, level, scene);
+    // L'extérieur est celui du bâtiment, pas du niveau affiché : les façades
+    // sont celles du niveau bas, et le toit couvre le reste. Construire depuis
+    // les combles ne montrait que le toit, et posait la pelouse à leur altitude.
+    const ground = project.levels.reduce((low, candidate) =>
+      candidate.elevation < low.elevation ? candidate : low,
+    );
+    this.exterior = buildExterior(project, ground, scene);
     if (project.site && this.exterior) {
-      this.exteriorFrame = siteOverviewLevel(level, project.site, this.exterior.height);
+      this.exteriorFrame = siteOverviewLevel(ground, project.site, this.exterior.height);
       for (const mesh of this.exterior.meshes) {
         mesh.receiveShadows = true;
         if (this.exterior.roofMeshes.includes(mesh)) shadow.addShadowCaster(mesh);
