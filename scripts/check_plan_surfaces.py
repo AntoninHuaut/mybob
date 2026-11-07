@@ -211,8 +211,21 @@ def match(surfaces, rooms):
     return pairs, orphans
 
 
+def reference(surfaces):
+    """Surface de référence d'une pièce : SU si le plan l'imprime, sinon SH, sinon SA.
+
+    Un polygone de pièce est un plancher. Quand le plan imprime les deux, c'est
+    la surface utile qui se compare au plancher : la surface habitable exclut la
+    partie sous 1,80 m de hauteur, donc elle est plus petite sans que rien soit
+    faux. Comparer un plancher à une SH fabrique un écart qui n'existe pas.
+    """
+    order = {"SU": 0, "SH": 1, "SA": 2}
+    return min(surfaces, key=lambda surface: order.get(surface["kind"], 3))
+
+
 def report(pairs, orphans, tolerance):
     rows = []
+    grouped = {}
     for surface, room, how in pairs:
         if room is None:
             rows.append(
@@ -227,21 +240,33 @@ def report(pairs, orphans, tolerance):
                 }
             )
             continue
+        grouped.setdefault(room["id"], {"room": room, "surfaces": [], "how": how})
+        grouped[room["id"]]["surfaces"].append(surface)
+    for entry in grouped.values():
+        room = entry["room"]
+        surfaces = entry["surfaces"]
+        chosen = reference(surfaces)
         computed = polygon_area(room["polygon"])
-        delta = computed - surface["area"]
+        delta = computed - chosen["area"]
         declared = room.get("planArea")
         rows.append(
             {
                 "room": room["id"],
                 "name": room.get("name"),
-                "printed": surface["area"],
+                "printed": chosen["area"],
+                "printedKind": chosen["kind"],
+                "alsoPrinted": [
+                    {"kind": surface["kind"], "area": surface["area"]}
+                    for surface in surfaces
+                    if surface is not chosen
+                ],
                 "computed": round(computed, 3),
                 "delta": round(delta, 3),
                 "declared": declared,
-                "declaredDelta": None if declared is None else round(declared - surface["area"], 3),
+                "declaredDelta": None if declared is None else round(declared - chosen["area"], 3),
                 "verdict": "exact" if abs(delta) <= tolerance else "écart",
-                "how": how,
-                "text": surface["text"],
+                "how": entry["how"],
+                "text": chosen["text"],
             }
         )
     for room in orphans:
@@ -266,6 +291,8 @@ def print_table(rows, tolerance):
     print(f"{'pièce':14s} {'imprimé':>8s} {'calculé':>8s} {'écart':>7s}  verdict")
     for row in rows:
         printed = "—" if row["printed"] is None else f"{row['printed']:.2f}"
+        if row.get("printedKind"):
+            printed = f"{printed} {row['printedKind']}"
         computed = "—" if row["computed"] is None else f"{row['computed']:.2f}"
         delta = "—" if row["delta"] is None else f"{row['delta']:+.2f}"
         name = row["room"] or "?"

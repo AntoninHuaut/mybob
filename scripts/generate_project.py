@@ -186,7 +186,7 @@ def snap(value, candidates, tolerance):
     return nearest if abs(nearest - value) <= tolerance else value
 
 
-def snap_rooms(rooms, walls, tolerance=0.30):
+def snap_rooms(rooms, walls, outline=None, tolerance=0.30):
     """Recale les pièces sur les faces des murs : une pièce s'arrête à la face finie.
 
     Le recalage est un **déplacement**, pas une mesure : il est rapporté pour que
@@ -200,6 +200,10 @@ def snap_rooms(rooms, walls, tolerance=0.30):
         for point in room["polygon"]:
             x = round(snap(point[0], xs, tolerance), 4)
             z = round(snap(point[1], zs, tolerance), 4)
+            # Un recalage ne doit pas sortir la pièce du niveau : sur un contour
+            # en L, la face d'un mur peut être dehors. On garde alors l'original.
+            if outline and not inside((x, z), outline):
+                x, z = point[0], point[1]
             if abs(x - point[0]) > 1e-6 or abs(z - point[1]) > 1e-6:
                 moves.append(
                     {
@@ -578,7 +582,7 @@ def build(
     if overrides:
         apply_overrides(walls, overrides)
     target["walls"] = walls
-    moves = snap_rooms(target["rooms"], walls)
+    moves = snap_rooms(target["rooms"], walls, target.get("outline"))
     if report is not None:
         report["thickness"] = read
         report["openingsAdded"] = added
