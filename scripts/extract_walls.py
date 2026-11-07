@@ -1,6 +1,7 @@
 """Extraction du tracé vectoriel d'une page de plans (murs et lignes de cote).
 
 Usage : uvx --from pymupdf python extract_walls.py <pdf> <numero-page> [zone x0,x1,y0,y1]
+        <numero-page> : compté à partir de 1, comme les autres scripts du dépôt.
 Sortie : lignes horizontales et verticales noires regroupées par ordonnée (axes des murs),
          avec emprise le long de l'axe, en points PDF (après correction de rotation).
 """
@@ -8,14 +9,19 @@ import sys
 import pymupdf
 from collections import defaultdict
 
-pdf, page_i = sys.argv[1], int(sys.argv[2])
+pdf, page_number = sys.argv[1], int(sys.argv[2])
 zone = None
 if len(sys.argv) > 3:
     x0, x1, y0, y1 = (float(v) for v in sys.argv[3].split(","))
     zone = (x0, x1, y0, y1)
 
 doc = pymupdf.open(pdf)
-p = doc[page_i]
+if not 1 <= page_number <= doc.page_count:
+    sys.exit(f"page {page_number} inexistante : le document en a {doc.page_count}")
+page_index = page_number - 1
+p = doc[page_index]
+words = p.get_text().split()
+print(f"page {page_number} : {' '.join(words[:6])}")
 mb = p.mediabox
 # Corriger les pages en /Rotate 90 : (x, y) PDF -> points d'affichage (x + y inversés)
 def tx(x, y):
