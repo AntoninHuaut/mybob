@@ -27,7 +27,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Zone                   | Fichier                                 | Rôle                                                                |
 | ---------------------- | --------------------------------------- | ------------------------------------------------------------------- |
 | Composition            | `src/main.ts`                           | Câblage DOM, `setMode`, projets, préférences, raccourcis            |
-| Moteur                 | `src/scene/engine.ts`                   | WebGPU puis repli WebGL, délai de démarrage                         |
+| Moteur                 | `src/scene/engine.ts`                   | Moteur WebGL, message si l'accélération graphique manque            |
 | Scène                  | `src/scene/viewer.ts`                   | `HouseViewer` : modes, caméras, coupe, ombres, mesures, portes      |
 | Géométrie de la maison | `src/scene/buildHouse.ts`               | Murs, sols, plafonds, menuiseries, portes                           |
 | Extérieur              | `src/scene/buildExterior.ts`            | Façades, toiture, terrain                                           |
@@ -197,4 +197,6 @@ une suite verte sur une géométrie fausse ne distingue pas le correct de l'inco
   projeter l'ombre de son volume.
 - La suite e2e prend un port libre : jamais de `--strictPort` sur un port connu, et ne pas
   arrêter le serveur d'un autre agent.
-- WebGPU d'abord, repli WebGL ; `?webgl=1` force WebGL pour reproduire un rendu logiciel.
+- Le moteur est **WebGL uniquement**. L'occlusion de la visite passe par le tampon de
+  géométrie, que Babylon n'implémente pas en WebGPU : un moteur WebGPU rendrait la visite
+  plus plate sans rien signaler. Ne pas réintroduire de repli.

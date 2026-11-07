@@ -13,7 +13,6 @@ export interface DiagnosticEngine {
   getRenderHeight(): number;
   getHardwareScalingLevel(): number;
   webGLVersion?: number;
-  getInfo?(): { vendor?: string; renderer?: string; version?: string };
   getGlInfo?(): { vendor?: string; renderer?: string; version?: string };
 }
 
@@ -74,15 +73,15 @@ function decimal(value: number): string {
 }
 
 /**
- * Babylon exposes the GPU name through `getInfo()` on WebGPU and `getGlInfo()` on
- * WebGL. Both stay optional so a stub engine still produces a report.
+ * Babylon exposes the GPU name through `getGlInfo()` on the WebGL engine. It
+ * stays optional so a stub engine still produces a report.
  */
 export function engineInfo(engine: DiagnosticEngine): {
   vendor: string;
   renderer: string;
   version: string;
 } {
-  const info = engine.getInfo?.() ?? engine.getGlInfo?.();
+  const info = engine.getGlInfo?.();
   return {
     vendor: info?.vendor || 'inconnu',
     renderer: info?.renderer || 'inconnu',
@@ -90,9 +89,8 @@ export function engineInfo(engine: DiagnosticEngine): {
   };
 }
 
-/** "WebGL 2" or "WebGPU": the first question when a machine renders slowly. */
+/** "WebGL 2": the first question when a machine renders slowly. */
 export function engineLabel(engine: DiagnosticEngine): string {
-  if (engine.getClassName().includes('WebGPU')) return 'WebGPU';
   return engine.webGLVersion ? `WebGL ${engine.webGLVersion}` : engine.getClassName();
 }
 

@@ -41,25 +41,17 @@ function scene(): DiagnosticScene {
 
 const view = { mode: 'walk', exterior: false, environment: true, occlusion: 'active' } as const;
 
-test('le nom du moteur distingue WebGL de WebGPU', () => {
+test('le nom du moteur donne la version WebGL, ou le nom de classe à défaut', () => {
   assert.equal(engineLabel(engine()), 'WebGL 2');
-  assert.equal(
-    engineLabel(engine({ getClassName: () => 'WebGPUEngine', webGLVersion: undefined })),
-    'WebGPU',
-  );
+  assert.equal(engineLabel(engine({ webGLVersion: undefined })), 'ThinEngine');
 });
 
-test('le GPU se lit sur les deux moteurs et reste lisible sans information', () => {
+test('le GPU se lit sur le moteur et reste lisible sans information', () => {
   assert.deepEqual(engineInfo(engine()), {
     vendor: 'WebKit',
     renderer: 'ANGLE (NVIDIA RTX 3060)',
     version: 'WebGL 2.0',
   });
-  const webgpu = engine({
-    getGlInfo: undefined,
-    getInfo: () => ({ vendor: 'nvidia', renderer: 'ampere', version: 'GeForce RTX 3060' }),
-  });
-  assert.equal(engineInfo(webgpu).renderer, 'ampere');
   assert.deepEqual(engineInfo(engine({ getGlInfo: undefined })), {
     vendor: 'inconnu',
     renderer: 'inconnu',
@@ -92,8 +84,8 @@ test('le rapport nomme l’extérieur et l’occlusion retirée', () => {
 
 test('un instantané complet reste formattable sans navigateur', () => {
   const snapshot: DiagnosticSnapshot = {
-    engine: 'WebGPU',
-    gpu: 'nvidia · ampere',
+    engine: 'WebGL 2',
+    gpu: 'WebKit · ANGLE (NVIDIA RTX 3060)',
     frameRate: 12,
     frameTimeMs: 83.3,
     view,

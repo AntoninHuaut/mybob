@@ -1491,9 +1491,7 @@ async function start() {
     } catch {
       storageWarning = true;
     }
-    // Le canvas peut être remplacé par createEngine après un échec WebGPU :
-    // l'engine d'abord, puis l'élément courant du DOM.
-    const sceneEngine = await createEngine(el<HTMLCanvasElement>('#scene'));
+    const sceneEngine = createEngine(el<HTMLCanvasElement>('#scene'));
     viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'), sceneEngine);
     frameRate = new FrameRateMeter(el('#frame-rate'));
     solarPanel = new SolarPanel({

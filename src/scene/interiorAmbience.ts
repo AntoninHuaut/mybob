@@ -113,9 +113,9 @@ function faceData(colourAt: (t: number) => Color3) {
 
 /**
  * Diffuse irradiance of the generated faces, integrated by Babylon's own cube
- * map tooling instead of read back from the GPU: a readback is asynchronous and
- * unsupported on some WebGPU backends, which would leave the PBR materials
- * without any ambient term.
+ * map tooling instead of read back from the GPU: a readback is asynchronous,
+ * which would leave the PBR materials without any ambient term on the frame the
+ * visit starts.
  */
 export function bouncePolynomial(faces: {
   right: Uint8Array;
@@ -187,9 +187,10 @@ export function createInteriorOcclusion(
   camera: Camera,
 ): SSAO2RenderingPipeline | undefined {
   try {
-    // The geometry buffer is a WebGL feature: on WebGPU `createMultipleRenderTarget`
-    // does not exist and Babylon throws instead of returning null. A visit without
-    // occlusion is still a visit, so the failure has to stay local to this function.
+    // The geometry buffer needs multiple render targets, which a WebGL context can
+    // still refuse (software rasterizer, missing extension): Babylon then throws
+    // instead of returning null. A visit without occlusion is still a visit, so the
+    // failure has to stay local to this function.
     const buffer = scene.enableGeometryBufferRenderer();
     if (!buffer || !buffer.isSupported) {
       scene.disableGeometryBufferRenderer();
