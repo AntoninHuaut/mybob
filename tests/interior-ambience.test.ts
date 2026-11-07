@@ -10,14 +10,19 @@ import { createWalkCamera } from '../src/scene/walkCamera';
 import {
   bounceFaces,
   bouncePolynomial,
+  configureInteriorBloom,
+  createInteriorBloom,
   createInteriorEnvironment,
   createInteriorOcclusion,
   nextOcclusionProbe,
   startOcclusionProbe,
+  INTERIOR_BLOOM_THRESHOLD,
+  INTERIOR_BLOOM_WEIGHT,
   INTERIOR_GROUND_COLOR,
   INTERIOR_OCCLUSION_LOW_SAMPLES,
   INTERIOR_OCCLUSION_SAMPLE_MS,
   INTERIOR_OCCLUSION_WARMUP_MS,
+  type BloomPipeline,
 } from '../src/scene/interiorAmbience';
 
 /** Mirrors `computeEnvironmentIrradiance` from Babylon's harmonics shader. */
@@ -109,6 +114,81 @@ test('an engine without raw textures or a pre-pass degrades to no ambience', () 
     assert.ok(
       !scene.prePassRenderer,
       'a refused occlusion must not leave the pre-pass rendering every frame',
+    );
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+/** A pipeline that records what is set on it, and nulls `imageProcessing` like Babylon. */
+function recordingPipeline(): { pipeline: BloomPipeline; order: string[] } {
+  const order: string[] = [];
+  let enabled = true;
+  const pipeline: BloomPipeline = {
+    imageProcessing: {
+      get toneMappingEnabled() {
+        return true;
+      },
+      set toneMappingEnabled(value: boolean) {
+        order.push(`toneMapping=${value}`);
+      },
+      get vignetteEnabled() {
+        return true;
+      },
+      set vignetteEnabled(value: boolean) {
+        order.push(`vignette=${value}`);
+      },
+    },
+    get imageProcessingEnabled() {
+      return enabled;
+    },
+    set imageProcessingEnabled(value: boolean) {
+      order.push(`imageProcessingEnabled=${value}`);
+      // Switching the pass off disposes the post-process and nulls the reference.
+      if (!value) pipeline.imageProcessing = null;
+    },
+    bloomEnabled: false,
+    bloomThreshold: 0,
+    bloomWeight: 0,
+  };
+  return { pipeline, order };
+}
+
+test('the bloom sub-effects are configured before the pass is switched off', () => {
+  const { pipeline, order } = recordingPipeline();
+  configureInteriorBloom(pipeline);
+  assert.deepEqual(
+    order,
+    ['toneMapping=false', 'vignette=false', 'imageProcessingEnabled=false'],
+    'disabling the pass nulls `imageProcessing`, so the sub-effects must be set first',
+  );
+  assert.equal(pipeline.imageProcessing, null, 'the pass is gone, not merely disabled');
+  assert.equal(pipeline.bloomEnabled, true);
+  assert.equal(pipeline.bloomThreshold, INTERIOR_BLOOM_THRESHOLD);
+  assert.equal(pipeline.bloomWeight, INTERIOR_BLOOM_WEIGHT);
+});
+
+test('the visit bloom is a bloom-only chain on the walk camera', () => {
+  const { engine, scene, camera } = fixture();
+  try {
+    const pipeline = createInteriorBloom(scene, camera);
+    assert.ok(pipeline, 'a backend that builds post-processes gets the bloom');
+    assert.equal(pipeline.bloomEnabled, true);
+    assert.equal(pipeline.bloomThreshold, 0.6, 'the threshold validated on the test house');
+    assert.equal(pipeline.bloomWeight, 0.2, 'the weight validated on the test house');
+    assert.equal(
+      pipeline.imageProcessingEnabled,
+      false,
+      'the app tone-maps in the material shaders, a second pass would double it',
+    );
+    const chain = (camera as unknown as { _postProcesses: ({ name: string } | null)[] })
+      ._postProcesses;
+    const names = chain.filter((pass) => pass !== null).map((pass) => pass.name);
+    assert.ok(names.includes('bloomMerge'), `the glow must reach the camera, got ${names}`);
+    assert.ok(
+      !names.includes('imageProcessing'),
+      'no image-processing pass may be added to the visit chain',
     );
   } finally {
     scene.dispose();

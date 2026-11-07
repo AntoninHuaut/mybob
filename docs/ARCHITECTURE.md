@@ -38,7 +38,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Caméra de visite       | `src/scene/walkCamera.ts`               | Hauteur du regard, rayon visiteur, vitesse, pas                     |
 | Coupe des murs         | `src/scene/wallCutaway.ts`              | `auto` / `full` / `low`, plans de découpe par matériau              |
 | Ouvertures en plan     | `src/scene/planOpenings.ts`             | Baies et portes dessinées dans la vue Plan                          |
-| Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, occlusion ambiante, repli sous 24 fps                   |
+| Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, TAA, occlusion, bloom, repli sous 24 fps                |
 | Diagnostic             | `src/scene/diagnostics.ts`              | `mybob.diag()` : moteur, GPU, cadence, résolution, scène            |
 | Mesure                 | `src/scene/measurement.ts`              | Accrochage aux axes du plan                                         |
 | Soleil                 | `src/scene/solar.ts`                    | Équations NOAA, fuseaux IANA                                        |
@@ -114,6 +114,14 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
   soleil. Plan et Vue 3D gardent leur éclairage : l'environnement et le tampon de géométrie ne
   sont attachés qu'en visite et libérés en sortie, et l'environnement précédent est restauré
   plutôt qu'effacé. Avec un aperçu solaire appliqué, l'ambiance suit le soleil comme ailleurs.
+- La chaîne de post-traitements de la visite est ordonnée et l'ordre compte : Babylon ajoute
+  chaque pipeline à la fin de la chaîne de la caméra, donc `updateInteriorAmbience` construit
+  le TAA d'abord, l'occlusion ensuite, le bloom en dernier. On lit
+  `TAA, TAAPass, SSAO…, ssaoCombine, bloom`. Le bloom est réglé à un seuil de 0,6 et un poids
+  de 0,2 : la lampe et la baie prennent un peu de lumière, les murs blancs restent nets. Son
+  `imageProcessingEnabled` est faux, sinon le tone mapping serait appliqué deux fois — l'app
+  tone-map déjà dans les shaders des matériaux — et ses sous-effets sont configurés avant la
+  coupure, qui détruit le post-process et nullifie `imageProcessing`.
 - La cadence est surveillée pendant toute la visite : trois relevés consécutifs sous 24 images
   par seconde, hors onglet masqué, retirent l'occlusion ; l'environnement et les luminaires
   restent en place. Un relevé sain remet le compteur à zéro.
