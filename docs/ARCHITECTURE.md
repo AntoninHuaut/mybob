@@ -216,9 +216,13 @@ et `main.ts`. Respecter la voix décrite dans [IDENTITE-MYBOB.md](IDENTITE-MYBOB
 ```sh
 pnpm install --frozen-lockfile
 pnpm test          # node --test + tsx : DOM (Happy DOM) et géométrie (NullEngine)
-pnpm run ci        # format, tests, build, contrôle du build public
-pnpm run test:e2e  # Playwright sur le build public, port libre à chaque exécution
+node --import tsx --test --test-isolation=none tests/<zone>.test.ts   # un seul fichier de zone
+pnpm run ci        # format, tests, build, contrôle du build public (pas d'e2e)
 ```
+
+Un workflow navigateur se vérifie localement par les seuls scénarios e2e de la
+fonctionnalité touchée — `--grep` ou fichier, jamais la suite entière : la recette et les
+commandes sont dans [E2E.md](E2E.md), la suite complète appartient à la CI.
 
 Les tests DOM utilisent Happy DOM et les tests de scène un `NullEngine` : ils prouvent le
 comportement, pas le rendu. Pour juger un rendu, ouvrir un vrai navigateur et dire ce qui a

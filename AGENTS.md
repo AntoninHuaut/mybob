@@ -74,10 +74,17 @@ These files replace reliance on any previous chat context.
 
 ## Work and verification
 
-Use Node 24, `pnpm install --frozen-lockfile`, and `pnpm run ci` for a release. Run
-`pnpm run test:e2e` for browser workflows. Tests cover DOM behavior with Happy DOM and geometry
-with Babylon NullEngine. Neither proves visual correctness: use a real browser when available
-and record what was actually inspected.
+Use Node 24 and `pnpm install --frozen-lockfile`. Verify locally only what the change
+touches, never the whole suite as a reflex. Unit test files mirror the module they test
+(`tests/furniture.test.ts`, `tests/plan-openings.test.ts`): run the touched ones,
+`node --import tsx --test --test-isolation=none tests/<zone>.test.ts`. A browser workflow is
+verified by the e2e scenarios of that feature only, with a `--grep` on an already-built
+`dist/` — the recipe lives in [E2E](docs/E2E.md). Never run the full e2e suite on this
+machine: the CI pipeline runs all of it, sharded in three (`test:e2e:built --shard=n/3`).
+`pnpm run ci` (format, unit tests, build, public-build check) is the local release gate; it
+does not run e2e. Tests cover DOM behavior with Happy DOM and geometry with Babylon
+NullEngine. Neither proves visual correctness: use a real browser when available and record
+what was actually inspected.
 
 Several agents share this machine. The e2e suite takes a free port on every run
 (`playwright.config.ts`): never hardcode a port, never add `--strictPort` on a known one, and
