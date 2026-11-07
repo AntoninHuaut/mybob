@@ -601,9 +601,13 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
     const [decisionsPath, projectPath, registryPath] = process.argv.slice(2);
     if (!decisionsPath || !projectPath || !registryPath) {
       throw new Error(
-        'Usage: node --import tsx scripts/check-plan-decisions.ts decisions.json project.json registry.json',
+        'Usage: node --import tsx scripts/check-plan-decisions.ts decisions.json project.json registry.json [--allow-unresolved]',
       );
     }
+    // Une face non résolue n'est pas une contradiction : en fusion, les murs
+    // viennent du modèle et la décision ne construit rien. Le drapeau dit que
+    // l'appelant assume ce repli ; une erreur, elle, bloque toujours.
+    const allowUnresolved = process.argv.includes('--allow-unresolved');
     const read = async (path: string) => JSON.parse(await readFile(path, 'utf8'));
     const report = checkDecisions(
       await read(decisionsPath),
@@ -611,7 +615,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       await read(projectPath),
     );
     process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
-    if (!report.ready) process.exitCode = 1;
+    const blocking = report.errors.length > 0 || (!allowUnresolved && !report.ready);
+    if (blocking) process.exitCode = 1;
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : error}\n`);
     process.exitCode = 1;
