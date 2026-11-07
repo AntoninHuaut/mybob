@@ -10,6 +10,7 @@ plan, ni un diagnostic de pièce.
 
 Usage :
   python scripts/wall_joins.py <projet.json> <niveau>
+  python scripts/wall_joins.py --self-test
 """
 
 import json
@@ -50,14 +51,13 @@ def inside(pts, x, z, eps=1e-9):
     return True
 
 
-def main():
-    if len(sys.argv) < 3:
-        sys.exit(__doc__)
-    project = json.loads(open(sys.argv[1], encoding="utf-8-sig").read())
-    level_id = sys.argv[2]
+def report(project, level_id):
+    """Imprime les abouts non couverts du niveau et renvoie leur nombre."""
     level = next((lv for lv in project["levels"] if lv["id"] == level_id), None)
     if level is None:
-        sys.exit(f"niveau {level_id!r} inconnu : {', '.join(lv['id'] for lv in project['levels'])}")
+        sys.exit(
+            f"niveau {level_id!r} inconnu : " + ", ".join(lv["id"] for lv in project["levels"])
+        )
     rects = [(w["id"], rect(w)) for w in level["walls"]]
     rects = [(wid, pts) for wid, pts in rects if pts]
 
@@ -73,4 +73,65 @@ def main():
     return bare
 
 
-main()
+def self_test():
+    """Non-régression sur un projet synthétique : aucune donnée réelle."""
+    open_loop = {
+        "levels": [
+            {
+                "id": "l",
+                "walls": [
+                    {"id": "a", "start": [0, 0], "end": [2, 0], "thickness": 0.1},
+                    {"id": "b", "start": [2, 0], "end": [2, 2], "thickness": 0.1},
+                ],
+            }
+        ]
+    }
+    # Un angle ouvert laisse libres ses deux extrémités : c'est le cas normal.
+    if report(open_loop, "l") != 2:
+        print("ECHEC un angle ouvert doit laisser deux abouts libres")
+        return 1
+    closed = {
+        "levels": [
+            {
+                "id": "l",
+                "walls": [
+                    {"id": "a", "start": [0, 0], "end": [2, 0], "thickness": 0.1},
+                    {"id": "b", "start": [2, 0], "end": [2, 2], "thickness": 0.1},
+                    {"id": "c", "start": [2, 2], "end": [0, 2], "thickness": 0.1},
+                    {"id": "d", "start": [0, 2], "end": [0, 0], "thickness": 0.1},
+                ],
+            }
+        ]
+    }
+    if report(closed, "l") != 0:
+        print("ECHEC le contour fermé doit couvrir tous ses abouts")
+        return 1
+    floating = {
+        "levels": [
+            {
+                "id": "l",
+                "walls": [
+                    {"id": "a", "start": [0, 0], "end": [2, 0], "thickness": 0.1},
+                    {"id": "e", "start": [3, 0], "end": [5, 0], "thickness": 0.1},
+                ],
+            }
+        ]
+    }
+    if report(floating, "l") != 4:
+        print("ECHEC la cloison isolée doit laisser quatre abouts libres")
+        return 1
+    print("about de murs : auto-test réussi")
+    return 0
+
+
+def main(argv=None):
+    argv = sys.argv[1:] if argv is None else argv
+    if "--self-test" in argv:
+        return self_test()
+    if len(argv) < 2:
+        sys.exit(__doc__)
+    project = json.loads(open(argv[0], encoding="utf-8-sig").read())
+    return report(project, argv[1])
+
+
+sys.exit(main())

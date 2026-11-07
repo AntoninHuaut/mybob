@@ -59,6 +59,13 @@ jobs:
         run: python3 scripts/generate_project.py --self-test
       - name: Test the printed-surface check
         run: python3 scripts/check_plan_surfaces.py --self-test
+      - name: Test the plan page tools
+        run: |
+          python3 -m pip install --quiet pymupdf pillow
+          python3 scripts/grid_page.py --self-test
+          python3 scripts/overlay_page.py --self-test
+          python3 scripts/model_plan.py --self-test
+          python3 scripts/wall_joins.py --self-test
       - name: Check types and build public application
         run: npm run build
       - name: Ensure personal house data is absent from publication
