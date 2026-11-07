@@ -10,6 +10,8 @@ export interface Opening {
   hinge?: 'start' | 'end';
   swing?: 1 | -1;
   exterior?: boolean;
+  /** A `door` leaf built as a glazed French window instead of a solid slab. */
+  glazed?: boolean;
 }
 export interface Wall {
   id: string;

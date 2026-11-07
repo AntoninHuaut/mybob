@@ -179,10 +179,10 @@ export function validateProject(input: unknown): HouseProject {
           fail(
             `Une ouverture doit mesurer au moins 10 cm de large et de haut pour les profils du modèle : ${o.id}`,
           );
-        if (o.kind !== 'window' && (o.sill ?? 0) !== 0)
-          fail(
-            `Les portes, baies coulissantes et portes de garage doivent partir du sol (allège de 0 m) : ${o.id}`,
-          );
+        if (o.kind !== 'window' && o.kind !== 'sliding' && (o.sill ?? 0) !== 0)
+          fail(`Les portes et portes de garage doivent partir du sol (allège de 0 m) : ${o.id}`);
+        if (o.glazed !== undefined && (typeof o.glazed !== 'boolean' || o.kind !== 'door'))
+          fail(`Seule une porte battante peut être vitrée : ${o.id}`);
         if (!optionalBoolean(o.exterior))
           fail(`Le statut extérieur de l’ouverture doit être un booléen : ${o.id}`);
         if (o.hinge !== undefined && !['start', 'end'].includes(o.hinge))
