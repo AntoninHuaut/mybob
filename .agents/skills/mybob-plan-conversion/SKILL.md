@@ -516,6 +516,23 @@ pour une mesure. Trois règles en découlent, et elles sont dans le script :
   posait 1,20 sous les fenêtres du nord. Chaque étiquette est appariée à la baie
   la plus proche, et une baie sans étiquette est rapportée comme non résolue.
 
+La convention du script est un défaut, pas un verdict : le propriétaire a corrigé
+trois types après relecture 3D, et ses réponses priment sur la règle.
+
+- une ouverture imprimée `1.40/2.15` pleine hauteur d'un séjour peut être une
+  **baie** (`sliding`), pas une porte battante : le script dit `door`, la maison
+  dit baie ;
+- la « fenêtre double » d'une cuisine est **coulissante sur le côté** : `sliding`
+  avec son allège (1,60/1,05 allège 1,10 au plan A, 1,80/1,05 au plan B) ;
+- une baie pleine hauteur de chambre (1,20/2,15 sans allège) est une
+  **porte-fenêtre ouvrante** : `door` avec `glazed: true`, pas une fenêtre
+  fixe aux poignées décoratives ;
+- toute baie de mur extérieur porte `exterior: true` : sans lui, le coulissant
+  rend en panneau plein et la porte de garage démarre ouverte — c'est ce qui
+  a fait lire « portes coulissantes pleines » au propriétaire sur le plan B.
+  `generate_project.py` pose ce drapeau à chaque passe de génération ; une
+  génération plus ancienne ne l'a pas, donc vérifier la clé avant relecture.
+
 **Une chaîne de façade peut couvrir plusieurs arêtes.** Au sud du plan B, le
 séjour, l'entrée en renfoncement et le garage sont trois arêtes distinctes, et une
 seule chaîne les mesure toutes. Chercher l'arête par le côté seul posait toutes
@@ -858,12 +875,13 @@ Deux conséquences :
 Lancer `validateProject`, puis l'audit déterministe. Il rapporte les
 chevauchements pièce/pièce, les intersections pièce/mur plein, les murs
 colinéaires en double, les abouts de murs qui s'arrêtent juste avant un autre
-mur, les pièces qu'aucun passage de plain-pied n'atteint, un point d'apparition
-hors de toute pièce, le dégagement du visiteur et les résidus de surface
-déclarée. Résoudre les chevauchements accidentels, les cloisons doublées, les
-abouts presque joints et les passages bloqués. Enquêter sur les résidus de
-surface ; garder `planArea` à part et expliquer les différences par la preuve.
-Un accord de surface ne suffit pas.
+mur, les cloisons qui flottent hors du contour ou au-dessus d'une trémie
+déclarée (`wall-over-void`), les pièces qu'aucun passage de plain-pied
+n'atteint, un point d'apparition hors de toute pièce, le dégagement du
+visiteur et les résidus de surface déclarée. Résoudre les chevauchements
+accidentels, les cloisons doublées, les abouts presque joints et les passages
+bloqués. Enquêter sur les résidus de surface ; garder `planArea` à part et
+expliquer les différences par la preuve. Un accord de surface ne suffit pas.
 
 ```sh
 node --import tsx scripts/audit-plan.ts artifacts/plan-review/house.json > artifacts/plan-review/house-audit.json
@@ -1034,7 +1052,19 @@ plans, en une seule revue. Deux visages à connaître :
   maison en 3D ; et une cloison qui ferme hermétiquement une cage d'escalier —
   une volée descend depuis le palier, rien ne peut la murer.
 
-Seuls `compare_plan.py` (« aucune contrepartie ») et le calque orange les voient.
+Le visage combles du second cas : au plan B, une cloison collée au flanc est de
+la volée dans les combles — x 5,795, aucun aplat dans l'extrait — alors que le
+dessin ouvre la trémie jusqu'au mur des WC (x 6,15) et n'y montre qu'un
+garde-corps. Le piège vient du remplissage : la cloison ferme la trémie pour
+que `reachedRooms` ne passe pas par le vide, et l'inventé survit parce que la
+trémie est déclarée `floorVoids` et qu'aucune pièce ne borde la face. La
+réponse du propriétaire, une revue 3D plus tard : « un mur en trop à l'étage ».
+
+La variante trémie n'attend plus la revue du propriétaire pour se voir :
+`audit-plan.ts` signale désormais tout mur plein qui chevauche un
+`floorVoids` déclaré (`wall-over-void`, seuil 0,01 m² ; un mur qui affleure la
+face de la trémie reste sous le seuil). Les autres visages restent là :
+`compare_plan.py` (« aucune contrepartie ») et le calque orange.
 Un mur de contour inventé vient presque toujours d'un polygone calé sur la
 surface imprimée au lieu d'être calé sur les faces : corriger le polygone,
 garder la surface imprimée dans `planArea`, documenter le résidu — jamais

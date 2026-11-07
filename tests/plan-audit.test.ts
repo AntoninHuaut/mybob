@@ -239,3 +239,47 @@ test('audit flags a spawn outside every room', () => {
   ).issues;
   assert.ok(issues.some((i) => i.kind === 'spawn-outside-room'));
 });
+
+test('audit flags a wall standing over a stairwell void, not one flanking it', () => {
+  const stairwell: Point2[] = [
+    [2, 1],
+    [3.5, 1],
+    [3.5, 2.5],
+    [2, 2.5],
+  ];
+  const issues = auditPlan(
+    project({
+      floorVoids: [stairwell],
+      walls: [
+        // cloison inventée qui barre la trémie : elle flotte sur le vide
+        { id: 'over-the-void', start: [2.5, 0.6], end: [2.5, 3.2], thickness: 0.07 },
+        // garde-corps rendu en cloison dans la trémie, entre deux murs
+        { id: 'railing-as-wall', start: [2.55, 1], end: [2.55, 2.5], thickness: 0.07 },
+        // mur légitime qui borde la face de la trémie : sa face affleure le bord
+        { id: 'flank', start: [1.95, 1], end: [1.95, 2.5], thickness: 0.1 },
+      ],
+      rooms: [
+        {
+          id: 'room',
+          name: 'Room',
+          kind: 'living',
+          polygon: [
+            [0.2, 0.2],
+            [5.8, 0.2],
+            [5.8, 3.8],
+            [0.2, 3.8],
+          ],
+          label: [3, 3],
+          viewpoint: [3, 3],
+        },
+      ],
+    }),
+  ).issues;
+  const over = issues.filter((i) => i.kind === 'wall-over-void');
+  assert.ok(
+    over.some((i) => i.ids.includes('over-the-void') && Math.abs(i.value - 0.105) < 1e-6),
+    `overlap attendu 0.105, reçu ${JSON.stringify(over)}`,
+  );
+  assert.ok(over.some((i) => i.ids.includes('railing-as-wall')));
+  assert.ok(!over.some((i) => i.ids.includes('flank')));
+});
