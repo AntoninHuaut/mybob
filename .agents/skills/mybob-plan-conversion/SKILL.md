@@ -117,8 +117,18 @@ behind a valid JSON.
    thicknesses. An envelope wall inset by half its thickness at both ends of the
    outline is `derived` from the printed overall extent.
 
-3. **Construction and verification** — generator, `validateProject`,
+3. **Construction and verification** — `scripts/generate_project.py` assembles
+   the project: exterior walls from the outline (each edge gives a wall whose
+   outer face is the edge, axis inset by half the thickness), openings from the
+   closed chains that measure each side, partitions from the geometry layer, and
+   the rooms snapped onto the new wall faces. `validateProject`,
    `scripts/audit-plan.ts`, overlay, browser.
+
+   Two limits measured on real plans: **interior doors are not extractable** —
+   they are drawn as polylines, not curves, and their labels are outlined text,
+   so neither the arc nor the text can be read; and a façade whose openings are
+   only isolated dimensions (not a closed chain) yields no opening. Both must be
+   reported as missing, not invented.
 
 `scripts/check-plan-decisions.ts` is the gate between layers 2 and 3. It
 recomputes every claim instead of trusting its prose: the referenced run must sum
