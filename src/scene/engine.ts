@@ -1,10 +1,17 @@
 import { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine';
 import { Engine } from '@babylonjs/core/Engines/engine';
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+/**
+ * Sentinel for a promise that did not settle in time. A plain `undefined` cannot
+ * carry that meaning: `initAsync()` resolves with `void`, so a successful init
+ * and a timeout would be indistinguishable and WebGPU would never be kept.
+ */
+export const TIMED_OUT = Symbol('timed out');
+
+export function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | typeof TIMED_OUT> {
   return Promise.race([
     promise,
-    new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), ms)),
+    new Promise<typeof TIMED_OUT>((resolve) => setTimeout(() => resolve(TIMED_OUT), ms)),
   ]);
 }
 
@@ -78,7 +85,7 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractE
         }),
         3000,
       );
-      if (!adapter) webglFallback('aucun adaptateur GPU');
+      if (adapter === TIMED_OUT || !adapter) webglFallback('aucun adaptateur GPU');
       else if (await adapterIsSoftware(adapter)) webglFallback('adaptateur logiciel');
       else {
         const { WebGPUEngine } = await import('@babylonjs/core/Engines/webgpuEngine');
@@ -88,11 +95,11 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractE
           powerPreference: 'high-performance',
         });
         const init = engine.initAsync();
-        const initialised = await withTimeout(init, 8000);
+        const initialised = await withTimeout(init, 4000);
         // Un driver peut répondre à l'init puis échouer à la première écriture
         // (validation WebGPU : clearQuad/write_buffer). On observe le device
         // pendant un court rodage : la moindre erreur disqualifie le WebGPU.
-        if (!initialised) {
+        if (initialised === TIMED_OUT) {
           // Détruire le device pendant l'init laisse des commandes en vol :
           // Babylon écrit alors dans un buffer invalidé et crache une erreur de
           // validation. On attend que l'init retombe avant de libérer.
