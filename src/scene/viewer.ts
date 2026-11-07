@@ -54,13 +54,15 @@ import { cameraYaw, planHeading, setPlanView, stopOrbit, usePlanCoordinates } fr
 import {
   createInteriorEnvironment,
   createInteriorOcclusion,
+  nextOcclusionProbe,
+  startOcclusionProbe,
   INTERIOR_ENVIRONMENT_INTENSITY,
   INTERIOR_FIXTURE_INTENSITY,
   INTERIOR_FIXTURE_RANGE,
   INTERIOR_GROUND_COLOR,
-  INTERIOR_OCCLUSION_MIN_FPS,
-  INTERIOR_OCCLUSION_PROBE_MS,
+  type OcclusionProbe,
 } from './interiorAmbience';
+import type { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture';
 import type { RawCubeTexture } from '@babylonjs/core/Materials/Textures/rawCubeTexture';
 import type { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
 
@@ -155,8 +157,10 @@ export class HouseViewer {
   private interiorEnvironment?: RawCubeTexture;
   private interiorOcclusion?: SSAO2RenderingPipeline;
   private interiorAmbienceUnavailable = false;
-  private occlusionProbeAt?: number;
+  private occlusionProbe?: OcclusionProbe;
   private occlusionRefused = false;
+  private previousEnvironment?: BaseTexture | null;
+  private previousEnvironmentIntensity = 1;
   private shadowsBeforeReadability?: boolean;
   private solarPosition?: SolarPosition;
   private baseSun?: { direction: Vector3; position: Vector3; diffuse: Color3 };
@@ -209,8 +213,10 @@ export class HouseViewer {
     this.interiorEnvironment = undefined;
     this.interiorOcclusion = undefined;
     this.interiorAmbienceUnavailable = false;
-    this.occlusionProbeAt = undefined;
+    this.occlusionProbe = undefined;
     this.occlusionRefused = false;
+    this.previousEnvironment = undefined;
+    this.previousEnvironmentIntensity = 1;
     this.exterior = undefined;
     this.exteriorFrame = undefined;
     this.exteriorView = false;
@@ -263,6 +269,8 @@ export class HouseViewer {
     this.hemispheric = new HemisphericLight('sky', new Vector3(0.3, 1, -0.1), scene);
     this.hemispheric.intensity = 0.9;
     this.hemispheric.groundColor = Color3.FromHexString('#b6b4a2');
+    // Captured once, at build time: the visit and the plan both restore from it.
+    this.baseGround = this.hemispheric.groundColor.clone();
     this.sun = new DirectionalLight('sunlight', new Vector3(0.5, -1, -0.45), scene);
     this.sun.position = new Vector3(
       extent.center[0] - 9,
@@ -803,13 +811,16 @@ export class HouseViewer {
     this.house.fixtures.forEach((f) => f.setEnabled(interior));
     this.house.pointLights.forEach((l) => {
       l.setEnabled(this.lightOn && !plan);
+      // Written on every call: a per-fixture intensity from project data would be lost here.
       l.intensity = interior ? INTERIOR_FIXTURE_INTENSITY : FIXTURE_LIGHT_INTENSITY;
       l.range = interior ? INTERIOR_FIXTURE_RANGE : FIXTURE_LIGHT_RANGE;
     });
     if (plan) {
       this.planLighting ??= {
         diffuse: this.hemispheric.diffuse?.clone() ?? Color3.White(),
-        ground: this.hemispheric.groundColor?.clone() ?? Color3.White(),
+        // The base bounce, never the live one: entering the plan straight from the
+        // visit would otherwise snapshot the darker interior colour.
+        ground: (this.baseGround ?? this.hemispheric.groundColor)?.clone() ?? Color3.White(),
       };
       this.hemispheric.diffuse = Color3.White();
       this.hemispheric.groundColor = Color3.White();
@@ -873,37 +884,54 @@ export class HouseViewer {
         if (!this.interiorEnvironment) this.interiorAmbienceUnavailable = true;
       }
       if (this.interiorEnvironment) {
+        // Remember what was there, so leaving the visit restores it instead of
+        // clearing an environment another feature may have installed.
+        if (this.previousEnvironment === undefined) {
+          this.previousEnvironment = this.scene.environmentTexture;
+          this.previousEnvironmentIntensity = this.scene.environmentIntensity;
+        }
         this.scene.environmentTexture = this.interiorEnvironment;
         this.scene.environmentIntensity = INTERIOR_ENVIRONMENT_INTENSITY;
       }
       if (!this.occlusionRefused && !this.interiorOcclusion) {
         this.interiorOcclusion = createInteriorOcclusion(this.scene, this.walk);
-        this.occlusionProbeAt = this.interiorOcclusion ? performance.now() : undefined;
+        this.occlusionProbe = this.interiorOcclusion
+          ? startOcclusionProbe(performance.now())
+          : undefined;
       }
       return;
     }
     if (this.interiorEnvironment && this.scene.environmentTexture === this.interiorEnvironment) {
-      this.scene.environmentTexture = null;
-      this.scene.environmentIntensity = 1;
+      this.scene.environmentTexture = this.previousEnvironment ?? null;
+      this.scene.environmentIntensity = this.previousEnvironmentIntensity;
     }
+    this.previousEnvironment = undefined;
+    this.previousEnvironmentIntensity = 1;
     this.interiorOcclusion?.dispose(true);
     this.interiorOcclusion = undefined;
-    this.occlusionProbeAt = undefined;
+    this.occlusionProbe = undefined;
   }
 
   /**
-   * Ambient occlusion is the expensive part of the visit. Once the visit has run
-   * long enough to judge, a frame rate below the threshold drops the pipeline:
-   * the environment and the fixture lights keep the room readable.
+   * Ambient occlusion is the expensive part of the visit. The frame rate is
+   * watched for as long as the visit lasts, so a room that turns out too heavy
+   * later still drops the pipeline; the environment and the fixture lights keep
+   * the room readable.
    */
   private probeOcclusionCost() {
-    if (this.occlusionProbeAt === undefined || !this.interiorOcclusion) return;
-    if (performance.now() - this.occlusionProbeAt < INTERIOR_OCCLUSION_PROBE_MS) return;
-    this.occlusionProbeAt = undefined;
+    if (!this.occlusionProbe || !this.interiorOcclusion) return;
     const fps = this.engine.getFps();
-    if (fps >= INTERIOR_OCCLUSION_MIN_FPS) return;
+    const result = nextOcclusionProbe(
+      this.occlusionProbe,
+      performance.now(),
+      fps,
+      document.visibilityState === 'visible',
+    );
+    this.occlusionProbe = result.probe;
+    if (!result.refuse) return;
     this.interiorOcclusion.dispose(true);
     this.interiorOcclusion = undefined;
+    this.occlusionProbe = undefined;
     this.occlusionRefused = true;
     console.info(`[visite] occlusion ambiante désactivée : ${Math.round(fps)} fps`);
   }

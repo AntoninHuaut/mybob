@@ -249,6 +249,41 @@ test('plan lighting is neutral and shadow-free, then restores 3D and visit light
   engine.dispose();
 });
 
+test('entering the plan straight from the visit snapshots the editor bounce, not the interior one', () => {
+  const { engine, scene, viewer, cutaway, markers } = fixture();
+  const sky = new HemisphericLight('sky', Vector3.Up(), scene);
+  sky.groundColor = Color3.FromHexString('#b6b4a2');
+  const ground = sky.groundColor.asArray();
+  const sun = new DirectionalLight('sun', new Vector3(0.5, -1, -0.45), scene);
+  const ceiling = MeshBuilder.CreateBox('ceiling', {}, scene);
+  Object.assign(viewer, {
+    hemispheric: sky,
+    sun,
+    lightOn: true,
+    ceilingOn: false,
+    house: { ceiling, fixtures: [], pointLights: [], highlights: new Map() },
+  });
+  const update = () => (viewer as unknown as { updateLighting(): void }).updateLighting();
+  viewer.setWallDisplay('full');
+  viewer.mode = 'walk';
+  update();
+  viewer.mode = 'plan';
+  update();
+  const snapshot = (viewer as unknown as { planLighting?: { ground: Color3 } }).planLighting;
+  assert.deepEqual(
+    snapshot?.ground.asArray(),
+    ground,
+    'the plan must not inherit the darker visit bounce',
+  );
+  viewer.mode = 'overview';
+  update();
+  assert.deepEqual(sky.groundColor.asArray(), ground);
+  cutaway.dispose();
+  markers.dispose();
+  scene.dispose();
+  engine.dispose();
+});
+
 test('solar previews drive the directional light, preserve neutral plan and restore the initial preset', () => {
   const { engine, scene, viewer, cutaway, markers } = fixture();
   const sky = new HemisphericLight('sky', Vector3.Up(), scene);
