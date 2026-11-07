@@ -171,8 +171,9 @@ test('a hidden tab restarts the window instead of judging the resume hitch', () 
 test('a backend without multiple render targets loses occlusion, not the visit', () => {
   const { engine, scene, camera } = fixture();
   try {
-    // WebGPU has no `createMultipleRenderTarget`: Babylon throws instead of returning
-    // null, and the throw used to escape `setMode` before the mode change completed.
+    // A context without multiple render targets makes Babylon throw instead of
+    // returning null, and the throw used to escape `setMode` before the mode
+    // change completed.
     (
       scene as unknown as { enableGeometryBufferRenderer: () => never }
     ).enableGeometryBufferRenderer = () => {

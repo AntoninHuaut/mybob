@@ -15,7 +15,7 @@ pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
-Ouvrir l’adresse indiquée par Vite. Par défaut, seul le studio de démonstration est embarqué ; importer sa maison localement. `npm run dev:private` charge un plan personnel local. L’application utilise WebGPU par défaut quand le navigateur expose un adaptateur matériel, avec repli automatique sur WebGL (rendu logiciel, navigateur automatisé ou démarrage trop lent) ; `?webgl=1` force WebGL. L’accélération graphique reste nécessaire. Aucun compte ni serveur de données n’est nécessaire en local.
+Ouvrir l’adresse indiquée par Vite. Par défaut, seul le studio de démonstration est embarqué ; importer sa maison localement. `npm run dev:private` charge un plan personnel local. L’application rend en WebGL 2 ; l’accélération graphique du navigateur reste nécessaire. Aucun compte ni serveur de données n’est nécessaire en local.
 
 ```sh
 npm test
