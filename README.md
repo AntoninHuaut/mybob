@@ -4,7 +4,7 @@ Application de visite de maisons en 3D pour ordinateur, réalisée avec **Babylo
 
 ## Reprise avec un nouvel agent
 
-Lire [AGENTS.md](AGENTS.md) et [le skill de maintenance](.agents/skills/mybob-maintenance/SKILL.md) ; le guide de passation est un fichier local git-ignoré sur le clone de l'owner. **Exporter son projet depuis le navigateur actuel avant de passer en local** : le dépôt ne contient pas l’aménagement sauvegardé dans ce navigateur.
+Lire [AGENTS.md](AGENTS.md), puis [la carte du code](docs/ARCHITECTURE.md) et [le skill de maintenance](.agents/skills/mybob-maintenance/SKILL.md) ; le guide de passation est un fichier local git-ignoré sur le clone de l'owner. **Exporter son projet depuis le navigateur actuel avant de passer en local** : le dépôt ne contient pas l’aménagement sauvegardé dans ce navigateur.
 
 ## Démarrer
 
@@ -29,7 +29,7 @@ Tests navigateur automatisés : `pnpm exec playwright install chromium`, puis `p
 
 Le build normal est **public et limité à la démonstration**. La commande `npm run ci` exécute tous les contrôles et vérifie qu’aucun plan personnel n’est présent dans l’artefact. Configuration Cloudflare Pages et GitHub Actions : [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable et un éclairage avec tone mapping. Le bouton Soleil ajoute un aperçu selon la commune, le nord du plan, la date et l’heure locale ; la vue Plan reste neutre. Détails et limites : [docs/V2.md](docs/V2.md), [docs/EXTERIOR.md](docs/EXTERIOR.md).
+La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable et un éclairage avec tone mapping. Le bouton Soleil ajoute un aperçu selon la commune, le nord du plan, la date et l’heure locale ; la vue Plan reste neutre. Détails et limites : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/EXTERIOR.md](docs/EXTERIOR.md).
 
 ## Utilisation
 
@@ -49,26 +49,18 @@ La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable e
 - **Répéter des meubles** : Ctrl C puis Ctrl V copie le meuble sélectionné ; chaque copie est indépendante et annulable. Sur une table, **Chaises** répartit le nombre voulu autour du plateau, avec dimensions réglables et liaison facultative.
 - **Placement précis** : sélectionner plusieurs meubles pour les aligner ou répartir leurs espacements ; activer séparément l’accrochage à une grille réglable ou aux murs pendant le glisser.
 - **Soleil** : après localisation, le panneau dans la scène propose un curseur horaire, Été/Hiver et lever/coucher approximatifs, sans déplacer la caméra. « Animer la journée » déroule l’ensoleillement en 12 secondes ; toute manipulation manuelle l’arrête.
-- **Image** : télécharger un PNG du Plan ou de la 3D sans panneaux, avec noms/surfaces et dimensions facultatifs.
-- **Soleil** : après localisation, le panneau dans la scène propose un curseur horaire, Été/Hiver et lever/coucher approximatifs, sans déplacer la caméra.
 - **Image** : télécharger un PNG du Plan ou de la 3D sans panneaux, avec noms/surfaces et dimensions facultatifs ; fond transparent et cartouche projet en option.
 
 ## Fichiers importants
 
+La carte complète des modules est dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Les seuls
+chemins à connaître avant de lire le code :
+
 ```text
 public/projects/private-*.json  Plans personnels locaux (git-ignorés, jamais commités)
 public/projects/studio-demo.json Démonstration publique
-src/model/types.ts              Format versionné des projets
-src/model/validate.ts           Validation à l’import
-src/model/geometry.ts           Calculs en mètres
-src/scene/buildHouse.ts         Génération des murs, sols, menuiseries et portes
-src/scene/materials.ts          Matériaux et texture procédurale de carrelage
-src/scene/viewer.ts             Caméras, collisions, éclairage et mesure
-src/scene/walkCamera.ts         Caméra de visite et hauteur réelle du regard
-src/ui/                        Plan miniature, icônes et formatage
-src/main.ts                    Interface et gestion des projets
-tests/model.test.ts             Contrôles de géométrie et de collisions avec Babylon NullEngine
-docs/PROJECT-FORMAT.md          Ajouter une autre maison
+public/projects/maison-atelier.json Gabarit synthétique des tests, aucune donnée personnelle
+docs/PROJECT-FORMAT.md          Format des projets, pour ajouter une autre maison
 ```
 
 ## Périmètre de cette version
