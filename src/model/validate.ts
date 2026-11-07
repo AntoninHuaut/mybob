@@ -1,5 +1,11 @@
-import type { HouseProject, Point2 } from './types';
-import { pointInPolygon, polygonArea, polygonInsidePolygon, wallLength } from './geometry';
+import type { HouseProject, Point2, ProjectSite } from './types';
+import {
+  pointInPolygon,
+  polygonArea,
+  polygonInsidePolygon,
+  resolveRoofDormer,
+  wallLength,
+} from './geometry';
 import { validateSolarSettings } from './solarSettings';
 
 export class ProjectValidationError extends Error {}
@@ -120,6 +126,14 @@ export function validateProject(input: unknown): HouseProject {
     fail('Les informations de référence sont invalides.');
   if (!Array.isArray(p.levels) || !p.levels.length || p.levels.length > 20)
     fail('Le projet doit contenir entre 1 et 20 niveaux.');
+  // Un mur de fond de lucarne traverse le plafond de son niveau : c'est le
+  // volume perçant la couverture, pas un mur plus haut que le bâtiment.
+  const dormerWallIds = new Set(
+    ((p.site as ProjectSite | undefined)?.roofs ?? [])
+      .flatMap((roof) => roof.dormers ?? [])
+      .map((dormer) => dormer?.wallId)
+      .filter((wallId): wallId is string => typeof wallId === 'string'),
+  );
   const ids = new Set<string>();
   const id = (value: unknown) => {
     if (!text(value) || ids.has(value)) fail(`Identifiant manquant ou dupliqué : ${String(value)}`);
@@ -155,7 +169,10 @@ export function validateProject(input: unknown): HouseProject {
         fail(`Mur invalide : ${w.id}`);
       if (!optionalBoolean(w.exterior))
         fail(`Le statut extérieur du mur doit être un booléen : ${w.id}`);
-      if (w.height !== undefined && (!positive(w.height) || w.height > l.ceilingHeight))
+      if (
+        w.height !== undefined &&
+        (!positive(w.height) || (w.height > l.ceilingHeight && !dormerWallIds.has(w.id)))
+      )
         fail(`Hauteur de mur invalide : ${w.id}`);
       if (w.openings !== undefined && (!Array.isArray(w.openings) || w.openings.length > 100))
         fail(`Ouvertures invalides : ${w.id}`);
@@ -342,6 +359,23 @@ export function validateProject(input: unknown): HouseProject {
               !roof.gables.every((f) => validRoofFace(f, roof.vertices))))
         )
           fail(`Géométrie de toiture invalide : ${roof.id}`);
+        if (roof.dormers !== undefined) {
+          if (!Array.isArray(roof.dormers) || roof.dormers.length > 30)
+            fail(`Lucarnes invalides : ${roof.id}`);
+          for (const dormer of roof.dormers) {
+            if (!record(dormer)) fail('Une lucarne de toiture doit être un objet.');
+            id(dormer.id);
+            if (
+              !point(dormer.start) ||
+              !point(dormer.end) ||
+              !text(dormer.wallId) ||
+              (dormer.slope !== undefined && !finite(dormer.slope))
+            )
+              fail(`Lucarne invalide : ${dormer.id}`);
+            const resolved = resolveRoofDormer(p, roof.vertices, roof.faces, dormer);
+            if (resolved.error) fail(resolved.error);
+          }
+        }
       }
     }
   }

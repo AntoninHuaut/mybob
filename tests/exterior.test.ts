@@ -6,6 +6,7 @@ import { Scene } from '@babylonjs/core/scene';
 import { Ray } from '@babylonjs/core/Culling/ray';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { buildExterior } from '../src/scene/buildExterior';
+import { resolveRoofDormer } from '../src/model/geometry';
 import { validateProject } from '../src/model/validate';
 import { polygonArea } from '../src/model/geometry';
 import type { HouseProject } from '../src/model/types';
@@ -164,4 +165,303 @@ test('site remains optional and personal geometry is not a rendering prerequisit
   built.dispose();
   scene.dispose();
   engine.dispose();
+});
+
+/**
+ * A synthetic two-level house with a gable roof and one chien-assis: generic
+ * coordinates, no personal plan. Ridge at z=4, eaves at z=0 and z=8, ridge
+ * height 7, eaves 3: the south versant follows y = 11 − z.
+ */
+function dormerProject(): HouseProject {
+  const project: HouseProject = {
+    schemaVersion: 1,
+    id: 'maison-synthetique',
+    name: 'Maison synthétique',
+    description: 'Une maison à lucarne pour tester le percement',
+    units: 'm',
+    source: { title: 'Fixture de test', status: 'Test', notes: [] },
+    levels: [
+      {
+        id: 'rdc',
+        name: 'Rez-de-chaussée',
+        elevation: 0,
+        ceilingHeight: 2.5,
+        outline: [
+          [0, 0],
+          [10, 0],
+          [10, 8],
+          [0, 8],
+        ],
+        walls: [],
+        rooms: [],
+        lights: [],
+        spawn: { position: [5, 4], yaw: 0 },
+      },
+      {
+        id: 'combles',
+        name: 'Combles aménagés',
+        elevation: 2.5,
+        ceilingHeight: 2,
+        outline: [
+          [0.2, 0.3],
+          [9.8, 0.3],
+          [9.8, 5.5],
+          [4.2, 5.5],
+          [4.2, 7.1],
+          [2.8, 7.1],
+          [2.8, 5.5],
+          [0.2, 5.5],
+        ],
+        walls: [
+          {
+            id: 'h-rampant-nord',
+            start: [0.2, 0.35],
+            end: [9.8, 0.35],
+            thickness: 0.1,
+            height: 1.2,
+            exterior: true,
+          },
+          {
+            id: 'h-rampant-sud',
+            start: [0.2, 5.45],
+            end: [9.8, 5.45],
+            thickness: 0.1,
+            height: 1.2,
+            exterior: true,
+          },
+          {
+            id: 'h-d-fond',
+            start: [3, 7.05],
+            end: [4, 7.05],
+            thickness: 0.1,
+            height: 2,
+            exterior: true,
+            openings: [
+              { id: 'd-fenetre', kind: 'window', offset: 0.05, width: 0.9, height: 1, sill: 0.8 },
+            ],
+          },
+        ],
+        rooms: [],
+        lights: [],
+        spawn: { position: [5, 4], yaw: 0 },
+      },
+    ],
+    site: {
+      boundary: [
+        [-5, -5],
+        [15, -5],
+        [15, 13],
+        [-5, 13],
+      ],
+      elevation: 0,
+      notes: [],
+      roofs: [
+        {
+          id: 'toiture',
+          vertices: [
+            [0, 3, 0],
+            [10, 3, 0],
+            [0, 7, 4],
+            [10, 7, 4],
+            [0, 3, 8],
+            [10, 3, 8],
+          ],
+          faces: [
+            [0, 1, 3, 2],
+            [2, 3, 5, 4],
+          ],
+          gables: [
+            [0, 2, 4],
+            [1, 3, 5],
+          ],
+          dormers: [
+            {
+              id: 'lucarne-test',
+              start: [3, 7],
+              end: [4, 5.5],
+              wallId: 'h-d-fond',
+            },
+          ],
+        },
+      ],
+    },
+  };
+  return project;
+}
+
+test('a dormer pierces the pan on its emprise, builds the joues and the dormer roof', () => {
+  const source = dormerProject();
+  const p = validateProject(source);
+  const { built, scene, engine } = exterior(p);
+  const pans = built.roofMeshes.filter((mesh) => mesh.name.startsWith('roof:toiture:'));
+  const pierced = pans.find((mesh) => mesh.name === 'roof:toiture:1')!;
+  assert.ok(pierced, 'le versant sud existe');
+  // The emprise is opened from the back join (z 5.5) to the outer face of the
+  // mur de fond (axis 7.05 + thickness/2): 1.6 m deep.
+  const hole = (1 + 2 * 0.003) * (7.1 - 5.5);
+  near(
+    meshPlanArea(pierced.getVerticesData('position')!, Array.from(pierced.getIndices()!)),
+    10 * 4 - hole,
+    0.001,
+  );
+  // The untouched north pan keeps its plain quadrilateral.
+  const north = pans.find((mesh) => mesh.name === 'roof:toiture:0')!;
+  near(
+    meshPlanArea(north.getVerticesData('position')!, Array.from(north.getIndices()!)),
+    10 * 4,
+    0.001,
+  );
+  // Two joues: a triangle from the pan at the mur de fond (y = 11 − 7.1 = 3.9)
+  // up to the top of the mur (combles floor 2.5 + height 2), rejoining the pan
+  // at the back of the emprise (y = 11 − 5.5 = 5.5).
+  const joues = built.roofMeshes.filter((mesh) => mesh.name.startsWith('dormer-joue:'));
+  assert.equal(joues.length, 2);
+  for (const joue of joues) {
+    const positions = joue.getVerticesData('position')!;
+    assert.equal(positions.length, 9);
+    const ys = Array.from(positions.filter((_, i) => i % 3 === 1)).sort((a, b) => a - b);
+    near(ys[0], 3.9);
+    near(ys[1], 4.5);
+    near(ys[2], 5.5);
+    // The cheeks sit at the sides of the emprise, outside the wall body.
+    const xs = Array.from(
+      new Set(positions.filter((_, i) => i % 3 === 0).map((x) => Math.round(x * 1000) / 1000)),
+    );
+    assert.ok(xs.includes(3 - 0.003) || xs.includes(4 + 0.003));
+  }
+  // The dormer roof runs from the top of the mur to the pan at the back.
+  const toit = built.roofMeshes.filter((mesh) => mesh.name.startsWith('dormer-toit:'));
+  assert.equal(toit.length, 2);
+  for (const panel of toit) {
+    const positions = panel.getVerticesData('position')!;
+    near(Math.min(...positions.filter((_, i) => i % 3 === 1)), 4.5);
+    near(Math.max(...positions.filter((_, i) => i % 3 === 1)), 5.5);
+  }
+  assert.ok(built.roofMeshes.every((mesh) => !mesh.isEnabled()));
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
+});
+
+test('a declared dormer slope changes where the dormer roof meets the pan', () => {
+  const project = dormerProject();
+  project.site!.roofs![0].dormers![0].slope = 0.25;
+  const p = validateProject(project);
+  // Pan rising 1 m per metre of retreat; the dormer roof rises 0.25 per metre
+  // from the top of the mur (4.5) above the pan at the front (3.9):
+  // they join 0.8 m behind the mur, at y = 3.9 + 0.8 = 4.7.
+  const { built, scene, engine } = exterior(p);
+  const toit = built.roofMeshes.filter((mesh) => mesh.name.startsWith('dormer-toit:'));
+  for (const panel of toit) {
+    const positions = panel.getVerticesData('position')!;
+    near(Math.min(...positions.filter((_, i) => i % 3 === 1)), 4.5);
+    near(Math.max(...positions.filter((_, i) => i % 3 === 1)), 4.7);
+  }
+  const pierced = built.roofMeshes.find((mesh) => mesh.name === 'roof:toiture:1')!;
+  const hole = (1 + 2 * 0.003) * 0.8;
+  near(
+    meshPlanArea(pierced.getVerticesData('position')!, Array.from(pierced.getIndices()!)),
+    10 * 4 - hole,
+    0.001,
+  );
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
+});
+
+test('dormers resolve from the project data alone, whatever the house', () => {
+  const project = dormerProject();
+  const p = validateProject(project);
+  const frame = resolveRoofDormer(
+    p,
+    p.site!.roofs![0].vertices,
+    p.site!.roofs![0].faces,
+    p.site!.roofs![0].dormers![0],
+  );
+  assert.ok(frame.frame);
+  assert.equal(frame.frame.faceIndex, 1);
+  near(frame.frame.meet, 5.5);
+  near(frame.frame.front, 7.1, 0.001);
+  near(frame.frame.frontTop, 4.5);
+});
+
+test('two dormers on the same pan each open their own hole', () => {
+  const twin = dormerProject();
+  // One mur de fond wide enough for two chiens-assis, and an outline carrying both.
+  const mur = twin.levels[1].walls.find((w) => w.id === 'h-d-fond')!;
+  mur.start = [3, 7.05];
+  mur.end = [6, 7.05];
+  mur.openings = [
+    { id: 'd-fenetre-1', kind: 'window', offset: 0.05, width: 0.9, height: 1, sill: 0.8 },
+    { id: 'd-fenetre-2', kind: 'window', offset: 2.05, width: 0.9, height: 1, sill: 0.8 },
+  ];
+  twin.levels[1].outline = [
+    [0.2, 0.3],
+    [9.8, 0.3],
+    [9.8, 5.5],
+    [6.2, 5.5],
+    [6.2, 7.1],
+    [4.8, 7.1],
+    [4.8, 5.5],
+    [4.2, 5.5],
+    [4.2, 7.1],
+    [2.8, 7.1],
+    [2.8, 5.5],
+    [0.2, 5.5],
+  ];
+  twin.site!.roofs![0].dormers = [
+    { id: 'lucarne-a', start: [3, 5.5], end: [4, 7], wallId: 'h-d-fond' },
+    { id: 'lucarne-b', start: [5, 5.5], end: [6, 7], wallId: 'h-d-fond' },
+  ];
+  const p = validateProject(twin);
+  const { built, scene, engine } = exterior(p);
+  const pierced = built.roofMeshes.find((mesh) => mesh.name === 'roof:toiture:1')!;
+  const hole = (1 + 2 * 0.003) * (7.1 - 5.5);
+  near(
+    meshPlanArea(pierced.getVerticesData('position')!, Array.from(pierced.getIndices()!)),
+    10 * 4 - 2 * hole,
+    0.001,
+  );
+  assert.equal(built.roofMeshes.filter((m) => m.name.startsWith('dormer-joue:')).length, 4);
+  assert.equal(built.roofMeshes.filter((m) => m.name.startsWith('dormer-toit:')).length, 4);
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
+});
+
+test('dormer validation rejects misaligned emprises, hidden walls and runaway slopes', () => {
+  const bad = (edit: (p: HouseProject) => void) => {
+    const p = dormerProject();
+    edit(p);
+    assert.throws(() => validateProject(p));
+  };
+  bad((p) => {
+    p.site!.roofs![0].dormers![0].wallId = 'inconnu';
+  });
+  bad((p) => {
+    p.site!.roofs![0].dormers![0].start = [3, 7.02];
+    p.site!.roofs![0].dormers![0].end = [4, 7.04];
+  });
+  bad((p) => {
+    p.site!.roofs![0].dormers![0].start = [3, 9];
+    p.site!.roofs![0].dormers![0].end = [4, 11];
+  });
+  bad((p) => {
+    p.site!.roofs![0].dormers![0].slope = 42;
+  });
+  bad((p) => {
+    p.levels[1].walls[2].exterior = false;
+  });
+  // A mur de fond below the roofing stays rejected: the dormer would be invisible.
+  bad((p) => {
+    p.levels[1].walls[2].height = 1.2;
+  });
+  // Only a dormer mur de fond may exceed the ceiling height of its level.
+  const p = dormerProject();
+  p.levels[1].walls[2].height = 2.2;
+  validateProject(p);
+  const q = dormerProject();
+  q.site!.roofs![0].dormers = [];
+  q.levels[1].walls[2].height = 2.2;
+  assert.throws(() => validateProject(q), /Hauteur de mur invalide/);
 });

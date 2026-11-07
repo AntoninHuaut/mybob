@@ -62,6 +62,24 @@ export interface Level {
   lights: { id: string; position: Point2; provisional?: boolean }[];
   spawn: { position: Point2; yaw: number };
 }
+/**
+ * Chien-assis percé dans un pan : le rendu ouvre le versant sur l'emprise et
+ * bâtit les joues et le toit. La face avant reste portée par le mur de fond du
+ * niveau traversé, qui garde sa hauteur et sa fenêtre.
+ */
+export interface RoofDormer {
+  id: string;
+  /** Emprise au sol en plan (x, z) : deux coins opposés du rectangle, dans le repère du projet. */
+  start: Point2;
+  end: Point2;
+  /** Mur de fond du niveau traversé : il porte la face avant et sa fenêtre. */
+  wallId: string;
+  /**
+   * Pente du toit de la lucarne vers le faîtage, en montée par mètre de repli.
+   * Sans valeur, le toit rejoint la couverture à l'arrière de l'emprise.
+   */
+  slope?: number;
+}
 export interface SiteRoof {
   id: string;
   /** Metres in the level coordinate system: x, height above level datum, z. */
@@ -70,6 +88,8 @@ export interface SiteRoof {
   faces: number[][];
   /** Rendered with the exterior plaster instead of the roof material. */
   gables?: number[][];
+  /** Chiens-assis percés dans les pans de cette toiture. */
+  dormers?: RoofDormer[];
 }
 export interface ProjectSite {
   /** Parcel in the same x/z coordinate system as the floor plan. */
