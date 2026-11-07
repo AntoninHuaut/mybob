@@ -107,11 +107,14 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
 - Tone mapping ACES, intensités ciel et soleil réduites. Le bouton Lumière ne commande que les
   luminaires intérieurs, jamais le soleil.
 - La visite a sa propre ambiance : environnement cubique généré localement (aucun fichier
-  distant), occlusion ambiante, luminaires du niveau à la place du soleil que le plafond masque.
-  Plan et Vue 3D gardent leur éclairage : l'environnement et le tampon de géométrie ne sont
-  attachés qu'en visite et libérés en sortie.
-- Sous 24 images par seconde après quelques secondes de marche, l'occlusion est retirée ;
-  l'environnement et les luminaires restent en place.
+  distant) pour un reflet ambiant, lisible surtout sur le verre et l'acier ; le relief vient de
+  l'occlusion ambiante et des luminaires du niveau, renforcés parce que le plafond masque le
+  soleil. Plan et Vue 3D gardent leur éclairage : l'environnement et le tampon de géométrie ne
+  sont attachés qu'en visite et libérés en sortie, et l'environnement précédent est restauré
+  plutôt qu'effacé. Avec un aperçu solaire appliqué, l'ambiance suit le soleil comme ailleurs.
+- La cadence est surveillée pendant toute la visite : trois relevés consécutifs sous 24 images
+  par seconde, hors onglet masqué, retirent l'occlusion ; l'environnement et les luminaires
+  restent en place. Un relevé sain remet le compteur à zéro.
 - L'extérieur cadre le terrain et le faîtage ; Vue 3D montre la maison ouverte ; Plan masque
   terrain et toiture. Sélectionner une pièce ou ajouter un meuble depuis l'extérieur revient à
   la vue intérieure.
