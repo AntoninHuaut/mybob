@@ -31,6 +31,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Scène                  | `src/scene/viewer.ts`                   | `HouseViewer` : modes, caméras, coupe, ombres, mesures, portes      |
 | Géométrie de la maison | `src/scene/buildHouse.ts`               | Murs, sols, plafonds, menuiseries, portes                           |
 | Arêtes de mur          | `src/scene/beveledBox.ts`               | Boîte à arêtes chanfreinées, pour les murs                          |
+| Angles verticaux       | `src/scene/cornerBead.ts`               | Chanfrein des angles concaves entre deux murs                       |
 | Extérieur              | `src/scene/buildExterior.ts`            | Façades, toiture, terrain                                           |
 | Matériaux              | `src/scene/materials.ts`                | Matériaux partagés, carrelage procédural                            |
 | Relief et rugosité     | `src/scene/surfaceTextures.ts`          | Normal maps et roughness maps procédurales, tuilées au mètre        |
@@ -61,6 +62,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Panneaux               | `src/ui/roomPanels.ts`, `minimap.ts`    | Liste des pièces, fiche, plan miniature                             |
 | Aide et accueil        | `src/ui/firstSteps.ts`, `onboarding.ts` | Carte « Premiers pas », aide courte et complète                     |
 | Export image           | `src/ui/imageExport.ts`                 | PNG de la caméra, cartouche, options                                |
+| Banc d'essai (dev)     | `src/ui/fxLab.ts`                       | Poussière, chanfrein d'angle, SSAO forcé — jamais dans un build     |
 | Styles                 | `src/style.css` + `src/style/*.css`     | `chrome`, `scene`, `feedback` ; `furniture/panel.css` pour la popup |
 
 ## Le flux d'une donnée
@@ -122,8 +124,18 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
   solaire appliqué, l'ambiance suit le soleil comme ailleurs.
 - Les murs sont des boîtes à arêtes chanfreinées (`beveledBox.ts`, 4 mm) : un angle vif est le
   marqueur n°1 de l'image de synthèse, un chanfrein accroche la lumière. Les jonctions
-  mur/plafond et mur/sol en portent un ; les angles verticaux où deux murs se recouvrent n'en
-  ont pas encore, il faudrait couper les murs en onglet.
+  mur/plafond et mur/sol en portent un.
+- Les angles **verticaux** entre deux murs n'en portent pas, et c'est mesuré, pas supposé. Un
+  tel angle est concave : ses deux faces intérieures se croisent, il n'y a aucune arête à
+  chanfreiner. Le couper en onglet ne changerait rien à l'image — l'onglet ne déplace que le
+  recouvrement caché à l'intérieur du mur, la face visible reste la même. `cornerBead.ts` sait
+  poser un chanfrein de 45° par-dessus, mais à 4 mm il est invisible et à 12 mm il efface le
+  creux que l'occlusion dessine : les deux murs y diffèrent de 6 niveaux sur 255, il n'y a rien
+  à adoucir. Le module reste, le banc d'essai permet de le revérifier.
+- Le banc d'essai (`src/ui/fxLab.ts`) n'existe qu'en développement : `main.ts` l'importe
+  derrière `import.meta.env.DEV` et en dynamique, donc Vite le retire entièrement d'un build.
+  Il porte les questions de rendu non tranchées — poussière, chanfrein d'angle, SSAO forcé —
+  pour les juger sur la vraie maison plutôt qu'à l'aveugle.
 - Les surfaces ne sont plus des couleurs unies : plâtre, parquet, béton et acier portent une
   normal map et une roughness map, générées par bruit fractal et tuilées au mètre. Les UV des
   boîtes sont réécrits en mètres par `worldScaleUvs`, sinon un mur de 4 m et une plinthe de
