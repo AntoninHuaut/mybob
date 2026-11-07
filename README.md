@@ -4,7 +4,7 @@ Application de visite de maisons en 3D pour ordinateur, réalisée avec **Babylo
 
 ## Reprise avec un nouvel agent
 
-Lire [AGENTS.md](AGENTS.md), puis [la carte du code](docs/ARCHITECTURE.md) et [le skill de maintenance](.agents/skills/mybob-maintenance/SKILL.md) ; le guide de passation est un fichier local git-ignoré sur le clone de l'owner. **Exporter son projet depuis le navigateur actuel avant de passer en local** : le dépôt ne contient pas l’aménagement sauvegardé dans ce navigateur.
+Lire [AGENTS.md](AGENTS.md), puis [la carte du code](docs/ARCHITECTURE.md) et [le skill de maintenance](.agents/skills/mybob-maintenance/SKILL.md). **Exporter son projet depuis le navigateur actuel avant de passer en local** : le dépôt ne contient pas l’aménagement sauvegardé dans ce navigateur.
 
 ## Démarrer
 

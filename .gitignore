@@ -14,4 +14,3 @@ test-results/
 *.tar.gz
 *:Zone.Identifier
 public/projects/private-*.json
-docs/HANDOFF*.md

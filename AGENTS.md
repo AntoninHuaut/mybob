@@ -2,18 +2,13 @@
 
 ## Start here
 
-1. `docs/HANDOFF.md` — local passation journal (git-ignored, present on the owner's clone
-   only): **short-lived state**, not a knowledge base. Read the recent entries for the
-   current state of the private plans and the owner's last decisions; the full history sits
-   in `docs/HANDOFF.archive.md`. A durable rule, trap or method belongs to the doc or skill
-   that owns the area — never keep it only in the journal.
-2. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the code map: modules, data flow, the three
+1. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the code map: modules, data flow, the three
    view modes, invariants, verification recipes, known traps.
-3. The one doc for the area you touch: [PROJECT-FORMAT](docs/PROJECT-FORMAT.md),
+2. The one doc for the area you touch: [PROJECT-FORMAT](docs/PROJECT-FORMAT.md),
    [FURNITURE](docs/FURNITURE.md), [EXTERIOR](docs/EXTERIOR.md),
    [UI-REFINEMENT](docs/UI-REFINEMENT.md), [DEPLOYMENT](docs/DEPLOYMENT.md),
    [E2E](docs/E2E.md), [IDENTITE-MYBOB](docs/IDENTITE-MYBOB.md).
-4. Then only the files that map names. Do not re-read all of `src/` to "get oriented": the map
+3. Then only the files that map names. Do not re-read all of `src/` to "get oriented": the map
    exists so you don't have to. If it is wrong or silent about what you needed, fix the map in
    the same change.
 
@@ -73,8 +68,8 @@ These files replace reliance on any previous chat context.
   everywhere else, link to it. Do not restate the module map outside `docs/ARCHITECTURE.md`.
 - Documentation describes what the code does now. Delete a section when the behaviour it
   describes is gone, rather than leaving a stale paragraph behind.
-- When behaviour changes, update the doc that owns it and the handoff journal. Never place
-  credentials, Cloudflare Access OTPs, private email lists or API tokens in documentation.
+- When behaviour changes, update the doc that owns it. Never place credentials, Cloudflare
+  Access OTPs, private email lists or API tokens in documentation.
 
 ## Work and verification
 

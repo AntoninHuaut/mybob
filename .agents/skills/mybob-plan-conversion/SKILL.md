@@ -10,8 +10,7 @@ importable n'est que la première porte technique : ne pas promouvoir une
 géométrie devinée au rang de conversion terminée parce qu'elle passe la
 validation.
 
-Lire `AGENTS.md`, le journal de passation local `docs/HANDOFF.md` (ignoré par
-git, présent sur le clone du propriétaire), `docs/PROJECT-FORMAT.md`,
+Lire `AGENTS.md`, `docs/PROJECT-FORMAT.md`,
 `src/model/types.ts` et `src/model/validate.ts`. Suivre le skill de maintenance
 pour toute modification du dépôt. Garder les plans d'origine, les pages rendues,
 les registres de preuve, les calques et les bundles personnels dans les
@@ -233,7 +232,8 @@ déduire une dimension linéaire d'une surface annoncée.
 
 **Une page se repère par son texte, pas par son numéro d'ancienne note.** Les
 scripts du dépôt numérotent à partir de 1 (`--pages 8` ouvre `doc[7]`) ; seul
-pymupdf lui-même compte à partir de 0, et une note de passation peut compter
+pymupdf lui-même compte à partir de 0, et une note d'une session passée peut
+compter
 dans n'importe laquelle des deux conventions. Deux pages voisines du même
 constructeur se ressemblent assez pour qu'un calque pressé se croie aligné.
 Localiser la page d'un niveau par un texte qui n'existe que sur elle — la
