@@ -227,15 +227,17 @@ recoupement (la somme des pièces doit atteindre le total imprimé) ; ne jamais
 déduire une dimension linéaire d'une surface annoncée.
 
 **Une page se repère par son texte, pas par son numéro d'ancienne note.** Les
-outils du dépôt numérotent à partir de 1 (`--pages 8` ouvre `doc[7]`), pymupdf et
-les outils de forge de `artifacts/plan-review/` à partir de 0, et une note de
-passation peut compter dans n'importe laquelle des deux conventions. Deux pages
-voisines du même constructeur se ressemblent assez pour qu'un calque pressé se
-croie aligné. Localiser la page d'un niveau par un texte qui n'existe que sur
-elle — la surface d'une pièce donnée, un titre de dessin — et consigner ce texte
-dans le registre, pas un numéro hérité. Une passe du soir a rendu la page des
-combles en cherchant celle du rez-de-chaussée : le numéro venait d'une note, la
-page changeait d'index selon la convention.
+scripts du dépôt numérotent à partir de 1 (`--pages 8` ouvre `doc[7]`), pymupdf
+et `extract_walls.py` à partir de 0, et une note de passation peut compter dans
+n'importe laquelle des deux conventions. Deux pages voisines du même
+constructeur se ressemblent assez pour qu'un calque pressé se croie aligné.
+Localiser la page d'un niveau par un texte qui n'existe que sur elle — la
+surface d'une pièce donnée, un titre de dessin — et consigner ce texte dans le
+registre, pas un numéro hérité. `grid_page.py` et `overlay_page.py` impriment
+les premiers mots de la page lue : vérifier cette ligne avant de lire le rendu.
+Une passe du soir a rendu la page des combles en cherchant celle du
+rez-de-chaussée : le numéro venait d'une note, la page changeait d'index selon
+la convention.
 
 Pour confronter un modèle à la source sans passer par la géométrie du modèle,
 mesurer directement le plan rendu : `scripts/measure_plan.py` balaye des lignes
@@ -956,15 +958,17 @@ entrées explicites.
 - `décalé` — le mur est au mauvais endroit. C'est celui qui compte.
 - `aucune contrepartie` — le mur est inventé.
 
-Quatre outils de forge persistent dans `artifacts/plan-review/` (ignoré par git)
-et complètent ce calque : `grid.py` rend une planche PDF avec une grille en
-mètres, pour lire une épaisseur ou une cote contre le modèle ; `overlay.py`
-dessine les murs et pièces du projet par-dessus la planche ; `model_plan.py`
-rend un niveau depuis le JSON seul, pour vérifier ce que le modèle dit sans le
-dessin ; `wall_joins.py` liste les abouts de murs qu'aucun autre mur ne couvre.
-Ils prennent l'index de page **à partir de 0** et un repère
-`(ox, oy, échelle)` en points affichés de la page tournée. `wall_joins.py` a
-révélé une cloison flottant hors du plancher que l'audit ne signalait pas.
+Quatre outils complètent ce calque, dans `scripts/` : `grid_page.py` rend une
+page de plan PDF avec une grille en mètres, pour lire une épaisseur ou une cote
+contre le modèle ; `overlay_page.py` dessine les murs et pièces du projet
+par-dessus la planche ; `model_plan.py` rend un niveau depuis le JSON seul, pour
+vérifier ce que le modèle dit sans le dessin ; `wall_joins.py` liste les abouts
+de murs qu'aucun autre mur ne couvre. Les trois premiers prennent le numéro de
+page **à partir de 1** comme le reste du dépôt, un repère `(ox, oy, échelle)` en
+points affichés de la page tournée, et impriment la page lue. `wall_joins.py` a
+révélé une cloison flottant hors du plancher — l'audit la signale désormais
+(`interior-wall-outside-outline`) — et reste la liste de travail des abouts
+libres, l'autre façon de trouver un mur inventé ou un raccord manquant.
 
 ### Le navigateur
 
