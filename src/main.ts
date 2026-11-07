@@ -1,7 +1,14 @@
 import './style.css';
-import bobPlan from './assets/brand/bob-plan.png';
 import { SolarPanel } from './ui/solarPanel';
 import { appTemplate } from './ui/appTemplate';
+import { fullHelpHtml, shortHelpHtml } from './ui/firstSteps';
+import {
+  ONBOARDING_STORAGE,
+  parseOnboarding,
+  serializeOnboarding,
+  shouldShowStartCard,
+  type OnboardingState,
+} from './ui/onboarding';
 import { confirmImportReplacement } from './ui/confirmImport';
 import { solarPosition } from './scene/solar';
 import { HouseViewer, type ViewMode } from './scene/viewer';
@@ -85,6 +92,7 @@ let previewFurniture: FurnitureItem[] | undefined;
 let draggingFurniture = false;
 let overlays: FurnitureOverlays = { distances: true, clearances: false, openings: false };
 let syncingViewerMode = false;
+let onboarding: OnboardingState = parseOnboarding(null);
 
 el('#app').innerHTML = appTemplate();
 
@@ -95,6 +103,36 @@ function toast(message: string) {
   toastTimer = setTimeout(() => {
     el('#toast').hidden = true;
   }, 5000);
+}
+
+function readOnboarding(): OnboardingState {
+  try {
+    return parseOnboarding(localStorage.getItem(ONBOARDING_STORAGE));
+  } catch {
+    return parseOnboarding(null);
+  }
+}
+
+function saveOnboarding(next: OnboardingState) {
+  try {
+    localStorage.setItem(ONBOARDING_STORAGE, serializeOnboarding(next));
+  } catch {
+    /* optional persistence */
+  }
+}
+
+/** La carte ne bloque rien : la fermer ne fait que la retirer pour les prochains lancements. */
+function dismissStartCard() {
+  const card = el('#start-card');
+  if (card.hidden) return;
+  card.hidden = true;
+  onboarding = { ...onboarding, cardSeen: true };
+  saveOnboarding(onboarding);
+}
+
+function showStartCard() {
+  if (!shouldShowStartCard(onboarding)) return;
+  el('#start-card').hidden = false;
 }
 
 function activeButton(selector: string, active: boolean) {
@@ -755,6 +793,14 @@ function openDialog(title: string, content: string) {
   el<HTMLDialogElement>('#info-dialog').showModal();
 }
 
+/** Aide courte par défaut ; le texte détaillé reste à un clic, sans rien retirer. */
+function openFirstSteps() {
+  openDialog('PRENDRE EN MAIN L’ATELIER', shortHelpHtml());
+  el('#show-full-help').addEventListener('click', () => {
+    el('#dialog-content').innerHTML = fullHelpHtml();
+  });
+}
+
 function downloadProject() {
   let levels: Record<string, FurnitureItem[]>;
   let variants: VariantBook;
@@ -1354,12 +1400,18 @@ function wireViewportControls() {
   el('#resume-walk').addEventListener('click', () => {
     viewer.captureMouse();
   });
-  el('#help').addEventListener('click', () =>
-    openDialog(
-      'PRENDRE EN MAIN L’ATELIER',
-      `<div class="bob-help"><img src="${bobPlan}" alt=""><div><h2>Faites comme chez vous.</h2><p>Moi, c’est Bob. Voici quelques repères pour explorer et aménager votre maison.</p></div></div><div class="help-grid"><div>${icon('cube', 24)}<h3>Vue 3D</h3><p>ZQSD ou WASD pour déplacer la vue, Maj pour accélérer. Glissez avec le bouton gauche pour tourner, le bouton droit pour déplacer ; utilisez la molette pour zoomer. Les flèches déplacent aussi la vue quand aucun meuble n’est sélectionné.</p></div><div>${icon('walk', 24)}<h3>Visite</h3><p>ZQSD, WASD ou flèches pour marcher. Souris pour regarder, Maj pour accélérer, E pour ouvrir une porte, F pour modifier le meuble visé. Échap libère la souris.</p></div><div>${icon('ruler', 24)}<h3>Mesures</h3><p>Activez Mesurer, puis cliquez sur deux points du sol. La distance est exprimée en mètres. Un troisième clic commence une nouvelle mesure ; les mesures confirmées restent affichées jusqu’à « Effacer les mesures ».</p></div><div>${icon('circulation', 24)}<h3>Circulation</h3><p>Activez « Circulation » pour voir l’espace restant autour du lit, du canapé et de la table : rouge sous 60 cm, ambre jusqu’à 80 cm. Indicatif, jamais bloquant.</p></div><div>${icon('plan', 24)}<h3>Vos repères</h3><p>Sélectionnez une pièce dans la liste ou le plan miniature, puis choisissez « Visiter cette pièce » pour vous y rendre.</p></div></div><div class="dialog-callout">Si le navigateur refuse la capture de la souris, cliquez dans la vue puis maintenez le bouton gauche pour regarder autour de vous. Les touches de déplacement restent disponibles.</div><p>Les portes intérieures sont ouvertes au départ. Cliquez sur une porte en vue 3D, ou utilisez E à proximité pendant la visite. Ajoutez un meuble depuis le panneau Meubles, puis glissez-le dans la scène. Dans la fenêtre de modification, les changements restent en aperçu jusqu’à validation ; Annuler conserve l’aménagement précédent. Les flèches déplacent le meuble sélectionné de 1 cm, Maj de 10 cm ; R le tourne de 15°. Pendant le glisser, le meuble s’aimante aux murs et aligne centres et bords avec les autres meubles ; maintenez Alt pour suspendre l’aimantation. Ctrl Z annule et Ctrl Maj Z rétablit. Renseignez les dimensions réelles du meuble et sa configuration.</p><h3>Affichage des murs</h3><p>Dans Navigation, choisissez Automatique, Murs complets ou Murs bas pour dégager la vue. La visite conserve les murs complets.</p><h3>Importer votre maison</h3><p>Le bouton « Importer ma maison » ouvre un fichier JSON de projet fourni séparément. Le PDF du constructeur doit d’abord être converti. La maison et les meubles sont conservés dans ce navigateur ; Exporter permet de garder une copie ou de changer d’ordinateur.</p>`,
-    ),
-  );
+  el('#help').addEventListener('click', openFirstSteps);
+  el('#first-steps').addEventListener('click', openFirstSteps);
+  el('#start-card').addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-start-action]');
+    if (!button) return;
+    if (button.dataset.startAction === 'orbit') viewer.tourOrbit();
+    else if (button.dataset.startAction === 'plan') setMode('plan');
+    else if (button.dataset.startAction === 'walk') setMode('walk');
+    dismissStartCard();
+  });
+  el('#close-start-card').addEventListener('click', dismissStartCard);
+  viewer.canvas.addEventListener('pointerdown', dismissStartCard, { once: true });
   el('#source-info').addEventListener('click', () => {
     const rooms = viewer.level.rooms;
     openDialog(
@@ -1596,6 +1648,8 @@ async function start() {
     loadProject(initial);
     wireEvents();
     el('#loading').hidden = true;
+    onboarding = readOnboarding();
+    showStartCard();
     if (storageWarning)
       toast(
         'Certains projets locaux n’ont pas pu être restaurés. Les projets fournis restent disponibles.',

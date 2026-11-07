@@ -181,6 +181,89 @@
   box-shadow: 0 4px 16px #2a452012;
   backdrop-filter: blur(10px);
 }
+/* Carte de démarrage : posée dans la scène, sans voile ; la maison reste utilisable. */
+.start-card {
+  position: absolute;
+  z-index: 6;
+  left: 22px;
+  top: 132px;
+  width: min(320px, calc(100% - 44px));
+  padding: 15px 16px 16px;
+  border: 1px solid #d0dec6;
+  border-radius: 10px;
+  background: #fafdf4f2;
+  box-shadow: 0 10px 30px #2a45201f;
+  backdrop-filter: blur(10px);
+}
+.viewport.walking .start-card {
+  display: none;
+}
+.start-card-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+.start-card h2 {
+  margin: 4px 0 13px;
+  font-size: 17px;
+  line-height: 1.3;
+}
+.start-card-actions {
+  display: grid;
+  gap: 8px;
+}
+.start-card-actions button {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 11px;
+  text-align: left;
+  border: 1px solid #dbe4d4;
+  border-radius: 8px;
+  background: #fff;
+  color: #2f4a3c;
+}
+.start-card-actions button:hover {
+  border-color: #9dbb8c;
+  background: #f4f9ef;
+}
+.start-card-actions button > svg {
+  flex: none;
+  margin-top: 2px;
+  color: #60854a;
+}
+.start-card-actions strong {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+}
+.start-card-actions small {
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--secondary);
+}
+@media (max-width: 760px) {
+  .start-card {
+    left: 12px;
+    right: 12px;
+    top: auto;
+    bottom: 62px;
+    width: auto;
+  }
+  .start-card:not([hidden]) ~ .mini-card {
+    display: none;
+  }
+}
+/* Sur un écran bas, la carte masquerait la colonne d’outils : l’entrée de la barre latérale suffit. */
+@media (max-height: 600px) {
+  .start-card {
+    display: none;
+  }
+}
 .mini-heading {
   display: flex;
   align-items: center;

@@ -144,7 +144,11 @@ export class HouseViewer {
   private planZoom = 1;
   private resizeObserver: ResizeObserver;
   private pointerLockError = () => this.onPointerLockError?.();
-  private orbitPointerDown = (event: PointerEvent) => this.recoverOrbitControls(event);
+  private orbitTour: { from: number; to: number; start: number; duration: number } | undefined;
+  private orbitPointerDown = (event: PointerEvent) => {
+    this.orbitTour = undefined;
+    this.recoverOrbitControls(event);
+  };
 
   constructor(
     readonly canvas: HTMLCanvasElement,
@@ -163,11 +167,13 @@ export class HouseViewer {
     canvas.addEventListener('wheel', this.planWheel, { passive: false });
     canvas.addEventListener('pointerdown', this.orbitPointerDown, true);
     this.engine.runRenderLoop(() => {
+      this.stepOrbitTour();
       if (this.scene) this.scene.render();
     });
   }
 
   load(project: HouseProject, levelId?: string) {
+    this.orbitTour = undefined;
     this.wallCutaway?.dispose();
     this.wallCutaway = undefined;
     this.planOpenings?.dispose();
@@ -342,6 +348,7 @@ export class HouseViewer {
 
   setMode(mode: ViewMode) {
     if (!this.scene) return;
+    this.orbitTour = undefined;
     if (mode === 'walk') {
       const point = findVisitDestination(this.scene, this.level, [
         this.walk.position.x,
@@ -445,7 +452,33 @@ export class HouseViewer {
     this.house.highlights.forEach((m, key) => m.setEnabled(this.mode !== 'walk' && key === id));
   }
 
+  /**
+   * Rotation d’aperçu : montre le geste de glisser sans changer la cible ni le cadrage.
+   * Toute interaction avec la scène l’interrompt.
+   */
+  tourOrbit(radians = Math.PI / 3, duration = 1800) {
+    if (this.mode !== 'overview' || this.exteriorView || !this.orbit) return false;
+    stopOrbit(this.orbit);
+    this.orbitTour = {
+      from: this.orbit.alpha,
+      to: this.orbit.alpha + radians,
+      start: performance.now(),
+      duration,
+    };
+    return true;
+  }
+
+  private stepOrbitTour() {
+    const tour = this.orbitTour;
+    if (!tour || !this.orbit) return;
+    const progress = Math.min(1, (performance.now() - tour.start) / tour.duration);
+    const eased = progress * progress * (3 - 2 * progress);
+    this.orbit.alpha = tour.from + (tour.to - tour.from) * eased;
+    if (progress >= 1) this.orbitTour = undefined;
+  }
+
   reset() {
+    this.orbitTour = undefined;
     stopOrbit(this.orbit);
     const destination = findVisitDestination(this.scene, this.level, this.level.spawn.position);
     if (!destination && this.mode === 'walk') {

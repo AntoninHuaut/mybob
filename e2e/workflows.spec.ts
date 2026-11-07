@@ -119,7 +119,7 @@ async function addSofa(page: Page) {
 
 test.beforeEach(async ({ page }) => {
   // External optional fonts must not make the suite depend on internet access.
-  await page.route(/^https?:\/\/(?!127\.0\.0\.1:4179(?:\/|$))/, (route) => route.abort());
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
   await expect(page.getByRole('button', { name: 'Plan', exact: true })).toBeEnabled();
   await expect(page.locator('#project-select')).toContainText('Démonstration');
@@ -218,7 +218,7 @@ test('export JSON puis import dans un navigateur vierge restaurent toutes les va
   const context = await browser.newContext(testInfo.project.use);
   try {
     const imported = await context.newPage();
-    await imported.route(/^https?:\/\/(?!127\.0\.0\.1:4179(?:\/|$))/, (route) => route.abort());
+    await imported.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
     await imported.goto('/');
     await furnishings(imported);
     await imported.getByRole('tab', { name: 'Maison', exact: true }).click();
@@ -374,6 +374,8 @@ test('MyBob accueille et présente les commandes sans masquer le projet', async 
   await page.getByRole('button', { name: 'Aide et commandes' }).click();
   const dialog = page.getByRole('dialog', { name: 'PRENDRE EN MAIN L’ATELIER' });
   await expect(dialog.getByText(/Moi, c’est Bob/)).toBeVisible();
+  await expect(dialog.locator('.first-steps-list li')).toHaveCount(3);
+  await dialog.getByRole('button', { name: /Tout voir/ }).click();
   await expect(dialog.getByText('Vue 3D', { exact: true })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath('mybob-aide.png') });
   await dialog.getByRole('button', { name: 'Fermer' }).click();

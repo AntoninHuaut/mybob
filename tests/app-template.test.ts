@@ -31,3 +31,16 @@ test('les boutons d’outil restent dans la colonne flottante', () => {
     'un bouton d’outil hors colonne se place au coin du viewport et masque le titre',
   );
 });
+
+test('la carte de démarrage vit dans la scène et l’aide reste joignable depuis la barre latérale', () => {
+  const document = render();
+  const card = document.querySelector('#start-card');
+  assert.ok(card, 'la carte de démarrage existe');
+  assert.ok(
+    document.querySelector('#viewport')!.contains(card),
+    'la carte est posée dans la scène',
+  );
+  assert.ok(card.hasAttribute('hidden'), 'elle attend le chargement avant de s’afficher');
+  assert.ok(document.querySelector('#first-steps'), 'l’entrée Premiers pas reste dans la barre');
+  assert.ok(document.querySelector('#help'), 'l’aide de l’en-tête reste disponible');
+});

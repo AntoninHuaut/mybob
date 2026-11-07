@@ -78,7 +78,7 @@ test.beforeEach(async ({ page }) => {
   }
   // Avoid sampling a room label halfway through the sidebar transition.
   await page.emulateMedia({ reducedMotion: 'reduce' });
-  await page.route(/^https?:\/\/(?!127\.0\.0\.1:4179(?:\/|$))/, (route) => route.abort());
+  await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
   await expect(page.locator('#project-select')).toContainText('Démonstration');
 });
