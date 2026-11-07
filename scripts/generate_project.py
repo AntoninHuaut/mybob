@@ -200,7 +200,37 @@ def snap_rooms(rooms, walls, tolerance=0.30):
         ]
 
 
-def build(plan, registry, template, level_id, pages, thickness):
+def apply_overrides(walls, overrides):
+    """Applique les retouches saisies après la génération.
+
+    Une retouche porte sur un mur précis : le décaler perpendiculairement, ou
+    changer son épaisseur. Elle survit à une régénération, donc corriger trois
+    murs ne demande pas de refaire les vingt autres.
+    """
+    patches = overrides.get("walls", {})
+    for wall in walls:
+        patch = patches.get(wall["id"])
+        if not patch:
+            continue
+        horizontal = abs(wall["start"][0] - wall["end"][0]) >= abs(
+            wall["start"][1] - wall["end"][1]
+        )
+        across = 1 if horizontal else 0
+        if "offset" in patch:
+            wall["start"][across] = round(wall["start"][across] + patch["offset"], 4)
+            wall["end"][across] = round(wall["end"][across] + patch["offset"], 4)
+        if "thickness" in patch:
+            wall["thickness"] = patch["thickness"]
+        for opening in wall.get("openings", []):
+            opening_patch = overrides.get("openings", {}).get(opening["id"])
+            if not opening_patch:
+                continue
+            for key in ("offset", "width", "height"):
+                if key in opening_patch:
+                    opening[key] = opening_patch[key]
+
+
+def build(plan, registry, template, level_id, pages, thickness, overrides=None):
     level = next(candidate for candidate in template["levels"] if candidate["id"] == level_id)
     outline = level["outline"]
     chains = [
@@ -265,6 +295,8 @@ def build(plan, registry, template, level_id, pages, thickness):
 
     result = json.loads(json.dumps(template))
     target = next(candidate for candidate in result["levels"] if candidate["id"] == level_id)
+    if overrides:
+        apply_overrides(walls, overrides)
     target["walls"] = walls
     snap_rooms(target["rooms"], walls)
     return result
@@ -371,6 +403,23 @@ def self_test():
     # L'arête sud va de x=6 vers x=0 : la porte à x 2,00..2,90 est à 3,10 du début.
     elif abs(openings[0]["width"] - 0.9) > 0.01 or abs(openings[0]["offset"] - 3.1) > 0.01:
         failures.append(f"baie mal placée : {openings[0]}")
+    # Une retouche survit à la régénération et ne touche que le mur visé.
+    patched = build(
+        plan,
+        registry,
+        template,
+        "rdc",
+        [1],
+        0.34,
+        {"walls": {"ext-3": {"offset": 0.05, "thickness": 0.30}}},
+    )
+    patched_walls = patched["levels"][0]["walls"]
+    target = next(wall for wall in patched_walls if wall["id"] == "ext-3")
+    untouched = next(wall for wall in patched_walls if wall["id"] == "ext-1")
+    if abs(target["thickness"] - 0.30) > 1e-9:
+        failures.append(f"retouche d'épaisseur non appliquée : {target['thickness']}")
+    if abs(untouched["thickness"] - 0.34) > 1e-9:
+        failures.append(f"retouche appliquée au mauvais mur : {untouched['thickness']}")
     if failures:
         for failure in failures:
             print(f"ECHEC {failure}")
@@ -388,6 +437,11 @@ def main(argv):
     parser.add_argument("out")
     parser.add_argument("--pages", default=None)
     parser.add_argument("--thickness", type=float, default=DEFAULT_THICKNESS)
+    parser.add_argument(
+        "--overrides",
+        default=None,
+        help="fichier de retouches appliquées après génération (murs et baies)",
+    )
     if "--self-test" in argv:
         return self_test()
     args = parser.parse_args(argv[1:])
@@ -395,7 +449,10 @@ def main(argv):
     plan = json.loads(Path(args.plan).read_text(encoding="utf-8"))
     registry = json.loads(Path(args.registry).read_text(encoding="utf-8"))
     template = json.loads(Path(args.template).read_text(encoding="utf-8"))
-    result = build(plan, registry, template, args.level, pages, args.thickness)
+    overrides = (
+        json.loads(Path(args.overrides).read_text(encoding="utf-8")) if args.overrides else None
+    )
+    result = build(plan, registry, template, args.level, pages, args.thickness, overrides)
     Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     level = next(candidate for candidate in result["levels"] if candidate["id"] == args.level)
     openings = sum(len(wall.get("openings", [])) for wall in level["walls"])
