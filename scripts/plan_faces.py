@@ -73,6 +73,60 @@ def wall_rect(wall):
     return None
 
 
+def region_polygon(cells, xs, zs):
+    """Contour d'une région, tracé sur les arêtes de ses cellules.
+
+    Une région est une union de cellules : son contour est l'ensemble des côtés
+    qui n'ont pas de voisin dans la région. On les oriente tous dans le même
+    sens, on les enchaîne, et on retire les points alignés. Le résultat est exact
+    — c'est le contour de ce que les murs laissent libre, y compris les retours
+    de cloison qui dépassent dans la pièce.
+    """
+    inside = set(cells)
+    edges = []
+    for i, j in cells:
+        if (i - 1, j) not in inside:
+            edges.append(((xs[i], zs[j]), (xs[i], zs[j + 1])))
+        if (i + 1, j) not in inside:
+            edges.append(((xs[i + 1], zs[j + 1]), (xs[i + 1], zs[j])))
+        if (i, j - 1) not in inside:
+            edges.append(((xs[i + 1], zs[j]), (xs[i], zs[j])))
+        if (i, j + 1) not in inside:
+            edges.append(((xs[i], zs[j + 1]), (xs[i + 1], zs[j + 1])))
+    if not edges:
+        return []
+    following = {}
+    for start, end in edges:
+        following.setdefault((round(start[0], 6), round(start[1], 6)), []).append(end)
+    start = edges[0][0]
+    loop = [start]
+    current = edges[0][1]
+    guard = 0
+    while guard < len(edges) + 4:
+        guard += 1
+        key = (round(current[0], 6), round(current[1], 6))
+        if key == (round(start[0], 6), round(start[1], 6)):
+            break
+        loop.append(current)
+        candidates = following.get(key)
+        if not candidates:
+            break
+        current = candidates.pop(0)
+    simplified = []
+    for point in loop:
+        if len(simplified) >= 2:
+            a, b = simplified[-2], simplified[-1]
+            if abs((b[0] - a[0]) * (point[1] - a[1]) - (b[1] - a[1]) * (point[0] - a[0])) < 1e-9:
+                simplified[-1] = point
+                continue
+        simplified.append(point)
+    if len(simplified) >= 3:
+        a, b = simplified[-2], simplified[-1]
+        if abs((b[0] - a[0]) * (simplified[0][1] - a[1]) - (b[1] - a[1]) * (simplified[0][0] - a[0])) < 1e-9:
+            simplified.pop()
+    return [[round(point[0], 4), round(point[1], 4)] for point in simplified]
+
+
 def build(level):
     """Régions libres du niveau, en cellules puis en surfaces."""
     rects = []
@@ -152,6 +206,7 @@ def build(level):
             regions.append(
                 {
                     "area": round(area, 4),
+                    "polygon": region_polygon(cells, xs, zs),
                     "cells": len(cells),
                     "bbox": [round(x0, 3), round(z0, 3), round(x1, 3), round(z1, 3)],
                     "centroid": [round(cx, 3), round(cz, 3)],
@@ -179,8 +234,7 @@ def compare(result, level):
         for index, region in enumerate(result["regions"]):
             if index in used:
                 continue
-            x0, z0, x1, z1 = region["bbox"]
-            if x0 <= cx <= x1 and z0 <= cz <= z1:
+            if contains(region["polygon"], cx, cz):
                 holder = index
                 break
         declared = polygon_area(room["polygon"])
@@ -213,6 +267,38 @@ def compare(result, level):
         if index not in used
     ]
     return rows, orphans
+
+
+def apply(result, level):
+    """Remplace le polygone des pièces fermées par le contour calculé.
+
+    Une région qui ne porte qu'une pièce donne son contour exact, retours de
+    cloison compris. Une région qui en porte plusieurs est un espace ouvert : sa
+    découpe est une convention, on n'y touche pas et on le dit.
+    """
+    rooms = [room for room in level.get("rooms") or [] if room.get("polygon")]
+    holders = {}
+    for room in rooms:
+        cx, cz = polygon_centroid(room["polygon"])
+        for index, region in enumerate(result["regions"]):
+            if contains(region["polygon"], cx, cz):
+                holders.setdefault(index, []).append(room)
+                break
+    applied, skipped = [], []
+    for index, region in enumerate(result["regions"]):
+        owners = holders.get(index, [])
+        if len(owners) != 1:
+            skipped.append(
+                {"area": region["area"], "rooms": [room["id"] for room in owners]}
+            )
+            continue
+        room = owners[0]
+        before = polygon_area(room["polygon"])
+        room["polygon"] = region["polygon"]
+        applied.append(
+            {"room": room["id"], "before": round(before, 3), "after": region["area"]}
+        )
+    return applied, skipped
 
 
 def self_test():
@@ -259,6 +345,12 @@ def main(argv):
     parser.add_argument("project", nargs="?")
     parser.add_argument("--level", default="rdc")
     parser.add_argument("--compare", action="store_true")
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="remplacer le polygone des pièces fermées par le contour calculé",
+    )
+    parser.add_argument("--write", default=None, help="écrire le projet corrigé")
     parser.add_argument("--json", default=None)
     parser.add_argument("--self-test", action="store_true")
     if "--self-test" in argv:
@@ -296,6 +388,29 @@ def main(argv):
         for orphan in orphans:
             print(f"  région sans pièce : {orphan['area']:.3f} m² en {orphan['centroid']}")
         result["compare"] = {"rows": rows, "orphans": orphans}
+    if args.apply:
+        applied, skipped = apply(result, level)
+        print()
+        for item in applied:
+            print(
+                f"  {item['room']:14s} {item['before']:7.3f} -> {item['after']:7.3f} m²"
+            )
+        for item in skipped:
+            print(
+                f"  espace ouvert laissé tel quel : {item['area']:.3f} m² "
+                f"({', '.join(item['rooms']) or 'aucune pièce'})"
+            )
+        result["applied"] = applied
+        result["skipped"] = skipped
+        if args.write:
+            project["levels"] = [
+                level if candidate.get("id") == args.level else candidate
+                for candidate in project["levels"]
+            ]
+            Path(args.write).write_text(
+                json.dumps(project, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
+            )
+            print(f"-> {args.write}")
     if args.json:
         Path(args.json).write_text(json.dumps(result, ensure_ascii=False, indent=1), encoding="utf-8")
     return 0

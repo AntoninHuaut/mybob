@@ -376,6 +376,18 @@ cote en centimètres posée contre lui (22, 34, 15), l'**allège** sur la cote
 combien de murs il a lus et lesquels gardent une valeur de repli. Sur Émiéville :
 7 murs sur 8, allège 1,10 m.
 
+**Une façade n'a pas une épaisseur.** Sur Émiéville le nord fait 22 cm côté
+garage et 34 cm côté chambres ; prendre une seule cote pour toute l'arête faisait
+grandir chambre-3 de 0,65 m². Le script coupe donc chaque arête là où une cloison
+la rencontre, redonne à chaque tronçon la cote qui le longe, et garde la **face
+extérieure** fixe — c'est elle qui est sur le contour, pas l'axe. Les baies
+suivent, reportées par leur intervalle monde.
+
+Effet mesuré : le plan **entièrement généré**, sans un seul mur écrit à la main,
+passe de 6 à **8 pièces sur 10** à ±0,05 m². Les deux qui restent sont le hall
+(incohérence du plan) et le WC (+0,09, cloison garage brute à 10,2 cm contre
+15 cm finie).
+
 Attention à l'ambiguïté : deux cotes voisines peuvent décrire le même mur (21 et
 22 pour la même façade, brut et fini). Le script prend la plus proche ; c'est une
 proposition, et c'est une surcharge qui tranche.
@@ -531,6 +543,11 @@ la surface est un calcul, pas une détection.
 ```sh
 python scripts/plan_faces.py projet.json --level rdc --compare
 ```
+
+`--apply` remplace le polygone des pièces **fermées** par le contour calculé, et
+laisse les espaces ouverts tels quels en le disant. C'est ce qui supprime les
+retours de cloison qui dépassaient dans une pièce : sur Émiéville, sept pièces
+repassent au contour exact et l'audit tombe de huit réserves à une.
 
 Il répond à une question que la porte des surfaces ne peut pas poser : **les murs
 ferment-ils vraiment les pièces ?** Sur Émiéville, avant correction, le séjour,
