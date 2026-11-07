@@ -64,12 +64,22 @@ export const INTERIOR_FIXTURE_RANGE = 7;
 export const INTERIOR_GROUND_COLOR = Color3.FromHexString('#6d6a5f');
 
 /**
- * Bloom of the visit, tuned by eye on the test house: the lamp and the bay window
- * take a touch of light, nothing else. A decorative glow would veil the white
- * walls, which is exactly what these two values avoid.
+ * Bloom de la visite, calibré à l'œil sur la maison de test. Le seuil est
+ * affiché (les matériaux appliquent déjà le tone mapping) et les murs blancs
+ * éclairés tiennent entre 0,6 et 0,9 : un seuil à 0,6 faisait fleurer la pièce
+ * entière, ce qui se lisait comme un reflet laiteux. À 0,9, seuls la lampe et
+ * la vue à travers la baie dépassent le plafond.
  */
-export const INTERIOR_BLOOM_THRESHOLD = 0.6;
+export const INTERIOR_BLOOM_THRESHOLD = 0.9;
 export const INTERIOR_BLOOM_WEIGHT = 0.2;
+
+/**
+ * Bloom de l'orbite, un cran au-dessus de la visite : le fond de ciel de la Vue
+ * 3D et de l'Extérieur est plat à ~0,92 — au seuil de la visite, le ciel entier
+ * fleurait et voilerait le décor. À 0,95, ne dépassent que les surfaces
+ * réellement éblouies par le soleil et les reflets spéculaires : le halo voulu.
+ */
+export const ORBIT_BLOOM_THRESHOLD = 0.95;
 
 /** sRGB hex to linear light: the environment is authored in linear, not gamma. */
 function linear(hex: string): Color3 {
@@ -346,20 +356,26 @@ export interface BloomPipeline {
 }
 
 /**
- * Applies the validated bloom to a pipeline.
+ * Applies the validated bloom to a pipeline. The threshold is a parameter
+ * because the two cameras read different ceilings: the visit sits at
+ * `INTERIOR_BLOOM_THRESHOLD`, the orbit above its flat sky at
+ * `ORBIT_BLOOM_THRESHOLD`. The weight is shared.
  *
  * The app tone-maps in the material shaders, so the pipeline's own image
  * processing would tone-map a second time. It has to be configured *before* the
  * pass is switched off: disabling it disposes the post-process and nulls
  * `imageProcessing`, leaving the sub-effects unreachable.
  */
-export function configureInteriorBloom(pipeline: BloomPipeline): void {
+export function configureInteriorBloom(
+  pipeline: BloomPipeline,
+  threshold: number = INTERIOR_BLOOM_THRESHOLD,
+): void {
   if (pipeline.imageProcessing) {
     pipeline.imageProcessing.toneMappingEnabled = false;
     pipeline.imageProcessing.vignetteEnabled = false;
   }
   pipeline.imageProcessingEnabled = false;
-  pipeline.bloomThreshold = INTERIOR_BLOOM_THRESHOLD;
+  pipeline.bloomThreshold = threshold;
   pipeline.bloomWeight = INTERIOR_BLOOM_WEIGHT;
   pipeline.bloomEnabled = true;
 }
@@ -385,6 +401,29 @@ export function createInteriorBloom(
   } catch (error) {
     console.info(
       `[visite] bloom indisponible : ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * Bloom de la caméra orbite, donc de la Vue 3D et de l'Extérieur. Mêmes valeur
+ * de poids que la visite, seuil au-dessus du ciel plat (voir
+ * `ORBIT_BLOOM_THRESHOLD`). Le plan réutilise la même caméra en orthographique :
+ * `viewer` coupe le bloom dans ce mode plutôt que de détruire le pipeline à
+ * chaque bascule.
+ */
+export function createOrbitBloom(
+  scene: Scene,
+  camera: Camera,
+): DefaultRenderingPipeline | undefined {
+  try {
+    const pipeline = new DefaultRenderingPipeline('orbit-bloom', false, scene, [camera]);
+    configureInteriorBloom(pipeline, ORBIT_BLOOM_THRESHOLD);
+    return pipeline;
+  } catch (error) {
+    console.info(
+      `[vue 3d] bloom indisponible : ${error instanceof Error ? error.message : String(error)}`,
     );
     return undefined;
   }

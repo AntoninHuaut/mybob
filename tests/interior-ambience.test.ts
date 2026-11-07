@@ -12,6 +12,7 @@ import {
   bouncePolynomial,
   configureInteriorBloom,
   createInteriorBloom,
+  createOrbitBloom,
   createInteriorEnvironment,
   createInteriorOcclusion,
   faceDirection,
@@ -19,6 +20,7 @@ import {
   toHalfFloat,
   INTERIOR_BLOOM_THRESHOLD,
   INTERIOR_BLOOM_WEIGHT,
+  ORBIT_BLOOM_THRESHOLD,
   INTERIOR_GROUND_COLOR,
   type BloomPipeline,
   type BounceFace,
@@ -236,7 +238,11 @@ test('the visit bloom is a bloom-only chain on the walk camera', () => {
     const pipeline = createInteriorBloom(scene, camera);
     assert.ok(pipeline, 'a backend that builds post-processes gets the bloom');
     assert.equal(pipeline.bloomEnabled, true);
-    assert.equal(pipeline.bloomThreshold, 0.6, 'the threshold validated on the test house');
+    assert.equal(
+      pipeline.bloomThreshold,
+      0.9,
+      'à 0,6 les murs blancs (0,6-0,9 affiché) fleurissaient tous',
+    );
     assert.equal(pipeline.bloomWeight, 0.2, 'the weight validated on the test house');
     assert.equal(
       pipeline.imageProcessingEnabled,
@@ -251,6 +257,25 @@ test('the visit bloom is a bloom-only chain on the walk camera', () => {
       !names.includes('imageProcessing'),
       'no image-processing pass may be added to the visit chain',
     );
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+test('the orbit bloom shares the visit weight, above the flat sky, for the 3D and exterior views', () => {
+  const { engine, scene, camera } = fixture();
+  try {
+    const pipeline = createOrbitBloom(scene, camera);
+    assert.ok(pipeline, 'a backend that builds post-processes gets the bloom');
+    assert.equal(pipeline.bloomEnabled, true);
+    assert.equal(pipeline.bloomWeight, INTERIOR_BLOOM_WEIGHT);
+    assert.equal(
+      pipeline.bloomThreshold,
+      ORBIT_BLOOM_THRESHOLD,
+      'le ciel de la Vue 3D est plat à ~0,92 : au seuil de la visite, tout le ciel fleurerait',
+    );
+    assert.equal(pipeline.imageProcessingEnabled, false, 'le tone mapping reste dans les shaders');
   } finally {
     scene.dispose();
     engine.dispose();
