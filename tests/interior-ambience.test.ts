@@ -93,7 +93,7 @@ test('the visit ground bounce is darker than the editor one', () => {
   assert.ok(INTERIOR_GROUND_COLOR.b < editor[2]);
 });
 
-test('an engine without raw textures or a geometry buffer degrades to no ambience', () => {
+test('an engine without raw textures or a pre-pass degrades to no ambience', () => {
   const { engine, scene, camera } = fixture();
   try {
     assert.equal(
@@ -104,11 +104,11 @@ test('an engine without raw textures or a geometry buffer degrades to no ambienc
     assert.equal(
       createInteriorOcclusion(scene, camera),
       undefined,
-      'no geometry buffer means no ambient occlusion',
+      'no pre-pass means no ambient occlusion',
     );
     assert.ok(
-      !scene.geometryBufferRenderer,
-      'a refused occlusion must not leave the geometry buffer rendering every frame',
+      !scene.prePassRenderer,
+      'a refused occlusion must not leave the pre-pass rendering every frame',
     );
   } finally {
     scene.dispose();
@@ -174,9 +174,7 @@ test('a backend without multiple render targets loses occlusion, not the visit',
     // A context without multiple render targets makes Babylon throw instead of
     // returning null, and the throw used to escape `setMode` before the mode
     // change completed.
-    (
-      scene as unknown as { enableGeometryBufferRenderer: () => never }
-    ).enableGeometryBufferRenderer = () => {
+    (scene as unknown as { enablePrePassRenderer: () => never }).enablePrePassRenderer = () => {
       throw new TypeError('this._getEngine().createMultipleRenderTarget is not a function');
     };
     assert.equal(
@@ -184,7 +182,7 @@ test('a backend without multiple render targets loses occlusion, not the visit',
       undefined,
       'an unsupported backend must degrade to no occlusion',
     );
-    assert.ok(!scene.geometryBufferRenderer, 'the failed attempt must not leave a buffer behind');
+    assert.ok(!scene.prePassRenderer, 'the failed attempt must not leave a pre-pass behind');
   } finally {
     scene.dispose();
     engine.dispose();
@@ -284,10 +282,12 @@ test('a backend that refuses occlusion is not asked again on every visit', () =>
   const orbit = new ArcRotateCamera('orbit', 0, 0.7, 8, Vector3.Zero(), scene);
   const walk = createWalkCamera(scene, visitLevel);
   let attempts = 0;
-  const enable = scene.enableGeometryBufferRenderer.bind(scene);
-  scene.enableGeometryBufferRenderer = () => {
+  // The occlusion reads the PrePass; a backend that refuses it must be remembered.
+  // The temporal pass asks for the same renderer, so the count is compared between
+  // two visit entries rather than against an absolute number.
+  scene.enablePrePassRenderer = () => {
     attempts++;
-    return enable();
+    return null;
   };
   const canvas = {
     classList: { toggle() {} },
@@ -325,16 +325,17 @@ test('a backend that refuses occlusion is not asked again on every visit', () =>
   globalThis.document = { pointerLockElement: null } as unknown as Document;
   try {
     viewer.setMode('walk');
+    const afterFirstVisit = attempts;
     viewer.setMode('plan');
     viewer.setMode('walk');
+    assert.equal(
+      attempts,
+      afterFirstVisit,
+      'a refused pre-pass must be remembered, not retried on every visit entry',
+    );
   } finally {
     globalThis.document = previousDocument;
     scene.dispose();
     engine.dispose();
   }
-  assert.equal(
-    attempts,
-    1,
-    'a refused geometry buffer must be remembered, not retried on every visit entry',
-  );
 });

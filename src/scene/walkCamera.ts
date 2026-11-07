@@ -77,7 +77,8 @@ export function createWalkCamera(scene: Scene, level: Level) {
   camera.rotation.y = cameraYaw(level.spawn.yaw, scene.useRightHandedSystem);
   camera.minZ = 0.04;
   camera.maxZ = 300;
-  camera.fov = 1.05;
+  // 68° vertical, chosen on the test house: 60° made rooms read smaller than they are.
+  camera.fov = (68 * Math.PI) / 180;
   camera.checkCollisions = true;
   camera.applyGravity = true;
   camera.needMoveForGravity = true;
