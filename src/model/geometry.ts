@@ -1,4 +1,4 @@
-import type { Point2, Wall, Opening, Level } from './types';
+import type { Point2, Wall, Opening, Level, ProjectSite } from './types';
 
 export function polygonArea(points: Point2[]): number {
   return (
@@ -80,6 +80,20 @@ export function floorElevationAt(level: Level, point: Point2): number {
     (room) => room.floorOffset !== undefined && pointInPolygon(point, room.polygon),
   );
   return level.elevation + (room?.floorOffset ?? 0);
+}
+
+/**
+ * Ground under a point: the room's floor inside the house, the parcel's flat
+ * terrain outside. A project without a site keeps the level datum outside.
+ */
+export function groundElevationAt(
+  level: Level,
+  site: ProjectSite | undefined,
+  point: Point2,
+): number {
+  return pointInPolygon(point, level.outline)
+    ? floorElevationAt(level, point)
+    : level.elevation + (site?.elevation ?? 0);
 }
 
 export function bounds(points: Point2[]) {

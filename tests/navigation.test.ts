@@ -21,9 +21,9 @@ import {
   isVisitArea,
   isVisitDestination,
   sectionPlane,
-  visitorGroundElevation,
   wallFacesCamera,
 } from '../src/scene/navigation';
+import { groundElevationAt } from '../src/model/geometry';
 
 const project: HouseProject = JSON.parse(
   await readFile(new URL('../public/projects/maison-atelier.json', import.meta.url), 'utf8'),
@@ -134,16 +134,16 @@ test('the visit walks out onto the parcel but never past it', () => {
 test('the visitor stands on the room floor inside and on the parcel ground outside', () => {
   const site = project.site!;
   const garage = level.rooms.find((room) => room.id === 'garage')!;
-  assert.equal(visitorGroundElevation(level, site, garage.viewpoint), level.elevation - 0.12);
-  assert.equal(visitorGroundElevation(level, site, [3, -1.5]), level.elevation);
+  assert.equal(groundElevationAt(level, site, garage.viewpoint), level.elevation - 0.12);
+  assert.equal(groundElevationAt(level, site, [3, -1.5]), level.elevation);
   const lowered: ProjectSite = { ...site, elevation: -0.4 };
-  assert.equal(visitorGroundElevation(level, lowered, [3, -1.5]), level.elevation - 0.4);
+  assert.equal(groundElevationAt(level, lowered, [3, -1.5]), level.elevation - 0.4);
   assert.equal(
-    visitorGroundElevation(level, lowered, garage.viewpoint),
+    groundElevationAt(level, lowered, garage.viewpoint),
     level.elevation - 0.12,
     'a lowered parcel never moves the floor of a room',
   );
-  assert.equal(visitorGroundElevation(level, undefined, [3, -1.5]), level.elevation);
+  assert.equal(groundElevationAt(level, undefined, [3, -1.5]), level.elevation);
 });
 
 test('changing the eye height outside keeps the collision body on the lawn', () => {
@@ -151,7 +151,7 @@ test('changing the eye height outside keeps the collision body on the lawn', () 
   const scene = new Scene(engine);
   const camera = createWalkCamera(scene, level);
   camera.position.set(3, 1.65, -1.5);
-  const ground = visitorGroundElevation(level, project.site, [3, -1.5]);
+  const ground = groundElevationAt(level, project.site, [3, -1.5]);
   for (const height of [1.1, 1.65, 1.8]) {
     assert.equal(applyEyeHeight(camera, level, height, ground), height);
     assert.ok(Math.abs(camera.position.y - ground - height) < 1e-9);

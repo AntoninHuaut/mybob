@@ -71,13 +71,6 @@ export function isParcelDestination(level: Level, site: ProjectSite | undefined,
   );
 }
 
-/** Floor under the visitor: the room's floor inside, the parcel's flat ground outside. */
-export function visitorGroundElevation(level: Level, site: ProjectSite | undefined, point: Point2) {
-  return pointInPolygon(point, level.outline)
-    ? floorElevationAt(level, point)
-    : level.elevation + (site?.elevation ?? 0);
-}
-
 export function isSceneVisitDestination(scene: Scene, level: Level, point: Point2) {
   if (!isVisitDestination(level, point)) return false;
   const floor = floorElevationAt(level, point);

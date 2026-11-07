@@ -1,8 +1,8 @@
 import { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Scene } from '@babylonjs/core/scene';
-import type { Level } from '../model/types';
-import { floorElevationAt } from '../model/geometry';
+import type { Level, ProjectSite } from '../model/types';
+import { floorElevationAt, groundElevationAt } from '../model/geometry';
 import { cameraYaw, walkMovement } from './coordinates';
 import { pointInPolygon } from '../model/geometry';
 import { Ray } from '@babylonjs/core/Culling/ray';
@@ -32,7 +32,12 @@ export function applyLookSensitivity(camera: UniversalCamera, multiplier: number
 }
 
 /** Lift over a small, unobstructed threshold; keep mesh collisions for walls and doors. */
-export function prepareWalkStep(camera: UniversalCamera, level: Level, movement: Vector3) {
+export function prepareWalkStep(
+  camera: UniversalCamera,
+  level: Level,
+  movement: Vector3,
+  site?: ProjectSite,
+) {
   camera.applyGravity = true;
   if (movement.lengthSquared() < 0.0000001) return;
   const direction = movement.clone();
@@ -45,7 +50,9 @@ export function prepareWalkStep(camera: UniversalCamera, level: Level, movement:
   ];
   const targetRoom = level.rooms.find((room) => pointInPolygon(point, room.polygon));
   if (!targetRoom) return;
-  const currentFloor = floorElevationAt(level, [camera.position.x, camera.position.z]);
+  // The step is measured from the ground the visitor actually stands on: the lawn
+  // outside is lower than the floor, and that rise is the one to climb.
+  const currentFloor = groundElevationAt(level, site, [camera.position.x, camera.position.z]);
   const nextFloor = level.elevation + (targetRoom.floorOffset ?? 0);
   const rise = nextFloor - currentFloor;
   if (rise < 0.001 || rise > 0.2) return;
