@@ -197,8 +197,21 @@ def source_bands(pixels, calibration, level, step):
     return found
 
 
+def axis_distance(px, pz, geometry):
+    """Distance d'un point à l'axe d'un mur, about compris."""
+    x0, z0, ux, uz, length = geometry
+    t = max(0.0, min(length, (px - x0) * ux + (pz - z0) * uz))
+    return math.hypot(px - (x0 + ux * t), pz - (z0 + uz * t))
+
+
 def covered(band, walls):
-    """Un mur du modèle couvre-t-il cette bande à cette altitude ?"""
+    """Un mur du modèle couvre-t-il cette bande à cette altitude ?
+
+    Un mur parallèle au balayage coupe la ligne en z et couvre par son axe.
+    Un mur perpendiculaire ne la coupe pas : balayée en lignes z, une petite
+    bande est souvent la trace du mur lui-même (retour court), pas un mur en
+    face. Le mur couvre alors par son empreinte, about compris.
+    """
     centre = (band["x0"] + band["x1"]) / 2
     for wall in walls:
         geometry = wall_geometry(wall)
@@ -206,6 +219,8 @@ def covered(band, walls):
             continue
         x0, z0, ux, uz, length = geometry
         if abs(ux) > 0.7:  # mur plutôt horizontal : ne coupe pas une ligne en z
+            if axis_distance(centre, band["z"], geometry) <= wall["thickness"] / 2 + 0.12:
+                return wall["id"]
             continue
         if not (min(z0, z0 + uz * length) - 0.15 <= band["z"] <= max(z0, z0 + uz * length) + 0.15):
             continue
@@ -217,7 +232,12 @@ def covered(band, walls):
 
 
 def self_test():
-    """Vérifie les quatre verdicts sur un plan synthétique, sans dépendre d'un PDF."""
+    """Vérifie les quatre verdicts et un coin couvert par un retour perpendiculaire.
+
+    Le coin et son retour sont une vérification purement géométrique, sans
+    dépendre d'un PDF : le balayage en lignes z fait du retour horizontal la
+    bande elle-même, et c'est l'empreinte du mur qui doit la couvrir.
+    """
     from PIL import ImageDraw
 
     scale, origin = 100.0, (50.0, 50.0)
@@ -261,9 +281,26 @@ def self_test():
         print(f"  {status:5} {label:8} attendu={expected:32} obtenu={verdict}")
         if verdict != expected:
             failures.append(label)
+    # Un coin : cloison verticale et retour horizontal court. Les deux bandes
+    # proviennent du retour lui-même ; le témoin du tronçon droit reste couvert
+    # par la cloison, et une bande isolée loin de tout reste sans mur.
+    cloison = {"id": "cloison", "start": [1.0, 0.6], "end": [1.0, 2.5], "thickness": 0.10}
+    retour = {"id": "retour", "start": [1.0, 2.5], "end": [1.4, 2.5], "thickness": 0.10}
+    corner_cases = [
+        ({"z": 2.45, "x0": 0.95, "x1": 1.45}, "retour"),
+        ({"z": 2.55, "x0": 1.05, "x1": 1.45}, "retour"),
+        ({"z": 1.5, "x0": 0.95, "x1": 1.05}, "cloison"),
+        ({"z": 0.5, "x0": 2.5, "x1": 3.0}, None),
+    ]
+    for band, expected in corner_cases:
+        found = covered(band, [cloison, retour])
+        status = "ok" if found == expected else "ÉCHEC"
+        print(f"  {status:5} coin      z={band['z']} attendu={expected} obtenu={found}")
+        if found != expected:
+            failures.append(f"coin z={band['z']}")
     if failures:
         raise SystemExit(f"auto-test en échec : {', '.join(failures)}")
-    print("auto-test : 4 verdicts conformes")
+    print("auto-test : 4 verdicts et 4 bandes du coin conformes")
     return 0
 
 
