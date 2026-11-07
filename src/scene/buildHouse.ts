@@ -13,6 +13,14 @@ import earcut from 'earcut';
 import type { Level, Opening, Point2, Wall } from '../model/types';
 import { alongWall, pointInPolygon, wallLength, wallSections } from '../model/geometry';
 import type { Materials } from './materials';
+import { beveledBox } from './beveledBox';
+
+/**
+ * Chamfer of a wall edge. A real plastered arris is two millimetres, but two
+ * millimetres is under a pixel at 720p: four is the smallest that still catches a
+ * highlight, and it is what stops the corner reading as a razor cut.
+ */
+export const WALL_BEVEL = 0.004;
 
 /** Fixture light defaults; the visit mode boosts them without touching the geometry. */
 export const FIXTURE_LIGHT_INTENSITY = 0.32;
@@ -166,9 +174,14 @@ export function buildHouse(
     material: Material,
     parent: TransformNode = root,
     collision = true,
+    bevel = 0,
   ) => {
-    const mesh = MeshBuilder.CreateBox(name, { width, height, depth }, scene);
-    worldScaleUvs(mesh);
+    const mesh =
+      bevel > 0
+        ? beveledBox(name, width, height, depth, bevel, scene)
+        : MeshBuilder.CreateBox(name, { width, height, depth }, scene);
+    // A chamfered box already carries world-scale UVs; a plain one does not.
+    if (bevel <= 0) worldScaleUvs(mesh);
     mesh.position.set(x, y, z);
     mesh.parent = parent;
     mesh.material = material;
@@ -306,6 +319,8 @@ export function buildHouse(
         0,
         materials.plaster,
         group,
+        true,
+        WALL_BEVEL,
       );
     }
     if (openingBase > wallBottom)
