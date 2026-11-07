@@ -357,6 +357,21 @@
   border-radius: 50%;
   background: #9daf8d;
 }
+.bottom-meta {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+/* Cadence de rendu : un diagnostic, pas une commande. Discret et jamais cliquable. */
+.frame-rate {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: #7d9174;
+  white-space: nowrap;
+}
+.frame-rate.low {
+  color: #a8703f;
+}
 .scale-note {
   display: flex;
   align-items: center;

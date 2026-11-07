@@ -39,6 +39,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Coupe des murs         | `src/scene/wallCutaway.ts`              | `auto` / `full` / `low`, plans de découpe par matériau              |
 | Ouvertures en plan     | `src/scene/planOpenings.ts`             | Baies et portes dessinées dans la vue Plan                          |
 | Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, occlusion ambiante, repli sous 24 fps                   |
+| Diagnostic             | `src/scene/diagnostics.ts`              | `mybob.diag()` : moteur, GPU, cadence, résolution, scène            |
 | Mesure                 | `src/scene/measurement.ts`              | Accrochage aux axes du plan                                         |
 | Soleil                 | `src/scene/solar.ts`                    | Équations NOAA, fuseaux IANA                                        |
 | Données                | `src/model/types.ts`                    | Format versionné (`schemaVersion: 1`)                               |
@@ -54,6 +55,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Meubles — session      | `src/furniture/layoutSession.ts`        | Chargement/écriture par projet et niveau                            |
 | Interface              | `src/ui/appTemplate.ts`                 | Gabarit statique de l'application                                   |
 | Textes de mode         | `src/ui/modeChrome.ts`                  | Titres, aides clavier et tactile par mode                           |
+| Compteur de cadence    | `src/ui/frameRate.ts`                   | Affichage des fps, écriture limitée à quatre par seconde            |
 | Panneaux               | `src/ui/roomPanels.ts`, `minimap.ts`    | Liste des pièces, fiche, plan miniature                             |
 | Aide et accueil        | `src/ui/firstSteps.ts`, `onboarding.ts` | Carte « Premiers pas », aide courte et complète                     |
 | Export image           | `src/ui/imageExport.ts`                 | PNG de la caméra, cartouche, options                                |
@@ -115,6 +117,12 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
 - La cadence est surveillée pendant toute la visite : trois relevés consécutifs sous 24 images
   par seconde, hors onglet masqué, retirent l'occlusion ; l'environnement et les luminaires
   restent en place. Un relevé sain remet le compteur à zéro.
+- La cadence s'affiche en tout petit dans le pied de la scène et passe en ambre sous 24 images
+  par seconde : le repli devient observable sans ouvrir les outils du navigateur. C'est un
+  affichage, pas un réglage de qualité. Pour diagnostiquer une machine lente à distance,
+  `mybob.diag()` imprime moteur, GPU, cadence, résolution réellement rendue, état de l'ambiance
+  de visite, taille de la scène et caractéristiques de la machine ; la commande est rappelée au
+  démarrage et le rapport est renvoyé en texte, pour être copié.
 - L'extérieur cadre le terrain et le faîtage ; Vue 3D montre la maison ouverte ; Plan masque
   terrain et toiture. Sélectionner une pièce ou ajouter un meuble depuis l'extérieur revient à
   la vue intérieure.

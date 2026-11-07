@@ -65,6 +65,7 @@ import {
 import type { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture';
 import type { RawCubeTexture } from '@babylonjs/core/Materials/Textures/rawCubeTexture';
 import type { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
+import type { OcclusionState } from './diagnostics';
 
 export type ViewMode = 'overview' | 'plan' | 'walk';
 export interface FrameInfo {
@@ -637,6 +638,27 @@ export class HouseViewer {
     this.updateCutaway();
     this.updateShadowPolicy();
     if (this.mode === 'overview') this.fitOverview();
+  }
+
+  /**
+   * What the visit did with its own ambience, for the diagnostic report. The
+   * occlusion is created on entering the visit, so an absent pipeline outside the
+   * visit means "not asked for", not "refused".
+   */
+  get ambience(): { environment: boolean; occlusion: OcclusionState } {
+    return {
+      environment: Boolean(
+        this.interiorEnvironment && this.scene?.environmentTexture === this.interiorEnvironment,
+      ),
+      occlusion:
+        this.mode !== 'walk'
+          ? 'idle'
+          : this.interiorOcclusion
+            ? 'active'
+            : this.occlusionRefused
+              ? 'refused'
+              : 'unavailable',
+    };
   }
 
   private fitOverview() {
