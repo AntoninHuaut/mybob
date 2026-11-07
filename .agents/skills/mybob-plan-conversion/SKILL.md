@@ -21,6 +21,11 @@ personnel qui doit vivre sous `public/projects/` suit la convention
 l'autorité sur ce qui peut être publié. Ne jamais ajouter de donnée personnelle à
 la liste blanche des ressources publiques.
 
+Les cas de référence de ce document sont anonymisés : **plan A** (RDC, page 8,
+1/75) et **plan B** (RDC page 13, combles page 14, 1/50). Aucun nom de commune,
+de constructeur ni de fichier d'origine n'est écrit ici — le dépôt est public.
+Les plans eux-mêmes vivent dans `reference-documents/`, ignoré par git.
+
 ## La règle : un script mesure, l'IA décide
 
 **Un script mesure ou calcule. Il ne décide pas.**
@@ -84,7 +89,7 @@ a passé son auto-test et cassé le vrai plan :
 - `merge_partitions` reprenait l'épaisseur de l'aplat : sur le plan réel, la
   cloison garage/WC passait de 15 à 10,2 cm et le WC gagnait 0,09 m².
 
-Les deux ont été vus par la porte des surfaces sur Émiéville, pas par la CI. Un
+Les deux ont été vus par la porte des surfaces sur le plan A, pas par la CI. Un
 auto-test synthétique est un filet de régression, pas une validation.
 
 ### La boucle de conception, en commandes
@@ -116,14 +121,14 @@ le plan n'est pas fini — sauf si l'écart est documenté comme une incohérenc
 plan lui-même, ce qui est un résultat, pas un échec.
 
 **L'audit a une porte que les surfaces n'ont pas** : `room-unreachable`. Une pièce
-peut être exacte au centimètre carré et n'avoir aucune porte. Sur Sannerville,
+peut être exacte au centimètre carré et n'avoir aucune porte. Sur le plan B,
 neuf pièces sur neuf étaient exactes et six étaient inaccessibles à la visite,
 parce que le RDC n'avait pas une seule baie. Les surfaces ne le voient pas : elles
 ne comparent que les pièces qu'on leur donne. Il faut les trois portes, et
 `reachedRooms` se lit à chaque passage.
 
 La quatrième supprime les retours de cloison qui dépassaient dans une pièce :
-sur Émiéville, l'audit passe de huit réserves à une.
+sur le plan A, l'audit passe de huit réserves à une.
 
 Quand un vrai plan révèle un motif que les fixtures ne couvrent pas, ajouter le
 motif à la fixture **et** la ligne dans ce fichier. Une fixture qui ne vient pas
@@ -249,7 +254,7 @@ pratique du métier, pas une préférence personnelle :
 
 Un plan vectoriel exporté à l'échelle 1:1 donne exactement **37,795 pt/m à 1/75**
 et **56,693 pt/m à 1/50**. Mesuré sur les deux maisons du constructeur : 37,79
-sur Émiéville, 56,66 à 56,71 sur Sannerville. Si la valeur déduite des chaînes
+sur le plan A, 56,66 à 56,71 sur le plan B. Si la valeur déduite des chaînes
 s'écarte de ces nombres, c'est le fichier qui a été redimensionné, pas la méthode
 qui est fausse : garder la valeur déduite et le noter.
 
@@ -269,7 +274,7 @@ ratio redevient la seule source, avec l'incertitude qui va avec.
 
 L'échelle vient des chaînes ; l'**origine** aussi, et c'est là que ça casse. Une
 chaîne partielle ne commence pas au bord du niveau : prendre son début pour
-l'origine décale tout le niveau. La page 14 de Sannerville n'a qu'une chaîne
+l'origine décale tout le niveau. La page 14 du plan B n'a qu'une chaîne
 verticale de 2,78 + 1,27 = 4,05 m pour une emprise de 8,50 m ; l'origine tombait
 3,5 m trop bas, toutes les étiquettes de surface se projetaient à z négatif, et
 les sept pièces des combles sortaient « pièce sans étiquette ». On croit alors
@@ -378,7 +383,7 @@ construction ne commence pas sur une supposition. En **fusion**, les murs
 viennent du modèle et la décision ne construit rien : `--allow-unresolved`
 laisse alors passer une face non résolue, jamais une contradiction. Sans ce
 drapeau, la porte est infranchissable sur un vrai plan (23 faces non résolues sur
-41 sur Émiéville) et le pipeline documenté ne s'exécute jamais de bout en bout.
+41 sur le plan A) et le pipeline documenté ne s'exécute jamais de bout en bout.
 
 ```sh
 uvx --from pymupdf python scripts/extract_plan_evidence.py plan.pdf artifacts/plan-review/registry.json --pages 13,14
@@ -417,10 +422,10 @@ calque, le navigateur.
 Rien n'y est inventé : l'**épaisseur** de chaque mur extérieur est lue sur la
 cote en centimètres posée contre lui (22, 34, 15), l'**allège** sur la cote
 `All : 1.10 m`, la **hauteur** de baie sur son libellé `90/2.15`. Le script dit
-combien de murs il a lus et lesquels gardent une valeur de repli. Sur Émiéville :
+combien de murs il a lus et lesquels gardent une valeur de repli. Sur le plan A :
 7 murs sur 8, allège 1,10 m.
 
-**Une façade n'a pas une épaisseur.** Sur Émiéville le nord fait 22 cm côté
+**Une façade n'a pas une épaisseur.** Sur le plan A le nord fait 22 cm côté
 garage et 34 cm côté chambres ; prendre une seule cote pour toute l'arête faisait
 grandir chambre-3 de 0,65 m². Le script coupe donc chaque arête là où une cloison
 la rencontre, redonne à chaque tronçon la cote qui le longe, et garde la **face
@@ -446,7 +451,7 @@ déplacements et non des mesures :
 - **les écarts d'épaisseur de cloison** entre le modèle et l'aplat du dessin.
 
 Ce dernier est le piège le plus coûteux. **L'aplat du dessin est le mur brut ; le
-modèle porte le mur fini, doublage compris.** Sur Émiéville, la cloison
+modèle porte le mur fini, doublage compris.** Sur le plan A, la cloison
 garage/WC fait 10,2 cm à l'aplat et 15 cm finie, et la surface imprimée du WC
 (1,62 m²) tranche pour 15 cm. Remplacer l'un par l'autre rétrécit la pièce de
 0,09 m². La fusion ne reprend donc l'épaisseur que si elle concorde à 3 cm, et
@@ -464,11 +469,11 @@ pour une mesure. Trois règles en découlent, et elles sont dans le script :
   `garage` est une porte de garage — la pièce est dans le modèle, donc la règle
   est exacte ;
 - l'**allège** n'est pas votée : le plan porte plusieurs `All : … m` sur la même
-  page (1,10 au nord, 1,20 au sud à Sannerville). Prendre la plus fréquente
+  page (1,10 au nord, 1,20 au sud au plan B). Prendre la plus fréquente
   posait 1,20 sous les fenêtres du nord. Chaque étiquette est appariée à la baie
   la plus proche, et une baie sans étiquette est rapportée comme non résolue.
 
-**Une chaîne de façade peut couvrir plusieurs arêtes.** Au sud de Sannerville, le
+**Une chaîne de façade peut couvrir plusieurs arêtes.** Au sud du plan B, le
 séjour, l'entrée en renfoncement et le garage sont trois arêtes distinctes, et une
 seule chaîne les mesure toutes. Chercher l'arête par le côté seul posait toutes
 les baies sur la première et perdait les autres : l'entrée et le séjour n'avaient
@@ -494,7 +499,7 @@ d'encre.
 
 `--openings-only` garde les murs du modèle et n'ajoute que les baies des chaînes.
 C'est le mode d'une maison dont les murs sont déjà justes : il ne touche ni aux
-cloisons, ni aux pièces, donc les surfaces ne bougent pas. Sur Sannerville, il a
+cloisons, ni aux pièces, donc les surfaces ne bougent pas. Sur le plan B, il a
 ajouté les onze baies extérieures sans déplacer un seul sommet de pièce.
 
 `--replace` jette les murs du modèle et ne garde que ce que le dessin donne. Ne
@@ -506,7 +511,7 @@ intérieures — mais elle ne jette plus ce que le dessin a calculé : les **bai
 prouvées par une chaîne et absentes du modèle sont reportées, par leur intervalle
 monde et non par leur offset (deux murs voisins peuvent être à six centimètres
 l'un de l'autre), et les **écarts d'épaisseur** entre le modèle et la cote
-imprimée sont signalés. Sur Émiéville, le modèle avait déjà les seize baies : la
+imprimée sont signalés. Sur le plan A, le modèle avait déjà les seize baies : la
 fusion n'ajoute rien et le dit.
 
 ## Construire depuis un référentiel commun
@@ -590,12 +595,12 @@ hors tolérance, le plan n'est pas fini.
 **Quelle surface comparer.** Un polygone de pièce est un **plancher**, donc un
 SU. La SH est le plancher moins ce qui est sous 1,80 m de hauteur. Sur un niveau
 à plafond plat les deux coïncident ; sous pente ou sous escalier, non. Quand le
-plan imprime les deux, le script prend la **SU** — sur Sannerville le hall imprime
+plan imprime les deux, le script prend la **SU** — sur le plan B le hall imprime
 `SH 5,19` et `SU 6,97`, et comparer au SH aurait affiché une fausse erreur de
 1,78 m². Corollaire : c'est la SU qu'il faut stocker dans `planArea`, sinon l'app
 affiche « contour à vérifier » sur une pièce juste.
 
-État mesuré sur Émiéville RDC (page 8, 1/75), tolérance 0,05 m² :
+État mesuré sur le RDC du plan A (page 8, 1/75), tolérance 0,05 m² :
 
 | version                               | hors tolérance | total calculé |
 | ------------------------------------- | -------------- | ------------- |
@@ -634,11 +639,11 @@ python scripts/plan_faces.py projet.json --level rdc --compare
 
 `--apply` remplace le polygone des pièces **fermées** par le contour calculé, et
 laisse les espaces ouverts tels quels en le disant. C'est ce qui supprime les
-retours de cloison qui dépassaient dans une pièce : sur Émiéville, sept pièces
+retours de cloison qui dépassaient dans une pièce : sur le plan A, sept pièces
 repassent au contour exact et l'audit tombe de huit réserves à une.
 
 Il répond à une question que la porte des surfaces ne peut pas poser : **les murs
-ferment-ils vraiment les pièces ?** Sur Émiéville, avant correction, le séjour,
+ferment-ils vraiment les pièces ?** Sur le plan A, avant correction, le séjour,
 le dégagement et le hall ne formaient qu'une seule région de 45,46 m² : aucun mur
 ne les séparait. C'est normal — ce sont des zones d'un même espace ouvert — mais
 il faut le savoir avant de lire un écart de surface.
@@ -646,7 +651,7 @@ il faut le savoir avant de lire un écart de surface.
 Deux conséquences :
 
 - une **zone ouverte** n'a pas de surface propre. Sa limite est une convention,
-  et le plan peut se contredire. Sur Émiéville, `placard` + `hall` impriment
+  et le plan peut se contredire. Sur le plan A, `placard` + `hall` impriment
   0,60 + 1,73 = 2,33 m² pour un bloc de 1,27 × 1,79 = 2,27 m² : les cotes du plan
   ne se referment pas sur 0,06 m². On documente l'écart, on ne bouge pas un mur
   pour faire tomber le nombre ;
@@ -688,7 +693,7 @@ l'ambiguïté et marquer non résolu, au lieu de bouger un mur jusqu'à ce que l
 nombre tombe juste.
 
 **Le cas symétrique existe et il est plus vicieux** : une pièce peut être
-atteinte par un interstice qui ne devrait pas exister. Sur Sannerville, la salle
+atteinte par un interstice qui ne devrait pas exister. Sur le plan B, la salle
 d'eau n'a aucune porte et se lisait pourtant comme atteinte, parce que le
 polygone des WC s'arrêtait 24 cm avant le mur sud et que le remplissage passait
 sous le murêt. Un `reachedRooms` complet n'est donc pas une preuve de plan
@@ -781,7 +786,7 @@ pouvoir les retoucher à la main dans l'interface, plus tard. Les murs, eux, ne 
 retouchent pas à la main.
 
 Un mur manquant se corrige aussi à la main, et il faut le chercher : ni la porte
-des surfaces ni l'audit ne signalent un mur absent. Sur Sannerville, le mur ouest
+des surfaces ni l'audit ne signalent un mur absent. Sur le plan B, le mur ouest
 des WC n'existait pas — les WC étaient ouverts sur le hall sur 1,60 m — et rien
 ne le disait. Ce qui l'a montré est le calque : les murs du modèle en orange
 par-dessus le dessin, et une bande hachurée du dessin sans orange en dessous.
