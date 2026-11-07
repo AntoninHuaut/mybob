@@ -276,3 +276,64 @@ test('a failing ambience never leaves the visit half-applied', () => {
     'the section plane, the cutaways and the chrome all depend on reaching the end',
   );
 });
+
+test('a backend that refuses occlusion is not asked again on every visit', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const orbit = new ArcRotateCamera('orbit', 0, 0.7, 8, Vector3.Zero(), scene);
+  const walk = createWalkCamera(scene, visitLevel);
+  let attempts = 0;
+  const enable = scene.enableGeometryBufferRenderer.bind(scene);
+  scene.enableGeometryBufferRenderer = () => {
+    attempts++;
+    return enable();
+  };
+  const canvas = {
+    classList: { toggle() {} },
+    style: {},
+    clientWidth: 1280,
+    clientHeight: 720,
+  } as unknown as HTMLCanvasElement;
+  const viewer = Object.assign(Object.create(HouseViewer.prototype), {
+    scene,
+    level: visitLevel,
+    orbit,
+    walk,
+    canvas,
+    mode: 'plan',
+    eyeHeight: 1.65,
+    dimensions: [],
+    measureMeshes: [],
+    measureMode: false,
+    goToMode: false,
+    exteriorView: false,
+    sectionHeight: undefined,
+    clearKeys() {},
+    updateLighting() {},
+    updateSection() {},
+    updateCutaway() {},
+  }) as HouseViewer;
+  for (const camera of [orbit, walk] as unknown as {
+    attachControl: () => void;
+    detachControl: () => void;
+  }[]) {
+    camera.attachControl = () => {};
+    camera.detachControl = () => {};
+  }
+  const previousDocument = globalThis.document;
+  globalThis.document = { pointerLockElement: null } as unknown as Document;
+  try {
+    viewer.setMode('walk');
+    viewer.setMode('plan');
+    viewer.setMode('walk');
+  } finally {
+    globalThis.document = previousDocument;
+    scene.dispose();
+    engine.dispose();
+  }
+  assert.equal(
+    attempts,
+    1,
+    'a refused geometry buffer must be remembered, not retried on every visit entry',
+  );
+});

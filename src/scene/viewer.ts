@@ -160,6 +160,7 @@ export class HouseViewer {
   private interiorAmbienceUnavailable = false;
   private occlusionProbe?: OcclusionProbe;
   private occlusionRefused = false;
+  private occlusionUnavailable = false;
   private previousEnvironment?: BaseTexture | null;
   private previousEnvironmentIntensity = 1;
   private shadowsBeforeReadability?: boolean;
@@ -216,6 +217,7 @@ export class HouseViewer {
     this.interiorAmbienceUnavailable = false;
     this.occlusionProbe = undefined;
     this.occlusionRefused = false;
+    this.occlusionUnavailable = false;
     this.previousEnvironment = undefined;
     this.previousEnvironmentIntensity = 1;
     this.exterior = undefined;
@@ -924,8 +926,11 @@ export class HouseViewer {
         this.scene.environmentTexture = this.interiorEnvironment;
         this.scene.environmentIntensity = INTERIOR_ENVIRONMENT_INTENSITY;
       }
-      if (!this.occlusionRefused && !this.interiorOcclusion) {
+      if (!this.occlusionRefused && !this.occlusionUnavailable && !this.interiorOcclusion) {
         this.interiorOcclusion = createInteriorOcclusion(this.scene, this.walk);
+        // A backend without multiple render targets refuses every time: remember it
+        // rather than throwing again on each visit entry.
+        this.occlusionUnavailable = !this.interiorOcclusion;
         this.occlusionProbe = this.interiorOcclusion
           ? startOcclusionProbe(performance.now())
           : undefined;
