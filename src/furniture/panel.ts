@@ -297,9 +297,8 @@ export class FurniturePanel {
         </details>
       </form>
       <div data-group-controls>${this.groupControls(item)}</div>
-      <details class="furniture-more-actions"><summary>Autres actions</summary><div class="furniture-actions">${item.kind === 'tv-stand' ? '<button type="button" data-furniture-action="add-tv">Ajouter une TV dessus</button>' : ''}<button type="button" data-furniture-action="duplicate">Dupliquer</button><button type="button" data-furniture-action="delete" class="furniture-delete">Retirer le meuble</button></div></details>
       <div class="furniture-edit-status" role="status"></div>
-      <div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button class="primary-button" type="submit" form="furniture-edit-form">Enregistrer</button></div></section>`;
+      <div class="furniture-dialog-footer"><div class="furniture-footer-actions">${item.kind === 'tv-stand' ? '<button type="button" data-furniture-action="add-tv">Ajouter une TV dessus</button>' : ''}<button type="button" data-furniture-action="duplicate">Dupliquer</button><button type="button" data-furniture-action="delete" class="furniture-delete">Retirer le meuble</button></div><div class="furniture-footer-submit"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button class="primary-button" type="submit" form="furniture-edit-form">Enregistrer</button></div></div></section>`;
   }
 
   focusDimensions() {

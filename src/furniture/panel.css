@@ -274,33 +274,6 @@
 .furniture-apply:hover {
   background: #d3e5c2;
 }
-.furniture-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-top: 13px;
-}
-.furniture-actions button {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 5px;
-  min-height: 32px;
-  padding: 6px 9px;
-  border: 1px solid transparent;
-  border-radius: 5px;
-  color: #4c713b;
-  background: transparent;
-  font-size: 12px;
-}
-.furniture-actions button:hover {
-  background: #eef1ec;
-}
-.furniture-actions .furniture-delete {
-  color: #885a3c;
-  background: transparent;
-  border-color: transparent;
-}
 .furniture-key-hint {
   margin: 12px 0 0;
   font-size: 12px;
@@ -478,10 +451,37 @@
 }
 .furniture-dialog-footer {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 12px;
   margin-top: 21px;
+}
+.furniture-footer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.furniture-footer-actions button {
+  min-height: 36px;
+  padding: 6px 9px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  color: #4c713b;
+  background: transparent;
+  font-size: 12px;
+}
+.furniture-footer-actions button:hover {
+  background: #eef1ec;
+}
+.furniture-footer-actions .furniture-delete {
+  color: #885a3c;
+}
+.furniture-footer-submit {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-left: auto;
 }
 .furniture-cancel {
   min-height: 40px;
@@ -558,9 +558,6 @@
   }
   .furniture-item {
     min-height: 52px;
-  }
-  .furniture-actions button {
-    min-height: 40px;
   }
   .furniture-history button {
     width: 40px;
@@ -738,14 +735,12 @@
   padding: 0;
   border: 0;
 }
-.furniture-placement,
-.furniture-more-actions {
+.furniture-placement {
   margin-top: 16px;
   padding-top: 8px;
   border-top: 1px solid #e0e5dc;
 }
-.furniture-placement > summary,
-.furniture-more-actions > summary {
+.furniture-placement > summary {
   min-height: 36px;
   padding: 8px 0;
   color: #4b594d;
@@ -755,9 +750,6 @@
 }
 .furniture-placement .furniture-advanced {
   margin-top: 10px;
-}
-.furniture-more-actions .furniture-actions {
-  margin-top: 7px;
 }
 .furniture-edit-dialog .furniture-dialog-footer {
   position: sticky;

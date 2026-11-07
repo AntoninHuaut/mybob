@@ -136,7 +136,6 @@ test('ajout, brouillon annulé et rechargement conservent les valeurs enregistr�
     .getByLabel(/Largeur/)
     .first()
     .fill('250');
-  await dialog.getByText('Autres actions', { exact: true }).click();
   await dialog.getByRole('button', { name: 'Dupliquer', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Annuler', exact: true }).click();
   await page.reload();
@@ -155,7 +154,6 @@ async function emptyVariant(page: Page) {
   await variants.getByRole('button', { name: 'Créer la copie' }).click();
   await page.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Modifier Canapé E2E', exact: true });
-  await dialog.getByText('Autres actions', { exact: true }).click();
   await dialog.getByRole('button', { name: 'Retirer le meuble' }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Enregistrer', exact: true }).click();
   await furnishings(page);
