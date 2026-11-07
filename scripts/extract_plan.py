@@ -25,6 +25,8 @@ import argparse
 import collections
 import json
 import sys
+import tempfile
+from pathlib import Path
 
 import pymupdf
 
@@ -188,7 +190,7 @@ def self_test():
     page.draw_rect(
         pymupdf.Rect(600, 20, 600 + 2 * scale, 20 + 0.10 * scale), color=None, fill=wall
     )
-    path = "artifacts/plan-review/self-test-plan.pdf"
+    path = str(Path(tempfile.mkdtemp()) / "self-test-plan.pdf")
     document.save(path)
     envelope = (origin[0], origin[1], origin[0] + 6 * scale, origin[1] + 5 * scale)
     result = build(path, 1, scale, envelope)
