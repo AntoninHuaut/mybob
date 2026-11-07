@@ -53,6 +53,8 @@ jobs:
           python3 scripts/extract_plan.py --self-test
       - name: Test the project generator
         run: python3 scripts/generate_project.py --self-test
+      - name: Test the printed-surface check
+        run: python3 scripts/check_plan_surfaces.py --self-test
       - name: Check types and build public application
         run: npm run build
       - name: Ensure personal house data is absent from publication
