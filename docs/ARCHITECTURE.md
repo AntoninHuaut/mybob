@@ -167,7 +167,9 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
 - La visite sort de la maison : la limite est la parcelle (`site.boundary`), pas l'emprise du
   niveau. Sans `site`, l'emprise reste la limite. Le garde-fou de `beforeFrame` ne renvoie au
   départ que hors parcelle, sous le sol ou au-dessus du plafond ; le sol sous le visiteur est
-  celui de la pièce dedans, celui du terrain plat dehors (`visitorGroundElevation`). Revenir du
+  celui de la pièce dedans, celui du terrain plat dehors (`groundElevationAt`). La marche entre
+  les deux est franchie par `prepareWalkStep`, qui mesure la montée depuis ce sol-là : un terrain
+  déclaré sous le plancher ne bloque plus le retour. Revenir du
   plan en visite depuis la pelouse garde le point courant (`isParcelDestination`) au lieu de
   refuser la destination. La toiture est visible en visite : dedans le plafond la masque, dehors
   elle rend la maison entière. Les murs extérieurs gardent leurs collisions, donc on ne sort que

@@ -9,7 +9,7 @@ import { Ray } from '@babylonjs/core/Culling/ray';
 import '@babylonjs/core/Collisions/collisionCoordinator';
 import { buildHouse, polygonMesh, poseDoor } from '../src/scene/buildHouse';
 import type { Materials } from '../src/scene/materials';
-import type { HouseProject } from '../src/model/types';
+import type { HouseProject, Level } from '../src/model/types';
 import { polygonArea } from '../src/model/geometry';
 import { createWalkCamera, EYE_HEIGHT, prepareWalkStep } from '../src/scene/walkCamera';
 
@@ -196,6 +196,62 @@ test('threshold assistance preserves closed-door collisions and restores gravity
   prepareWalkStep(camera, level, new Vector3(0, 0, 0.008));
   assert.equal(camera.applyGravity, false);
   prepareWalkStep(camera, level, Vector3.Zero());
+  assert.equal(camera.applyGravity, true);
+  scene.dispose();
+  engine.dispose();
+});
+
+test('the visitor climbs the parcel step back into the house', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  scene.useRightHandedSystem = true;
+  const square: [number, number][] = [
+    [0, 0],
+    [4, 0],
+    [4, 4],
+    [0, 4],
+  ];
+  const level: Level = {
+    id: 'rdc',
+    name: 'RDC',
+    elevation: 0,
+    ceilingHeight: 2.5,
+    outline: square,
+    walls: [],
+    rooms: [
+      {
+        id: 'piece',
+        name: 'Pièce',
+        kind: 'living',
+        polygon: square,
+        label: [2, 2],
+        viewpoint: [2, 2],
+      },
+    ],
+    lights: [],
+    spawn: { position: [2, 2], yaw: 0 },
+  };
+  // The terrain sits 20 cm under the finished floor, as the owner's plan de masse states.
+  const site = {
+    boundary: [
+      [-5, -5],
+      [9, -5],
+      [9, 9],
+      [-5, 9],
+    ] as [number, number][],
+    elevation: -0.2,
+    notes: [],
+  };
+  const camera = createWalkCamera(scene, level);
+  const step = new Vector3(0, 0, 0.05);
+  camera.position.set(2, site.elevation + EYE_HEIGHT, -0.3);
+  prepareWalkStep(camera, level, step, site);
+  near(camera.position.y, EYE_HEIGHT + 0.008);
+  assert.equal(camera.applyGravity, false, 'the step up is assisted, not left to collisions');
+  // Without a site the terrain is the level datum: there is no step to climb.
+  camera.position.set(2, site.elevation + EYE_HEIGHT, -0.3);
+  prepareWalkStep(camera, level, step);
+  near(camera.position.y, site.elevation + EYE_HEIGHT);
   assert.equal(camera.applyGravity, true);
   scene.dispose();
   engine.dispose();

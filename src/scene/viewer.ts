@@ -21,7 +21,7 @@ import '@babylonjs/core/Culling/ray';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import '@babylonjs/core/Collisions/collisionCoordinator';
 import type { HouseProject, Level, Point2, ProjectSite } from '../model/types';
-import { bounds, floorElevationAt, pointInPolygon } from '../model/geometry';
+import { bounds, floorElevationAt, groundElevationAt, pointInPolygon } from '../model/geometry';
 import {
   buildHouse,
   poseDoor,
@@ -56,7 +56,6 @@ import {
   isSceneVisitDestination,
   isVisitArea,
   sectionPlane,
-  visitorGroundElevation,
 } from './navigation';
 import { cameraYaw, planHeading, setPlanView, stopOrbit, usePlanCoordinates } from './coordinates';
 import {
@@ -428,7 +427,7 @@ export class HouseViewer {
       }
       this.walk.position.set(
         point[0],
-        visitorGroundElevation(this.level, this.site, point) + this.eyeHeight,
+        groundElevationAt(this.level, this.site, point) + this.eyeHeight,
         point[1],
       );
     }
@@ -629,7 +628,7 @@ export class HouseViewer {
       this.walk,
       this.level,
       heightMeters,
-      visitorGroundElevation(this.level, this.site, [this.walk.position.x, this.walk.position.z]),
+      groundElevationAt(this.level, this.site, [this.walk.position.x, this.walk.position.z]),
     );
     return this.eyeHeight;
   }
@@ -1063,7 +1062,7 @@ export class HouseViewer {
       // outside the parcel, under the floor, or above the ceiling.
       if (
         !isVisitArea(this.level, this.site, [p.x, p.z]) ||
-        p.y < visitorGroundElevation(this.level, this.site, [p.x, p.z]) + 0.7 ||
+        p.y < groundElevationAt(this.level, this.site, [p.x, p.z]) + 0.7 ||
         p.y > this.level.elevation + this.level.ceilingHeight + 1
       )
         this.reset();
@@ -1091,7 +1090,7 @@ export class HouseViewer {
           this.keyState.has('ShiftLeft') || this.keyState.has('ShiftRight'),
         );
       }
-      prepareWalkStep(this.walk, this.level, movement);
+      prepareWalkStep(this.walk, this.level, movement, this.site);
       this.walk.cameraDirection.addInPlace(movement);
       const room = this.level.rooms.find((r) => pointInPolygon([p.x, p.z], r.polygon));
       const hit = this.scene.pickWithRay(this.walk.getForwardRay(3));
