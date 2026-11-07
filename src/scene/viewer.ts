@@ -52,6 +52,7 @@ import {
 } from './navigation';
 import { cameraYaw, planHeading, setPlanView, stopOrbit, usePlanCoordinates } from './coordinates';
 import {
+  createInteriorBloom,
   createInteriorEnvironment,
   createInteriorOcclusion,
   createInteriorTaa,
@@ -65,6 +66,7 @@ import {
 } from './interiorAmbience';
 import type { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture';
 import type { RawCubeTexture } from '@babylonjs/core/Materials/Textures/rawCubeTexture';
+import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
 import type { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
 import type { TAARenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/taaRenderingPipeline';
 import type { OcclusionState } from './diagnostics';
@@ -160,6 +162,7 @@ export class HouseViewer {
   private interiorEnvironment?: RawCubeTexture;
   private interiorOcclusion?: SSAO2RenderingPipeline;
   private interiorTaa?: TAARenderingPipeline;
+  private interiorBloom?: DefaultRenderingPipeline;
   private interiorAmbienceUnavailable = false;
   private occlusionProbe?: OcclusionProbe;
   private occlusionRefused = false;
@@ -218,6 +221,7 @@ export class HouseViewer {
     this.interiorEnvironment = undefined;
     this.interiorOcclusion = undefined;
     this.interiorTaa = undefined;
+    this.interiorBloom = undefined;
     this.interiorAmbienceUnavailable = false;
     this.occlusionProbe = undefined;
     this.occlusionRefused = false;
@@ -949,6 +953,9 @@ export class HouseViewer {
           ? startOcclusionProbe(performance.now())
           : undefined;
       }
+      // Last in the chain, for the same reason the temporal pass is first: the glow
+      // belongs on the finished image, not on the occlusion's half-resolution buffer.
+      this.interiorBloom ??= createInteriorBloom(this.scene, this.walk);
       return;
     }
     if (this.interiorEnvironment && this.scene.environmentTexture === this.interiorEnvironment) {
@@ -961,6 +968,8 @@ export class HouseViewer {
     this.interiorOcclusion = undefined;
     this.interiorTaa?.dispose();
     this.interiorTaa = undefined;
+    this.interiorBloom?.dispose();
+    this.interiorBloom = undefined;
     // Both pipelines read the PrePass and nothing else does, so it goes with them.
     this.scene.disablePrePassRenderer();
     this.occlusionProbe = undefined;
@@ -1270,6 +1279,8 @@ export class HouseViewer {
     this.interiorOcclusion = undefined;
     this.interiorTaa?.dispose();
     this.interiorTaa = undefined;
+    this.interiorBloom?.dispose();
+    this.interiorBloom = undefined;
     window.removeEventListener('keydown', this.keydown);
     window.removeEventListener('keyup', this.keyup);
     window.removeEventListener('blur', this.clearKeys);

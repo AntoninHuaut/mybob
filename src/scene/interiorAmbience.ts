@@ -3,6 +3,7 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { CubeMapToSphericalPolynomialTools } from '@babylonjs/core/Misc/HighDynamicRange/cubemapToSphericalPolynomial';
 import { RawCubeTexture } from '@babylonjs/core/Materials/Textures/rawCubeTexture';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
+import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
 import { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
 import { TAARenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/taaRenderingPipeline';
 import type { Camera } from '@babylonjs/core/Cameras/camera';
@@ -33,6 +34,14 @@ export const INTERIOR_FIXTURE_RANGE = 7;
 
 /** Darker ground bounce in visit, so the hemispheric light reads top-to-bottom. */
 export const INTERIOR_GROUND_COLOR = Color3.FromHexString('#6d6a5f');
+
+/**
+ * Bloom of the visit, tuned by eye on the test house: the lamp and the bay window
+ * take a touch of light, nothing else. A decorative glow would veil the white
+ * walls, which is exactly what these two values avoid.
+ */
+export const INTERIOR_BLOOM_THRESHOLD = 0.6;
+export const INTERIOR_BLOOM_WEIGHT = 0.2;
 
 /**
  * Ambient occlusion is the expensive part of the visit. Below this frame rate the
@@ -248,6 +257,63 @@ export function createInteriorOcclusion(
     scene.disablePrePassRenderer();
     console.info(
       `[visite] occlusion ambiante indisponible : ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return undefined;
+  }
+}
+
+/**
+ * The slice of `DefaultRenderingPipeline` the visit configures. Narrowed to a
+ * structural type so the ordering rule below is testable without a GPU.
+ */
+export interface BloomPipeline {
+  imageProcessing: { toneMappingEnabled: boolean; vignetteEnabled: boolean } | null;
+  imageProcessingEnabled: boolean;
+  bloomEnabled: boolean;
+  bloomThreshold: number;
+  bloomWeight: number;
+}
+
+/**
+ * Applies the validated bloom to a pipeline.
+ *
+ * The app tone-maps in the material shaders, so the pipeline's own image
+ * processing would tone-map a second time. It has to be configured *before* the
+ * pass is switched off: disabling it disposes the post-process and nulls
+ * `imageProcessing`, leaving the sub-effects unreachable.
+ */
+export function configureInteriorBloom(pipeline: BloomPipeline): void {
+  if (pipeline.imageProcessing) {
+    pipeline.imageProcessing.toneMappingEnabled = false;
+    pipeline.imageProcessing.vignetteEnabled = false;
+  }
+  pipeline.imageProcessingEnabled = false;
+  pipeline.bloomThreshold = INTERIOR_BLOOM_THRESHOLD;
+  pipeline.bloomWeight = INTERIOR_BLOOM_WEIGHT;
+  pipeline.bloomEnabled = true;
+}
+
+/**
+ * Bloom for the visit camera. Built after the occlusion on purpose: Babylon
+ * appends each pipeline to the end of the camera's chain, so the glow is
+ * composited on the finished image instead of being fed back into the AO.
+ *
+ * `hdr` stays false. The materials already tone-map in their shaders, so the
+ * values reaching the pipeline are display-referred: a half-float buffer would
+ * cost a second scene render and bandwidth without widening the range the
+ * threshold reads.
+ */
+export function createInteriorBloom(
+  scene: Scene,
+  camera: Camera,
+): DefaultRenderingPipeline | undefined {
+  try {
+    const pipeline = new DefaultRenderingPipeline('interior-bloom', false, scene, [camera]);
+    configureInteriorBloom(pipeline);
+    return pipeline;
+  } catch (error) {
+    console.info(
+      `[visite] bloom indisponible : ${error instanceof Error ? error.message : String(error)}`,
     );
     return undefined;
   }
