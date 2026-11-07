@@ -23,6 +23,8 @@ Read the local passation journal `docs/HANDOFF.md` first (git-ignored: present o
 
 Use Node 24, `pnpm install --frozen-lockfile`, and `pnpm run ci` for a release. Run `pnpm run test:e2e` for browser workflows. Tests cover DOM behavior with Happy DOM and geometry with Babylon NullEngine. Neither proves visual correctness: use a real browser when available and record what was actually inspected.
 
+Several agents share this machine. The e2e suite takes a free port on every run (`playwright.config.ts`): never hardcode a port, never add `--strictPort` on a known one, and never stop another agent's Vite server. `pnpm run dev` already increments its own port; an orphaned `vite preview` is simply ignored because the suite picks a different port.
+
 All changes must go through a pull request (MR) from a `codex/` branch to `main`. Do not commit or push changes directly to `main`. A local test pass is not a substitute for the remote CI. Never merge while any required check is pending, failed, cancelled or missing; verify the checks for the exact latest PR commit. The owner authorizes auto-merge through GitHub once required CI checks pass; enable it for completed, validated changes without asking again. Never bypass branch protections or required checks.
 
 Never block on CI with long sleeps. Push, enable auto-merge, then continue other work; check `gh pr checks` afterwards. A `sleep` longer than about 30 s is a smell: do something useful instead.

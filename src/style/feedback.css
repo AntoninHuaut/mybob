@@ -149,6 +149,34 @@ dialog p {
   background: #742d21;
   color: white;
 }
+.first-steps-list {
+  display: grid;
+  gap: 15px;
+  margin: 0 0 22px;
+  padding: 0;
+  list-style: none;
+}
+.first-steps-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 13px;
+}
+.first-steps-list li > svg {
+  flex: none;
+  margin-top: 2px;
+  color: #60854a;
+}
+.first-steps-list strong {
+  display: block;
+  font-size: 14px;
+}
+.first-steps-list p {
+  margin: 3px 0 0;
+  font-size: 13px;
+}
+#show-full-help {
+  margin-left: -12px;
+}
 .help-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;

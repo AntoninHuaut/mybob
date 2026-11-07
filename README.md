@@ -33,6 +33,7 @@ La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable e
 
 ## Utilisation
 
+- **Premiers pas** : au premier lancement, une carte propose de tourner autour de la maison, d’ouvrir le plan ou d’entrer dans la visite. Elle ne bloque rien, disparaît au premier geste et reste accessible depuis la barre latérale.
 - **Vue 3D** : glisser avec le bouton gauche pour tourner ; molette pour zoomer ; bouton droit pour déplacer.
 - Le cadrage s’adapte à la fenêtre et réserve une marge pour l’interface. **Recentrer** réaffiche la maison entière après un zoom ou un déplacement.
 - **Extérieur** : si le projet contient un terrain, affiche la parcelle, les façades et la toiture ; la vue 3D garde la toiture ouverte pour aménager.
