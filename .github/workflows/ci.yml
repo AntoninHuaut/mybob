@@ -55,6 +55,10 @@ jobs:
         run: |
           python3 -m pip install --quiet pymupdf
           python3 scripts/derive_outline.py --self-test
+      - name: Test the interior doors read from swing arcs
+        run: |
+          python3 -m pip install --quiet pymupdf
+          python3 scripts/extract_doors.py --self-test
       - name: Test the dimension registry
         run: python3 scripts/extract_plan_evidence.py --self-test
       - name: Test the rooms computed from walls
