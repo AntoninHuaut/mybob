@@ -190,14 +190,8 @@ def snap_rooms(rooms, walls, tolerance=0.30):
             [round(snap(point[0], xs, tolerance), 4), round(snap(point[1], zs, tolerance), 4)]
             for point in room["polygon"]
         ]
-        room["label"] = [
-            round(snap(room["label"][0], xs, tolerance), 4),
-            round(snap(room["label"][1], zs, tolerance), 4),
-        ]
-        room["viewpoint"] = [
-            round(snap(room["viewpoint"][0], xs, tolerance), 4),
-            round(snap(room["viewpoint"][1], zs, tolerance), 4),
-        ]
+        # Le repère et le point de visite restent où ils sont : les recaler les
+        # poserait sur la face d'un mur, donc sur le bord du polygone.
 
 
 def apply_overrides(walls, overrides):
@@ -230,7 +224,60 @@ def apply_overrides(walls, overrides):
                     opening[key] = opening_patch[key]
 
 
-def build(plan, registry, template, level_id, pages, thickness, overrides=None):
+def merge_partitions(model_walls, partitions, tolerance=0.15):
+    """Remplace les cloisons du modèle par celles lues sur le dessin.
+
+    Les murs hachurés ne sont pas extractibles : ils restent ceux du modèle, avec
+    leurs baies. Seules les cloisons — les rectangles remplis — sont reprises du
+    dessin, parce que c'est là qu'elles sont exactes. Une cloison sans
+    contrepartie dans le modèle est ajoutée.
+    """
+    merged = [json.loads(json.dumps(wall)) for wall in model_walls]
+    added = 0
+    for partition in partitions:
+        along = 0 if partition["axis"] == "horizontal" else 1
+        across = 1 - along
+        centre = (partition["low"] + partition["high"]) / 2
+        best, best_gap = None, tolerance
+        for wall in merged:
+            horizontal = abs(wall["start"][0] - wall["end"][0]) >= abs(
+                wall["start"][1] - wall["end"][1]
+            )
+            if (0 if horizontal else 1) != along:
+                continue
+            gap = abs(wall["start"][across] - centre)
+            if gap > best_gap:
+                continue
+            low = min(wall["start"][along], wall["end"][along])
+            high = max(wall["start"][along], wall["end"][along])
+            if min(high, partition["to"]) - max(low, partition["from"]) <= 0:
+                continue
+            best, best_gap = wall, gap
+        if best is None:
+            start = [0.0, 0.0]
+            end = [0.0, 0.0]
+            start[along], end[along] = partition["from"], partition["to"]
+            start[across] = end[across] = centre
+            merged.append(
+                {
+                    "id": f"clo-{len(merged) + 1}",
+                    "start": [round(start[0], 4), round(start[1], 4)],
+                    "end": [round(end[0], 4), round(end[1], 4)],
+                    "thickness": partition["thickness"],
+                    "openings": [],
+                }
+            )
+            added += 1
+            continue
+        # On garde l'identifiant, l'emprise et les baies du modèle : une cloison
+        # lue s'arrête au tableau d'une porte, le mur du modèle la traverse. Seuls
+        # la position et la épaisseur viennent du dessin.
+        best["start"][across] = best["end"][across] = round(centre, 4)
+        best["thickness"] = partition["thickness"]
+    return merged, added
+
+
+def build(plan, registry, template, level_id, pages, thickness, overrides=None, merge=True):
     level = next(candidate for candidate in template["levels"] if candidate["id"] == level_id)
     outline = level["outline"]
     chains = [
@@ -275,23 +322,27 @@ def build(plan, registry, template, level_id, pages, thickness, overrides=None):
             opening["id"] = f"{wall['id']}-o{len(wall['openings']) + 1}"
             wall["openings"].append(opening)
 
-    for index, partition in enumerate(plan["walls"]):
-        along = 0 if partition["axis"] == "horizontal" else 1
-        across = 1 - along
-        centre = (partition["low"] + partition["high"]) / 2
-        start = [0.0, 0.0]
-        end = [0.0, 0.0]
-        start[along], end[along] = partition["from"], partition["to"]
-        start[across] = end[across] = centre
-        walls.append(
-            {
-                "id": f"clo-{index + 1}",
-                "start": [round(start[0], 4), round(start[1], 4)],
-                "end": [round(end[0], 4), round(end[1], 4)],
-                "thickness": partition["thickness"],
-                "openings": [],
-            }
-        )
+    if merge:
+        # Les murs hachurés du modèle sont conservés : seules les cloisons changent.
+        walls = merge_partitions(level["walls"], plan["walls"])[0]
+    else:
+        for index, partition in enumerate(plan["walls"]):
+            along = 0 if partition["axis"] == "horizontal" else 1
+            across = 1 - along
+            centre = (partition["low"] + partition["high"]) / 2
+            start = [0.0, 0.0]
+            end = [0.0, 0.0]
+            start[along], end[along] = partition["from"], partition["to"]
+            start[across] = end[across] = centre
+            walls.append(
+                {
+                    "id": f"clo-{index + 1}",
+                    "start": [round(start[0], 4), round(start[1], 4)],
+                    "end": [round(end[0], 4), round(end[1], 4)],
+                    "thickness": partition["thickness"],
+                    "openings": [],
+                }
+            )
 
     result = json.loads(json.dumps(template))
     target = next(candidate for candidate in result["levels"] if candidate["id"] == level_id)
@@ -389,7 +440,8 @@ def self_test():
             }
         ],
     }
-    result = build(plan, registry, template, "rdc", [1], 0.34)
+    # Mode remplacement : tout vient du dessin et du contour.
+    result = build(plan, registry, template, "rdc", [1], 0.34, merge=False)
     level = result["levels"][0]
     failures = []
     if len(level["walls"]) != 5:
@@ -403,6 +455,31 @@ def self_test():
     # L'arête sud va de x=6 vers x=0 : la porte à x 2,00..2,90 est à 3,10 du début.
     elif abs(openings[0]["width"] - 0.9) > 0.01 or abs(openings[0]["offset"] - 3.1) > 0.01:
         failures.append(f"baie mal placée : {openings[0]}")
+    # La fusion garde les murs du modèle que le dessin ne donne pas.
+    with_model = json.loads(json.dumps(template))
+    with_model["levels"][0]["walls"] = [
+        {
+            "id": "hachure",
+            "start": [0.34, 1.0],
+            "end": [5.66, 1.0],
+            "thickness": 0.34,
+            "openings": [
+                {"id": "porte", "kind": "door", "offset": 2.0, "width": 0.9, "height": 2.1}
+            ],
+        }
+    ]
+    merged = build(plan, registry, with_model, "rdc", [1], 0.34)
+    merged_walls = merged["levels"][0]["walls"]
+    kept = next((wall for wall in merged_walls if wall["id"] == "hachure"), None)
+    if kept is None:
+        failures.append("la fusion a supprimé un mur hachuré du modèle")
+    elif len(kept.get("openings", [])) != 1:
+        failures.append("la fusion a perdu une baie du modèle")
+    # La fusion ne garde que les murs du modèle et les cloisons lues : le mur
+    # hachuré et la cloison, pas de murs extérieurs régénérés.
+    if len(merged_walls) != 2:
+        failures.append(f"{len(merged_walls)} murs après fusion au lieu de 2")
+
     # Une retouche survit à la régénération et ne touche que le mur visé.
     patched = build(
         plan,
@@ -412,6 +489,7 @@ def self_test():
         [1],
         0.34,
         {"walls": {"ext-3": {"offset": 0.05, "thickness": 0.30}}},
+        merge=False,
     )
     patched_walls = patched["levels"][0]["walls"]
     target = next(wall for wall in patched_walls if wall["id"] == "ext-3")
@@ -438,6 +516,11 @@ def main(argv):
     parser.add_argument("--pages", default=None)
     parser.add_argument("--thickness", type=float, default=DEFAULT_THICKNESS)
     parser.add_argument(
+        "--replace",
+        action="store_true",
+        help="remplacer tous les murs par ceux du dessin, au lieu de fusionner",
+    )
+    parser.add_argument(
         "--overrides",
         default=None,
         help="fichier de retouches appliquées après génération (murs et baies)",
@@ -452,7 +535,16 @@ def main(argv):
     overrides = (
         json.loads(Path(args.overrides).read_text(encoding="utf-8")) if args.overrides else None
     )
-    result = build(plan, registry, template, args.level, pages, args.thickness, overrides)
+    result = build(
+        plan,
+        registry,
+        template,
+        args.level,
+        pages,
+        args.thickness,
+        overrides,
+        merge=not args.replace,
+    )
     Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     level = next(candidate for candidate in result["levels"] if candidate["id"] == args.level)
     openings = sum(len(wall.get("openings", [])) for wall in level["walls"])
