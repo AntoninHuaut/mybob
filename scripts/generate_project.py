@@ -28,6 +28,11 @@ TOL = 0.01  # m
 DEFAULT_THICKNESS = 0.34  # m, épaisseur d'un mur extérieur sans cote
 MIN_THICKNESS = 0.06  # m, en dessous ce n'est pas une épaisseur de mur
 MAX_THICKNESS = 0.45  # m, au-dessus non plus
+DOOR_HEIGHT = 1.6  # m, en dessous une ouverture ne peut pas être une porte
+BAY_WIDTH = 1.6  # m, au-dessus une ouverture de hauteur de porte est une baie
+GARAGE_WIDTH = 2.0  # m, au-dessus une ouverture pleine hauteur sur un garage en est la porte
+SILL_RADIUS = 130.0  # pt, rayon d'appariement d'une étiquette « All : … m »
+MAX_HOST_DISTANCE = 0.6  # m, au-delà la baie n'appartient pas à ce mur
 
 
 def outline_edges(outline):
@@ -99,20 +104,33 @@ def chain_side(chain, origins):
     return (chain["perpendicular"] - origin) / chain["printedPointsPerMetre"]
 
 
-def edge_for_side(edges, axis, side, outline):
-    """Arête du contour qui porte le côté mesuré par une chaîne."""
-    # Le côté d'une chaîne horizontale est une ordonnée, celui d'une verticale une abscisse.
-    values = [point[1] if axis == "horizontal" else point[0] for point in outline]
-    low, high = min(values), max(values)
+def edge_for_interval(edges, axis, side, low, high):
+    """Arête du contour qui contient un intervalle monde, du côté mesuré.
+
+    Une chaîne de façade peut mesurer plusieurs arêtes à la fois : au sud de
+    Sannerville, le séjour, l'entrée en renfoncement et le garage sont trois
+    arêtes distinctes, et une seule chaîne les couvre toutes. Chercher l'arête
+    par le côté seul posait toutes les baies sur la première et perdait les
+    autres — l'entrée et le séjour n'avaient plus une seule ouverture.
+
+    On retient donc les arêtes dont l'intervalle le long de l'axe contient la
+    baie, puis la plus proche du côté mesuré. Le renfoncement d'entrée est à
+    0,35 m du nu de façade : la distance tranche, une tolérance ne le ferait pas.
+    """
+    along = 0 if axis == "horizontal" else 1
+    best = None
+    best_distance = None
     for edge in edges:
         if edge["axis"] != axis:
             continue
+        edge_low, edge_high = sorted((edge["start"][along], edge["end"][along]))
+        if low < edge_low - TOL or high > edge_high + TOL:
+            continue
         coordinate = edge["start"][1] if axis == "horizontal" else edge["start"][0]
-        if side > high and abs(coordinate - high) <= TOL:
-            return edge
-        if side < low and abs(coordinate - low) <= TOL:
-            return edge
-    return None
+        distance = abs(coordinate - side)
+        if best_distance is None or distance < best_distance:
+            best, best_distance = edge, distance
+    return best
 
 
 def chain_start(chain, origins):
@@ -126,21 +144,88 @@ def chain_start(chain, origins):
     return (first["at"][along] - first["value"] / 2 * ppm - origin) / ppm
 
 
-def openings_from_chain(chain, wall, origins, sill=None):
-    """Baies d'une chaîne, ramenées sur l'offset du mur qu'elle mesure.
+def parse_measure(text):
+    """Une cote de baie : « 1.80 » en mètres, « 95 » en centimètres."""
+    text = text.strip().replace(",", ".")
+    return float(text) if "." in text else float(text) / 100
+
+
+def opening_kind(width, height):
+    """Fenêtre, porte ou baie, d'après la seule géométrie imprimée.
+
+    Une ouverture plus basse qu'une porte est une fenêtre. Une ouverture de
+    hauteur de porte et large de plus de 1,60 m n'est pas un vantail : c'est une
+    baie. Le plan ne dit pas « porte » ou « fenêtre » ; il donne deux nombres.
+    """
+    if height < DOOR_HEIGHT:
+        return "window"
+    return "sliding" if width >= BAY_WIDTH else "door"
+
+
+def sill_for(at, sills, fallback):
+    """Allège de l'étiquette la plus proche, ou repli signalé.
+
+    Le plan porte plusieurs allèges sur la même page — 1,10 m au nord, 1,20 m au
+    sud. Prendre la plus fréquente pour tout le niveau posait 1,20 sous les
+    fenêtres du nord. L'étiquette est écrite à côté de sa baie : c'est la
+    distance qui l'apparie, pas un vote.
+    """
+    if not sills:
+        return (fallback if fallback is not None else 0.0), fallback is not None
+    best = min(sills, key=lambda sill: math.hypot(sill["at"][0] - at[0], sill["at"][1] - at[1]))
+    distance = math.hypot(best["at"][0] - at[0], best["at"][1] - at[1])
+    if distance <= SILL_RADIUS:
+        return best["value"], False
+    return (fallback if fallback is not None else 0.0), True
+
+
+def point_in_polygon(point, polygon):
+    """Appartenance d'un point à un polygone, par parité de croisements."""
+    x, z = point
+    inside = False
+    for index, start in enumerate(polygon):
+        end = polygon[(index + 1) % len(polygon)]
+        if (start[1] > z) != (end[1] > z):
+            cross = start[0] + (z - start[1]) * (end[0] - start[0]) / (end[1] - start[1])
+            if x < cross:
+                inside = not inside
+    return inside
+
+
+def garage_opening(opening, wall, rooms):
+    """Vrai si la baie est une porte de garage.
+
+    Le plan ne nomme pas les baies : il donne une largeur et une hauteur. Une
+    ouverture pleine hauteur de plus de deux mètres qui donne sur une pièce de
+    type garage est une porte de garage — la seule chose qui la distingue d'une
+    baie vitrée est la pièce qu'elle dessert, et le modèle la connaît.
+    """
+    if opening["height"] < DOOR_HEIGHT or opening["width"] < GARAGE_WIDTH:
+        return False
+    along = 0 if abs(wall["start"][1] - wall["end"][1]) < 1e-9 else 1
+    across = 1 - along
+    centre = (opening["low"] + opening["high"]) / 2
+    for side in (-1, 1):
+        probe = [0.0, 0.0]
+        probe[along] = centre
+        probe[across] = wall["start"][across] + side * (wall["thickness"] / 2 + 0.3)
+        for room in rooms:
+            if room.get("kind") == "garage" and point_in_polygon(probe, room["polygon"]):
+                return True
+    return False
+
+
+def chain_openings(chain, origins, sills=None, fallback_sill=None):
+    """Baies d'une chaîne, en intervalles monde le long de son axe.
 
     Les segments d'une chaîne sont ordonnés par abscisse croissante : leur
-    intervalle monde se lit directement. L'offset d'une baie se compte depuis le
-    début du mur, qui peut aller dans l'autre sens. L'allège vient du plan
-    (« All : 1.10 m ») ; sans elle, la baie est marquée non résolue plutôt que
-    posée à une hauteur inventée.
+    intervalle monde se lit directement. La hauteur vient du texte de la cote
+    (« 1.80/1.05 »), l'allège de l'étiquette la plus proche. Une baie de hauteur
+    de porte n'a pas d'allège : elle part du sol.
     """
-    along = 0 if chain["axis"] == "horizontal" else 1
     start_world = chain_start(chain, origins)
     if start_world is None:
         return []
-    wall_start = wall["start"][along]
-    wall_end = wall["end"][along]
     cursor = start_world
     found = []
     for segment in chain["segments"]:
@@ -149,21 +234,45 @@ def openings_from_chain(chain, wall, origins, sill=None):
         if segment["kind"] != "opening" or "/" not in segment["text"]:
             continue
         width_text, height_text = segment["text"].split("/", 1)
-        width = float(width_text.replace(",", ".")) if "," in width_text or "." in width_text else float(width_text) / 100
-        height = float(height_text.replace(",", ".")) if "," in height_text or "." in height_text else float(height_text) / 100
-        offset = low - wall_start if wall_end >= wall_start else wall_start - high
-        if offset < -TOL or offset + width > abs(wall_end - wall_start) + TOL:
-            continue
+        width = parse_measure(width_text)
+        height = parse_measure(height_text)
+        if height >= DOOR_HEIGHT:
+            sill, guessed = 0.0, False
+        else:
+            sill, guessed = sill_for(segment["at"], sills, fallback_sill)
         found.append(
             {
-                "offset": round(max(0.0, offset), 4),
+                "low": round(low, 4),
+                "high": round(high, 4),
                 "width": round(width, 4),
                 "height": round(height, 4),
-                "kind": "window" if height < 1.6 else "door",
-                "sill": 0.0 if height >= 1.6 else (sill if sill is not None else 0.0),
+                "kind": opening_kind(width, height),
+                "sill": sill,
+                "sillGuessed": guessed,
             }
         )
     return found
+
+
+def place_opening(opening, wall):
+    """Ramène une baie monde sur l'offset du mur qui la porte.
+
+    L'offset se compte depuis le début du mur, qui peut aller dans l'autre sens.
+    """
+    along = 0 if abs(wall["start"][1] - wall["end"][1]) < 1e-9 else 1
+    wall_start = wall["start"][along]
+    wall_end = wall["end"][along]
+    if wall_end >= wall_start:
+        offset = opening["low"] - wall_start
+    else:
+        offset = wall_start - opening["high"]
+    return {
+        "offset": round(max(0.0, offset), 4),
+        "width": opening["width"],
+        "height": opening["height"],
+        "kind": opening["kind"],
+        "sill": opening["sill"],
+    }
 
 
 def wall_faces(walls):
@@ -614,6 +723,18 @@ def printed_thickness(registry, pages, edge, frame, tolerance=0.6):
     return None if best is None else best[1]
 
 
+def printed_sills(registry, pages):
+    """Toutes les allèges imprimées, avec leur position sur la page."""
+    found = []
+    for page in registry.get("pages") or []:
+        if pages is not None and page.get("index") not in pages:
+            continue
+        for sill in (page.get("labels") or {}).get("sills") or []:
+            if sill.get("value") is not None and sill.get("at"):
+                found.append(sill)
+    return found
+
+
 def printed_sill(registry, pages):
     """Allège imprimée la plus fréquente, ou None si le plan n'en donne pas."""
     counts = {}
@@ -641,6 +762,11 @@ def merge_openings(model_walls, generated_walls, tolerance=0.12):
     murs voisins peuvent être à six centimètres l'un de l'autre, et un offset
     recopié d'un mur à l'autre poserait la baie hors du mur. La baie doit tenir
     dans l'emprise du mur d'accueil, sinon elle n'est pas reportée.
+
+    Le mur d'accueil est celui dont l'emprise contient la baie et dont l'axe est
+    le plus proche, pas le premier sous une tolérance : le mur d'entrée du modèle
+    est à 0,33 m de l'arête du contour, et une tolérance fixe y perdait les trois
+    baies de l'entrée.
     """
     added = []
     for generated in generated_walls:
@@ -659,33 +785,39 @@ def merge_openings(model_walls, generated_walls, tolerance=0.12):
             else:
                 world_low = g_high - opening["offset"] - opening["width"]
             world_high = world_low + opening["width"]
+            best = None
             for wall in model_walls:
                 wall_along_x = abs(wall["start"][0] - wall["end"][0]) >= abs(
                     wall["start"][1] - wall["end"][1]
                 )
                 if wall_along_x != along_x:
                     continue
-                wall_axis = wall["start"][1] if along_x else wall["start"][0]
-                if abs(wall_axis - g_axis) > tolerance:
-                    continue
                 w_start = wall["start"][0] if along_x else wall["start"][1]
                 w_end = wall["end"][0] if along_x else wall["end"][1]
                 w_low, w_high = sorted((w_start, w_end))
                 if world_low < w_low - tolerance or world_high > w_high + tolerance:
                     continue
-                offset = world_low - w_start if w_end >= w_start else w_start - world_high
-                duplicate = any(
-                    abs(existing["offset"] - offset) <= tolerance
-                    and abs(existing["width"] - opening["width"]) <= tolerance
-                    for existing in wall["openings"]
-                )
-                if duplicate:
+                wall_axis = wall["start"][1] if along_x else wall["start"][0]
+                distance = abs(wall_axis - g_axis)
+                if distance > MAX_HOST_DISTANCE:
                     continue
-                copy = json.loads(json.dumps(opening))
-                copy["offset"] = round(max(0.0, offset), 4)
-                wall["openings"].append(copy)
-                added.append({"wall": wall["id"], "offset": copy["offset"]})
-                break
+                if best is None or distance < best[0]:
+                    best = (distance, wall, w_start, w_end)
+            if best is None:
+                continue
+            _, wall, w_start, w_end = best
+            offset = world_low - w_start if w_end >= w_start else w_start - world_high
+            duplicate = any(
+                abs(existing["offset"] - offset) <= tolerance
+                and abs(existing["width"] - opening["width"]) <= tolerance
+                for existing in wall["openings"]
+            )
+            if duplicate:
+                continue
+            copy = json.loads(json.dumps(opening))
+            copy["offset"] = round(max(0.0, offset), 4)
+            wall["openings"].append(copy)
+            added.append({"wall": wall["id"], "offset": copy["offset"]})
     return added
 
 
@@ -733,7 +865,16 @@ def compare_thickness(model_walls, generated_walls, tolerance=0.12, gap=0.02):
 
 
 def build(
-    plan, registry, template, level_id, pages, thickness, overrides=None, merge=True, report=None
+    plan,
+    registry,
+    template,
+    level_id,
+    pages,
+    thickness,
+    overrides=None,
+    merge=True,
+    report=None,
+    openings_only=False,
 ):
     level = next(candidate for candidate in template["levels"] if candidate["id"] == level_id)
     outline = level["outline"]
@@ -746,6 +887,7 @@ def build(
     edges = outline_edges(outline)
     origins = envelope_frame(chains, outline)
     frame = world_frame(chains, outline)
+    sills = printed_sills(registry, pages)
     sill = printed_sill(registry, pages)
 
     walls = []
@@ -777,19 +919,36 @@ def build(
             }
         )
 
+    dropped = []
+    guessed = []
     for chain in chains:
         if not chain["closed"]:
             continue
         side = chain_side(chain, origins)
         if side is None:
             continue
-        edge = edge_for_side(edges, chain["axis"], side, outline)
-        if edge is None:
-            continue
-        wall = walls[edges.index(edge)]
-        for opening in openings_from_chain(chain, wall, origins, sill):
-            opening["id"] = f"{wall['id']}-o{len(wall['openings']) + 1}"
-            wall["openings"].append(opening)
+        for opening in chain_openings(chain, origins, sills, sill):
+            edge = edge_for_interval(
+                edges, chain["axis"], side, opening["low"], opening["high"]
+            )
+            if edge is None:
+                dropped.append(
+                    {
+                        "axis": chain["axis"],
+                        "low": opening["low"],
+                        "high": opening["high"],
+                        "width": opening["width"],
+                    }
+                )
+                continue
+            wall = walls[edges.index(edge)]
+            placed = place_opening(opening, wall)
+            if garage_opening(opening, wall, level["rooms"]):
+                placed["kind"] = "garage"
+            placed["id"] = f"{wall['id']}-o{len(wall['openings']) + 1}"
+            wall["openings"].append(placed)
+            if opening["sillGuessed"]:
+                guessed.append({"wall": wall["id"], "opening": placed["id"]})
 
     generated = walls
     added = []
@@ -797,7 +956,13 @@ def build(
     partition_gaps = []
     closed = []
     rejoined = []
-    if merge:
+    if openings_only:
+        # Les murs du modèle sont gardés tels quels : seules les baies lues sur
+        # les chaînes sont reportées. C'est le cas d'une maison dont les murs
+        # sont déjà justes et à qui il ne manque que les ouvertures.
+        walls = json.loads(json.dumps(level["walls"]))
+        added = merge_openings(walls, generated)
+    elif merge:
         # Les murs hachurés du modèle sont conservés : seules les cloisons changent.
         walls, _, partition_gaps = merge_partitions(level["walls"], plan["walls"])
         added = merge_openings(walls, generated)
@@ -829,7 +994,9 @@ def build(
     if overrides:
         apply_overrides(walls, overrides)
     target["walls"] = walls
-    moves = snap_rooms(target["rooms"], walls, target.get("outline"))
+    # En mode « baies seules », les pièces du modèle sont déjà justes : les
+    # recaler sur les faces les déplacerait pour rien et casserait les surfaces.
+    moves = [] if openings_only else snap_rooms(target["rooms"], walls, target.get("outline"))
     if report is not None:
         report["thickness"] = read
         report["openingsAdded"] = added
@@ -839,6 +1006,8 @@ def build(
         report["closed"] = closed
         report["rejoined"] = rejoined
         report["sill"] = sill
+        report["openingsDropped"] = dropped
+        report["sillGuessed"] = guessed
     return result
 
 
@@ -987,6 +1156,40 @@ def self_test():
         failures.append(f"retouche d'épaisseur non appliquée : {target['thickness']}")
     if abs(untouched["thickness"] - 0.34) > 1e-9:
         failures.append(f"retouche appliquée au mauvais mur : {untouched['thickness']}")
+
+    # Une chaîne de façade peut couvrir plusieurs arêtes : au sud, un renfoncement
+    # d'entrée sépare deux tronçons. Chaque baie doit atterrir sur l'arête qui la
+    # contient, sinon celles des autres arêtes sont perdues.
+    notched = [[0, 0], [6, 0], [6, 4], [4, 4], [4, 3.6], [2, 3.6], [2, 4], [0, 4]]
+    notched_template = json.loads(json.dumps(template))
+    notched_template["levels"][0]["outline"] = notched
+    notched_template["levels"][0]["rooms"] = []
+    notched_segments = [
+        {"text": "1.00", "kind": "linear", "value": 1.0, "at": [100 + 0.5 * ppm, 400]},
+        {"text": "0.90/2.10", "kind": "opening", "value": 0.9, "at": [100 + 1.45 * ppm, 400]},
+        {"text": "1.10", "kind": "linear", "value": 1.1, "at": [100 + 2.45 * ppm, 400]},
+        {"text": "1.00/2.10", "kind": "opening", "value": 1.0, "at": [100 + 3.5 * ppm, 400]},
+        {"text": "2.00", "kind": "linear", "value": 2.0, "at": [100 + 5.0 * ppm, 400]},
+    ]
+    notched_registry = json.loads(json.dumps(registry))
+    notched_registry["pages"][0]["chains"][0]["segments"] = notched_segments
+    notched_result = build(
+        {"walls": []}, notched_registry, notched_template, "rdc", [1], 0.34, merge=False
+    )
+    notched_openings = [
+        opening
+        for wall in notched_result["levels"][0]["walls"]
+        for opening in wall.get("openings", [])
+    ]
+    if len(notched_openings) != 2:
+        failures.append(
+            f"{len(notched_openings)} baies sur un contour en renfoncement au lieu de 2"
+        )
+    else:
+        widths = sorted(round(opening["width"], 2) for opening in notched_openings)
+        if widths != [0.9, 1.0]:
+            failures.append(f"baies du renfoncement mal réparties : {widths}")
+
     if failures:
         for failure in failures:
             print(f"ECHEC {failure}")
@@ -1008,6 +1211,11 @@ def main(argv):
         "--replace",
         action="store_true",
         help="remplacer tous les murs par ceux du dessin, au lieu de fusionner",
+    )
+    parser.add_argument(
+        "--openings-only",
+        action="store_true",
+        help="garder les murs du modèle et n'ajouter que les baies lues sur les chaînes",
     )
     parser.add_argument(
         "--overrides",
@@ -1035,6 +1243,7 @@ def main(argv):
         overrides,
         merge=not args.replace,
         report=report,
+        openings_only=args.openings_only,
     )
     Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     level = next(candidate for candidate in result["levels"] if candidate["id"] == args.level)
@@ -1049,7 +1258,14 @@ def main(argv):
     if report.get("sill") is None:
         print("  allège : aucune cote imprimée, baies de fenêtre posées à 0")
     else:
-        print(f"  allège imprimée : {report['sill']} m")
+        print(f"  allège imprimée la plus fréquente : {report['sill']} m")
+    for item in report.get("sillGuessed") or []:
+        print(f"  allège non appariée, repli appliqué : {item['opening']} ({item['wall']})")
+    for item in report.get("openingsDropped") or []:
+        print(
+            f"  baie sans arête d'accueil : {item['axis']} "
+            f"{item['low']:.2f}..{item['high']:.2f} ({item['width']:.2f} m)"
+        )
     if report.get("openingsAdded"):
         print(f"  baies ajoutées depuis les chaînes : {len(report['openingsAdded'])}")
     moves = report.get("roomMoves") or []

@@ -53,6 +53,13 @@ utilisables parce qu'ils n'inventent rien : `extract_plan.py` ne rend que des
 rectangles remplis, `generate_project.py` ne place une baie que sur une chaîne
 refermée. Ce qu'ils ne savent pas lire manque, et c'est à l'IA de le voir.
 
+Les **portes intérieures** ne sont dans aucune de ces colonnes : elles ne sont
+pas cotées, donc aucun script ne peut les rendre exactes. Elles se lisent à
+l'encre et se posent à la main, ce que le propriétaire a explicitement autorisé
+(« porte intérieure, si c'est un truc à peu près c'est ok ; murs c'est gênant »).
+Ne pas les confondre avec une mesure : ce sont des décisions appuyées sur une
+lecture.
+
 ## Deux boucles, et ne pas les confondre
 
 Les tests de CI tournent sur des plans **synthétiques** : aucune donnée
@@ -91,6 +98,10 @@ uvx --from pymupdf python scripts/extract_plan.py plan.pdf plan.json \
 # 2. Construire : murs extérieurs, cloisons, baies, épaisseurs lues au plan.
 python scripts/generate_project.py plan.json registry.json modele.json rdc out.json --pages 8
 
+# 2 bis. Ou seulement les baies, quand les murs du modèle sont déjà justes.
+python scripts/generate_project.py plan.json registry.json modele.json rdc out.json \
+    --pages 8 --openings-only
+
 # 3. Juger le résultat, pas le dessin.
 python scripts/check_plan_surfaces.py registry.json out.json --level rdc --page 8
 python scripts/plan_faces.py out.json --level rdc --compare
@@ -103,6 +114,13 @@ python scripts/plan_faces.py out.json --level rdc --apply --write out.json
 La troisième étape est celle qui compte. Tant qu'une pièce est hors tolérance,
 le plan n'est pas fini — sauf si l'écart est documenté comme une incohérence du
 plan lui-même, ce qui est un résultat, pas un échec.
+
+**L'audit a une porte que les surfaces n'ont pas** : `room-unreachable`. Une pièce
+peut être exacte au centimètre carré et n'avoir aucune porte. Sur Sannerville,
+neuf pièces sur neuf étaient exactes et six étaient inaccessibles à la visite,
+parce que le RDC n'avait pas une seule baie. Les surfaces ne le voient pas : elles
+ne comparent que les pièces qu'on leur donne. Il faut les trois portes, et
+`reachedRooms` se lit à chaque passage.
 
 La quatrième supprime les retours de cloison qui dépassaient dans une pièce :
 sur Émiéville, l'audit passe de huit réserves à une.
@@ -418,13 +436,47 @@ signale l'écart sinon.
 Le **type** d'une baie est une convention, pas une lecture : sous 1,60 m de
 hauteur c'est une fenêtre avec allège, au-dessus c'est une baie à seuil. Le plan
 donne la hauteur, pas le type. C'est écrit ici pour que personne ne le prenne
-pour une mesure.
+pour une mesure. Trois règles en découlent, et elles sont dans le script :
+
+- hauteur < 1,60 m → `window` ; hauteur ≥ 1,60 m et largeur ≥ 1,60 m → `sliding`
+  (une ouverture de hauteur de porte large de 2,40 m n'est pas un vantail) ;
+  sinon `door` ;
+- une ouverture pleine hauteur de plus de 2,00 m qui donne sur une pièce de type
+  `garage` est une porte de garage — la pièce est dans le modèle, donc la règle
+  est exacte ;
+- l'**allège** n'est pas votée : le plan porte plusieurs `All : … m` sur la même
+  page (1,10 au nord, 1,20 au sud à Sannerville). Prendre la plus fréquente
+  posait 1,20 sous les fenêtres du nord. Chaque étiquette est appariée à la baie
+  la plus proche, et une baie sans étiquette est rapportée comme non résolue.
+
+**Une chaîne de façade peut couvrir plusieurs arêtes.** Au sud de Sannerville, le
+séjour, l'entrée en renfoncement et le garage sont trois arêtes distinctes, et une
+seule chaîne les mesure toutes. Chercher l'arête par le côté seul posait toutes
+les baies sur la première et perdait les autres : l'entrée et le séjour n'avaient
+plus une seule ouverture, et six pièces sur neuf étaient inaccessibles à la
+visite. Chaque baie est donc placée sur l'arête dont l'intervalle la contient, et
+à distance égale la plus proche du côté mesuré — le renfoncement d'entrée est à
+0,35 m du nu de façade, une tolérance ne le distinguerait pas.
 
 Deux limites mesurées sur de vrais plans : **les portes intérieures ne sont pas
 extractibles** — elles sont dessinées en polylignes, pas en arcs, et leurs
 libellés sont du texte vectorisé, donc ni l'arc ni le texte ne se lisent ; et une
 façade dont les baies ne sont que des cotes isolées (pas une chaîne fermée) ne
 donne aucune baie. Les deux se rapportent comme manquantes, jamais inventées.
+
+Les portes intérieures se lisent donc **à l'encre**, mur par mur, et c'est l'IA
+qui les pose : le propriétaire accepte qu'elles soient approchées, à condition
+que les murs soient justes. La méthode qui marche : balayer l'axe du mur tous les
+centimètres et relever les plages sans encre d'au moins 30 cm. Un balayage sur
+une seule ligne ne suffit pas — une cloison de 7 cm fait deux pixels, et la
+hachure d'un mur épais donne des trous qui n'en sont pas. Trois droites dans
+l'épaisseur (les deux faces et l'axe), et on retient la plage où **aucune** n'a
+d'encre.
+
+`--openings-only` garde les murs du modèle et n'ajoute que les baies des chaînes.
+C'est le mode d'une maison dont les murs sont déjà justes : il ne touche ni aux
+cloisons, ni aux pièces, donc les surfaces ne bougent pas. Sur Sannerville, il a
+ajouté les onze baies extérieures sans déplacer un seul sommet de pièce.
 
 `--replace` jette les murs du modèle et ne garde que ce que le dessin donne. Ne
 pas l'utiliser sur une vraie maison : les murs hachurés et les portes intérieures
@@ -616,6 +668,15 @@ imprimées est une trouvaille, pas un arrondi : énoncer la plage que produit
 l'ambiguïté et marquer non résolu, au lieu de bouger un mur jusqu'à ce que le
 nombre tombe juste.
 
+**Le cas symétrique existe et il est plus vicieux** : une pièce peut être
+atteinte par un interstice qui ne devrait pas exister. Sur Sannerville, la salle
+d'eau n'a aucune porte et se lisait pourtant comme atteinte, parce que le
+polygone des WC s'arrêtait 24 cm avant le mur sud et que le remplissage passait
+sous le murêt. Un `reachedRooms` complet n'est donc pas une preuve de plan
+correct : il faut lire **par où** on passe. Le test qui tranche est de fermer le
+mur manquant et de regarder si la pièce devient inatteignable — si oui, c'était
+bien un interstice.
+
 Lire les propres drapeaux de l'audit avant de rapporter. Il renvoie
 `sourceVerified: false` et `browserInspected: false` parce qu'il contrôle la
 cohérence interne, pas la fidélité au plan. Un rapport propre veut dire « pas de
@@ -691,6 +752,21 @@ après génération :
 Une correction vise un mur et survit à une régénération. Corriger trois murs ne
 veut jamais dire refaire les vingt autres. Garder ce fichier à côté du projet,
 pas dans le dépôt.
+
+Les **portes intérieures** ne passent pas par là : `--overrides` ne sait pas
+ajouter une baie, seulement déplacer ou redimensionner une baie existante. Elles
+s'écrivent donc directement dans le projet, après la génération, avec leur
+justification en commentaire du script qui les pose. C'est la seule couche qui
+n'est pas reproductible depuis le PDF, et c'est assumé : le propriétaire veut
+pouvoir les retoucher à la main dans l'interface, plus tard. Les murs, eux, ne se
+retouchent pas à la main.
+
+Un mur manquant se corrige aussi à la main, et il faut le chercher : ni la porte
+des surfaces ni l'audit ne signalent un mur absent. Sur Sannerville, le mur ouest
+des WC n'existait pas — les WC étaient ouverts sur le hall sur 1,60 m — et rien
+ne le disait. Ce qui l'a montré est le calque : les murs du modèle en orange
+par-dessus le dessin, et une bande hachurée du dessin sans orange en dessous.
+Faire le calque à chaque passe, pas seulement à la fin.
 
 ## Livrer un état d'achèvement honnête
 
