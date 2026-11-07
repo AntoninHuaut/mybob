@@ -73,7 +73,6 @@ export interface FurnitureItem {
   /** Linked objects share transformations, without changing individual dimensions. */
   groupId?: string;
   color: string;
-  source?: { url?: string; image?: string; note?: string };
   clearances?: { front: number; back: number; left: number; right: number };
   opening?: { kind: 'hinged' | 'drawer'; reach: number };
 }
@@ -296,30 +295,6 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
       !/^#[0-9a-fA-F]{6}$/.test(item.color)
     )
       fail('Couleur ou verrouillage du meuble invalide.');
-    if (item.source !== undefined) {
-      if (!record(item.source)) fail('La référence du meuble doit être un objet.');
-      if (item.source.url !== undefined) {
-        try {
-          const url = new URL(item.source.url);
-          if (!['http:', 'https:'].includes(url.protocol) || item.source.url.length > 4000)
-            fail('Le lien du meuble doit être une adresse HTTP ou HTTPS.');
-        } catch {
-          fail('Le lien du meuble doit être une adresse HTTP ou HTTPS.');
-        }
-      }
-      if (
-        item.source.image !== undefined &&
-        (typeof item.source.image !== 'string' ||
-          !/^data:image\/(?:png|jpeg|webp);base64,[A-Za-z0-9+/=]+$/.test(item.source.image) ||
-          item.source.image.length > 2_500_000)
-      )
-        fail('La photo doit être une image PNG, JPEG ou WebP de taille réduite.');
-      if (
-        item.source.note !== undefined &&
-        (typeof item.source.note !== 'string' || item.source.note.length > 2000)
-      )
-        fail('La note du meuble est trop longue.');
-    }
     if (
       item.clearances !== undefined &&
       (!record(item.clearances) ||

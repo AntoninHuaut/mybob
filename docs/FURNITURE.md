@@ -30,7 +30,7 @@ Les distances partent des centres des quatre faces. Les enveloppes de passage et
 
 Lors du placement, seules les distances vers les obstacles sont affichées (« Écart ») ; les dimensions du meuble restent consultables dans sa fiche. En plus des quatre axes vers les murs, le meuble sélectionné reçoit une cote réelle (points les plus proches des empreintes) vers chacun de ses voisins hors ensemble lié dans un rayon d’1 m — au maximum trois. Les membres d’un même ensemble lié (table + chaises) ne sont jamais cotés entre eux : l’ensemble se déplace comme un bloc. Les écarts ≤ 2 cm restent masqués.
 
-Les aménagements sont sauvegardés localement par maison et par niveau. L’export du projet inclut les meubles. Les références déjà présentes dans les anciens fichiers restent compatibles, mais ne sont plus proposées dans l’interface. Une erreur de sauvegarde est signalée si la mémoire locale est indisponible ou pleine. Conserver un export pour transférer ou sauvegarder le travail.
+Les aménagements sont sauvegardés localement par maison et par niveau. L’export du projet inclut les meubles. Une erreur de sauvegarde est signalée si la mémoire locale est indisponible ou pleine. Conserver un export pour transférer ou sauvegarder le travail.
 
 Dans **Navigation**, accessible près des outils de vue, régler le regard assis/debout, masquer les façades gênantes, activer une coupe, ou choisir un point libre du sol pour commencer une visite à cet endroit. Ce changement de point de vue ne simule pas une marche automatique au travers des pièces. Les volumes complets et leurs collisions sont restaurés en visite.
 
