@@ -1,6 +1,6 @@
 import { Plane } from '@babylonjs/core/Maths/math.plane';
 import type { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
-import type { Level, Point2, Wall } from '../model/types';
+import type { Level, Point2, ProjectSite, Wall } from '../model/types';
 import { floorElevationAt, pointInPolygon } from '../model/geometry';
 import { ELLIPSOID_HALF_HEIGHT, VISITOR_RADIUS } from './walkCamera';
 import type { Scene } from '@babylonjs/core/scene';
@@ -8,13 +8,18 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 
 /** The viewpoint changes, while the visitor's collision body stays on the floor. */
-export function applyEyeHeight(camera: UniversalCamera, level: Level, requested: number) {
+export function applyEyeHeight(
+  camera: UniversalCamera,
+  level: Level,
+  requested: number,
+  ground = floorElevationAt(level, [camera.position.x, camera.position.z]),
+) {
   const height = Math.max(
     0.85,
     Math.min(level.ceilingHeight - 0.1, Number.isFinite(requested) ? requested : 1.65),
   );
   camera.metadata = { ...camera.metadata, eyeHeight: height };
-  camera.position.y = floorElevationAt(level, [camera.position.x, camera.position.z]) + height;
+  camera.position.y = ground + height;
   camera.ellipsoidOffset.y = 2 * ELLIPSOID_HALF_HEIGHT - height;
   camera.cameraDirection.setAll(0);
   return height;
@@ -46,6 +51,31 @@ export function isVisitDestination(level: Level, point: Point2) {
       (wall) => distanceToWall(point, wall) > wall.thickness / 2 + VISITOR_RADIUS + 0.025,
     )
   );
+}
+
+/** The visit may leave the house onto the parcel; without a site, the outline is the limit. */
+export function isVisitArea(level: Level, site: ProjectSite | undefined, point: Point2) {
+  return pointInPolygon(point, site?.boundary ?? level.outline);
+}
+
+/** A parcel point clear of walls, where the visit may stand outside the house. */
+export function isParcelDestination(level: Level, site: ProjectSite | undefined, point: Point2) {
+  return (
+    point.every(Number.isFinite) &&
+    !!site &&
+    !pointInPolygon(point, level.outline) &&
+    pointInPolygon(point, site.boundary) &&
+    level.walls.every(
+      (wall) => distanceToWall(point, wall) > wall.thickness / 2 + VISITOR_RADIUS + 0.025,
+    )
+  );
+}
+
+/** Floor under the visitor: the room's floor inside, the parcel's flat ground outside. */
+export function visitorGroundElevation(level: Level, site: ProjectSite | undefined, point: Point2) {
+  return pointInPolygon(point, level.outline)
+    ? floorElevationAt(level, point)
+    : level.elevation + (site?.elevation ?? 0);
 }
 
 export function isSceneVisitDestination(scene: Scene, level: Level, point: Point2) {

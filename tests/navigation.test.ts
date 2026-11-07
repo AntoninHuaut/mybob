@@ -6,7 +6,8 @@ import { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import '@babylonjs/core/Collisions/collisionCoordinator';
-import type { HouseProject } from '../src/model/types';
+import type { HouseProject, ProjectSite } from '../src/model/types';
+import { HouseViewer } from '../src/scene/viewer';
 import {
   applyLookSensitivity,
   createWalkCamera,
@@ -16,8 +17,11 @@ import {
 } from '../src/scene/walkCamera';
 import {
   applyEyeHeight,
+  isParcelDestination,
+  isVisitArea,
   isVisitDestination,
   sectionPlane,
+  visitorGroundElevation,
   wallFacesCamera,
 } from '../src/scene/navigation';
 
@@ -105,6 +109,106 @@ test('visit destinations reject outside points, walls, and non-finite coordinate
     ]),
     false,
   );
+});
+
+test('the visit walks out onto the parcel but never past it', () => {
+  const site = project.site!;
+  const lawn: [number, number] = [3, -1.5];
+  assert.equal(isVisitArea(level, site, lawn), true);
+  assert.equal(isVisitArea(level, site, [-100, -100]), false);
+  assert.equal(isVisitArea(level, undefined, lawn), false, 'no site keeps the outline');
+  assert.equal(isVisitArea(level, undefined, level.spawn.position), true);
+  assert.equal(isParcelDestination(level, site, lawn), true);
+  assert.equal(
+    isParcelDestination(level, site, level.spawn.position),
+    false,
+    'inside the house is not a parcel destination',
+  );
+  assert.equal(isParcelDestination(level, site, [-100, -100]), false);
+  assert.equal(isParcelDestination(level, undefined, lawn), false);
+  assert.equal(isParcelDestination(level, site, [NaN, 1]), false);
+  // Just outside the south facade: the visitor's radius still overlaps the wall.
+  assert.equal(isParcelDestination(level, site, [3, -0.15]), false);
+});
+
+test('the visitor stands on the room floor inside and on the parcel ground outside', () => {
+  const site = project.site!;
+  const garage = level.rooms.find((room) => room.id === 'garage')!;
+  assert.equal(visitorGroundElevation(level, site, garage.viewpoint), level.elevation - 0.12);
+  assert.equal(visitorGroundElevation(level, site, [3, -1.5]), level.elevation);
+  const lowered: ProjectSite = { ...site, elevation: -0.4 };
+  assert.equal(visitorGroundElevation(level, lowered, [3, -1.5]), level.elevation - 0.4);
+  assert.equal(
+    visitorGroundElevation(level, lowered, garage.viewpoint),
+    level.elevation - 0.12,
+    'a lowered parcel never moves the floor of a room',
+  );
+  assert.equal(visitorGroundElevation(level, undefined, [3, -1.5]), level.elevation);
+});
+
+test('changing the eye height outside keeps the collision body on the lawn', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const camera = createWalkCamera(scene, level);
+  camera.position.set(3, 1.65, -1.5);
+  const ground = visitorGroundElevation(level, project.site, [3, -1.5]);
+  for (const height of [1.1, 1.65, 1.8]) {
+    assert.equal(applyEyeHeight(camera, level, height, ground), height);
+    assert.ok(Math.abs(camera.position.y - ground - height) < 1e-9);
+    const bodyBottom = camera.position.y - 2 * ELLIPSOID_HALF_HEIGHT + camera.ellipsoidOffset.y;
+    assert.ok(Math.abs(bodyBottom - ground) < 1e-9);
+  }
+  scene.dispose();
+  engine.dispose();
+});
+
+test('the visit guard keeps the visitor on the parcel and resets only outside it', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const walk = createWalkCamera(scene, level);
+  scene.activeCamera = walk;
+  let resets = 0;
+  const viewer = Object.assign(Object.create(HouseViewer.prototype), {
+    scene,
+    engine,
+    level,
+    walk,
+    canvas: { clientWidth: 800, clientHeight: 600 },
+    site: project.site,
+    mode: 'walk',
+    paused: true,
+    capturing: false,
+    keyState: new Set<string>(),
+    house: { doors: [] },
+    updateCutaway() {},
+    reset() {
+      resets++;
+    },
+    onFrame() {},
+  }) as HouseViewer;
+  const frame = () => (viewer as unknown as { beforeFrame(): void }).beforeFrame();
+  const place = (x: number, z: number) => walk.position.set(x, 1.65, z);
+  const previousDocument = globalThis.document;
+  globalThis.document = { activeElement: null, pointerLockElement: null } as unknown as Document;
+  try {
+    place(3, -1.5); // lawn, south of the house
+    frame();
+    assert.equal(resets, 0, 'the parcel is walkable');
+    place(3, 4.6); // inside the house
+    frame();
+    assert.equal(resets, 0);
+    place(-100, -100); // beyond the parcel
+    frame();
+    assert.equal(resets, 1);
+    place(3, -1.5);
+    walk.position.y = 0.2; // under the ground
+    frame();
+    assert.equal(resets, 2);
+  } finally {
+    globalThis.document = previousDocument;
+    scene.dispose();
+    engine.dispose();
+  }
 });
 
 test('section plane respects the level elevation and keeps the lower half-space', () => {
