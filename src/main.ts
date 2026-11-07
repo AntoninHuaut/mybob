@@ -121,7 +121,10 @@ function saveOnboarding(next: OnboardingState) {
   }
 }
 
-/** La carte ne bloque rien : la fermer ne fait que la retirer pour les prochains lancements. */
+/**
+ * La carte ne bloque rien et ne disparaît que sur sa croix : un clic dans la scène est une
+ * exploration, pas une réponse. Les trois actions la laissent ouverte pour les essayer à la suite.
+ */
 function dismissStartCard() {
   const card = el('#start-card');
   if (card.hidden) return;
@@ -1408,10 +1411,8 @@ function wireViewportControls() {
     if (button.dataset.startAction === 'orbit') viewer.tourOrbit();
     else if (button.dataset.startAction === 'plan') setMode('plan');
     else if (button.dataset.startAction === 'walk') setMode('walk');
-    dismissStartCard();
   });
   el('#close-start-card').addEventListener('click', dismissStartCard);
-  viewer.canvas.addEventListener('pointerdown', dismissStartCard, { once: true });
   el('#source-info').addEventListener('click', () => {
     const rooms = viewer.level.rooms;
     openDialog(
