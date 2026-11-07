@@ -4,12 +4,13 @@ import { CubeMapToSphericalPolynomialTools } from '@babylonjs/core/Misc/HighDyna
 import { RawCubeTexture } from '@babylonjs/core/Materials/Textures/rawCubeTexture';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
+import { TAARenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/taaRenderingPipeline';
 import type { Camera } from '@babylonjs/core/Cameras/camera';
 import type { Scene } from '@babylonjs/core/scene';
 // Registers the `sphericalPolynomial` accessor used to feed diffuse IBL without a GPU readback.
 import '@babylonjs/core/Materials/Textures/baseTexture.polynomial';
-// Replaces the `enableGeometryBufferRenderer` stub with the real implementation.
-import '@babylonjs/core/Rendering/geometryBufferRendererSceneComponent';
+// Replaces the `enablePrePassRenderer` stub with the real implementation.
+import '@babylonjs/core/Rendering/prePassRendererSceneComponent';
 
 /**
  * Bounce colours of a neutral interior. The ceiling is the brightest surface a
@@ -178,32 +179,58 @@ export function createInteriorEnvironment(scene: Scene): RawCubeTexture | undefi
 }
 
 /**
+ * Temporal antialiasing for the visit camera. It has to be built before the
+ * occlusion: Babylon appends each pipeline to the end of the camera's post-process
+ * chain, so a TAA created afterwards runs on the AO output and smears its noise into
+ * trails. Built first, it smooths the scene and the occlusion is composited on top,
+ * which is the order the effect expects.
+ *
+ * It also has to be built once the engine has rendered a frame: `isSupported` reads
+ * `caps.texelFetch`, which is not populated at construction time, and the pipeline
+ * then silently builds nothing at all.
+ */
+export function createInteriorTaa(scene: Scene, camera: Camera): TAARenderingPipeline | undefined {
+  try {
+    const pipeline = new TAARenderingPipeline('interior-taa', scene, [camera]);
+    // The constructor still returns an object on a backend that cannot run it, and
+    // `dispose()` then throws on the textures it never created. Drop it here instead.
+    if (!pipeline.isSupported) return undefined;
+    // Babylon switches TAA off while the camera moves, which is the opposite of what a
+    // walkthrough needs. Reprojection and history clamping keep it usable in motion.
+    pipeline.disableOnCameraMove = false;
+    pipeline.reprojectHistory = true;
+    pipeline.clampHistory = true;
+    pipeline.samples = 16;
+    return pipeline;
+  } catch (error) {
+    console.info(
+      `[visite] antialiasing temporel indisponible : ${error instanceof Error ? error.message : String(error)}`,
+    );
+    return undefined;
+  }
+}
+
+/**
  * Screen-space ambient occlusion for the visit camera only. Half-resolution AO
- * keeps the cost down; the geometry buffer is released with the pipeline so the
- * plan and overview modes never pay for it.
+ * keeps the cost down. It reads the PrePass rather than the legacy geometry buffer,
+ * so it shares a single auxiliary pass with the temporal antialiasing.
  */
 export function createInteriorOcclusion(
   scene: Scene,
   camera: Camera,
 ): SSAO2RenderingPipeline | undefined {
   try {
-    // The geometry buffer needs multiple render targets, which a WebGL context can
-    // still refuse (software rasterizer, missing extension): Babylon then throws
-    // instead of returning null. A visit without occlusion is still a visit, so the
-    // failure has to stay local to this function.
-    const buffer = scene.enableGeometryBufferRenderer();
-    if (!buffer || !buffer.isSupported) {
-      scene.disableGeometryBufferRenderer();
-      return undefined;
-    }
+    // SSAO2 reads depth and normals from either the legacy geometry buffer or the
+    // PrePass. The PrePass is the one TAA reprojects against, so sharing it keeps a
+    // single auxiliary pass instead of two that fight over the scene render.
+    const prePass = scene.enablePrePassRenderer();
+    if (!prePass) return undefined;
     const pipeline = new SSAO2RenderingPipeline(
       'interior-occlusion',
       scene,
       { ssaoRatio: 0.5, blurRatio: 1 },
       [camera],
-      // A boolean, not the instance: passing the buffer would mark it as forced and
-      // `dispose(true)` would then leave it rendering the G-buffer every frame.
-      true,
+      false,
     );
     pipeline.totalStrength = 0.6;
     pipeline.radius = 0.35;
@@ -218,7 +245,7 @@ export function createInteriorOcclusion(
     pipeline.expensiveBlur = true;
     return pipeline;
   } catch (error) {
-    scene.disableGeometryBufferRenderer();
+    scene.disablePrePassRenderer();
     console.info(
       `[visite] occlusion ambiante indisponible : ${error instanceof Error ? error.message : String(error)}`,
     );

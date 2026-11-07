@@ -54,6 +54,7 @@ import { cameraYaw, planHeading, setPlanView, stopOrbit, usePlanCoordinates } fr
 import {
   createInteriorEnvironment,
   createInteriorOcclusion,
+  createInteriorTaa,
   nextOcclusionProbe,
   startOcclusionProbe,
   INTERIOR_ENVIRONMENT_INTENSITY,
@@ -65,6 +66,7 @@ import {
 import type { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture';
 import type { RawCubeTexture } from '@babylonjs/core/Materials/Textures/rawCubeTexture';
 import type { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
+import type { TAARenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/taaRenderingPipeline';
 import type { OcclusionState } from './diagnostics';
 
 export type ViewMode = 'overview' | 'plan' | 'walk';
@@ -157,6 +159,7 @@ export class HouseViewer {
   private baseGround?: Color3;
   private interiorEnvironment?: RawCubeTexture;
   private interiorOcclusion?: SSAO2RenderingPipeline;
+  private interiorTaa?: TAARenderingPipeline;
   private interiorAmbienceUnavailable = false;
   private occlusionProbe?: OcclusionProbe;
   private occlusionRefused = false;
@@ -214,6 +217,7 @@ export class HouseViewer {
     this.baseGround = undefined;
     this.interiorEnvironment = undefined;
     this.interiorOcclusion = undefined;
+    this.interiorTaa = undefined;
     this.interiorAmbienceUnavailable = false;
     this.occlusionProbe = undefined;
     this.occlusionRefused = false;
@@ -932,6 +936,10 @@ export class HouseViewer {
         this.scene.environmentTexture = this.interiorEnvironment;
         this.scene.environmentIntensity = INTERIOR_ENVIRONMENT_INTENSITY;
       }
+      // Built before the occlusion on purpose: Babylon appends each pipeline to the
+      // end of the camera's chain, so the temporal pass has to exist first or it ends
+      // up accumulating the AO noise instead of smoothing the scene.
+      this.interiorTaa ??= createInteriorTaa(this.scene, this.walk);
       if (!this.occlusionRefused && !this.occlusionUnavailable && !this.interiorOcclusion) {
         this.interiorOcclusion = createInteriorOcclusion(this.scene, this.walk);
         // A backend without multiple render targets refuses every time: remember it
@@ -951,6 +959,10 @@ export class HouseViewer {
     this.previousEnvironmentIntensity = 1;
     this.interiorOcclusion?.dispose(true);
     this.interiorOcclusion = undefined;
+    this.interiorTaa?.dispose();
+    this.interiorTaa = undefined;
+    // Both pipelines read the PrePass and nothing else does, so it goes with them.
+    this.scene.disablePrePassRenderer();
     this.occlusionProbe = undefined;
   }
 
@@ -1256,6 +1268,8 @@ export class HouseViewer {
     this.planOpenings?.dispose();
     this.interiorOcclusion?.dispose(true);
     this.interiorOcclusion = undefined;
+    this.interiorTaa?.dispose();
+    this.interiorTaa = undefined;
     window.removeEventListener('keydown', this.keydown);
     window.removeEventListener('keyup', this.keyup);
     window.removeEventListener('blur', this.clearKeys);
