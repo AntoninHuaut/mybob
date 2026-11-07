@@ -9,8 +9,15 @@ export function confirmImportReplacement(
   dialog.setAttribute('aria-labelledby', 'replace-project-title');
   dialog.innerHTML = `<h2 id="replace-project-title">Remplacer « ${escapeHtml(projectName)} » ?</h2>
     <p>Ce fichier porte le même identifiant qu’un projet déjà disponible. Il remplacera son modèle et, si le fichier en contient, les meubles des niveaux concernés. Gardez un export de la version actuelle avant de continuer.</p>
-    ${onExport ? '<button type="button" data-export>Exporter la version actuelle</button>' : '<p>Pour exporter la version actuelle, annulez puis sélectionnez ce projet.</p>'}
-    <form method="dialog"><button value="cancel" autofocus>Annuler</button><button value="replace" class="primary-button">Remplacer le projet</button></form>`;
+    ${
+      onExport
+        ? ''
+        : '<p>Pour exporter la version actuelle, annulez puis sélectionnez ce projet.</p>'
+    }<form method="dialog" class="dialog-actions">${
+      onExport
+        ? '<button type="button" data-export class="text-button dialog-actions-start">Exporter la version actuelle</button>'
+        : ''
+    }<button type="submit" value="cancel" class="text-button" autofocus>Annuler</button><button type="submit" value="replace" class="danger-button">Remplacer le projet</button></form>`;
   document.body.append(dialog);
   dialog.querySelector('[data-export]')?.addEventListener('click', () => onExport?.());
   return new Promise((resolve) => {
