@@ -354,7 +354,7 @@ test('editing a dressing keeps untouched run lengths exact', () => {
   }
 });
 
-test('a shower offers three simple types', () => {
+test('a shower asks for a tray height and the glass sides', () => {
   const { window, panel, added, cleanup } = setup();
   try {
     panel.openAdd();
@@ -362,13 +362,41 @@ test('a shower offers three simple types', () => {
     const kind = form.elements.namedItem('kind') as unknown as DOMInput;
     kind.value = 'shower';
     kind.dispatchEvent(new window.Event('change', { bubbles: true }));
-    const type = form.elements.namedItem('showerType') as unknown as DOMSelect;
-    assert.equal(type.value, 'bac');
     assert.ok(!form.querySelector('[data-shower-fields]')!.hasAttribute('hidden'));
-    type.value = 'italienne';
+    const tray = form.elements.namedItem('showerTray') as unknown as DOMInput;
+    const left = form.elements.namedItem('showerPanelLeft') as unknown as DOMInput;
+    const front = form.elements.namedItem('showerPanelFront') as unknown as DOMInput;
+    assert.equal(tray.value, '6');
+    assert.equal(left.checked, true);
+    assert.equal(front.checked, false);
+    tray.value = '0';
+    front.checked = true;
     form.reportValidity = () => true;
     form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
-    assert.equal(added[0].showerType, 'italienne');
+    assert.equal(added[0].showerTray, 0);
+    assert.deepEqual(added[0].showerPanels, ['left', 'front']);
+  } finally {
+    cleanup();
+  }
+});
+
+test('changing the kind keeps the preset footprint', () => {
+  const { window, panel, cleanup } = setup();
+  try {
+    panel.openAdd();
+    const form = window.document.querySelector<DOMForm>('#furniture-add-form')!;
+    const kind = form.elements.namedItem('kind') as unknown as DOMInput;
+    const value = (name: string) => (form.elements.namedItem(name) as unknown as DOMInput).value;
+    for (const [type, width, depth] of [
+      ['shower', '90', '90'],
+      ['bathtub', '170', '75'],
+      ['dressing', '180', '60'],
+    ] as const) {
+      kind.value = type;
+      kind.dispatchEvent(new window.Event('change', { bubbles: true }));
+      assert.equal(value('width'), width, `${type} width`);
+      assert.equal(value('depth'), depth, `${type} depth`);
+    }
   } finally {
     cleanup();
   }

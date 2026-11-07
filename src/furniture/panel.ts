@@ -15,8 +15,11 @@ import {
   createFurniture,
   dressingBounds,
   FURNITURE_CATEGORIES,
+  SHOWER_PANEL_SIDES,
+  showerPanelField,
   type DressingRun,
   type FurnitureItem,
+  type ShowerPanelSide,
 } from './model';
 
 export interface FurniturePanelAdapter {
@@ -160,7 +163,7 @@ function readRunsFromForm(form: HTMLFormElement): DressingRun[] {
   );
 }
 /** Renders the run rows and sets each corner select explicitly. */
-function applyDressingRuns(form: HTMLFormElement, runs: DressingRun[]) {
+function applyDressingRuns(form: HTMLFormElement, runs: DressingRun[], syncTotals = true) {
   const container = form.querySelector<HTMLElement>('[data-dressing-runs]');
   if (!container) return;
   container.innerHTML = runs.map((run, index) => dressingRunRow(run, index, runs.length)).join('');
@@ -168,7 +171,7 @@ function applyDressingRuns(form: HTMLFormElement, runs: DressingRun[]) {
     const select = form.elements.namedItem(`dressingRunTurn${index}`) as HTMLSelectElement | null;
     if (select) select.value = run.turn ?? 'end';
   });
-  syncDressingTotals(form);
+  if (syncTotals) syncDressingTotals(form);
 }
 /** Overall width and depth follow the runs, so they are shown but never typed. */
 function syncDressingTotals(form: HTMLFormElement) {
@@ -198,9 +201,21 @@ function updateDressingFields(form: HTMLFormElement, kind: string) {
   if (kind === 'dressing') syncDressingTotals(form);
 }
 
+const SHOWER_PANEL_LABELS: Record<ShowerPanelSide, string> = {
+  left: 'Gauche',
+  right: 'Droite',
+  front: 'Avant',
+  back: 'Arrière',
+};
+
 function showerFields(item: FurnitureItem) {
-  const type = item.showerType ?? 'bac';
-  return `<fieldset class="furniture-shape-fields" data-shower-fields${item.locked ? ' disabled' : ''}${item.kind === 'shower' ? '' : ' hidden'}><legend>Type de douche</legend><label class="furniture-field">Configuration<select name="showerType"><option value="italienne"${type === 'italienne' ? ' selected' : ''}>Douche italienne, sans bac</option><option value="bac"${type === 'bac' ? ' selected' : ''}>Bac de douche et une paroi</option><option value="cabine"${type === 'cabine' ? ' selected' : ''}>Cabine fermée, deux parois</option></select></label><p class="furniture-form-note">La paroi vitrée est à gauche du volume ; tournez le meuble pour la placer autrement. Les dimensions restent celles de l’encombrement au sol.</p></fieldset>`;
+  const tray = item.showerTray ?? 0.06;
+  const panels = item.showerPanels ?? ['left'];
+  const sides = SHOWER_PANEL_SIDES.map(
+    (side) =>
+      `<label class="furniture-panel-side"><input type="checkbox" name="${showerPanelField(side)}"${panels.includes(side) ? ' checked' : ''}> ${SHOWER_PANEL_LABELS[side]}</label>`,
+  ).join('');
+  return `<fieldset class="furniture-shape-fields" data-shower-fields${item.locked ? ' disabled' : ''}${item.kind === 'shower' ? '' : ' hidden'}><legend>Douche</legend><label class="furniture-field">Hauteur du bac <span>cm</span><input name="showerTray" type="number" min="0" max="40" step="0.5" value="${cm(tray)}"></label><div class="furniture-panel-sides-field"><span>Parois vitrées</span><div class="furniture-panel-sides">${sides}</div></div><p class="furniture-form-note">0 cm de bac donne une douche italienne. Le pommeau est au fond du volume ; tournez la douche pour changer de mur.</p></fieldset>`;
 }
 function updateShowerFields(form: HTMLFormElement, kind: string) {
   const fields = form.querySelector<HTMLFieldSetElement>('[data-shower-fields]');
@@ -636,7 +651,13 @@ export class FurniturePanel {
       (form.elements.namedItem('sofaSide') as HTMLSelectElement).value = 'left';
       (form.elements.namedItem('returnDepth') as HTMLInputElement).value = '180';
       (form.elements.namedItem('returnWidth') as HTMLInputElement).value = '90';
-      (form.elements.namedItem('showerType') as HTMLSelectElement).value = 'bac';
+      (form.elements.namedItem('showerTray') as HTMLInputElement).value = String(
+        cm(preset.showerTray ?? 0.06),
+      );
+      for (const side of SHOWER_PANEL_SIDES)
+        (form.elements.namedItem(showerPanelField(side)) as HTMLInputElement).checked = (
+          preset.showerPanels ?? ['left']
+        ).includes(side);
       (form.elements.namedItem('elevation') as HTMLInputElement).value = String(
         cm(preset.elevation ?? 0),
       );
@@ -654,7 +675,12 @@ export class FurniturePanel {
       (form.elements.namedItem('dressingRunDepth') as HTMLInputElement).value = String(
         cm(preset.dressing?.runDepth ?? 0.6),
       );
-      applyDressingRuns(form, preset.dressing?.runs ?? [{ length: preset.width }]);
+      // Only a dressing derives its overall size from the runs; other kinds keep the preset.
+      applyDressingRuns(
+        form,
+        preset.dressing?.runs ?? [{ length: preset.width }],
+        input.value === 'dressing',
+      );
       updateDressingFields(form, input.value);
       syncDepthLabel(form, input.value);
     }

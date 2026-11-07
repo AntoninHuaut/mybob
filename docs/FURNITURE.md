@@ -42,7 +42,7 @@ Les dix-neuf catégories sont regroupées par pièce dans le menu Type de meuble
 
 Le dressing se décrit comme une suite de tronçons : une profondeur commune, puis pour chaque tronçon sa longueur et l’angle qui le termine (à gauche, à droite ou fin). Un tronçon suffit pour une penderie droite, deux donnent un angle, trois un U, et ainsi de suite jusqu’à douze. La largeur et la profondeur hors tout sont calculées à partir des tronçons et ne se saisissent pas. Les tronçons partagent leur angle et le vide intérieur reste libre, par exemple pour un siège.
 
-La douche propose trois configurations simples : italienne sans bac, bac de douche avec une paroi, ou cabine fermée avec deux parois. La paroi vitrée est à gauche du volume ; tourner le meuble la place ailleurs. Les volumes de sanitaires sont des repères simplifiés : remplacez les mesures proposées par celles du modèle réel.
+La douche se décrit par deux réglages indépendants : la hauteur du bac, en centimètres, où 0 donne une douche italienne sans bac, et les côtés qui portent une paroi vitrée (gauche, droite, avant, arrière). Le pommeau est au fond du volume ; tourner la douche change de mur. Les volumes de sanitaires sont des repères simplifiés : remplacez les mesures proposées par celles du modèle réel.
 
 La hauteur de pose est relative au sol fini. Le bouton Ajouter une TV dessus d’un meuble TV place un téléviseur à sa cote supérieure. Les dimensions proposées restent à remplacer par celles du modèle réel.
 

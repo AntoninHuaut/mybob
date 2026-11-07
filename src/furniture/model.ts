@@ -42,8 +42,13 @@ export interface DressingConfiguration {
   runDepth: number;
   runs: DressingRun[];
 }
-/** One choice for the user: walk-in, low tray, or a closed corner cabin. */
-export type ShowerType = 'italienne' | 'bac' | 'cabine';
+/** Shower only: a side of the volume that can carry a glass panel. */
+export type ShowerPanelSide = 'left' | 'right' | 'front' | 'back';
+/** Checkbox order in the shower form. */
+export const SHOWER_PANEL_SIDES: ShowerPanelSide[] = ['left', 'right', 'front', 'back'];
+/** Form field name for one shower panel checkbox. */
+export const showerPanelField = (side: ShowerPanelSide) =>
+  `showerPanel${side.charAt(0).toUpperCase()}${side.slice(1)}`;
 export interface FurnitureItem {
   id: string;
   name: string;
@@ -55,8 +60,10 @@ export interface FurnitureItem {
   elevation?: number;
   sofa?: SofaConfiguration;
   dressing?: DressingConfiguration;
-  /** Shower only: walk-in, low tray or closed corner cabin. */
-  showerType?: ShowerType;
+  /** Shower only: tray height in metres; 0 is a walk-in shower with no tray. */
+  showerTray?: number;
+  /** Shower only: sides closed by a glass panel. */
+  showerPanels?: ShowerPanelSide[];
   /** Display diagonal only; chassis dimensions remain editable approximations. */
   tvDiagonalInches?: number;
   position: Point2;
@@ -134,14 +141,35 @@ function fail(message: string): never {
   throw new FurnitureValidationError(message);
 }
 
+/** Older exports picked one of three presets; keep them readable as tray plus panels. */
+const LEGACY_SHOWER: Record<string, { tray: number; panels: ShowerPanelSide[] }> = {
+  italienne: { tray: 0, panels: ['left', 'back'] },
+  bac: { tray: 0.06, panels: ['left', 'back'] },
+  cabine: { tray: 0.06, panels: ['left', 'back', 'front'] },
+};
+
+function migrateShower(item: FurnitureItem): FurnitureItem {
+  const legacy = (item as { showerType?: unknown }).showerType;
+  if (legacy === undefined) return item;
+  if (typeof legacy !== 'string' || !Object.hasOwn(LEGACY_SHOWER, legacy))
+    fail('Le type de douche est invalide.');
+  const { tray, panels } = LEGACY_SHOWER[legacy];
+  const migrated = { ...item } as FurnitureItem & { showerType?: unknown };
+  delete migrated.showerType;
+  migrated.showerTray ??= tray;
+  migrated.showerPanels ??= [...panels];
+  return migrated;
+}
+
 /** This validates data and scale; architectural fit is checked separately. */
 export function validateFurnitureList(input: unknown): FurnitureItem[] {
   if (!Array.isArray(input) || input.length > 200)
     fail('Un aménagement peut contenir au plus 200 meubles.');
   const ids = new Set<string>();
+  const items: FurnitureItem[] = [];
   for (const candidate of input) {
     if (!record(candidate)) fail('Chaque meuble doit être un objet.');
-    const item = candidate as unknown as FurnitureItem;
+    const item = migrateShower(candidate as unknown as FurnitureItem);
     if (typeof item.id !== 'string' || !item.id || item.id.length > 160 || ids.has(item.id))
       fail('Identifiant de meuble manquant ou dupliqué.');
     ids.add(item.id);
@@ -235,9 +263,25 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
       )
         fail('Les dimensions hors tout du dressing ne correspondent pas à ses tronçons.');
     }
-    if (item.showerType !== undefined) {
-      if (item.kind !== 'shower' || !['italienne', 'bac', 'cabine'].includes(item.showerType))
-        fail('Le type de douche est invalide.');
+    if (item.showerTray !== undefined) {
+      if (
+        item.kind !== 'shower' ||
+        !finite(item.showerTray) ||
+        item.showerTray < 0 ||
+        item.showerTray > 0.4 ||
+        item.showerTray >= item.height
+      )
+        fail('La hauteur du bac doit rester sous la hauteur de la douche, entre 0 et 40 cm.');
+    }
+    if (item.showerPanels !== undefined) {
+      if (
+        item.kind !== 'shower' ||
+        !Array.isArray(item.showerPanels) ||
+        item.showerPanels.length > SHOWER_PANEL_SIDES.length ||
+        !item.showerPanels.every((side) => SHOWER_PANEL_SIDES.includes(side)) ||
+        new Set(item.showerPanels).size !== item.showerPanels.length
+      )
+        fail('Les parois de la douche sont invalides.');
     }
     if (
       !Array.isArray(item.position) ||
@@ -296,8 +340,9 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
         item.opening.reach > 5)
     )
       fail('Le débattement du meuble est invalide.');
+    items.push(item);
   }
-  return structuredClone(input as FurnitureItem[]);
+  return structuredClone(items);
 }
 
 export type FurnitureInput = Omit<Partial<FurnitureItem>, 'sofa' | 'dressing'> & {
@@ -359,7 +404,10 @@ export function createFurniture(input: FurnitureInput = {}): FurnitureItem {
     item.width = bounds.width;
     item.depth = bounds.depth;
   }
-  if (kind === 'shower') item.showerType = input.showerType ?? 'bac';
+  if (kind === 'shower') {
+    item.showerTray = input.showerTray ?? 0.06;
+    item.showerPanels = input.showerPanels ?? ['left'];
+  }
   return validateFurnitureList([item])[0];
 }
 

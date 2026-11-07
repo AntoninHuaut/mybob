@@ -101,7 +101,8 @@ export class FurnitureLayer {
         item.color,
         item.sofa,
         item.dressing,
-        item.showerType,
+        item.showerTray,
+        item.showerPanels,
         item.tvDiagonalInches,
       ]);
       let visual = this.visuals.get(item.id);
@@ -660,16 +661,19 @@ export class FurnitureLayer {
       box(w, h * 0.42, d * 0.24, 0, h * 0.72, -d * 0.36);
       box(w * 0.2, h * 0.02, d * 0.06, 0, h * 0.94, -d * 0.36, metal);
     } else if (item.kind === 'shower') {
-      const type = item.showerType ?? 'bac';
+      const tray = item.showerTray ?? 0.06;
+      const panels = item.showerPanels ?? ['left'];
       const glass = material('glass', new Color3(0.72, 0.84, 0.88));
       glass.alpha = 0.32;
       glass.backFaceCulling = false;
-      const tray = type === 'italienne' ? 0.02 : 0.06;
-      box(w, tray, d, 0, tray / 2, 0, pale);
-      if (type === 'italienne') box(w * 0.12, 0.004, w * 0.12, 0, tray + 0.002, 0, metal);
-      box(w, h - tray, 0.02, 0, tray + (h - tray) / 2, -d / 2 + 0.01, glass);
-      box(0.02, h - tray, d, -w / 2 + 0.01, tray + (h - tray) / 2, 0, glass);
-      if (type === 'cabine') box(w, h - tray, 0.02, 0, tray + (h - tray) / 2, d / 2 - 0.01, glass);
+      if (tray > 0) box(w, tray, d, 0, tray / 2, 0, pale);
+      box(w * 0.12, 0.004, w * 0.12, 0, tray + 0.002, 0, metal);
+      const panelHeight = h - tray;
+      const panelY = tray + panelHeight / 2;
+      if (panels.includes('back')) box(w, panelHeight, 0.02, 0, panelY, -d / 2 + 0.01, glass);
+      if (panels.includes('front')) box(w, panelHeight, 0.02, 0, panelY, d / 2 - 0.01, glass);
+      if (panels.includes('left')) box(0.02, panelHeight, d, -w / 2 + 0.01, panelY, 0, glass);
+      if (panels.includes('right')) box(0.02, panelHeight, d, w / 2 - 0.01, panelY, 0, glass);
       box(0.04, h * 0.5, 0.04, 0, h * 0.65, -d / 2 + 0.05, metal);
       box(w * 0.22, 0.03, w * 0.22, 0, h * 0.92, -d / 2 + 0.15, metal);
     } else if (item.kind === 'bathtub') {

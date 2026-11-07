@@ -8,6 +8,8 @@ import {
   footprintParts,
   FURNITURE_PRESETS,
   validateFurnitureList,
+  type FurnitureItem,
+  type ShowerPanelSide,
 } from '../src/furniture/model';
 import { checkFurniture, polygonsOverlap } from '../src/furniture/checks';
 import type { Level } from '../src/model/types';
@@ -176,12 +178,40 @@ test('a dressing survives validation and duplication with its exact runs', () =>
   assert.equal(copy.depth, item.depth);
 });
 
-test('a shower offers three simple types and rejects the others', () => {
-  assert.equal(createFurniture({ kind: 'shower' }).showerType, 'bac');
-  for (const type of ['italienne', 'bac', 'cabine'] as const)
-    assert.equal(createFurniture({ kind: 'shower', showerType: type }).showerType, type);
-  assert.throws(() => createFurniture({ kind: 'table', showerType: 'bac' }));
+test('a shower separates its tray height from its glass panels', () => {
+  const shower = createFurniture({ kind: 'shower' });
+  assert.equal(shower.showerTray, 0.06);
+  assert.deepEqual(shower.showerPanels, ['left']);
+  const walkIn = createFurniture({
+    kind: 'shower',
+    showerTray: 0,
+    showerPanels: ['left', 'front'],
+  });
+  assert.equal(walkIn.showerTray, 0);
+  assert.deepEqual(walkIn.showerPanels, ['left', 'front']);
+  assert.throws(() => createFurniture({ kind: 'table', showerTray: 0.06 }));
+  assert.throws(() => createFurniture({ kind: 'shower', showerTray: 0.5 }));
+  assert.throws(() => createFurniture({ kind: 'shower', showerTray: 2 }));
   assert.throws(() =>
-    createFurniture({ kind: 'shower', showerType: 'hammam' as unknown as 'bac' }),
+    createFurniture({ kind: 'shower', showerPanels: ['top'] as unknown as ShowerPanelSide[] }),
   );
+  assert.throws(() => createFurniture({ kind: 'shower', showerPanels: ['left', 'left'] }));
+});
+
+test('older shower presets migrate to a tray height and panels', () => {
+  const legacy = (showerType: string) => {
+    const item = createFurniture({ kind: 'shower' }) as FurnitureItem & { showerType?: string };
+    delete item.showerTray;
+    delete item.showerPanels;
+    item.showerType = showerType;
+    return item;
+  };
+  const [italienne] = validateFurnitureList([legacy('italienne')]);
+  assert.equal(italienne.showerTray, 0);
+  assert.deepEqual(italienne.showerPanels, ['left', 'back']);
+  assert.equal('showerType' in italienne, false);
+  const [cabine] = validateFurnitureList([legacy('cabine')]);
+  assert.equal(cabine.showerTray, 0.06);
+  assert.deepEqual(cabine.showerPanels, ['left', 'back', 'front']);
+  assert.throws(() => validateFurnitureList([legacy('hammam')]));
 });

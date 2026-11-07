@@ -1,9 +1,10 @@
 import {
   dressingBounds,
   dressingStrips,
+  SHOWER_PANEL_SIDES,
+  showerPanelField,
   type DressingRun,
   type FurnitureItem,
-  type ShowerType,
 } from './model';
 
 /** Reads the run rows of a dressing form, whatever the field source. */
@@ -32,7 +33,8 @@ export function measurementsFromForm(
   | 'elevation'
   | 'sofa'
   | 'dressing'
-  | 'showerType'
+  | 'showerTray'
+  | 'showerPanels'
   | 'tvDiagonalInches'
 > {
   const height = Number(data.get('height')) / 100;
@@ -49,7 +51,8 @@ export function measurementsFromForm(
       elevation,
       dressing: { runDepth: Number.isFinite(runDepth) && runDepth > 0 ? runDepth : 0.6, runs },
       sofa: undefined,
-      showerType: undefined,
+      showerTray: undefined,
+      showerPanels: undefined,
       tvDiagonalInches: undefined,
     };
   }
@@ -75,7 +78,11 @@ export function measurementsFromForm(
         }
       : undefined,
     dressing: undefined,
-    showerType: kind === 'shower' ? (String(data.get('showerType')) as ShowerType) : undefined,
+    showerTray: kind === 'shower' ? Number(data.get('showerTray') ?? 0) / 100 : undefined,
+    showerPanels:
+      kind === 'shower'
+        ? SHOWER_PANEL_SIDES.filter((side) => data.has(showerPanelField(side)))
+        : undefined,
   };
 }
 
