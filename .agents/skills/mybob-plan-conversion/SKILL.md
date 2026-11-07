@@ -44,16 +44,17 @@ approximatif qu'on croit.
 
 ## L'inventaire
 
-| script                     | ce qu'il fait                                      | exactitude                                                              |
-| -------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
-| `extract_plan_evidence.py` | lit cotes, chaînes, étiquettes de surface          | **100 %** — lecture, aucune interprétation                              |
-| `check_plan_surfaces.py`   | compare surfaces imprimées et polygones du projet  | **100 %** — calcul, c'est la porte de sortie                            |
-| `plan_faces.py`            | calcule les pièces depuis les murs du niveau       | **100 %** — calcul, aucune détection                                    |
-| `compare_plan.py`          | mesure l'encre sous chaque mur du modèle           | **100 %** — mesure, ne corrige rien                                     |
-| `audit-plan.ts`            | cohérence interne du projet                        | **100 %** — calcul                                                      |
-| `check-plan-decisions.ts`  | arithmétique des décisions et rejeu de l'enveloppe | **100 %** — calcul                                                      |
-| `extract_plan.py`          | cloisons, par l'aplat de couleur du dessin         | **100 % sur les cloisons**, aveugle sur les bandes hachurées            |
-| `generate_project.py`      | murs extérieurs, épaisseurs et baies lues au plan  | **exact mais incomplet** : n'invente jamais, oublie ce qu'il ne lit pas |
+| script                     | ce qu'il fait                                                           | exactitude                                                              |
+| -------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `extract_plan_evidence.py` | lit cotes, chaînes, étiquettes de surface                               | **100 %** — lecture, aucune interprétation                              |
+| `check_plan_surfaces.py`   | compare surfaces imprimées et polygones du projet                       | **100 %** — calcul, c'est la porte de sortie                            |
+| `check_site.py`            | vérifie parcelle, implantation, niveaux et toit contre le plan de masse | **100 %** — calcul, refuse les écarts et signale le non coté            |
+| `plan_faces.py`            | calcule les pièces depuis les murs du niveau                            | **100 %** — calcul, aucune détection                                    |
+| `compare_plan.py`          | mesure l'encre sous chaque mur du modèle                                | **100 %** — mesure, ne corrige rien                                     |
+| `audit-plan.ts`            | cohérence interne du projet                                             | **100 %** — calcul                                                      |
+| `check-plan-decisions.ts`  | arithmétique des décisions et rejeu de l'enveloppe                      | **100 %** — calcul                                                      |
+| `extract_plan.py`          | cloisons, par l'aplat de couleur du dessin                              | **100 % sur les cloisons**, aveugle sur les bandes hachurées            |
+| `generate_project.py`      | murs extérieurs, épaisseurs et baies lues au plan                       | **exact mais incomplet** : n'invente jamais, oublie ce qu'il ne lit pas |
 
 Les deux derniers sont les seuls qui produisent de la géométrie. Ils sont
 utilisables parce qu'ils n'inventent rien : `extract_plan.py` ne rend que des
@@ -769,7 +770,16 @@ laissait les cloisons traverser la couverture de 42 cm, visibles de l'extérieur
 #### Vérifier un extérieur déjà posé
 
 Un `site` écrit lors d'une session précédente n'a jamais été comparé au
-document. Le vérifier prend cinq minutes et se fait dans cet ordre, parce que
+document. Les cinq étapes ci-dessous sont un script — le registre du plan de
+masse se régénère par `extract_plan_evidence.py --pages <n>`, puis :
+
+```sh
+python scripts/check_site.py <registre-masse.json> <projet.json> --page <n>
+```
+
+Il rend un tableau imprimé / calculé / écart par point de contrôle, refuse ce
+qui dépasse la tolérance en nommant le côté ou le niveau fautif, et signale le
+non coté. La méthode reste la lecture de son rapport, dans cet ordre parce que
 chaque étape suppose la précédente :
 
 1. **Les quatre côtés de la parcelle et sa surface.** Calculer les longueurs et
