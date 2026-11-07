@@ -24,7 +24,9 @@ src/ui/              pure HTML fragments and panels
 Skills: maintenance and releases follow
 [.agents/skills/mybob-maintenance/SKILL.md](.agents/skills/mybob-maintenance/SKILL.md);
 reconstructing a plan from an architectural PDF follows
-[.agents/skills/mybob-plan-conversion/SKILL.md](.agents/skills/mybob-plan-conversion/SKILL.md).
+[.agents/skills/mybob-plan-conversion/SKILL.md](.agents/skills/mybob-plan-conversion/SKILL.md);
+opening a workable issue follows
+[.agents/skills/mybob-issues/SKILL.md](.agents/skills/mybob-issues/SKILL.md).
 These files replace reliance on any previous chat context.
 
 ## Product and privacy
