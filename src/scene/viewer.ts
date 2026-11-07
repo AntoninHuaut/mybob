@@ -188,9 +188,21 @@ export class HouseViewer {
   private planZoom = 1;
   private resizeObserver: ResizeObserver;
   private pointerLockError = () => this.onPointerLockError?.();
+  private captureRetry: number | undefined;
   private orbitTour: { from: number; to: number; start: number; duration: number } | undefined;
   private orbitPointerDown = (event: PointerEvent) => {
     this.orbitTour = undefined;
+    // In walk mode without a locked pointer, a click in the view must take the
+    // capture back: the toast after a failed capture sends the user here.
+    if (
+      this.mode === 'walk' &&
+      !this.paused &&
+      event.button === 0 &&
+      document.pointerLockElement !== this.canvas
+    ) {
+      this.captureMouse();
+      return;
+    }
     this.recoverOrbitControls(event);
   };
 
@@ -441,6 +453,7 @@ export class HouseViewer {
       );
     }
     this.clearKeys();
+    this.cancelCaptureRetry();
     stopOrbit(this.orbit);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
     this.orbit.detachControl();
@@ -490,13 +503,41 @@ export class HouseViewer {
 
   captureMouse() {
     this.canvas.focus();
+    this.cancelCaptureRetry();
     try {
       const result = this.canvas.requestPointerLock();
       if (result && typeof result.catch === 'function')
-        result.catch(() => this.onPointerLockError?.());
+        result.catch(() => this.scheduleCaptureRetry());
     } catch {
-      this.onPointerLockError?.();
+      this.scheduleCaptureRetry();
     }
+  }
+
+  /**
+   * Chromium refuses a new capture for about a second after the pointer lock
+   * left through the keyboard (Échap): a request inside that window rejects.
+   * Retry once at the end of the window, while the click's activation still
+   * holds; only a second failure is reported to the user.
+   */
+  private scheduleCaptureRetry() {
+    this.captureRetry = window.setTimeout(() => {
+      this.captureRetry = undefined;
+      if (this.mode !== 'walk' || this.paused || document.pointerLockElement === this.canvas)
+        return;
+      try {
+        const result = this.canvas.requestPointerLock();
+        if (result && typeof result.catch === 'function')
+          result.catch(() => this.onPointerLockError?.());
+      } catch {
+        this.onPointerLockError?.();
+      }
+    }, 1300);
+  }
+
+  private cancelCaptureRetry() {
+    if (this.captureRetry === undefined) return;
+    window.clearTimeout(this.captureRetry);
+    this.captureRetry = undefined;
   }
 
   /** A previous interrupted furniture gesture must not strand the orbit controls. */
@@ -1290,6 +1331,7 @@ export class HouseViewer {
   }
 
   dispose() {
+    this.cancelCaptureRetry();
     this.wallCutaway?.dispose();
     this.planOpenings?.dispose();
     this.interiorOcclusion?.dispose(true);
