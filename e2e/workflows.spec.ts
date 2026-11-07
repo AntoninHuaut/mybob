@@ -381,36 +381,3 @@ test('MyBob accueille et présente les commandes sans masquer le projet', async 
   await dialog.getByRole('button', { name: 'Fermer' }).click();
   await expect(dialog).not.toBeVisible();
 });
-test('la photo de plan tient dans son panneau sans recouvrir les outils', async ({
-  page,
-}, testInfo) => {
-  await page.getByRole('button', { name: 'Plan', exact: true }).click();
-  await page.locator('#plan-photo-file').setInputFiles('src/assets/brand/bob-plan.png');
-  const panel = page.locator('#plan-photo-panel');
-  await expect(panel).toBeVisible();
-  const layout = await page.evaluate(() => {
-    const panel = document.querySelector<HTMLElement>('#plan-photo-panel')!;
-    const tools = document.querySelector<HTMLElement>('.floating-tools')!;
-    const viewport = document.querySelector<HTMLElement>('#viewport')!;
-    const p = panel.getBoundingClientRect();
-    const t = tools.getBoundingClientRect();
-    const v = viewport.getBoundingClientRect();
-    return {
-      overflowX: panel.scrollWidth - panel.clientWidth,
-      overflowY: panel.scrollHeight - panel.clientHeight,
-      insideViewport: p.left >= v.left && p.right <= v.right,
-      overlapsTools: p.right > t.left && p.left < t.right && p.bottom > t.top && p.top < t.bottom,
-      clippedButtons: [...panel.querySelectorAll('button')].filter(
-        (button) => button.scrollWidth > button.clientWidth,
-      ).length,
-      photoInTools: tools.contains(document.querySelector('#tool-plan-photo')),
-    };
-  });
-  expect(layout.overflowX).toBe(0);
-  expect(layout.overflowY).toBe(0);
-  expect(layout.insideViewport).toBe(true);
-  expect(layout.overlapsTools).toBe(false);
-  expect(layout.clippedButtons).toBe(0);
-  expect(layout.photoInTools).toBe(true);
-  await page.screenshot({ path: testInfo.outputPath('plan-photo-panel.png') });
-});

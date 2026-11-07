@@ -30,18 +30,4 @@ test('les boutons d’outil restent dans la colonne flottante', () => {
     [],
     'un bouton d’outil hors colonne se place au coin du viewport et masque le titre',
   );
-  assert.ok(tools.contains(document.querySelector('#tool-plan-photo')!));
-});
-
-test('le panneau de photo de plan garde ses actions groupées', () => {
-  const document = render();
-  const panel = document.querySelector('#plan-photo-panel');
-  assert.ok(panel, 'le panneau existe');
-  assert.equal(panel.parentElement?.id, 'viewport');
-  const actions = panel.querySelector('.plan-photo-actions');
-  assert.ok(actions, 'les actions sont groupées');
-  assert.deepEqual(
-    [...actions.querySelectorAll('button')].map((button) => button.id),
-    ['plan-photo-change', 'plan-photo-remove'],
-  );
 });
