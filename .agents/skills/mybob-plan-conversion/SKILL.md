@@ -53,6 +53,57 @@ utilisables parce qu'ils n'inventent rien : `extract_plan.py` ne rend que des
 rectangles remplis, `generate_project.py` ne place une baie que sur une chaîne
 refermée. Ce qu'ils ne savent pas lire manque, et c'est à l'IA de le voir.
 
+## Deux boucles, et ne pas les confondre
+
+Les tests de CI tournent sur des plans **synthétiques** : aucune donnée
+personnelle dans le dépôt. Ils vérifient la mécanique — une chaîne se referme,
+une surface s'apparie, une pièce se calcule. Ils ne disent **rien** de la
+fidélité au plan.
+
+Les vrais PDF sont la seule source de vérité, et ils restent locaux
+(`reference-documents/`, `artifacts/plan-review/`, ignorés par git).
+
+| boucle     | support            | ce qu'elle prouve                      | où    |
+| ---------- | ------------------ | -------------------------------------- | ----- |
+| régression | plans synthétiques | le code fait encore ce qu'il faisait   | CI    |
+| conception | les vrais PDF      | l'approche marche sur une vraie maison | local |
+
+**Un CI vert ne valide pas un plan.** Deux fois dans la même session, un script
+a passé son auto-test et cassé le vrai plan :
+
+- `merge_openings` reportait les baies par leur offset : sur le plan réel, deux
+  murs à six centimètres l'un de l'autre se confondaient et la baie du garage
+  atterrissait dans la chambre 1 ;
+- `merge_partitions` reprenait l'épaisseur de l'aplat : sur le plan réel, la
+  cloison garage/WC passait de 15 à 10,2 cm et le WC gagnait 0,09 m².
+
+Les deux ont été vus par la porte des surfaces sur Émiéville, pas par la CI. Un
+auto-test synthétique est un filet de régression, pas une validation.
+
+### La boucle de conception, en commandes
+
+```sh
+# 1. Lire le document.
+uvx --from pymupdf python scripts/extract_plan_evidence.py plan.pdf registry.json --pages 8
+uvx --from pymupdf python scripts/extract_plan.py plan.pdf plan.json     --scale 37.795 --envelope x0,y0,x1,y1
+
+# 2. Décider, puis construire.
+python scripts/generate_project.py plan.json registry.json modele.json rdc out.json --pages 8
+
+# 3. Juger le résultat, pas le dessin.
+python scripts/check_plan_surfaces.py registry.json out.json --level rdc --page 8
+python scripts/plan_faces.py out.json --level rdc --compare
+node --import tsx scripts/audit-plan.ts out.json
+```
+
+La troisième étape est celle qui compte. Tant qu'une pièce est hors tolérance,
+le plan n'est pas fini — sauf si l'écart est documenté comme une incohérence du
+plan lui-même, ce qui est un résultat, pas un échec.
+
+Quand un vrai plan révèle un motif que les fixtures ne couvrent pas, ajouter le
+motif à la fixture **et** la ligne dans ce fichier. Une fixture qui ne vient pas
+d'un vrai cas est une fixture qui rassure à tort.
+
 ## Ce que dit l'état de l'art
 
 Deux familles de méthodes, et le choix dépend d'une seule question : le PDF
@@ -279,7 +330,11 @@ fermée, une affirmation `printed` sans référence de chaîne, une affirmation
 `printed-partial` sur une chaîne fermée, une décision manquante pour un mur ou
 une baie, et un décalage de baie qui contredit sa chaîne une fois l'origine du
 mur déclarée. Il sort en erreur tant qu'une décision reste non résolue : la
-construction ne commence pas sur une supposition.
+construction ne commence pas sur une supposition. En **fusion**, les murs
+viennent du modèle et la décision ne construit rien : `--allow-unresolved`
+laisse alors passer une face non résolue, jamais une contradiction. Sans ce
+drapeau, la porte est infranchissable sur un vrai plan (23 faces non résolues sur
+41 sur Émiéville) et le pipeline documenté ne s'exécute jamais de bout en bout.
 
 ```sh
 uvx --from pymupdf python scripts/extract_plan_evidence.py plan.pdf artifacts/plan-review/registry.json --pages 13,14
@@ -324,6 +379,27 @@ combien de murs il a lus et lesquels gardent une valeur de repli. Sur Émiévill
 Attention à l'ambiguïté : deux cotes voisines peuvent décrire le même mur (21 et
 22 pour la même façade, brut et fini). Le script prend la plus proche ; c'est une
 proposition, et c'est une surcharge qui tranche.
+
+Trois choses que le script fait et qu'il **rapporte**, parce qu'elles sont des
+déplacements et non des mesures :
+
+- **le recalage des pièces** sur les faces de murs (`snap_rooms`, 30 cm). Un
+  sommet déplacé de plus de quelques centimètres signale un polygone qui n'était
+  pas sur les faces ;
+- **les écarts d'épaisseur** entre le modèle et la cote imprimée ;
+- **les écarts d'épaisseur de cloison** entre le modèle et l'aplat du dessin.
+
+Ce dernier est le piège le plus coûteux. **L'aplat du dessin est le mur brut ; le
+modèle porte le mur fini, doublage compris.** Sur Émiéville, la cloison
+garage/WC fait 10,2 cm à l'aplat et 15 cm finie, et la surface imprimée du WC
+(1,62 m²) tranche pour 15 cm. Remplacer l'un par l'autre rétrécit la pièce de
+0,09 m². La fusion ne reprend donc l'épaisseur que si elle concorde à 3 cm, et
+signale l'écart sinon.
+
+Le **type** d'une baie est une convention, pas une lecture : sous 1,60 m de
+hauteur c'est une fenêtre avec allège, au-dessus c'est une baie à seuil. Le plan
+donne la hauteur, pas le type. C'est écrit ici pour que personne ne le prenne
+pour une mesure.
 
 Deux limites mesurées sur de vrais plans : **les portes intérieures ne sont pas
 extractibles** — elles sont dessinées en polylignes, pas en arcs, et leurs

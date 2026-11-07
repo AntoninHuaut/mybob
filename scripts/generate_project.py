@@ -187,15 +187,33 @@ def snap(value, candidates, tolerance):
 
 
 def snap_rooms(rooms, walls, tolerance=0.30):
-    """Recale les pièces sur les faces des murs : une pièce s'arrête à la face finie."""
+    """Recale les pièces sur les faces des murs : une pièce s'arrête à la face finie.
+
+    Le recalage est un **déplacement**, pas une mesure : il est rapporté pour que
+    personne ne le confonde avec une lecture du plan. Un sommet déplacé de plus
+    de quelques centimètres signale un polygone qui n'était pas sur les faces.
+    """
     xs, zs = wall_faces(walls)
+    moves = []
     for room in rooms:
-        room["polygon"] = [
-            [round(snap(point[0], xs, tolerance), 4), round(snap(point[1], zs, tolerance), 4)]
-            for point in room["polygon"]
-        ]
+        snapped = []
+        for point in room["polygon"]:
+            x = round(snap(point[0], xs, tolerance), 4)
+            z = round(snap(point[1], zs, tolerance), 4)
+            if abs(x - point[0]) > 1e-6 or abs(z - point[1]) > 1e-6:
+                moves.append(
+                    {
+                        "room": room["id"],
+                        "from": [point[0], point[1]],
+                        "to": [x, z],
+                        "distance": round(((x - point[0]) ** 2 + (z - point[1]) ** 2) ** 0.5, 4),
+                    }
+                )
+            snapped.append([x, z])
+        room["polygon"] = snapped
         # Le repère et le point de visite restent où ils sont : les recaler les
         # poserait sur la face d'un mur, donc sur le bord du polygone.
+    return moves
 
 
 def apply_overrides(walls, overrides):
@@ -228,16 +246,23 @@ def apply_overrides(walls, overrides):
                     opening[key] = opening_patch[key]
 
 
-def merge_partitions(model_walls, partitions, tolerance=0.15):
+def merge_partitions(model_walls, partitions, tolerance=0.15, thickness_gap=0.03):
     """Remplace les cloisons du modèle par celles lues sur le dessin.
 
     Les murs hachurés ne sont pas extractibles : ils restent ceux du modèle, avec
     leurs baies. Seules les cloisons — les rectangles remplis — sont reprises du
     dessin, parce que c'est là qu'elles sont exactes. Une cloison sans
     contrepartie dans le modèle est ajoutée.
+
+    L'épaisseur n'est reprise que si elle concorde. L'aplat du dessin est le mur
+    **brut** ; le modèle porte le mur **fini**, doublage compris. Remplacer l'un
+    par l'autre rétrécit la pièce : sur Émiéville, la cloison garage/WC fait
+    10,2 cm à l'aplat et 15 cm finie, et la surface imprimée du WC (1,62 m²)
+    tranche pour 15 cm. L'écart est rapporté, pas absorbé.
     """
     merged = [json.loads(json.dumps(wall)) for wall in model_walls]
     added = 0
+    gaps = []
     for partition in partitions:
         along = 0 if partition["axis"] == "horizontal" else 1
         across = 1 - along
@@ -276,9 +301,18 @@ def merge_partitions(model_walls, partitions, tolerance=0.15):
         # On garde l'identifiant, l'emprise et les baies du modèle : une cloison
         # lue s'arrête au tableau d'une porte, le mur du modèle la traverse. Seuls
         # la position et la épaisseur viennent du dessin.
-        best["start"][across] = best["end"][across] = round(centre, 4)
-        best["thickness"] = partition["thickness"]
-    return merged, added
+        if abs(best["thickness"] - partition["thickness"]) <= thickness_gap:
+            best["start"][across] = best["end"][across] = round(centre, 4)
+            best["thickness"] = partition["thickness"]
+        else:
+            gaps.append(
+                {
+                    "wall": best["id"],
+                    "model": best["thickness"],
+                    "drawn": partition["thickness"],
+                }
+            )
+    return merged, added, gaps
 
 
 def world_frame(chains, outline):
@@ -514,9 +548,10 @@ def build(
     generated = walls
     added = []
     thickness_gaps = []
+    partition_gaps = []
     if merge:
         # Les murs hachurés du modèle sont conservés : seules les cloisons changent.
-        walls = merge_partitions(level["walls"], plan["walls"])[0]
+        walls, _, partition_gaps = merge_partitions(level["walls"], plan["walls"])
         added = merge_openings(walls, generated)
         thickness_gaps = compare_thickness(walls, generated)
     else:
@@ -543,11 +578,13 @@ def build(
     if overrides:
         apply_overrides(walls, overrides)
     target["walls"] = walls
-    snap_rooms(target["rooms"], walls)
+    moves = snap_rooms(target["rooms"], walls)
     if report is not None:
         report["thickness"] = read
         report["openingsAdded"] = added
         report["thicknessGaps"] = thickness_gaps
+        report["roomMoves"] = moves
+        report["partitionGaps"] = partition_gaps
         report["sill"] = sill
     return result
 
@@ -762,6 +799,18 @@ def main(argv):
         print(f"  allège imprimée : {report['sill']} m")
     if report.get("openingsAdded"):
         print(f"  baies ajoutées depuis les chaînes : {len(report['openingsAdded'])}")
+    moves = report.get("roomMoves") or []
+    if moves:
+        worst = max(moves, key=lambda move: move["distance"])
+        print(
+            f"  pièces recalées sur les faces : {len(moves)} sommet(s), "
+            f"le plus grand de {worst['distance']:.3f} m ({worst['room']})"
+        )
+    for gap in report.get("partitionGaps") or []:
+        print(
+            f"  {gap['wall']} : cloison du modèle {gap['model']} m, "
+            f"aplat du dessin {gap['drawn']} m — épaisseur du modèle conservée"
+        )
     for gap in report.get("thicknessGaps") or []:
         print(
             f"  {gap['wall']} : épaisseur du modèle {gap['model']} m, "
