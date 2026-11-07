@@ -13,6 +13,15 @@ Read `AGENTS.md`, the local passation journal `docs/HANDOFF.md` (git-ignored, pr
 
 Inventory actual source files, SHA-256 hashes, page counts, drawing titles, project identifiers, dates and revisions. Separate different houses and superseded drawings. Verify files exist locally: old summaries, existing JSON and model notes cannot replace the source. If an essential source is unavailable, continue independent audit work and request that source; do not call a regenerated old JSON source-verified.
 
+One house often has several PDFs, and the obvious name is not the good one. A
+`Plans VP.pdf` turned out to be a 15-page scan of an earlier issue while the
+vector original sat next to it as `Plans.pdf`; a whole session was spent
+concluding the house had no vector plan. Before accepting a source, list every
+candidate file for that house and compare them on `page.get_drawings()` and
+`page.get_text("words")` counts. Prefer the vector file, and say which file and
+which page you used. When the owner mentions a document you cannot find, ask for
+its location rather than substituting the nearest name.
+
 Check whether the source is a vector drawing or a scan before promising a pipeline. `page.get_text()` and `page.get_drawings()` answer it in one call: a vector PDF yields dimension text and strokes, a scan yields neither. The extraction layer (`extract_plan_evidence.py`) and the decision layer need text; the verification layer (`measure_plan.py`, `compare_plan.py`, the overlay) reads pixels and works on both. On a scan, the evidence ledger has to be built by hand from the rendered image, and the printed scale must be read from the cartouche because there is no chain to deduce it from — a 1/75 scan is 105 px/m at 200 dpi, not the 157 px/m of a 1/50 drawing.
 
 Render floor plans, sections, elevations and site plans. Inspect readable crops including symbols and dimension endpoints. Extraction/OCR is only an aid. Follow [references/reconstruction.md](references/reconstruction.md) for the measurement ledger, coordinate construction and source overlay workflow. Complete the envelope and partition ledger before final geometry; revisit it when checks expose contradictions.
@@ -62,12 +71,26 @@ behind a valid JSON.
    (axis, own half-thickness, neighbour half-thickness) and keeps the one that
    reproduces the printed run. A length alone proves nothing — two walls of the
    same length on two different dimension lines give the same number — so a face
-   is only claimed when its own openings pin it to that run: the printed
-   positions of the openings must imply a single wall origin, and the wall must
-   fit inside the run. Offsets of zero give `printed` (or `printed-partial` on an
-   open chain); non-zero offsets give `derived`, because the length then depends
-   on declared thicknesses. An envelope wall inset by half its thickness at both
-   ends of the outline is `derived` from the printed overall extent.
+   is only claimed when something positional pins it to that run. Two anchors
+   exist, and the script tries them in this order:
+
+   - **`openings`** — the wall's own openings. Their printed positions must
+     imply a single wall origin, and the wall must fit inside the run.
+   - **`envelope`** — a closed chain whose sum equals the level outline's extent
+     along its axis. Such a chain covers exactly that extent, so its origin is a
+     boundary of the outline and its segments become absolute coordinates. The
+     reading direction is unknown: keep the one that recovers the most model
+     boundaries, and drop the chain on a tie. The chain's own line is then placed
+     in the model frame — the two axes supply each other's origin — which tells
+     which side of the outline it measures. Only a wall carrying that side's face
+     can be proved by it; without this filter a west wall gets "proved" by the
+     east façade chain, which is exactly what happened on a real plan.
+
+   Offsets of zero give `printed` (or `printed-partial` on an open chain);
+   non-zero offsets give `derived`, because the length then depends on declared
+   thicknesses. An envelope wall inset by half its thickness at both ends of the
+   outline is `derived` from the printed overall extent.
+
 3. **Construction and verification** — generator, `validateProject`,
    `scripts/audit-plan.ts`, overlay, browser.
 
@@ -75,12 +98,14 @@ behind a valid JSON.
 recomputes every claim instead of trusting its prose: the referenced run must sum
 to the declared length, the wall's axis length must follow from that length and
 the declared offsets, an opening's printed width and height must match its
-segment, and every chain must come from the level's own pages. It also rejects a
-face resting on an unclosed chain, a `printed` claim without a chain reference, a
-`printed-partial` claim on a closed chain, a missing decision for a wall or an
-opening, and an opening offset that contradicts its chain once the wall origin is
-declared. It exits non-zero while any decision stays unresolved: construction
-does not start on a guess.
+segment, and every chain must come from the level's own pages. An `envelope`
+claim is replayed from the declared frame: the chain must still sum to the
+outline extent, and the run's world interval must land on the wall's faces or the
+opening's jambs. It also rejects a face resting on an unclosed chain, a `printed`
+claim without a chain reference, a `printed-partial` claim on a closed chain, a
+missing decision for a wall or an opening, and an opening offset that contradicts
+its chain once the wall origin is declared. It exits non-zero while any decision
+stays unresolved: construction does not start on a guess.
 
 ```sh
 uvx --from pymupdf python scripts/extract_plan_evidence.py plan.pdf artifacts/plan-review/registry.json --pages 13,14
@@ -166,3 +191,30 @@ Read the audit's own flags before reporting. It returns `sourceVerified: false` 
 ## Deliver an honest completion state
 
 Supply local importable JSON, evidence ledger, before/after changes, audit report and source-comparison/browser results. State measured maximum residuals and unresolved features instead of an invented accuracy percentage. Mark the result provisional while material dimensions, source comparison or visual checks remain unresolved. Name missing evidence precisely. Do not claim perfection, survey accuracy or deployment without corresponding evidence.
+
+## Close the loop with the owner
+
+This skill is a working document, not a finished procedure. After a conversion
+pass, before declaring it done:
+
+1. **Ask the owner what to change.** Name the concrete choices you made and ask
+   which ones were wrong or missing: the source file you picked, the level page,
+   the wall thicknesses you kept, the openings you left unresolved, the
+   automation you did by hand. The owner knows the house and the builder; you
+   know what the scripts did. Neither half is enough alone.
+2. **Record the answer in this file**, in the section it belongs to, not in a
+   chat log. A correction that stays in a conversation is lost at the next
+   session.
+3. **Turn repeated manual work into a script step.** If you did the same thing
+   by hand twice — locating the level page, reading a scale, pairing faces,
+   placing a dimension line — it belongs in `scripts/`, with a fixture and a CI
+   step. Automate only what can be checked: a step that guesses silently is
+   worse than a manual one that is written down.
+4. **Keep the failure in the skill.** A wrong conclusion that cost a session
+   (a scan mistaken for the only source, a wall proved by the opposite façade)
+   is worth more than a success, provided the trap is written where the next
+   session will read it.
+
+Ask once, at the end of the pass, with a short list of specific questions. Do
+not ask for confirmation at every step: the owner asked for the work, not for a
+running commentary.

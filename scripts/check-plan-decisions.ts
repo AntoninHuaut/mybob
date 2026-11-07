@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { wallLength } from '../src/model/geometry';
-import type { HouseProject, Level, Wall } from '../src/model/types';
+import type { HouseProject, Level, Opening, Wall } from '../src/model/types';
 
 const OFFSET_TOL = 0.01; // m, écart accepté entre l'offset du projet et le cumul de chaîne
 const LENGTH_TOL = 0.01; // m, écart accepté sur une longueur ou une cote
@@ -39,6 +39,14 @@ export interface EvidenceRegistry {
   pages: { index: number; chains: RegistryChain[] }[];
 }
 
+export interface EnvelopeFrame {
+  page: number;
+  axis: 'horizontal' | 'vertical';
+  perpendicular: number;
+  base: number;
+  sign: 1 | -1;
+}
+
 export interface ChainRef {
   page: number;
   axis: 'horizontal' | 'vertical';
@@ -67,6 +75,8 @@ export interface Decision {
     printedWidth?: number;
     printedHeight?: number;
     convention?: OpeningConvention;
+    /** Ce qui rattache la cote au mur : ses propres baies, ou une chaîne calée sur l'emprise. */
+    anchor?: 'openings' | 'envelope';
     equation?: string;
     note?: string;
   };
@@ -82,6 +92,8 @@ export interface DecisionsFile {
   registry: string;
   /** Pages du registre qui portent ce niveau ; une cote d'un autre niveau ne prouve rien. */
   pages?: number[];
+  /** Chaînes refermées calées sur l'emprise, avec leur origine et leur sens de lecture. */
+  envelopes?: EnvelopeFrame[];
   faces: Decision[];
   openings: Decision[];
 }
@@ -148,6 +160,7 @@ function checkCommon(
  */
 function checkFace(
   decision: Decision,
+  decisions: DecisionsFile,
   registry: EvidenceRegistry,
   level: Level,
   errors: string[],
@@ -227,12 +240,17 @@ function checkFace(
   if (evidence.class === 'derived' && exact) {
     errors.push(`${where}: preuve dérivée sans décalage, la cote est déjà la longueur du mur`);
   }
+  if (evidence.anchor === 'envelope') {
+    checkEnvelopeFace(decisions, chain, level, wall, span, startOffset, endOffset, where, errors);
+  }
 }
 
 /** Vérifie qu'une ouverture recalculée depuis sa cote imprimée concorde avec le projet. */
 function checkOpening(
   decision: Decision,
+  decisions: DecisionsFile,
   registry: EvidenceRegistry,
+  level: Level,
   errors: string[],
   warnings: string[],
 ): void {
@@ -295,6 +313,147 @@ function checkOpening(
       `${where}: cumul déclaré ${String(evidence.cumulativeOffset)} ≠ cumul imprimé ${expected.toFixed(3)}`,
     );
   }
+  if (evidence.anchor === 'envelope') {
+    const wall = level.walls.find((candidate) => candidate.id === decision.wall);
+    const opening = wall?.openings?.find((candidate) => candidate.id === decision.id);
+    if (!wall || !opening) {
+      errors.push(`${where}: mur ou baie introuvable pour la preuve d'emprise`);
+    } else {
+      checkEnvelopeOpening(decisions, chain, level, wall, opening, index, where, errors);
+    }
+  }
+}
+
+function outlineBounds(level: Level, axis: 'horizontal' | 'vertical') {
+  const along = axis === 'horizontal' ? 0 : 1;
+  const values = level.outline.map((point) => point[along]);
+  return { low: Math.min(...values), high: Math.max(...values) };
+}
+
+function cumulativeSums(chain: RegistryChain): number[] {
+  const sums = [0];
+  for (const segment of chain.segments) sums.push(sums[sums.length - 1] + segment.value);
+  return sums;
+}
+
+/** Intervalle monde d'une suite, une fois la chaîne calée sur le contour. */
+function runInterval(
+  chain: RegistryChain,
+  start: number,
+  end: number,
+  base: number,
+  sign: number,
+): [number, number] {
+  const sums = cumulativeSums(chain);
+  const first = base + sign * sums[start];
+  const last = base + sign * sums[end + 1];
+  return [Math.min(first, last), Math.max(first, last)];
+}
+
+function alongAxis(wall: Wall): 0 | 1 {
+  return Math.abs(wall.end[0] - wall.start[0]) >= Math.abs(wall.end[1] - wall.start[1]) ? 0 : 1;
+}
+
+function faceSpan(wall: Wall, startOffset: number, endOffset: number): [number, number] {
+  const along = alongAxis(wall);
+  const low = Math.min(wall.start[along], wall.end[along]);
+  const high = Math.max(wall.start[along], wall.end[along]);
+  return [low + startOffset, high + endOffset];
+}
+
+function openingSpan(opening: Opening, wall: Wall): [number, number] {
+  const along = alongAxis(wall);
+  const low = Math.min(wall.start[along], wall.end[along]);
+  return [low + opening.offset, low + opening.offset + opening.width];
+}
+
+function findEnvelope(decisions: DecisionsFile, ref: ChainRef): EnvelopeFrame | undefined {
+  return (decisions.envelopes ?? []).find(
+    (frame) =>
+      frame.page === ref.page &&
+      frame.axis === ref.axis &&
+      Math.abs(frame.perpendicular - ref.perpendicular) <= PERPENDICULAR_TOL,
+  );
+}
+
+/** Une preuve d'emprise n'est valable que si la chaîne couvre le contour et tombe sur les faces. */
+function checkEnvelopeFace(
+  decisions: DecisionsFile,
+  chain: RegistryChain,
+  level: Level,
+  wall: Wall,
+  span: { start: number; end: number },
+  startOffset: number,
+  endOffset: number,
+  where: string,
+  errors: string[],
+): void {
+  const frame = findEnvelope(decisions, {
+    page: chain.page,
+    axis: chain.axis,
+    perpendicular: chain.perpendicular,
+  });
+  if (!frame) {
+    errors.push(`${where}: preuve d'emprise sans chaîne calée déclarée`);
+    return;
+  }
+  const bounds = outlineBounds(level, chain.axis);
+  if (Math.abs(chain.sum - (bounds.high - bounds.low)) > LENGTH_TOL) {
+    errors.push(
+      `${where}: la chaîne somme ${chain.sum.toFixed(3)} m, l'emprise ${(bounds.high - bounds.low).toFixed(3)} m`,
+    );
+    return;
+  }
+  const interval = runInterval(chain, span.start, span.end, frame.base, frame.sign);
+  const expected = faceSpan(wall, startOffset, endOffset);
+  if (
+    Math.abs(interval[0] - expected[0]) > LENGTH_TOL ||
+    Math.abs(interval[1] - expected[1]) > LENGTH_TOL
+  ) {
+    errors.push(
+      `${where}: intervalle imprimé ${interval[0].toFixed(3)}..${interval[1].toFixed(3)} ` +
+        `≠ faces du mur ${expected[0].toFixed(3)}..${expected[1].toFixed(3)}`,
+    );
+  }
+}
+
+function checkEnvelopeOpening(
+  decisions: DecisionsFile,
+  chain: RegistryChain,
+  level: Level,
+  wall: Wall,
+  opening: Opening,
+  index: number,
+  where: string,
+  errors: string[],
+): void {
+  const frame = findEnvelope(decisions, {
+    page: chain.page,
+    axis: chain.axis,
+    perpendicular: chain.perpendicular,
+  });
+  if (!frame) {
+    errors.push(`${where}: preuve d'emprise sans chaîne calée déclarée`);
+    return;
+  }
+  const bounds = outlineBounds(level, chain.axis);
+  if (Math.abs(chain.sum - (bounds.high - bounds.low)) > LENGTH_TOL) {
+    errors.push(
+      `${where}: la chaîne somme ${chain.sum.toFixed(3)} m, l'emprise ${(bounds.high - bounds.low).toFixed(3)} m`,
+    );
+    return;
+  }
+  const interval = runInterval(chain, index, index, frame.base, frame.sign);
+  const expected = openingSpan(opening, wall);
+  if (
+    Math.abs(interval[0] - expected[0]) > LENGTH_TOL ||
+    Math.abs(interval[1] - expected[1]) > LENGTH_TOL
+  ) {
+    errors.push(
+      `${where}: intervalle imprimé ${interval[0].toFixed(3)}..${interval[1].toFixed(3)} ` +
+        `≠ baie du projet ${expected[0].toFixed(3)}..${expected[1].toFixed(3)}`,
+    );
+  }
 }
 
 function checkCoverage(
@@ -321,6 +480,8 @@ function checkCoverage(
     if (!chain) continue;
     const printed = cumulativeOffset(chain, decision.evidence.segmentIndex);
     if (decision.evidence.wallOrigin === undefined) {
+      // Une preuve d'emprise place déjà la baie en absolu : rien à avertir.
+      if (decision.evidence.anchor === 'envelope') continue;
       warnings.push(
         `${kind} ${item.id}: origine du mur non déclarée, offset ${item.offset} non vérifiable ` +
           `(repère imprimé à ${printed.toFixed(3)} sur la chaîne page ${ref.page})`,
@@ -398,8 +559,9 @@ export function checkDecisions(
       }
     }
   }
-  for (const decision of faces) checkFace(decision, registry, level, errors, warnings);
-  for (const decision of openings) checkOpening(decision, registry, errors, warnings);
+  for (const decision of faces) checkFace(decision, decisions, registry, level, errors, warnings);
+  for (const decision of openings)
+    checkOpening(decision, decisions, registry, level, errors, warnings);
   checkCoverage(
     faces,
     level.walls.map((wall) => ({ id: wall.id })),
