@@ -14,8 +14,11 @@ import {
   createInteriorBloom,
   createInteriorEnvironment,
   createInteriorOcclusion,
+  faceDirection,
+  interiorRadiance,
   nextOcclusionProbe,
   startOcclusionProbe,
+  toHalfFloat,
   INTERIOR_BLOOM_THRESHOLD,
   INTERIOR_BLOOM_WEIGHT,
   INTERIOR_GROUND_COLOR,
@@ -23,6 +26,7 @@ import {
   INTERIOR_OCCLUSION_SAMPLE_MS,
   INTERIOR_OCCLUSION_WARMUP_MS,
   type BloomPipeline,
+  type BounceFace,
 } from '../src/scene/interiorAmbience';
 
 /** Mirrors `computeEnvironmentIrradiance` from Babylon's harmonics shader. */
@@ -89,6 +93,68 @@ test('the generated environment lights every wall, not only the ceiling and floo
     up[0] > down[0],
     'the ceiling bounce must stay brighter than the floor bounce so the room reads top-to-bottom',
   );
+});
+
+test('the environment carries values above white, so reflections have a hot spot', () => {
+  // The window is what the glass and the steel reflect; a clamped environment
+  // would only ever give them a grey patch.
+  const window = interiorRadiance(0, 0.1, 1);
+  assert.ok(
+    Math.max(...window) > 1,
+    `the window must exceed white in linear light, got ${window.join(', ')}`,
+  );
+  const wall = interiorRadiance(-1, 0, 0);
+  assert.ok(Math.max(...wall) < 1, `a plain wall must stay below white, got ${wall.join(', ')}`);
+  assert.ok(
+    Math.max(...window) > Math.max(...wall) * 3,
+    'the window must read as a light source, not as a slightly brighter wall',
+  );
+});
+
+test('each cube face points along its own axis', () => {
+  const centres: [BounceFace, [number, number, number]][] = [
+    ['right', [1, 0, 0]],
+    ['left', [-1, 0, 0]],
+    ['up', [0, 1, 0]],
+    ['down', [0, -1, 0]],
+    ['front', [0, 0, 1]],
+    ['back', [0, 0, -1]],
+  ];
+  for (const [face, expected] of centres) {
+    const [x, y, z] = faceDirection(face, 0.5, 0.5);
+    const sign = (v: number) => (Math.abs(v) < 1e-9 ? 0 : Math.sign(v));
+    assert.deepEqual(
+      [sign(x), sign(y), sign(z)],
+      expected.map(sign),
+      `${face} must look along ${expected.join(',')}`,
+    );
+  }
+});
+
+test('half floats encode the range the environment needs', () => {
+  assert.equal(toHalfFloat(0), 0x0000);
+  assert.equal(toHalfFloat(1), 0x3c00, 'one is the half-float unit');
+  assert.equal(toHalfFloat(0.5), 0x3800);
+  assert.equal(toHalfFloat(2), 0x4000);
+  assert.equal(toHalfFloat(-1), 0xbc00);
+  assert.equal(toHalfFloat(65504), 0x7bff, 'the largest finite half float');
+  assert.equal(toHalfFloat(1e9), 0x7bff, 'overflow saturates on the largest finite value');
+  assert.equal(toHalfFloat(Number.NaN), 0x7e00);
+  // Round trip through the decoder, which is what the GPU will do.
+  for (const value of [0.001, 0.18, 0.55, 1, 3.5, 7, 12.25]) {
+    const bits = toHalfFloat(value);
+    const sign = bits & 0x8000 ? -1 : 1;
+    const exponent = (bits >> 10) & 0x1f;
+    const mantissa = bits & 0x3ff;
+    const decoded =
+      exponent === 0
+        ? sign * mantissa * 2 ** -24
+        : sign * (1 + mantissa / 1024) * 2 ** (exponent - 15);
+    assert.ok(
+      Math.abs(decoded - value) <= Math.abs(value) * 0.001,
+      `${value} must survive the encoding, got ${decoded}`,
+    );
+  }
 });
 
 test('the visit ground bounce is darker than the editor one', () => {

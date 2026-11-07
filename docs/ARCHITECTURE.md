@@ -111,9 +111,13 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
 - La visite a sa propre ambiance : environnement cubique généré localement (aucun fichier
   distant) pour un reflet ambiant, lisible surtout sur le verre et l'acier ; le relief vient de
   l'occlusion ambiante et des luminaires du niveau, renforcés parce que le plafond masque le
-  soleil. Plan et Vue 3D gardent leur éclairage : l'environnement et le tampon de géométrie ne
-  sont attachés qu'en visite et libérés en sortie, et l'environnement précédent est restauré
-  plutôt qu'effacé. Avec un aperçu solaire appliqué, l'ambiance suit le soleil comme ailleurs.
+  soleil. Cet environnement est en **demi-flottants**, donc linéaire et au-delà du blanc : la
+  baie et le luminaire y valent plusieurs fois un mur, ce qui donne aux reflets un point chaud
+  au lieu d'une tache grise. Il est généré en 128 px — un reflet n'en résout pas plus, et les
+  six faces coûtent une trentaine de millisecondes à l'entrée en visite. Plan et Vue 3D gardent
+  leur éclairage : l'environnement et le tampon de géométrie ne sont attachés qu'en visite et
+  libérés en sortie, et l'environnement précédent est restauré plutôt qu'effacé. Avec un aperçu
+  solaire appliqué, l'ambiance suit le soleil comme ailleurs.
 - La chaîne de post-traitements de la visite est ordonnée et l'ordre compte : Babylon ajoute
   chaque pipeline à la fin de la chaîne de la caméra, donc `updateInteriorAmbience` construit
   le TAA d'abord, l'occlusion ensuite, le bloom en dernier. On lit
