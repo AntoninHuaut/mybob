@@ -22,7 +22,13 @@ import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import '@babylonjs/core/Collisions/collisionCoordinator';
 import type { HouseProject, Level, Point2 } from '../model/types';
 import { bounds, floorElevationAt, pointInPolygon } from '../model/geometry';
-import { buildHouse, poseDoor, type HouseScene } from './buildHouse';
+import {
+  buildHouse,
+  poseDoor,
+  FIXTURE_LIGHT_INTENSITY,
+  FIXTURE_LIGHT_RANGE,
+  type HouseScene,
+} from './buildHouse';
 import { createMaterials } from './materials';
 import { buildExterior, type ExteriorScene } from './buildExterior';
 import {
@@ -45,6 +51,18 @@ import {
   sectionPlane,
 } from './navigation';
 import { cameraYaw, planHeading, setPlanView, stopOrbit, usePlanCoordinates } from './coordinates';
+import {
+  createInteriorEnvironment,
+  createInteriorOcclusion,
+  INTERIOR_ENVIRONMENT_INTENSITY,
+  INTERIOR_FIXTURE_INTENSITY,
+  INTERIOR_FIXTURE_RANGE,
+  INTERIOR_GROUND_COLOR,
+  INTERIOR_OCCLUSION_MIN_FPS,
+  INTERIOR_OCCLUSION_PROBE_MS,
+} from './interiorAmbience';
+import type { RawCubeTexture } from '@babylonjs/core/Materials/Textures/rawCubeTexture';
+import type { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
 
 export type ViewMode = 'overview' | 'plan' | 'walk';
 export interface FrameInfo {
@@ -133,6 +151,12 @@ export class HouseViewer {
   private hemispheric!: HemisphericLight;
   private sun!: DirectionalLight;
   private planLighting?: { diffuse: Color3; ground: Color3 };
+  private baseGround?: Color3;
+  private interiorEnvironment?: RawCubeTexture;
+  private interiorOcclusion?: SSAO2RenderingPipeline;
+  private interiorAmbienceUnavailable = false;
+  private occlusionProbeAt?: number;
+  private occlusionRefused = false;
   private shadowsBeforeReadability?: boolean;
   private solarPosition?: SolarPosition;
   private baseSun?: { direction: Vector3; position: Vector3; diffuse: Color3 };
@@ -181,6 +205,12 @@ export class HouseViewer {
     this.planLighting = undefined;
     this.shadowsBeforeReadability = undefined;
     this.baseSun = undefined;
+    this.baseGround = undefined;
+    this.interiorEnvironment = undefined;
+    this.interiorOcclusion = undefined;
+    this.interiorAmbienceUnavailable = false;
+    this.occlusionProbeAt = undefined;
+    this.occlusionRefused = false;
     this.exterior = undefined;
     this.exteriorFrame = undefined;
     this.exteriorView = false;
@@ -398,6 +428,7 @@ export class HouseViewer {
       }
     }
     this.updateLighting();
+    this.updateInteriorAmbience();
     this.dimensions.forEach((mesh) => mesh.setEnabled(this.dimensionOn && mode !== 'walk'));
     this.updateSection();
     this.updateCutaway();
@@ -764,7 +795,11 @@ export class HouseViewer {
     this.updateShadowPolicy();
     this.house.ceiling.setEnabled(interior);
     this.house.fixtures.forEach((f) => f.setEnabled(interior));
-    this.house.pointLights.forEach((l) => l.setEnabled(this.lightOn && !plan));
+    this.house.pointLights.forEach((l) => {
+      l.setEnabled(this.lightOn && !plan);
+      l.intensity = interior ? INTERIOR_FIXTURE_INTENSITY : FIXTURE_LIGHT_INTENSITY;
+      l.range = interior ? INTERIOR_FIXTURE_RANGE : FIXTURE_LIGHT_RANGE;
+    });
     if (plan) {
       this.planLighting ??= {
         diffuse: this.hemispheric.diffuse?.clone() ?? Color3.White(),
@@ -780,6 +815,10 @@ export class HouseViewer {
         this.hemispheric.groundColor = this.planLighting.ground;
         this.planLighting = undefined;
       }
+      this.baseGround ??= this.hemispheric.groundColor.clone();
+      this.hemispheric.groundColor = interior
+        ? INTERIOR_GROUND_COLOR.clone()
+        : this.baseGround.clone();
       this.hemispheric.intensity = interior ? 0.42 : 0.55;
       this.sun.intensity = 0.95;
       if (this.solarPosition) {
@@ -815,6 +854,54 @@ export class HouseViewer {
     if (interior) this.house.highlights.forEach((m) => m.setEnabled(false));
   }
 
+  /**
+   * Visit-only ambience. The plan keeps its neutral lighting and the overview its
+   * façade cutaways, so both must stay exactly as they were: the environment and
+   * the geometry buffer are attached on entering the visit and released on leaving.
+   */
+  private updateInteriorAmbience() {
+    if (!this.scene) return;
+    if (this.mode === 'walk') {
+      if (!this.interiorAmbienceUnavailable) {
+        this.interiorEnvironment ??= createInteriorEnvironment(this.scene);
+        if (!this.interiorEnvironment) this.interiorAmbienceUnavailable = true;
+      }
+      if (this.interiorEnvironment) {
+        this.scene.environmentTexture = this.interiorEnvironment;
+        this.scene.environmentIntensity = INTERIOR_ENVIRONMENT_INTENSITY;
+      }
+      if (!this.occlusionRefused && !this.interiorOcclusion) {
+        this.interiorOcclusion = createInteriorOcclusion(this.scene, this.walk);
+        this.occlusionProbeAt = this.interiorOcclusion ? performance.now() : undefined;
+      }
+      return;
+    }
+    if (this.interiorEnvironment && this.scene.environmentTexture === this.interiorEnvironment) {
+      this.scene.environmentTexture = null;
+      this.scene.environmentIntensity = 1;
+    }
+    this.interiorOcclusion?.dispose(true);
+    this.interiorOcclusion = undefined;
+    this.occlusionProbeAt = undefined;
+  }
+
+  /**
+   * Ambient occlusion is the expensive part of the visit. Once the visit has run
+   * long enough to judge, a frame rate below the threshold drops the pipeline:
+   * the environment and the fixture lights keep the room readable.
+   */
+  private probeOcclusionCost() {
+    if (this.occlusionProbeAt === undefined || !this.interiorOcclusion) return;
+    if (performance.now() - this.occlusionProbeAt < INTERIOR_OCCLUSION_PROBE_MS) return;
+    this.occlusionProbeAt = undefined;
+    const fps = this.engine.getFps();
+    if (fps >= INTERIOR_OCCLUSION_MIN_FPS) return;
+    this.interiorOcclusion.dispose(true);
+    this.interiorOcclusion = undefined;
+    this.occlusionRefused = true;
+    console.info(`[visite] occlusion ambiante désactivée : ${Math.round(fps)} fps`);
+  }
+
   private setOrthoSize() {
     fitPlan(
       this.orbit,
@@ -833,6 +920,7 @@ export class HouseViewer {
 
   private beforeFrame() {
     if (this.capturing) return;
+    this.probeOcclusionCost();
     this.updateCutaway();
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.045);
     // Match the collision displacement to frame time, including the garage step.
@@ -1090,6 +1178,8 @@ export class HouseViewer {
   dispose() {
     this.wallCutaway?.dispose();
     this.planOpenings?.dispose();
+    this.interiorOcclusion?.dispose(true);
+    this.interiorOcclusion = undefined;
     window.removeEventListener('keydown', this.keydown);
     window.removeEventListener('keyup', this.keyup);
     window.removeEventListener('blur', this.clearKeys);
