@@ -1,8 +1,9 @@
 """Couche 1 : registre d'évidence extrait d'un PDF de plans.
 
 Extraction déterministe, sans interprétation : pages, étiquettes classées
-(cotes, baies, allèges, surfaces, niveaux, pentes), table des surfaces et
-chaînes de cotes avec leur résidu de fermeture et l'échelle déduite.
+(cotes, baies, allèges, surfaces, niveaux, pentes, niveaux nommés et côtés de
+parcelle des plans de masse), table des surfaces et chaînes de cotes avec leur
+résidu de fermeture et l'échelle déduite.
 
 Usage :
   uvx --from pymupdf python scripts/extract_plan_evidence.py <pdf> <sortie.json> [--pages 13,14] [--skip-vectors]
@@ -37,6 +38,12 @@ SCALE = re.compile(r"^Echelle\s*:\s*1/(\d+)$", re.I)
 DATE = re.compile(r"^Date\s*:\s*(\d{2}/\d{2}/\d{4})$", re.I)
 NUMBER = re.compile(r"^n°\s*(\S+)$")
 SURFACE_VALUE = re.compile(r"^(\d+[.,]\d+)\s*m\s*[²2]$", re.I)
+NAMED_LEVEL = re.compile(r"^([A-Za-zÀ-ÿ][A-Za-zÀ-ÿ .'-]{0,30}?)\s*:\s*([±+\-−]?\d+[.,]\d{1,3})$")
+PARCEL_SIDE = re.compile(r"^-\s*(\d+[.,]\d{1,3})\s*m\s*-$", re.I)
+PARCEL_AREA = re.compile(r"^Surface\s*:\s*(\d+(?:[.,]\d+)?)\s*m\s*[²2]$", re.I)
+RECT_AREA = re.compile(
+    r"^([^0-9]{1,40}?)([0-9]+(?:[.,][0-9]{1,3})?)\s*m?\s*[xX]\s*([0-9]+(?:[.,][0-9]{1,3})?)\s*m"
+)
 SECTION = re.compile(r"^SURFACES?\s+.+$", re.I)
 TOTAL_LABEL = re.compile(r"^total\b", re.I)
 TOTAL_LINE = re.compile(r"^(TOTAL\s+.+?)\s+(\d+[.,]\d+)\s*m\s*[²2]$", re.I)
@@ -106,6 +113,24 @@ def classify(line):
         return "drawingNumber", {"value": match.group(1)}
     if match := CENTIMETRES.match(text):
         return "centimetres", {"value": metres(match.group(1))}
+    # Libellés du plan de masse : niveaux nommés, côtés de parcelle, surface
+    # cadastrale et surfaces rectangulaires cotées dans une phrase. Lecture
+    # littérale : rien ici ne dit à quel objet s'applique la valeur.
+    if match := NAMED_LEVEL.match(text):
+        return "namedLevel", {
+            "name": match.group(1).strip(),
+            "value": float(match.group(2).replace(",", ".")),
+        }
+    if match := PARCEL_SIDE.match(text):
+        return "parcelSide", {"value": float(match.group(1).replace(",", "."))}
+    if match := PARCEL_AREA.match(text):
+        return "parcelArea", {"area": float(match.group(1).replace(",", "."))}
+    if match := RECT_AREA.match(text):
+        return "rectArea", {
+            "name": match.group(1).strip(),
+            "width": metres(match.group(2)),
+            "depth": metres(match.group(3)),
+        }
     return None
 
 
@@ -302,6 +327,10 @@ def page_record(page, index, skip_vectors):
             "rooms": [label for label in labels if label["kind"] == "room"],
             "levels": [label for label in labels if label["kind"] == "level"],
             "slopes": [label for label in labels if label["kind"] == "slope"],
+            "namedLevels": [label for label in labels if label["kind"] == "namedLevel"],
+            "parcelSides": [label for label in labels if label["kind"] == "parcelSide"],
+            "parcelAreas": [label for label in labels if label["kind"] == "parcelArea"],
+            "rectAreas": [label for label in labels if label["kind"] == "rectArea"],
         },
         "chains": chains,
         "chainTotals": [label for label in isolated if id(label) in totals_used],
@@ -327,6 +356,14 @@ def self_test():
     page.insert_text((100.0, baseline + 80), "All : 1.10 m", fontsize=8)
     page.insert_text((100.0, baseline + 100), "90/2.15", fontsize=8)
     page.insert_text((100.0, baseline + 120), "Echelle : 1/50", fontsize=8)
+    # Plan de masse : niveaux nommés, côté de parcelle, surface cadastrale,
+    # surface rectangulaire cotée.
+    page.insert_text((400.0, baseline), "RDC: +0.28", fontsize=8)
+    page.insert_text((400.0, baseline + 14), "Egout: +3.01", fontsize=8)
+    page.insert_text((400.0, baseline + 28), "- 32.03 m -", fontsize=8)
+    page.insert_text((400.0, baseline + 42), "Surface :  496 m2", fontsize=8)
+    page.insert_text((400.0, baseline + 56), "Entree charretiere 5.00mx5.00m, non close,", fontsize=8)
+    page.insert_text((400.0, baseline + 70), "TN : -0.15", fontsize=8)
     path = str(Path(tempfile.mkdtemp()) / "self-test-evidence.pdf")
     document.save(path)
     record = page_record(pymupdf.open(path)[0], 1, True)
@@ -353,6 +390,25 @@ def self_test():
         failures.append(f"baies {openings}")
     if record["cartouche"]["scale"] != "1/50":
         failures.append(f"échelle du cartouche {record['cartouche']['scale']}")
+    named = {
+        label["name"]: label["value"] for label in record["labels"]["namedLevels"]
+    }
+    for name, value in (("RDC", 0.28), ("Egout", 3.01), ("TN", -0.15)):
+        if abs(named.get(name, 0.0) - value) > 0.001:
+            failures.append(f"niveau nommé {name} : {named.get(name)} au lieu de {value}")
+    sides = record["labels"]["parcelSides"]
+    if len(sides) != 1 or abs(sides[0]["value"] - 32.03) > 0.001:
+        failures.append(f"libellés de côté de parcelle {sides}")
+    areas = record["labels"]["parcelAreas"]
+    if len(areas) != 1 or abs(areas[0]["area"] - 496.0) > 0.001:
+        failures.append(f"libellés de surface cadastrale {areas}")
+    rects = record["labels"]["rectAreas"]
+    if (
+        len(rects) != 1
+        or abs(rects[0]["width"] - 5.0) > 0.001
+        or abs(rects[0]["depth"] - 5.0) > 0.001
+    ):
+        failures.append(f"surfaces rectangulaires cotées {rects}")
     if failures:
         for failure in failures:
             print(f"ECHEC {failure}")
