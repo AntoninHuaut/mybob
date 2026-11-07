@@ -60,6 +60,7 @@ import {
 import { cameraYaw, planHeading, setPlanView, stopOrbit, usePlanCoordinates } from './coordinates';
 import {
   createInteriorBloom,
+  createOrbitBloom,
   createInteriorEnvironment,
   createInteriorOcclusion,
   createInteriorTaa,
@@ -173,6 +174,7 @@ export class HouseViewer {
   private interiorOcclusion?: SSAO2RenderingPipeline;
   private interiorTaa?: TAARenderingPipeline;
   private interiorBloom?: DefaultRenderingPipeline;
+  private orbitBloom?: DefaultRenderingPipeline;
   private interiorAmbienceUnavailable = false;
   private occlusionUnavailable = false;
   private previousEnvironment?: BaseTexture | null;
@@ -230,6 +232,7 @@ export class HouseViewer {
     this.interiorOcclusion = undefined;
     this.interiorTaa = undefined;
     this.interiorBloom = undefined;
+    this.orbitBloom = undefined;
     this.interiorAmbienceUnavailable = false;
     this.occlusionUnavailable = false;
     this.previousEnvironment = undefined;
@@ -477,6 +480,7 @@ export class HouseViewer {
     try {
       this.updateLighting();
       this.updateInteriorAmbience();
+      this.updateOrbitBloom();
     } catch (error) {
       console.info(
         `[visite] ambiance indisponible : ${error instanceof Error ? error.message : String(error)}`,
@@ -1016,6 +1020,19 @@ export class HouseViewer {
     this.scene.disablePrePassRenderer();
   }
 
+  /**
+   * Bloom de l'orbite : la Vue 3D (façades en coupe) et l'Extérieur (soleil,
+   * toiture, ciel). Le plan partage la caméra en orthographique — un plan ne
+   * doit rien fleurer, le pipeline est coupé sans être détruit : le reconstruire
+   * à chaque bascule coûterait une recréation de chaîne de post-traitement.
+   */
+  private updateOrbitBloom() {
+    if (!this.scene || !this.orbit) return;
+    const active = this.mode === 'overview';
+    if (active && !this.orbitBloom) this.orbitBloom = createOrbitBloom(this.scene, this.orbit);
+    if (this.orbitBloom) this.orbitBloom.bloomEnabled = active;
+  }
+
   private setOrthoSize() {
     fitPlan(
       this.orbit,
@@ -1298,6 +1315,8 @@ export class HouseViewer {
     this.interiorTaa = undefined;
     this.interiorBloom?.dispose();
     this.interiorBloom = undefined;
+    this.orbitBloom?.dispose();
+    this.orbitBloom = undefined;
     window.removeEventListener('keydown', this.keydown);
     window.removeEventListener('keyup', this.keyup);
     window.removeEventListener('blur', this.clearKeys);

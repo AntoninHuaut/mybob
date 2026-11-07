@@ -41,7 +41,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Caméra de visite       | `src/scene/walkCamera.ts`               | Hauteur du regard, rayon visiteur, vitesse, pas                     |
 | Coupe des murs         | `src/scene/wallCutaway.ts`              | `auto` / `full` / `low`, plans de découpe par matériau              |
 | Ouvertures en plan     | `src/scene/planOpenings.ts`             | Baies et portes dessinées dans la vue Plan, faces de coupe          |
-| Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, TAA, occlusion, bloom                                   |
+| Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, TAA, occlusion, bloom (visite, Vue 3D et Extérieur)     |
 | Diagnostic             | `src/scene/diagnostics.ts`              | `mybob.diag()` : moteur, GPU, cadence, résolution, scène            |
 | Mesure                 | `src/scene/measurement.ts`              | Accrochage aux axes du plan                                         |
 | Soleil                 | `src/scene/solar.ts`                    | Équations NOAA, fuseaux IANA                                        |
@@ -147,8 +147,11 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
 - La chaîne de post-traitements de la visite est ordonnée et l'ordre compte : Babylon ajoute
   chaque pipeline à la fin de la chaîne de la caméra, donc `updateInteriorAmbience` construit
   le TAA d'abord, l'occlusion ensuite, le bloom en dernier. On lit
-  `TAA, TAAPass, SSAO…, ssaoCombine, bloom`. Le bloom est réglé à un seuil de 0,6 et un poids
-  de 0,2 : la lampe et la baie prennent un peu de lumière, les murs blancs restent nets. Son
+  `TAA, TAAPass, SSAO…, ssaoCombine, bloom`. Le bloom est réglé à un seuil de 0,9 et un poids
+  de 0,2 : les valeurs sont affichées (le tone mapping est déjà passé) et les murs blancs
+  éclairés tiennent entre 0,6 et 0,9 — à 0,6 la pièce entière fleurissait et se lisait comme
+  un reflet laiteux sur les murs. Seuls la lampe et la vue à travers la baie dépassent le
+  seuil. Son
   `imageProcessingEnabled` est faux, sinon le tone mapping serait appliqué deux fois — l'app
   tone-map déjà dans les shaders des matériaux — et ses sous-effets sont configurés avant la
   coupure, qui détruit le post-process et nullifie `imageProcessing`.
