@@ -144,3 +144,31 @@ L’export peut inclure `furnishing: {version: 1, levels: {...}}`, avec les meub
 `solar` peut contenir `latitude` (−90 à 90), `longitude` (−180 à 180), `northAngleDeg` (sens horaire depuis le haut du plan), et facultativement `timeZone` (IANA, par exemple `Europe/Paris`), `label` et `instant`. Ce dernier conserve la date et l’heure choisies sous forme UTC ISO canonique (`2026-07-01T10:30:00.000Z`). Les anciens fichiers sans `instant` utilisent l’heure actuelle. Aucun lieu n’est fourni par défaut. L’import valide ces champs ; les angles sont normalisés sur [0,360). Le calcul utilise un instant absolu, la date et l’heure locale étant converties avec le fuseau choisi.
 
 Les réglages appliqués dans l’interface restent dans `maison-atelier:solar:<projectId>` et remplacent ceux du fichier lors de l’utilisation locale. L’export inclut la configuration effective. La préférence locale `null` signifie que l’utilisateur a choisi de revenir à l’éclairage standard, même si le fichier d’origine contient un champ solaire. Ces données ne sont jamais envoyées au serveur d’hébergement.
+
+## Partage par lien
+
+Le bouton **Lien** place dans le fragment de l’URL un instantané de l’état courant, forme
+`#p1:<base64url(déflate-raw(pack sémantique))>`. Le préfixe `p1` isole la version du format
+pour une future migration sans ambiguïté de lecture. Le fragment ne quitte jamais le
+navigateur : il n’est ni envoyé au serveur d’hébergement ni consigné dans l’historique
+(`history.replaceState`).
+
+Le lien transporte un **document d’export complet** : le projet, l’aménagement de chaque
+niveau et toutes les variantes — jamais la caméra courante ni les préférences de navigation.
+Deux différences assumées vis-à-vis du JSON exporté :
+
+- **Identifiants renumérotés.** Les identifiants réels (meubles, niveaux, murs, ouvertures,
+  pièces, escaliers, luminaires, surfaces, toitures) sont de l’entropie incompressible ; dans
+  le pack ils deviennent positionnels — `niveau-0`, `mur-0-1`, `meuble-0`, `groupe-0` — et sont
+  régénérés au déballage. Sont conservés : l’identifiant du projet, les noms (niveaux, pièces),
+  les notes, la description, la source et les identifiants de variantes. Déballer puis repacker
+  un lien rend les mêmes octets.
+- **Quantification.** Les distances sont arrondies au millimètre, les angles au dix-millième
+  de radian, les couleurs sont internées en minuscules 24 bits ; les champs absents ne sont
+  pas écrits. L’écart est en dessous de la précision de saisie.
+
+À l’ouverture d’un lien : le propriétaire du projet voit son état comparé au lien (rien si
+identique, un choix de trois issues sinon) ; un destinataire ouvre le projet en lecture seule,
+en mémoire seule, et peut l’ajouter à ses projets — il reçoit alors un nouvel identifiant et
+devient un projet importé normal, documenté ci-dessus. Un lien tronqué ou corrompu charge le
+projet local avec un avertissement, sans jamais bloquer le démarrage.

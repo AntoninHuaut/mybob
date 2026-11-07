@@ -48,6 +48,8 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Données                | `src/model/types.ts`                    | Format versionné (`schemaVersion: 1`)                               |
 | Validation             | `src/model/validate.ts`                 | Contrôle à l'import, erreurs lisibles                               |
 | Géométrie pure         | `src/model/geometry.ts`                 | Surfaces, appartenance, tronçons de mur, altitude du sol            |
+| Lien de partage — pack | `src/model/linkPacker.ts`               | Pack binaire sémantique du hash `#p1:` (varints, quantification)    |
+| Lien de partage — URL  | `src/model/shareLink.ts`                | Encodage/décodage du hash, comparaison canonique d'états            |
 | Meubles — modèle       | `src/furniture/model.ts`                | Types, identifiants, clé de stockage, historique                    |
 | Meubles — rendu        | `src/furniture/layer.ts`                | Maillages, sélection, glisser, calques, découpe en plan             |
 | Meubles — placement    | `src/furniture/placement.ts`            | Contraintes bâtiment, recherche de place                            |
@@ -60,6 +62,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Textes de mode         | `src/ui/modeChrome.ts`                  | Titres, aides clavier et tactile par mode                           |
 | Compteur de cadence    | `src/ui/frameRate.ts`                   | Affichage des fps, écriture limitée à quatre par seconde            |
 | Panneaux               | `src/ui/roomPanels.ts`, `minimap.ts`    | Liste des pièces, fiche, plan miniature                             |
+| Divergence de lien     | `src/ui/confirmLinkDivergence.ts`       | Trois issues quand un lien et l'état local diffèrent                |
 | Aide et accueil        | `src/ui/firstSteps.ts`, `onboarding.ts` | Carte « Premiers pas », aide courte et complète                     |
 | Export image           | `src/ui/imageExport.ts`                 | PNG de la caméra, cartouche, options                                |
 | Banc d'essai (dev)     | `src/ui/fxLab.ts`                       | Questions de rendu non tranchées — jamais dans un build             |
@@ -178,11 +181,39 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
   elle rend la maison entière. Les murs extérieurs gardent leurs collisions, donc on ne sort que
   par une porte ouverte.
 
+## Le lien de partage
+
+Le bouton **Lien** de l'en-tête copie une URL dont le fragment `#p1:<base64url>` est une
+photographie de l'état courant (`history.replaceState`, jamais `location.hash` : la
+navigation ne s'empile pas). Le fragment est écrit après chaque modification, avec un
+rebattement de 500 ms garanti au dernier appel, et relu au démarrage.
+
+- **Contenu** : `model/linkPacker.ts` packe un document d'export complet — projet, aménagement
+  de chaque niveau et toutes les variantes — jamais la caméra ni les préférences de navigation.
+- **Projection de transport** : le pack n'existe que dans l'URL. Les identifiants (meubles,
+  niveaux, murs, ouvertures, pièces) y sont **renumérotés positionnellement** (`meuble-0`,
+  `mur-0-1`…) : l'entropie des UUID ne tient pas sous 3 Ko. Ne sont conservés que les champs
+  qui portent un sens stable : `project.id`, les noms, les notes, la description, la source,
+  les identifiants de variantes. Repacker un document déballé rend les mêmes octets.
+- **Lecture au démarrage** (`main.ts`, `openSharedLink`) : le hash prime sur `localStorage`.
+  - Le projet existe déjà ici (propriétaire) : comparaison silencieuse sur les **octets
+    packés canoniques** (`samePackedState`, pas sur le hash compressé, déflate non
+    déterministe d'un navigateur à l'autre). Identique → rien. Différent →
+    `ui/confirmLinkDivergence.ts` : remplacer, garder les deux, ou ignorer — jamais de
+    perte silencieuse.
+  - Le projet n'existe pas ici (destinataire) : ouverture **en mémoire seule** (aucune
+    écriture `localStorage`), lecture seule avec bandeau et bouton **Ajouter à mes projets**
+    qui copie le document sous un nouvel identifiant puis l'installe normalement.
+- Un hash illisible n'empêche jamais le démarrage : le projet local est chargé, un avertissement
+  est affiché.
+
 ## Invariants à ne pas casser
 
 - Mètres en interne, centimètres dans les champs ; les valeurs non modifiées gardent leur
   valeur exacte malgré l'arrondi d'affichage.
 - Identifiants stables, `schemaVersion: 1`, validation à l'import.
+- Les identifiants ne vivent que dans la mémoire et le `localStorage` ; le pack du lien est
+  une projection de transport qui les renumérote — ne jamais réutiliser le pack comme état.
 - Les dialogues de meubles sont transactionnels : tout reste un brouillon jusqu'à
   Enregistrer, Annuler jette l'ensemble.
 - La réactivité ne remplace pas un contrôle natif pendant la saisie.

@@ -15,13 +15,16 @@ le workflow navigateur touché par un changement — par titre avec `--grep`, ou
 ```sh
 pnpm run build                                   # une fois, fige dist/
 pnpm exec playwright test --grep "mesure"        # les scénarios dont le titre contient « mesure »
+pnpm exec playwright test --grep "lien"          # le partage par URL (e2e/share-link.spec.ts)
 pnpm exec playwright test e2e/furniture-actions.spec.ts   # tous ceux d'un fichier
 ```
 
 Scénarios : `e2e/workflows.spec.ts` (canapé contre un mur, brouillon, variantes,
 export/import JSON, plan/PNG, mesures, accueil), `e2e/furniture-actions.spec.ts`
-(chaises et table, liaison TV, glisser), `e2e/first-steps.spec.ts` (carte Premiers pas,
-aide). Choisir le fichier d'abord, le `--grep` ensuite.
+(chaises et table, liaison TV, glisser), `e2e/share-link.spec.ts` (partage par lien :
+lecture seule du destinataire, adoption, silence pour le propriétaire, vieux lien, hash
+corrompu), `e2e/first-steps.spec.ts` (carte Premiers pas, aide). Choisir le fichier
+d'abord, le `--grep` ensuite.
 
 `pnpm run test:e2e` (build complet + exclusion du plan personnel + tous les scénarios)
 n'est pas la boucle locale : il n'existe que pour la CI, qui rejoue tout sur le build
