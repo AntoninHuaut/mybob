@@ -5,7 +5,7 @@ description: Maintain, debug, test and release the Mybob Babylon.js house and fu
 
 # Mybob maintenance
 
-Use this repository-local skill when changing the house viewer, furniture UI, project import/export, local storage, tests or deployment. Start with `AGENTS.md` and the local passation journal `docs/HANDOFF.md` (git-ignored, present on the owner's clone). Consult `docs/PROJECT-FORMAT.md`, `docs/FURNITURE.md`, `docs/UI-REFINEMENT.md`, `docs/DEPLOYMENT.md` for the touched area.
+Use this repository-local skill when changing the house viewer, furniture UI, project import/export, local storage, tests or deployment. Start with `AGENTS.md`, then `docs/ARCHITECTURE.md` for the module map, and the local passation journal `docs/HANDOFF.md` (git-ignored, present on the owner's clone). Consult `docs/PROJECT-FORMAT.md`, `docs/FURNITURE.md`, `docs/UI-REFINEMENT.md`, `docs/DEPLOYMENT.md` for the touched area.
 
 ## Establish the working state
 
@@ -16,14 +16,13 @@ Use this repository-local skill when changing the house viewer, furniture UI, pr
 
 ## Locate the correct layer
 
-- House schema/units/validation: `src/model/`.
-- House meshes, cameras, lighting, doors, cutaways: `src/scene/`.
-- Furniture schema/history/storage: `src/furniture/model.ts`.
-- Furniture transforms/groups/placement constraints: `groups.ts`, `placement.ts`, `checks.ts`.
-- All furniture edit actions: `editorDraft.ts` plus `panel.ts`; commit only with `onApplyDraft`.
-- Furniture meshes/dragging: `layer.ts`.
-- Application composition: `src/main.ts`; shared visual styles: `src/style.css`.
-- Solar mathematics/time-zone conversion: `src/scene/solar.ts`; settings validation: `src/model/solarSettings.ts`; controls/local preferences: `src/ui/solarPanel.ts`.
+`docs/ARCHITECTURE.md` carries the module map, the data flow, the three view modes and the
+invariants. Read it instead of scanning `src/`. Two details it does not spell out:
+
+- Every furniture edit action goes through `editorDraft.ts` and is committed only by
+  `onApplyDraft`.
+- Solar mathematics live in `src/scene/solar.ts`, settings validation in
+  `src/model/solarSettings.ts`, controls and local preferences in `src/ui/solarPanel.ts`.
 
 ## Fix without regressions
 
