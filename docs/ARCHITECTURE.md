@@ -30,6 +30,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Moteur                 | `src/scene/engine.ts`                   | Moteur WebGL, message si l'accélération graphique manque            |
 | Scène                  | `src/scene/viewer.ts`                   | `HouseViewer` : modes, caméras, coupe, ombres, mesures, portes      |
 | Géométrie de la maison | `src/scene/buildHouse.ts`               | Murs, sols, plafonds, menuiseries, portes                           |
+| Arêtes de mur          | `src/scene/beveledBox.ts`               | Boîte à arêtes chanfreinées, pour les murs                          |
 | Extérieur              | `src/scene/buildExterior.ts`            | Façades, toiture, terrain                                           |
 | Matériaux              | `src/scene/materials.ts`                | Matériaux partagés, carrelage procédural                            |
 | Relief et rugosité     | `src/scene/surfaceTextures.ts`          | Normal maps et roughness maps procédurales, tuilées au mètre        |
@@ -119,6 +120,10 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
   leur éclairage : l'environnement et le tampon de géométrie ne sont attachés qu'en visite et
   libérés en sortie, et l'environnement précédent est restauré plutôt qu'effacé. Avec un aperçu
   solaire appliqué, l'ambiance suit le soleil comme ailleurs.
+- Les murs sont des boîtes à arêtes chanfreinées (`beveledBox.ts`, 4 mm) : un angle vif est le
+  marqueur n°1 de l'image de synthèse, un chanfrein accroche la lumière. Les jonctions
+  mur/plafond et mur/sol en portent un ; les angles verticaux où deux murs se recouvrent n'en
+  ont pas encore, il faudrait couper les murs en onglet.
 - Les surfaces ne sont plus des couleurs unies : plâtre, parquet, béton et acier portent une
   normal map et une roughness map, générées par bruit fractal et tuilées au mètre. Les UV des
   boîtes sont réécrits en mètres par `worldScaleUvs`, sinon un mur de 4 m et une plinthe de
