@@ -122,7 +122,9 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
   affichage, pas un réglage de qualité. Pour diagnostiquer une machine lente à distance,
   `mybob.diag()` imprime moteur, GPU, cadence, résolution réellement rendue, état de l'ambiance
   de visite, taille de la scène et caractéristiques de la machine ; la commande est rappelée au
-  démarrage et le rapport est renvoyé en texte, pour être copié.
+  démarrage. `mybob.diag()` ne renvoie rien — la console réafficherait la valeur de retour et le
+  rapport apparaîtrait deux fois — et `mybob.report()` donne le même texte sans l'imprimer, pour
+  `copy(mybob.report())`.
 - L'extérieur cadre le terrain et le faîtage ; Vue 3D montre la maison ouverte ; Plan masque
   terrain et toiture. Sélectionner une pièce ou ajouter un meuble depuis l'extérieur revient à
   la vue intérieure.

@@ -1,10 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { Window } from 'happy-dom';
 import {
   collectDiagnostics,
   diagnosticLines,
   engineInfo,
   engineLabel,
+  installDiagnostics,
   type DiagnosticEngine,
   type DiagnosticScene,
   type DiagnosticSnapshot,
@@ -112,4 +114,35 @@ test('un instantané complet reste formattable sans navigateur', () => {
   const lines = diagnosticLines(snapshot);
   assert.match(lines[6], /8 cœurs · 8 Go de mémoire · écran 1920 × 1080 · tas 142 Mo/);
   assert.equal(lines[7], '  navigateur  test');
+});
+
+test('diag imprime le rapport une fois et report le renvoie pour la copie', () => {
+  const window = new Window({ url: 'http://localhost' });
+  const globals = globalThis as { window?: unknown };
+  const previousWindow = globals.window;
+  const printed: string[] = [];
+  const originalInfo = console.info;
+  globals.window = window;
+  console.info = (...args: unknown[]) => void printed.push(args.join(' '));
+  try {
+    installDiagnostics(() => collectDiagnostics(engine(), scene(), view));
+    assert.equal(printed.length, 1, 'le démarrage rappelle la commande une seule fois');
+    assert.match(printed[0], /tapez mybob\.diag\(\)/);
+
+    const api = (window as unknown as { mybob: { diag(): unknown; report(): string } }).mybob;
+    printed.length = 0;
+    assert.equal(
+      api.diag(),
+      undefined,
+      'diag ne renvoie rien : la console répéterait la valeur de retour',
+    );
+    assert.equal(printed.length, 1, 'un seul affichage par appel');
+    assert.match(printed[0], /rapport de performance/);
+
+    assert.equal(api.report(), printed[0], 'report renvoie le même texte');
+    assert.equal(printed.length, 1, 'report n’imprime rien');
+  } finally {
+    console.info = originalInfo;
+    globals.window = previousWindow;
+  }
 });

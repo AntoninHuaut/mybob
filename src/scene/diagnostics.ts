@@ -162,16 +162,21 @@ export function collectDiagnostics(
 
 /**
  * Publishes `mybob.diag()` and states it once at startup, so a relative who never
- * opens the developer tools still has the command in front of them. The report is
- * returned as text as well, which makes `copy(mybob.diag())` work in Chrome.
+ * opens the developer tools still has the command in front of them.
+ *
+ * `diag()` prints and returns nothing on purpose: the console echoes the value of
+ * every expression typed into it, so returning the report would show it twice.
+ * `report()` is the copyable form, for `copy(mybob.report())`.
  */
 export function installDiagnostics(report: () => DiagnosticSnapshot): void {
-  const diag = () => {
-    const text = diagnosticLines(report()).join('\n');
-    console.info(text);
-    return text;
+  const text = () => diagnosticLines(report()).join('\n');
+  const api = {
+    diag: () => {
+      console.info(text());
+    },
+    report: text,
   };
-  (window as unknown as { mybob?: { diag: () => string } }).mybob = { diag };
+  (window as unknown as { mybob?: typeof api }).mybob = api;
   const first = report();
   console.info(
     `[diag] ${first.engine} · ${first.gpu} · tapez mybob.diag() pour un rapport complet.`,
