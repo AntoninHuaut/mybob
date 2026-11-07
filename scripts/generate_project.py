@@ -14,15 +14,22 @@ extérieure est l'arête, l'axe étant en retrait d'une demi-épaisseur. Les bai
 d'une façade sont placées depuis la chaîne de cotes qui mesure ce côté, jamais
 depuis le symbole dessiné.
 
+Le contour du niveau vient du modèle, sauf si `--outline` désigne la sortie de
+`scripts/derive_outline.py` : le contour dérivé remplace alors celui qui est
+écrit à la main, et c'est lui qui porte les arêtes des murs extérieurs.
+
 Usage :
   uvx --from pymupdf python scripts/generate_project.py <plan.json> <registre.json> \
-      <modele.json> <niveau> <sortie.json> [--pages 8] [--thickness 0.34]
+      <modele.json> <niveau> <sortie.json> [--pages 8] [--thickness 0.34] \
+      [--outline contour.json]
 """
 import argparse
 import json
 import math
 import sys
 from pathlib import Path
+
+from derive_outline import load_outline
 
 TOL = 0.01  # m
 DEFAULT_THICKNESS = 0.34  # m, épaisseur d'un mur extérieur sans cote
@@ -894,9 +901,12 @@ def build(
     merge=True,
     report=None,
     openings_only=False,
+    outline=None,
 ):
     level = next(candidate for candidate in template["levels"] if candidate["id"] == level_id)
-    outline = level["outline"]
+    # Le contour écrit à la main n'est qu'une opinion : quand la couche 3 en a
+    # dérivé un, c'est lui qui porte les arêtes des murs extérieurs.
+    outline = level["outline"] if outline is None else outline
     chains = [
         chain
         for page in registry["pages"]
@@ -1014,9 +1024,10 @@ def build(
         apply_overrides(walls, overrides)
     stamped = stamp_exterior_openings(walls)
     target["walls"] = walls
+    target["outline"] = outline
     # En mode « baies seules », les pièces du modèle sont déjà justes : les
     # recaler sur les faces les déplacerait pour rien et casserait les surfaces.
-    moves = [] if openings_only else snap_rooms(target["rooms"], walls, target.get("outline"))
+    moves = [] if openings_only else snap_rooms(target["rooms"], walls, outline)
     if report is not None:
         report["thickness"] = read
         report["openingsAdded"] = added
@@ -1245,6 +1256,11 @@ def main(argv):
         default=None,
         help="fichier de retouches appliquées après génération (murs et baies)",
     )
+    parser.add_argument(
+        "--outline",
+        default=None,
+        help="contour dérivé par derive_outline.py, au lieu de celui du modèle",
+    )
     if "--self-test" in argv:
         return self_test()
     args = parser.parse_args(argv[1:])
@@ -1255,6 +1271,7 @@ def main(argv):
     overrides = (
         json.loads(Path(args.overrides).read_text(encoding="utf-8")) if args.overrides else None
     )
+    outline = load_outline(args.outline) if args.outline else None
     report = {}
     result = build(
         plan,
@@ -1267,6 +1284,7 @@ def main(argv):
         merge=not args.replace,
         report=report,
         openings_only=args.openings_only,
+        outline=outline,
     )
     Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     level = next(candidate for candidate in result["levels"] if candidate["id"] == args.level)
