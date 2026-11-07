@@ -236,7 +236,13 @@ test('plan lighting is neutral and shadow-free, then restores 3D and visit light
   assert.equal(sky.intensity, 0.42);
   assert.equal(sun.intensity, 0.95);
   assert.equal(ceiling.isEnabled(), true);
-  assert.deepEqual(sky.groundColor.asArray(), ground);
+  assert.ok(
+    sky.groundColor.r < ground[0] && sky.groundColor.g < ground[1] && sky.groundColor.b < ground[2],
+    'the visit darkens the ground bounce so the interior reads top-to-bottom',
+  );
+  viewer.mode = 'overview';
+  update();
+  assert.deepEqual(sky.groundColor.asArray(), ground, 'the editor keeps its original bounce');
   cutaway.dispose();
   markers.dispose();
   scene.dispose();

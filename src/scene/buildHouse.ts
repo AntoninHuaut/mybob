@@ -13,6 +13,10 @@ import type { Level, Opening, Point2, Wall } from '../model/types';
 import { alongWall, pointInPolygon, wallLength, wallSections } from '../model/geometry';
 import type { Materials } from './materials';
 
+/** Fixture light defaults; the visit mode boosts them without touching the geometry. */
+export const FIXTURE_LIGHT_INTENSITY = 0.32;
+export const FIXTURE_LIGHT_RANGE = 5.5;
+
 export interface DoorInstance {
   id: string;
   exterior: boolean;
@@ -571,8 +575,8 @@ export function buildHouse(
       scene,
     );
     point.diffuse = Color3.FromHexString('#fff0da');
-    point.intensity = 0.32;
-    point.range = 5.5;
+    point.intensity = FIXTURE_LIGHT_INTENSITY;
+    point.range = FIXTURE_LIGHT_RANGE;
     point.setEnabled(false);
     pointLights.push(point);
   }
