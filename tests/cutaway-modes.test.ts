@@ -95,9 +95,19 @@ test('automatic display lowers only near exterior walls and preserves shared flo
   assert.equal(furniture.material, material);
   assert.ok(material.clipPlane == null);
   assert.equal(scene.clipPlane, null, 'automatic mode never globally clips furniture');
-  assert.ok(Math.abs(north.material!.clipPlane!.d + 3.9) < 1e-8);
-  assert.ok(north.material!.clipPlane!.dotCoordinate(new Vector3(0, 3.8, 0)) < 0);
-  assert.ok(north.material!.clipPlane!.dotCoordinate(new Vector3(0, 4.1, 0)) > 0);
+  assert.ok(Math.abs(north.material!.clipPlane!.d + 3.65) < 1e-8);
+  assert.ok(north.material!.clipPlane!.dotCoordinate(new Vector3(0, 3.6, 0)) < 0);
+  assert.ok(north.material!.clipPlane!.dotCoordinate(new Vector3(0, 3.7, 0)) > 0);
+  const jamb = scene.getMeshByName('jamb:bay:1')!;
+  assert.notEqual(jamb.material, material, 'joinery follows the cut');
+  assert.ok(
+    jamb.material!.clipPlane!.d > north.material!.clipPlane!.d,
+    'joinery stops under the cut face instead of poking through it',
+  );
+  assert.ok(
+    markers.wallCaps.find((mesh) => mesh.name === 'plan-wall-cap-full:north')!.isEnabled(),
+    'the cut face stays continuous over the bay',
+  );
   assert.equal(north.checkCollisions, true);
   assert.equal(north.visibility, 1);
   assert.equal(north.isPickable, false);

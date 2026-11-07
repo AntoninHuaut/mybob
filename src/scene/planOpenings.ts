@@ -6,7 +6,11 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Level } from '../model/types';
-import { alongWall, wallSections } from '../model/geometry';
+import { alongWall, wallLength, wallSections } from '../model/geometry';
+
+/** The cut face sits just under the clip plane so the two never z-fight. */
+export const CAP_TOP_INSET = 0.018;
+const CAP_THICKNESS = 0.008;
 
 export interface PlanOpenings {
   readonly meshes: LinesMesh[];
@@ -14,7 +18,7 @@ export interface PlanOpenings {
   setVisible(
     enabled: boolean,
     cutHeight?: number,
-    options?: { markers?: boolean; wallIds?: ReadonlySet<string> },
+    options?: { markers?: boolean; wallIds?: ReadonlySet<string>; continuous?: boolean },
   ): void;
   dispose(): void;
 }
@@ -23,6 +27,7 @@ export interface PlanOpenings {
 export function buildPlanOpenings(scene: Scene, level: Level): PlanOpenings {
   const meshes: LinesMesh[] = [];
   const wallCaps: Mesh[] = [];
+  const fullCaps: Mesh[] = [];
   const capSections: { mesh: Mesh; bottom: number; top: number }[] = [];
   const capMaterial = new StandardMaterial('plan-wall-cut', scene);
   capMaterial.disableLighting = true;
@@ -64,6 +69,23 @@ export function buildPlanOpenings(scene: Scene, level: Level): PlanOpenings {
       });
       wallCaps.push(mesh);
     }
+    // One continuous face per wall: the automatic cutaway fills openings instead of
+    // leaving a notch where a bay or a door crosses the plane.
+    const full = MeshBuilder.CreateBox(
+      `plan-wall-cap-full:${wall.id}`,
+      { width: wallLength(wall), height: CAP_THICKNESS, depth: wall.thickness },
+      scene,
+    );
+    const [fullX, fullZ] = alongWall(wall, wallLength(wall) / 2);
+    full.position.set(fullX, level.elevation, fullZ);
+    full.rotation.y = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0]);
+    full.material = capMaterial;
+    full.isPickable = false;
+    full.checkCollisions = false;
+    full.metadata = { kind: 'plan-wall-cap', wallId: wall.id };
+    full.setEnabled(false);
+    fullCaps.push(full);
+    wallCaps.push(full);
     for (const opening of wall.openings ?? []) {
       if (opening.kind !== 'window' && opening.kind !== 'sliding') continue;
       const start = opening.offset,
@@ -113,13 +135,21 @@ export function buildPlanOpenings(scene: Scene, level: Level): PlanOpenings {
         mesh.position.y = level.elevation + height - 0.012;
         mesh.setEnabled(enabled && options.markers !== false);
       }
+      const continuous = options.continuous === true;
       for (const { mesh, bottom, top } of capSections) {
-        mesh.position.y = level.elevation + height - 0.022;
+        mesh.position.y = level.elevation + height - CAP_TOP_INSET - CAP_THICKNESS / 2;
         mesh.setEnabled(
           enabled &&
+            !continuous &&
             bottom <= height &&
             height < top &&
             (!options.wallIds || options.wallIds.has(mesh.metadata.wallId)),
+        );
+      }
+      for (const mesh of fullCaps) {
+        mesh.position.y = level.elevation + height - CAP_TOP_INSET - CAP_THICKNESS / 2;
+        mesh.setEnabled(
+          enabled && continuous && (!options.wallIds || options.wallIds.has(mesh.metadata.wallId)),
         );
       }
     },

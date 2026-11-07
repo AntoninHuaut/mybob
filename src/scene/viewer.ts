@@ -42,7 +42,12 @@ import {
 import { fitOverview, fitPlan, siteOverviewLevel } from './framing';
 import { panOrbitWithKeys } from './orbitNavigation';
 import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
-import { buildWallCutaway, type WallCutaway, type WallDisplay } from './wallCutaway';
+import {
+  AUTO_CUT_HEIGHT,
+  buildWallCutaway,
+  type WallCutaway,
+  type WallDisplay,
+} from './wallCutaway';
 import type { SolarPosition } from './solar';
 import {
   applyEyeHeight,
@@ -789,10 +794,11 @@ export class HouseViewer {
     if (this.mode !== 'plan') {
       this.planOpenings?.setVisible(
         active && (explicitSection || selected.size > 0),
-        explicitSection ? this.sectionHeight : 1.1,
+        explicitSection ? this.sectionHeight : AUTO_CUT_HEIGHT,
         {
           markers: false,
           wallIds: explicitSection ? undefined : selected,
+          continuous: true,
         },
       );
     }
