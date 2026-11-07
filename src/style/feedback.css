@@ -242,12 +242,17 @@ dialog p {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
-.area-table tr.area-warning td {
-  color: #826531;
+.area-table td.area-gap {
+  white-space: nowrap;
 }
-.area-table tr.area-warning td:last-child:after {
-  content: ' *';
-  font-size: 11px;
+.area-table td.area-gap.differs {
+  color: #826531;
+  font-weight: 600;
+}
+.area-note {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: var(--secondary);
 }
 @keyframes breathe {
   50% {
