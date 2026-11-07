@@ -55,28 +55,50 @@ behind a valid JSON.
    wall thicknesses and isolated dimensions are reported separately instead of
    being folded into the sum.
 2. **Decision** — one record per wall face and per opening, each carrying an
-   evidence class (`printed`, `derived`, `scaled`, `assumed`) and an `unresolved`
-   flag. `scripts/derive_plan_decisions.py` writes a conservative skeleton: it
-   claims `printed` only when a contiguous run of printed segments reproduces the
-   length, or the opening width and height, within a centimetre, uniquely, and
-   from a closed chain.
+   evidence class (`printed`, `printed-partial`, `derived`, `scaled`, `assumed`)
+   and an `unresolved` flag. `scripts/derive_plan_decisions.py` writes a
+   conservative skeleton. A printed dimension measures between **finished
+   faces**, never between axes: the script enumerates the end conventions
+   (axis, own half-thickness, neighbour half-thickness) and keeps the one that
+   reproduces the printed run. A length alone proves nothing — two walls of the
+   same length on two different dimension lines give the same number — so a face
+   is only claimed when its own openings pin it to that run: the printed
+   positions of the openings must imply a single wall origin, and the wall must
+   fit inside the run. Offsets of zero give `printed` (or `printed-partial` on an
+   open chain); non-zero offsets give `derived`, because the length then depends
+   on declared thicknesses. An envelope wall inset by half its thickness at both
+   ends of the outline is `derived` from the printed overall extent.
 3. **Construction and verification** — generator, `validateProject`,
    `scripts/audit-plan.ts`, overlay, browser.
 
-`scripts/check-plan-decisions.ts` is the gate between layers 2 and 3. It rejects
-a face resting on an unclosed chain, a printed claim without a chain reference, a
-missing decision for a wall or an opening, and an opening offset that contradicts
-its chain once the wall origin is declared. It exits non-zero while any decision
-stays unresolved: construction does not start on a guess.
+`scripts/check-plan-decisions.ts` is the gate between layers 2 and 3. It
+recomputes every claim instead of trusting its prose: the referenced run must sum
+to the declared length, the wall's axis length must follow from that length and
+the declared offsets, an opening's printed width and height must match its
+segment, and every chain must come from the level's own pages. It also rejects a
+face resting on an unclosed chain, a `printed` claim without a chain reference, a
+`printed-partial` claim on a closed chain, a missing decision for a wall or an
+opening, and an opening offset that contradicts its chain once the wall origin is
+declared. It exits non-zero while any decision stays unresolved: construction
+does not start on a guess.
 
 ```sh
 uvx --from pymupdf python scripts/extract_plan_evidence.py plan.pdf artifacts/plan-review/registry.json --pages 13,14
-uvx --from pymupdf python scripts/derive_plan_decisions.py project.json artifacts/plan-review/registry.json rdc artifacts/plan-review/decisions.json
+uvx --from pymupdf python scripts/derive_plan_decisions.py project.json artifacts/plan-review/registry.json rdc artifacts/plan-review/decisions.json --pages 13
 node --import tsx scripts/check-plan-decisions.ts artifacts/plan-review/decisions.json project.json artifacts/plan-review/registry.json
 ```
 
+Pass `--pages` with the pages that carry the level. Without it the script mixes
+every page of the registry, and a wall of the ground floor gets "proved" by a
+dimension of the upper floor: that mistake alone produced four false proofs on a
+real plan.
+
 The registry and the decisions file carry real plan data: keep them in the
-ignored directories, never in the repository.
+ignored directories, never in the repository. `tests/fixtures/plan-reference/`
+holds the synthetic reference plan (registry, project, decisions) that
+`python scripts/derive_plan_decisions.py --self-test` and
+`tests/plan-reference.test.ts` check in CI; it contains no real data and must
+stay that way.
 
 Classify dimensions as printed, derived, scaled or assumed. Keep each value's page, endpoints, equation and uncertainty. Derived values refer to independently transcribed dimensions, not output JSON. Resolve contradictory chains using revisions and measurement conventions; do not silently average them. Never derive linear dimensions from advertised areas.
 

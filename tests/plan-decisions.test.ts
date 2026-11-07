@@ -24,10 +24,23 @@ const chain: RegistryChain = {
   closed: true,
 };
 
+/** Même mur, cote imprimée plus longue de deux demi-épaisseurs déclarées. */
+const wideChain: RegistryChain = {
+  ...chain,
+  perpendicular: 200,
+  segments: [
+    { text: '50', kind: 'centimetres', value: 0.5, at: [100, 200] },
+    { text: '1.20/2.10', kind: 'opening', value: 1.2, at: [200, 200] },
+    { text: '1.00', kind: 'linear', value: 1.0, at: [300, 200] },
+  ],
+  sum: 2.7,
+  declaredTotal: { text: '2.70', value: 2.7, at: [200, 190] },
+};
+
 const registry: EvidenceRegistry = {
   schemaVersion: 1,
   source: { file: 'plan.pdf', sha256: 'x', pageCount: 1 },
-  pages: [{ index: 1, chains: [chain] }],
+  pages: [{ index: 1, chains: [chain, wideChain] }],
 };
 
 const project: HouseProject = {
@@ -70,11 +83,19 @@ const decisions = (overrides: Partial<DecisionsFile> = {}): DecisionsFile => ({
   project: 'maison-test',
   level: 'rdc',
   registry: 'registry.json',
+  pages: [1],
   faces: [
     {
       id: 'nord',
       wall: 'nord',
-      evidence: { class: 'printed', chain: { page: 1, axis: 'horizontal', perpendicular: 100 } },
+      evidence: {
+        class: 'printed',
+        chain: { page: 1, axis: 'horizontal', perpendicular: 100 },
+        span: { start: 0, end: 2 },
+        length: 2.5,
+        startOffset: 0,
+        endOffset: 0,
+      },
       unresolved: false,
     },
   ],
@@ -87,6 +108,9 @@ const decisions = (overrides: Partial<DecisionsFile> = {}): DecisionsFile => ({
         chain: { page: 1, axis: 'horizontal', perpendicular: 100 },
         segmentIndex: 1,
         cumulativeOffset: 0.5,
+        printedWidth: 1.2,
+        printedHeight: 2.1,
+        convention: 'both',
       },
       unresolved: false,
     },
@@ -134,7 +158,107 @@ test('plan decisions reject a face resting on an unclosed chain', () => {
   };
   const report = checkDecisions(decisions(), open, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('ne se referme pas')));
+  assert.ok(report.errors.some((error) => error.includes('chaîne ouverte')));
+});
+
+test('plan decisions accept a partial proof on an open chain', () => {
+  const open: EvidenceRegistry = {
+    ...registry,
+    pages: [{ index: 1, chains: [{ ...chain, closed: false, residual: null }] }],
+  };
+  const partial = decisions();
+  partial.faces[0].evidence.class = 'printed-partial';
+  const report = checkDecisions(partial, open, project);
+  assert.deepEqual(report.errors, []);
+  assert.equal(report.ready, true);
+});
+
+test('plan decisions reject a partial proof on a closed chain', () => {
+  const partial = decisions();
+  partial.faces[0].evidence.class = 'printed-partial';
+  const report = checkDecisions(partial, registry, project);
+  assert.equal(report.ready, false);
+  assert.ok(
+    report.errors.some((error) => error.includes('preuve partielle sur une chaîne refermée')),
+  );
+});
+
+test('plan decisions reject a declared length that the printed segments do not sum to', () => {
+  const wrong = decisions();
+  wrong.faces[0].evidence.length = 2.6;
+  const report = checkDecisions(wrong, registry, project);
+  assert.equal(report.ready, false);
+  assert.ok(report.errors.some((error) => error.includes('somme imprimée 2.500')));
+});
+
+test('plan decisions reject a face whose axis length does not follow from the cote', () => {
+  const wrong = decisions();
+  wrong.faces[0].evidence.startOffset = -0.1;
+  const report = checkDecisions(wrong, registry, project);
+  assert.equal(report.ready, false);
+  assert.ok(report.errors.some((error) => error.includes("longueur d'axe 2.500")));
+});
+
+test('plan decisions accept a derived face whose cote spans two declared half-thicknesses', () => {
+  const derived = decisions();
+  derived.faces[0].evidence = {
+    class: 'derived',
+    chain: { page: 1, axis: 'horizontal', perpendicular: 200 },
+    span: { start: 0, end: 2 },
+    length: 2.7,
+    startOffset: -0.1,
+    endOffset: 0.1,
+  };
+  const report = checkDecisions(derived, registry, project);
+  assert.deepEqual(report.errors, []);
+  assert.equal(report.ready, true);
+});
+
+test('plan decisions reject a printed face carrying declared offsets', () => {
+  const derived = decisions();
+  derived.faces[0].evidence = {
+    class: 'printed',
+    chain: { page: 1, axis: 'horizontal', perpendicular: 200 },
+    span: { start: 0, end: 2 },
+    length: 2.7,
+    startOffset: -0.1,
+    endOffset: 0.1,
+  };
+  const report = checkDecisions(derived, registry, project);
+  assert.equal(report.ready, false);
+  assert.ok(report.errors.some((error) => error.includes('décalages non nuls')));
+});
+
+test('plan decisions reject a chain taken from another level page', () => {
+  const elsewhere = decisions();
+  elsewhere.pages = [2];
+  const report = checkDecisions(elsewhere, registry, project);
+  assert.equal(report.ready, false);
+  assert.ok(report.errors.some((error) => error.includes('hors des pages du niveau')));
+});
+
+test('plan decisions require the level pages', () => {
+  const bare = decisions();
+  delete bare.pages;
+  const report = checkDecisions(bare, registry, project);
+  assert.equal(report.ready, false);
+  assert.ok(report.errors.some((error) => error.includes('pages du niveau manquantes')));
+});
+
+test('plan decisions reject an opening whose printed width contradicts the segment', () => {
+  const wrong = decisions();
+  wrong.openings[0].evidence.printedWidth = 1.4;
+  const report = checkDecisions(wrong, registry, project);
+  assert.equal(report.ready, false);
+  assert.ok(report.errors.some((error) => error.includes('largeur déclarée 1.4')));
+});
+
+test('plan decisions reject an opening pointing at a dimension segment', () => {
+  const wrong = decisions();
+  wrong.openings[0].evidence.segmentIndex = 0;
+  const report = checkDecisions(wrong, registry, project);
+  assert.equal(report.ready, false);
+  assert.ok(report.errors.some((error) => error.includes("n'est pas une baie")));
 });
 
 test('plan decisions block construction while a decision is unresolved', () => {
@@ -164,7 +288,5 @@ test('plan decisions reject a printed claim without a chain reference', () => {
   const bare = decisions();
   bare.faces[0].evidence = { class: 'printed' };
   const report = checkDecisions(bare, registry, project);
-  assert.ok(
-    report.errors.some((error) => error.includes('preuve imprimée sans référence de chaîne')),
-  );
+  assert.ok(report.errors.some((error) => error.includes('sans référence de chaîne')));
 });
