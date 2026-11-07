@@ -39,7 +39,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Navigation             | `src/scene/navigation.ts`               | Destination de visite, plan de coupe, mur face caméra               |
 | Caméra de visite       | `src/scene/walkCamera.ts`               | Hauteur du regard, rayon visiteur, vitesse, pas                     |
 | Coupe des murs         | `src/scene/wallCutaway.ts`              | `auto` / `full` / `low`, plans de découpe par matériau              |
-| Ouvertures en plan     | `src/scene/planOpenings.ts`             | Baies et portes dessinées dans la vue Plan                          |
+| Ouvertures en plan     | `src/scene/planOpenings.ts`             | Baies et portes dessinées dans la vue Plan, faces de coupe          |
 | Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, TAA, occlusion, bloom, repli sous 24 fps                |
 | Diagnostic             | `src/scene/diagnostics.ts`              | `mybob.diag()` : moteur, GPU, cadence, résolution, scène            |
 | Mesure                 | `src/scene/measurement.ts`              | Accrochage aux axes du plan                                         |
@@ -227,6 +227,10 @@ une suite verte sur une géométrie fausse ne distingue pas le correct de l'inco
   murs restent tronqués.
 - Les ombres sont coupées quand les murs sont abaissés : une façade tronquée ne doit pas
   projeter l'ombre de son volume.
+- La coupe automatique passe à 0,85 m, sous l'allège des fenêtres (0,90 m) : c'est ce qui les
+  fait disparaître entières. Baies et portes partent du sol et sont tranchées ; leur face de
+  coupe est pleine (`plan-wall-cap-full`) et la menuiserie s'arrête 18 mm plus bas. Remonter la
+  coupe au-dessus de 0,90 m reslice toutes les fenêtres.
 - La suite e2e prend un port libre : jamais de `--strictPort` sur un port connu, et ne pas
   arrêter le serveur d'un autre agent.
 - Le moteur est **WebGL uniquement**. L'occlusion de la visite passe par le tampon de

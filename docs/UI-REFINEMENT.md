@@ -30,7 +30,7 @@ Le projet intégré s’appelle Démonstration. Une corbeille à côté du séle
 
 ## Coupe et éclairage
 
-Navigation → Affichage des murs propose Automatique (défaut), Murs complets et Murs bas. En automatique, seules les façades faisant face à la caméra sont coupées à 1,10 m, avec une face de coupe solide. Les autres murs, sols et meubles gardent leurs matériaux. La visite et l’extérieur conservent les volumes complets ; une coupe explicite garde la priorité. Les collisions ne changent pas.
+Navigation → Affichage des murs propose Automatique (défaut), Murs complets et Murs bas. En automatique, seules les façades faisant face à la caméra sont coupées à 0,85 m, sous l’allège des fenêtres (0,90 m) : elles disparaissent entières au lieu d’être tranchées. La face de coupe est pleine sur toute la longueur du mur, baies et portes comprises, et la menuiserie s’arrête au ras de cette face. Les autres murs, sols et meubles gardent leurs matériaux. La visite et l’extérieur conservent les volumes complets ; une coupe explicite garde la priorité. Les collisions ne changent pas.
 
 Le Plan utilise un éclairage blanc uniforme sans ombres. Les ombres sont aussi désactivées dans la vue automatique à murs abaissés : une façade tronquée ne doit pas projeter l’ombre de son volume d’origine. Les vues complètes retrouvent leurs ombres.
 
