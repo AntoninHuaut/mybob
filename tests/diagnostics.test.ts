@@ -70,16 +70,16 @@ test('le rapport reprend moteur, cadence, vue, rendu et scène', () => {
   assert.match(lines[5], /412 maillages, 187 actifs, 38 matériaux, 6 lumières/);
 });
 
-test('le rapport nomme l’extérieur et l’occlusion retirée', () => {
+test('le rapport nomme l’extérieur et l’occlusion indisponible', () => {
   const lines = diagnosticLines(
     collectDiagnostics(engine(), scene(), {
       mode: 'overview',
       exterior: true,
       environment: false,
-      occlusion: 'refused',
+      occlusion: 'unavailable',
     }),
   );
-  assert.match(lines[3], /extérieur · occlusion retirée \(GPU faible\) · environnement inactif/);
+  assert.match(lines[3], /extérieur · occlusion indisponible \(WebGL\) · environnement inactif/);
 });
 
 test('un instantané complet reste formattable sans navigateur', () => {

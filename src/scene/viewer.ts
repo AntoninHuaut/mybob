@@ -63,13 +63,10 @@ import {
   createInteriorEnvironment,
   createInteriorOcclusion,
   createInteriorTaa,
-  nextOcclusionProbe,
-  startOcclusionProbe,
   INTERIOR_ENVIRONMENT_INTENSITY,
   INTERIOR_FIXTURE_INTENSITY,
   INTERIOR_FIXTURE_RANGE,
   INTERIOR_GROUND_COLOR,
-  type OcclusionProbe,
 } from './interiorAmbience';
 import type { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture';
 import type { RawCubeTexture } from '@babylonjs/core/Materials/Textures/rawCubeTexture';
@@ -173,8 +170,6 @@ export class HouseViewer {
   private interiorTaa?: TAARenderingPipeline;
   private interiorBloom?: DefaultRenderingPipeline;
   private interiorAmbienceUnavailable = false;
-  private occlusionProbe?: OcclusionProbe;
-  private occlusionRefused = false;
   private occlusionUnavailable = false;
   private previousEnvironment?: BaseTexture | null;
   private previousEnvironmentIntensity = 1;
@@ -232,8 +227,6 @@ export class HouseViewer {
     this.interiorTaa = undefined;
     this.interiorBloom = undefined;
     this.interiorAmbienceUnavailable = false;
-    this.occlusionProbe = undefined;
-    this.occlusionRefused = false;
     this.occlusionUnavailable = false;
     this.previousEnvironment = undefined;
     this.previousEnvironmentIntensity = 1;
@@ -693,21 +686,14 @@ export class HouseViewer {
   /**
    * What the visit did with its own ambience, for the diagnostic report. The
    * occlusion is created on entering the visit, so an absent pipeline outside the
-   * visit means "not asked for", not "refused".
+   * visit means "not asked for", not "failed".
    */
   get ambience(): { environment: boolean; occlusion: OcclusionState } {
     return {
       environment: Boolean(
         this.interiorEnvironment && this.scene?.environmentTexture === this.interiorEnvironment,
       ),
-      occlusion:
-        this.mode !== 'walk'
-          ? 'idle'
-          : this.interiorOcclusion
-            ? 'active'
-            : this.occlusionRefused
-              ? 'refused'
-              : 'unavailable',
+      occlusion: this.mode !== 'walk' ? 'idle' : this.interiorOcclusion ? 'active' : 'unavailable',
     };
   }
 
@@ -970,14 +956,11 @@ export class HouseViewer {
       // end of the camera's chain, so the temporal pass has to exist first or it ends
       // up accumulating the AO noise instead of smoothing the scene.
       this.interiorTaa ??= createInteriorTaa(this.scene, this.walk);
-      if (!this.occlusionRefused && !this.occlusionUnavailable && !this.interiorOcclusion) {
+      if (!this.occlusionUnavailable && !this.interiorOcclusion) {
         this.interiorOcclusion = createInteriorOcclusion(this.scene, this.walk);
         // A backend without multiple render targets refuses every time: remember it
         // rather than throwing again on each visit entry.
         this.occlusionUnavailable = !this.interiorOcclusion;
-        this.occlusionProbe = this.interiorOcclusion
-          ? startOcclusionProbe(performance.now())
-          : undefined;
       }
       // Last in the chain, for the same reason the temporal pass is first: the glow
       // belongs on the finished image, not on the occlusion's half-resolution buffer.
@@ -998,31 +981,6 @@ export class HouseViewer {
     this.interiorBloom = undefined;
     // Both pipelines read the PrePass and nothing else does, so it goes with them.
     this.scene.disablePrePassRenderer();
-    this.occlusionProbe = undefined;
-  }
-
-  /**
-   * Ambient occlusion is the expensive part of the visit. The frame rate is
-   * watched for as long as the visit lasts, so a room that turns out too heavy
-   * later still drops the pipeline; the environment and the fixture lights keep
-   * the room readable.
-   */
-  private probeOcclusionCost() {
-    if (!this.occlusionProbe || !this.interiorOcclusion) return;
-    const fps = this.engine.getFps();
-    const result = nextOcclusionProbe(
-      this.occlusionProbe,
-      performance.now(),
-      fps,
-      document.visibilityState === 'visible',
-    );
-    this.occlusionProbe = result.probe;
-    if (!result.refuse) return;
-    this.interiorOcclusion.dispose(true);
-    this.interiorOcclusion = undefined;
-    this.occlusionProbe = undefined;
-    this.occlusionRefused = true;
-    console.info(`[visite] occlusion ambiante désactivée : ${Math.round(fps)} fps`);
   }
 
   private setOrthoSize() {
@@ -1043,7 +1001,6 @@ export class HouseViewer {
 
   private beforeFrame() {
     if (this.capturing) return;
-    this.probeOcclusionCost();
     this.updateCutaway();
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.045);
     // Match the collision displacement to frame time, including the garage step.

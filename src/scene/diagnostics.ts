@@ -24,7 +24,7 @@ export interface DiagnosticScene {
   getActiveMeshes(): { readonly length: number };
 }
 
-export type OcclusionState = 'active' | 'refused' | 'unavailable' | 'idle';
+export type OcclusionState = 'active' | 'unavailable' | 'idle';
 
 export interface DiagnosticView {
   mode: string;
@@ -62,8 +62,7 @@ const MODE_LABELS: Record<string, string> = {
 
 const OCCLUSION_LABELS: Record<OcclusionState, string> = {
   active: 'active',
-  refused: 'retirée (GPU faible)',
-  unavailable: 'indisponible',
+  unavailable: 'indisponible (WebGL)',
   idle: 'hors visite',
 };
 
