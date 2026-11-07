@@ -435,8 +435,17 @@ export class HouseViewer {
         this.fitOverview();
       }
     }
-    this.updateLighting();
-    this.updateInteriorAmbience();
+    // The ambience is the only part of a mode change that can fail on a given
+    // backend. It must not take the rest with it: the section plane, the cutaways
+    // and the chrome all depend on this method reaching its end.
+    try {
+      this.updateLighting();
+      this.updateInteriorAmbience();
+    } catch (error) {
+      console.info(
+        `[visite] ambiance indisponible : ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
     this.dimensions.forEach((mesh) => mesh.setEnabled(this.dimensionOn && mode !== 'walk'));
     this.updateSection();
     this.updateCutaway();
