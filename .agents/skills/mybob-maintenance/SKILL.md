@@ -5,7 +5,7 @@ description: Maintain, debug, test and release the Mybob Babylon.js house and fu
 
 # Mybob maintenance
 
-Use this repository-local skill when changing the house viewer, furniture UI, project import/export, local storage, tests or deployment. Start with `AGENTS.md`, then `docs/ARCHITECTURE.md` for the module map, and the local passation journal `docs/HANDOFF.md` (git-ignored, present on the owner's clone). Consult `docs/PROJECT-FORMAT.md`, `docs/FURNITURE.md`, `docs/UI-REFINEMENT.md`, `docs/DEPLOYMENT.md` for the touched area.
+Use this repository-local skill when changing the house viewer, furniture UI, project import/export, local storage, tests or deployment. Start with `AGENTS.md`, then `docs/ARCHITECTURE.md` for the module map. Consult `docs/PROJECT-FORMAT.md`, `docs/FURNITURE.md`, `docs/UI-REFINEMENT.md`, `docs/DEPLOYMENT.md` for the touched area.
 
 ## Establish the working state
 
@@ -28,7 +28,7 @@ invariants. Read it instead of scanning `src/`. Two details it does not spell ou
 
 Reproduce with a minimal generic project where possible. Keep world units in metres and UI units in centimetres. Test constraints against the occupied parts of an L sofa, including rotation and the floor level; an overall rectangle can reject valid placements. Group operations must remain atomic. Untouched measurements must retain their exact stored values.
 
-Audit the fixtures you rely on before trusting a green suite. `public/projects/maison-atelier.json` feeds about ten test files and the public-build check; it carried fifteen geometry defects while every test passed, because no test asserted its geometric coherence. Run `scripts/audit-plan.ts` on a fixture you are about to build tests on, and treat a fixture defect as a test defect: a suite built on broken geometry cannot tell correct from incorrect. When you fix a fixture, recompute any `planArea` from the corrected polygon, since `tests/model.test.ts` requires them to agree within a square centimetre.
+Audit the fixtures you rely on before trusting a green suite. `public/projects/maison-atelier.json` feeds about ten test files and the public-build check; it carried fifteen geometry defects while every test passed, because no test asserted its geometric coherence. Run `scripts/audit-plan.ts` on a fixture you are about to build tests on, and treat a fixture defect as a test defect: a suite built on broken geometry cannot tell correct from incorrect. When you fix a fixture, recompute any `planArea` from the corrected polygon, since `tests/model.test.ts` requires them to agree within a square centimetre. These repo scripts live in `scripts/` at the repository root, shared with CI (`--self-test`), npm scripts and the plan-conversion skill — never move or duplicate them into this skill folder.
 
 For form/keyboard bugs, use the existing Happy DOM tests. Cover cancellation, actual event routing and no accidental movement while interacting with UI controls. For mesh/camera changes use NullEngine tests. Do not describe either as screenshot/browser QA. If a graphical browser is available locally, check Plan, overview, exterior, walk, add/edit dialogs and narrow viewport layouts.
 
@@ -41,6 +41,6 @@ Check both day and night, multiple time zones and project switches when changing
 3. Commit a coherent change. Push only within the user's authorized scope. Find the GitHub remote using `git remote -v` (usually `origin` after a fresh clone; it was `github` in the cloud workspace).
 4. Inspect GitHub checks for that exact commit, for example `gh api repos/AntoninHuaut/mybob/commits/<sha>/check-runs`. Both CI and Cloudflare Pages must succeed. The public URL is in `docs/DEPLOYMENT.md`.
 5. Cloudflare Access may return HTTP 302 to an unauthenticated request. This is not evidence of a rendering failure or successful authenticated visual inspection. Never weaken Access to make a check easier.
-6. Update the local passation journal `docs/HANDOFF.md` (git-ignored) with changes, checks performed and unresolved material limitations. State clearly if deployment or real-browser checks remain unverified.
+6. Durable findings go into the doc or skill that owns the area — a trap kept only in a conversation is lost at the next session. State clearly if deployment or real-browser checks remain unverified.
 
 No special approvals are introduced by this skill. Follow the current user's authorization, environment permissions and actual destructive-action requirements.

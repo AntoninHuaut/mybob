@@ -10,8 +10,7 @@ importable n'est que la première porte technique : ne pas promouvoir une
 géométrie devinée au rang de conversion terminée parce qu'elle passe la
 validation.
 
-Lire `AGENTS.md`, le journal de passation local `docs/HANDOFF.md` (ignoré par
-git, présent sur le clone du propriétaire), `docs/PROJECT-FORMAT.md`,
+Lire `AGENTS.md`, `docs/PROJECT-FORMAT.md`,
 `src/model/types.ts` et `src/model/validate.ts`. Suivre le skill de maintenance
 pour toute modification du dépôt. Garder les plans d'origine, les pages rendues,
 les registres de preuve, les calques et les bundles personnels dans les
@@ -43,6 +42,11 @@ valider, ou il disparaît. Mieux vaut une IA précise avec peu d'outils qu'un ou
 approximatif qu'on croit.
 
 ## L'inventaire
+
+Les scripts listés ici vivent dans `scripts/` à la racine du dépôt, pas dans
+le dossier du skill : ils sont partagés avec la CI (mode `--self-test`), les
+scripts npm et d'autres skills, et suivis par Prettier. Ne pas les déplacer ni
+les dupliquer dans `.agents/`.
 
 | script                     | ce qu'il fait                                                           | exactitude                                                              |
 | -------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------- |
@@ -229,7 +233,8 @@ déduire une dimension linéaire d'une surface annoncée.
 
 **Une page se repère par son texte, pas par son numéro d'ancienne note.** Les
 scripts du dépôt numérotent à partir de 1 (`--pages 8` ouvre `doc[7]`) ; seul
-pymupdf lui-même compte à partir de 0, et une note de passation peut compter
+pymupdf lui-même compte à partir de 0, et une note d'une session passée peut
+compter
 dans n'importe laquelle des deux conventions. Deux pages voisines du même
 constructeur se ressemblent assez pour qu'un calque pressé se croie aligné.
 Localiser la page d'un niveau par un texte qui n'existe que sur elle — la
@@ -337,6 +342,17 @@ constructeur, les murs se dessinent de deux façons, et la différence compte :
 - les **murs extérieurs** sont des **bandes hachurées** entre deux faces, non
   remplies. Leur position vient des chaînes de cotes refermées, qui la donnent au
   millimètre.
+
+Et deux fausses formes de mur à écarter avant d'en poser un :
+
+- **une porte dessinée ouverte** : son vantail à 90° et son arc forment deux
+  segments pleins qu'une lecture pressée prend pour une cloison. La porte
+  d'entrée d'un plan réel se dessine ainsi — son vantail a été pris pour un mur
+  de façade. Un « mur » sans hachure, sans aplat, et dans l'axe d'une baie
+  existante, est d'abord un vantail ;
+- **une chaîne de cotes dessinée dans une pièce** : les cotes se tracent aussi à
+  l'intérieur du plan, et une bande fine pleine largeur n'est pas toujours un
+  mur. Décider sur le rendu de la page, pas sur le seul trait.
 
 Six tentatives géométriques ont échoué sur les murs extérieurs et ne valent pas
 d'être refaites : apparier les traits parallèles (les lignes de cote sont aussi
@@ -814,43 +830,6 @@ d'autre : le reste du gravillon, l'accès au garage et le chemin vers l'entrée
 sont dessinés mais pas mesurés. Les écrire est une décision, pas une lecture.
 Les déclarer dans `site.notes` — le panneau « Terrain et extérieur » les
 affiche — plutôt que de les laisser passer pour des cotes.
-
-### Le toit et le terrain se lisent aussi
-
-Un projet sans `site` n'a pas de vue extérieure du tout : le bouton reste caché.
-Le toit n'est pas une décision, il est imprimé — mais sur d'autres pages que le
-plan de niveau.
-
-| ce qu'on cherche              | où c'est imprimé                                                      |
-| ----------------------------- | --------------------------------------------------------------------- |
-| pente du toit                 | coupes : `PENTE = 45.00 °`                                            |
-| hauteur d'égout et de faîtage | coupes et plan de masse : `Egout: +3.43`, `Faitage: +8.11`            |
-| niveau du sol fini            | plan de masse : `RDC: +0.28` sur la référence `±0.00`                 |
-| parcelle et reculs            | plan de masse : `32.60`, `16.00`, `3.61`, `17.35`, `Surface : 522 m²` |
-| couleurs                      | insertion : façade crème, toiture ardoise                             |
-
-**Tout ramener au repère du niveau**, pas à la référence du cartouche. Le plan de
-masse donne `RDC: +0.28` : l'égout à `+3.43` vaut donc **3,15** au-dessus du sol
-fini du RDC, et le faîtage **7,83**. Oublier cette soustraction pose le toit
-28 cm trop haut, et les murs traversent.
-
-**L'avalée se déduit, elle ne se lit pas.** La descente de faîtage à égout vaut
-`7,83 − 3,15 = 4,68`. À 45°, la demi-portée vaut `8,50 / 2 = 4,25`. L'écart,
-**0,43 m**, est le débord de toit. C'est ce qui fait tomber le faîtage au milieu
-du bâtiment.
-
-**Les pignons sont des index**, pas des sommets : `gables: [[6, 2, 7], [8, 3, 9]]`
-pointe dans `vertices`, comme `faces`. Une liste de sommets est rejetée par
-`validate.ts` avec « Géométrie de toiture invalide ».
-
-**La vue extérieure est celle du bâtiment, pas du niveau affiché.** Les façades
-viennent du niveau bas et le toit couvre le reste. Construire l'extérieur depuis
-les combles ne montrait que le toit, et posait la pelouse à leur altitude.
-
-**Les murs d'un niveau sous versant doivent rester sous le toit.** La hauteur
-maximale d'un mur est `toit(z) − plancher`. Sur le plan B, le toit au rampant
-vaut 4,80 pour un plancher à 2,75 : 2,05 m au plus. Un `ceilingHeight` de 2,5
-laissait les cloisons traverser la couverture de 42 cm, visibles de l'extérieur.
 
 ### Les pièces se calculent depuis les murs
 

@@ -39,7 +39,7 @@ import {
   prepareWalkStep,
   walkDisplacement,
 } from './walkCamera';
-import { fitOverview, fitPlan, siteOverviewLevel } from './framing';
+import { builtOutline, exteriorOverview, fitOverview, fitPlan, siteOverviewLevel } from './framing';
 import { panOrbitWithKeys } from './orbitNavigation';
 import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
 import {
@@ -133,6 +133,10 @@ export class HouseViewer {
   exterior?: ExteriorScene;
   private exteriorView = false;
   private exteriorFrame?: Level;
+  /** Parcel corners the exterior framing must keep on screen, in world coordinates. */
+  private parcelInView: Vector3[] | undefined;
+  /** Built silhouette corners, ground to roof apex, to grade the exterior azimuth. */
+  private exteriorSubject: Vector3[] = [];
   /** Parcel of the loaded project: the visit may walk on it, outside the house. */
   private site?: ProjectSite;
   level!: Level;
@@ -232,6 +236,8 @@ export class HouseViewer {
     this.previousEnvironmentIntensity = 1;
     this.exterior = undefined;
     this.exteriorFrame = undefined;
+    this.parcelInView = undefined;
+    this.exteriorSubject = [];
     this.exteriorView = false;
     this.keyState.clear();
     this.measurement = undefined;
@@ -320,8 +326,18 @@ export class HouseViewer {
       candidate.elevation < low.elevation ? candidate : low,
     );
     this.exterior = buildExterior(project, ground, scene);
-    if (project.site && this.exterior) {
-      this.exteriorFrame = siteOverviewLevel(ground, project.site, this.exterior.height);
+    const exteriorScene = this.exterior;
+    if (project.site && exteriorScene) {
+      const site = project.site;
+      this.exteriorFrame = siteOverviewLevel(ground, site, exteriorScene.height);
+      // La parcelle reste un arrière-plan visible : le cadrage ne la suit pas, il
+      // l'englobe dans l'image entière sans lui donner le rôle de cadre.
+      const yard = ground.elevation + site.elevation;
+      this.parcelInView = site.boundary.map(([x, z]) => new Vector3(x, yard, z));
+      this.exteriorSubject = builtOutline(ground, site).flatMap(([x, z]) => [
+        new Vector3(x, yard, z),
+        new Vector3(x, ground.elevation + exteriorScene.height, z),
+      ]);
       for (const mesh of this.exterior.meshes) {
         mesh.receiveShadows = true;
         if (this.exterior.roofMeshes.includes(mesh)) shadow.addShadowCaster(mesh);
@@ -670,7 +686,20 @@ export class HouseViewer {
     this.updateSection();
     this.updateCutaway();
     this.updateShadowPolicy();
-    if (this.mode === 'overview') this.fitOverview();
+    if (this.mode !== 'overview') return;
+    if (this.exteriorView && this.exteriorFrame) {
+      // La vue extérieure est une composition : l'azimut est choisi avec le cadrage.
+      exteriorOverview(
+        this.orbit,
+        this.exteriorFrame,
+        this.exteriorSubject,
+        this.parcelInView,
+        this.canvas.clientWidth,
+        this.canvas.clientHeight,
+      );
+    } else {
+      this.fitOverview();
+    }
   }
 
   /**
@@ -698,11 +727,15 @@ export class HouseViewer {
   }
 
   private fitOverview() {
+    // La parcelle n'entre dans le calcul qu'en vue extérieure : l'intérieur cadre
+    // sur le niveau, comme avant.
+    const frame = this.exteriorView && this.exteriorFrame ? this.exteriorFrame : this.level;
     fitOverview(
       this.orbit,
-      this.exteriorView && this.exteriorFrame ? this.exteriorFrame : this.level,
+      frame,
       this.canvas.clientWidth,
       this.canvas.clientHeight,
+      this.exteriorView && this.exteriorFrame ? this.parcelInView : undefined,
     );
   }
 

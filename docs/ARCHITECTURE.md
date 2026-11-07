@@ -164,9 +164,10 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
   démarrage. `mybob.diag()` ne renvoie rien — la console réafficherait la valeur de retour et le
   rapport apparaîtrait deux fois — et `mybob.report()` donne le même texte sans l'imprimer, pour
   `copy(mybob.report())`.
-- L'extérieur cadre le terrain et le faîtage ; Vue 3D montre la maison ouverte ; Plan masque
-  terrain et toiture. Sélectionner une pièce ou ajouter un meuble depuis l'extérieur revient à
-  la vue intérieure.
+- L'extérieur cadre le bâti et son toit — le recul et l'azimut sont choisis avec eux, et la
+  parcelle reste entière à l'image en fond sans dicter le cadrage ; Vue 3D montre la maison
+  ouverte ; Plan masque terrain et toiture. Sélectionner une pièce ou ajouter un meuble depuis
+  l'extérieur revient à la vue intérieure.
 - La visite sort de la maison : la limite est la parcelle (`site.boundary`), pas l'emprise du
   niveau. Sans `site`, l'emprise reste la limite. Le garde-fou de `beforeFrame` ne renvoie au
   départ que hors parcelle, sous le sol ou au-dessus du plafond ; le sol sous le visiteur est
