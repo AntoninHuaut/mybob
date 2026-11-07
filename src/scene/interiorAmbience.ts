@@ -36,12 +36,58 @@ export const INTERIOR_GROUND_COLOR = Color3.FromHexString('#6d6a5f');
 /**
  * Ambient occlusion is the expensive part of the visit. Below this frame rate the
  * pipeline is dropped: a weak GPU keeps a usable visit, losing corner hollows
- * rather than the ability to walk.
+ * rather than the ability to walk. This is a playability floor, not a measurement
+ * of what occlusion itself costs.
  */
 export const INTERIOR_OCCLUSION_MIN_FPS = 24;
 
-/** How long the visit runs before its frame rate is judged. */
-export const INTERIOR_OCCLUSION_PROBE_MS = 2500;
+/** Let the visit settle before judging it: shaders compile on the first frames. */
+export const INTERIOR_OCCLUSION_WARMUP_MS = 2500;
+
+/** Interval between two frame-rate samples once the visit has warmed up. */
+export const INTERIOR_OCCLUSION_SAMPLE_MS = 500;
+
+/** Consecutive low samples required before dropping occlusion. */
+export const INTERIOR_OCCLUSION_LOW_SAMPLES = 3;
+
+export interface OcclusionProbe {
+  /** When the next frame-rate sample is due. */
+  nextAt: number;
+  /** Consecutive samples below the floor. */
+  low: number;
+}
+
+export function startOcclusionProbe(now: number): OcclusionProbe {
+  return { nextAt: now + INTERIOR_OCCLUSION_WARMUP_MS, low: 0 };
+}
+
+/**
+ * Decides whether ambient occlusion must be dropped.
+ *
+ * A hidden tab freezes the frame loop, so the first frame back carries a delta of
+ * several seconds and collapses the engine's 30-frame average. Judging on that
+ * single frame would drop occlusion for the rest of the session after one
+ * alt-tab, so a hidden document restarts the window instead. A single low sample
+ * is never enough either: a garbage collection or a shader compile can produce
+ * one, hence the consecutive-sample requirement.
+ */
+export function nextOcclusionProbe(
+  probe: OcclusionProbe,
+  now: number,
+  fps: number,
+  visible: boolean,
+): { probe: OcclusionProbe; refuse: boolean } {
+  if (!visible) return { probe: startOcclusionProbe(now), refuse: false };
+  if (now < probe.nextAt) return { probe, refuse: false };
+  if (fps >= INTERIOR_OCCLUSION_MIN_FPS) {
+    return { probe: { nextAt: now + INTERIOR_OCCLUSION_SAMPLE_MS, low: 0 }, refuse: false };
+  }
+  const low = probe.low + 1;
+  return {
+    probe: { nextAt: now + INTERIOR_OCCLUSION_SAMPLE_MS, low },
+    refuse: low >= INTERIOR_OCCLUSION_LOW_SAMPLES,
+  };
+}
 
 function verticalBounce(t: number) {
   return t < 0.5
