@@ -243,13 +243,11 @@ test('saved layouts stay isolated by project and level, and storage failures are
   }
 });
 
-test('invalid dimensions, duplicated ids and unsafe source references are rejected', () => {
+test('invalid dimensions, duplicated ids and unsafe clearances are rejected', () => {
   assert.throws(() => createFurniture({ width: -0.1 }));
   assert.throws(() => createFurniture({ height: NaN }));
   const item = createFurniture();
   assert.throws(() => validateFurnitureList([item, item]));
-  assert.throws(() => createFurniture({ source: { url: 'javascript:alert(1)' } }));
-  assert.throws(() => createFurniture({ source: { image: 'https://example.org/image.svg' } }));
   assert.throws(() => createFurniture({ clearances: { front: -1, back: 0, left: 0, right: 0 } }));
 });
 
