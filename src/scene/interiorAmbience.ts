@@ -209,6 +209,11 @@ export function createInteriorOcclusion(
     pipeline.radius = 0.35;
     pipeline.samples = 16;
     pipeline.maxZ = 14;
+    // `samples` above is the SSAO sample count, not antialiasing. The pipeline renders
+    // the scene into its own texture, which defaults to a single sample, so the engine's
+    // `antialias: true` never reaches the visit: walls and window frames come out with
+    // hard stair-steps. `textureSamples` is the knob that multisamples that texture.
+    pipeline.textureSamples = 4;
     // The bilateral blur is what keeps half-resolution AO from looking grainy on plaster.
     pipeline.expensiveBlur = true;
     return pipeline;
