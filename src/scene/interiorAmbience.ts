@@ -14,19 +14,47 @@ import '@babylonjs/core/Materials/Textures/baseTexture.polynomial';
 import '@babylonjs/core/Rendering/prePassRendererSceneComponent';
 
 /**
- * Bounce colours of a neutral interior. The ceiling is the brightest surface a
- * room sees, the floor the darkest, so a vertical gradient alone already reads
- * as volume on matte plaster.
+ * Bounce colours of a neutral interior, in linear light. The ceiling is the
+ * brightest surface a room sees, the floor the darkest, so a vertical gradient
+ * alone already reads as volume on matte plaster.
  */
-const CEILING_BOUNCE = Color3.FromHexString('#e9e5db');
-const HORIZON_BOUNCE = Color3.FromHexString('#cfc7b8');
-const FLOOR_BOUNCE = Color3.FromHexString('#5c574f');
+const CEILING_BOUNCE = linear('#e9e5db');
+const HORIZON_BOUNCE = linear('#cfc7b8');
+const FLOOR_BOUNCE = linear('#5c574f');
 
-/** A 32 px face is enough for a smooth gradient once mipmapped. */
-const FACE_SIZE = 32;
+/**
+ * The bay window, and the reason the environment is high dynamic range: it is
+ * several times brighter than any wall, so the glass and the steel reflect a hot
+ * rectangle that survives the tone mapping instead of a grey patch. Defined in
+ * direction space rather than on one face, so it lands wherever the cube seam is.
+ */
+const WINDOW_LIGHT = linear('#dfeaf2').scale(7);
+const WINDOW_HALF_AZIMUTH = 0.42;
+const WINDOW_BOTTOM = -0.06;
+const WINDOW_TOP = 0.34;
 
-/** How strongly the generated environment lights the interior. */
-export const INTERIOR_ENVIRONMENT_INTENSITY = 0.55;
+/** The ceiling fixture: warm, small, and the only hot spot above the horizon. */
+const LAMP_LIGHT = linear('#ffe9c3').scale(3.5);
+const LAMP_ELEVATION = 1.15;
+const LAMP_HALF_AZIMUTH = 0.3;
+
+/**
+ * 128 px faces. The environment is only ever seen blurred by a roughness, and
+ * the faces are generated on the CPU when the visit starts: 256 px would triple
+ * that cost for detail no reflection resolves.
+ */
+const FACE_SIZE = 128;
+
+/** The six faces, in the order and naming Babylon's cube map tooling expects. */
+export type BounceFace = 'right' | 'left' | 'up' | 'down' | 'front' | 'back';
+export type BounceFaces = Record<BounceFace, Float32Array>;
+
+/**
+ * How strongly the generated environment lights the interior. Lower than the
+ * flat gradient it replaces: the window and the fixture add diffuse energy, and
+ * this keeps the room at the brightness that was validated before them.
+ */
+export const INTERIOR_ENVIRONMENT_INTENSITY = 0.42;
 
 /** The ceiling blocks the sun in visit, so the fixtures have to carry the room. */
 export const INTERIOR_FIXTURE_INTENSITY = 0.55;
@@ -99,60 +127,157 @@ export function nextOcclusionProbe(
   };
 }
 
+/** sRGB hex to linear light: the environment is authored in linear, not gamma. */
+function linear(hex: string): Color3 {
+  const srgb = Color3.FromHexString(hex);
+  const channel = (c: number) => (c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4);
+  return new Color3(channel(srgb.r), channel(srgb.g), channel(srgb.b));
+}
+
 function verticalBounce(t: number) {
   return t < 0.5
     ? Color3.Lerp(CEILING_BOUNCE, HORIZON_BOUNCE, t * 2)
     : Color3.Lerp(HORIZON_BOUNCE, FLOOR_BOUNCE, (t - 0.5) * 2);
 }
 
-/** One cube face, row 0 at the top, as RGBA bytes. */
-function faceData(colourAt: (t: number) => Color3) {
-  const data = new Uint8Array(FACE_SIZE * FACE_SIZE * 4);
+/**
+ * Radiance arriving from one direction, in linear light. Above 1 wherever the
+ * window or the fixture is: that is what makes the environment high dynamic
+ * range rather than a bright grey box.
+ */
+export function interiorRadiance(x: number, y: number, z: number): [number, number, number] {
+  const length = Math.hypot(x, y, z) || 1;
+  const ny = y / length;
+  const elevation = Math.asin(Math.max(-1, Math.min(1, ny)));
+  const azimuth = Math.atan2(x / length, z / length);
+  const base = verticalBounce((1 - ny) / 2);
+  let r = base.r,
+    g = base.g,
+    b = base.b;
+  if (
+    Math.abs(azimuth) < WINDOW_HALF_AZIMUTH &&
+    elevation > WINDOW_BOTTOM &&
+    elevation < WINDOW_TOP
+  ) {
+    r += WINDOW_LIGHT.r;
+    g += WINDOW_LIGHT.g;
+    b += WINDOW_LIGHT.b;
+  }
+  if (elevation > LAMP_ELEVATION && Math.abs(azimuth) < LAMP_HALF_AZIMUTH) {
+    r += LAMP_LIGHT.r;
+    g += LAMP_LIGHT.g;
+    b += LAMP_LIGHT.b;
+  }
+  return [r, g, b];
+}
+
+/**
+ * Direction of a cube-map texel, row 0 at the top, in the plan frame. `u` and `v`
+ * run from 0 to 1 across the face.
+ */
+export function faceDirection(face: BounceFace, u: number, v: number): [number, number, number] {
+  const s = u * 2 - 1;
+  const t = 1 - v * 2;
+  switch (face) {
+    case 'right':
+      return [1, t, s];
+    case 'left':
+      return [-1, t, -s];
+    case 'up':
+      return [s, 1, -t];
+    case 'down':
+      return [s, -1, t];
+    case 'front':
+      return [s, t, 1];
+    case 'back':
+      return [-s, t, -1];
+  }
+}
+
+/**
+ * Half-float bits of a value. WebGL 2 filters half-float textures without an
+ * extension, so the environment can carry values above 1 on every backend the
+ * app supports; a float texture would need a capability check and a fallback.
+ */
+export function toHalfFloat(value: number): number {
+  if (!Number.isFinite(value)) return value > 0 ? 0x7c00 : value < 0 ? 0xfc00 : 0x7e00;
+  const clamped = Math.max(-65504, Math.min(65504, value));
+  const sign = clamped < 0 ? 0x8000 : 0;
+  const magnitude = Math.abs(clamped);
+  if (magnitude < 2 ** -24) return sign;
+  if (magnitude >= 2 ** -14) {
+    const exponent = Math.floor(Math.log2(magnitude));
+    const mantissa = Math.round((magnitude / 2 ** exponent - 1) * 1024);
+    // Rounding the mantissa up can carry into the exponent, which is correct.
+    return sign | ((exponent + 15) << 10) | (mantissa & 0x3ff);
+  }
+  // Subnormal: no implicit leading one, fixed exponent -14.
+  return sign | Math.round(magnitude / 2 ** -24);
+}
+
+/** One face in linear light, as floats, ready for the irradiance integration. */
+function faceFloats(face: BounceFace): Float32Array {
+  const data = new Float32Array(FACE_SIZE * FACE_SIZE * 4);
   for (let y = 0; y < FACE_SIZE; y++) {
-    const colour = colourAt(y / (FACE_SIZE - 1));
     for (let x = 0; x < FACE_SIZE; x++) {
+      const [dx, dy, dz] = faceDirection(face, (x + 0.5) / FACE_SIZE, (y + 0.5) / FACE_SIZE);
+      const [r, g, b] = interiorRadiance(dx, dy, dz);
       const offset = (y * FACE_SIZE + x) * 4;
-      data[offset] = Math.round(colour.r * 255);
-      data[offset + 1] = Math.round(colour.g * 255);
-      data[offset + 2] = Math.round(colour.b * 255);
-      data[offset + 3] = 255;
+      data[offset] = r;
+      data[offset + 1] = g;
+      data[offset + 2] = b;
+      data[offset + 3] = 1;
     }
   }
   return data;
+}
+
+/** The six generated faces in linear light, named as Babylon's tooling expects them. */
+export function bounceFaces(): BounceFaces {
+  return {
+    right: faceFloats('right'),
+    left: faceFloats('left'),
+    up: faceFloats('up'),
+    down: faceFloats('down'),
+    front: faceFloats('front'),
+    back: faceFloats('back'),
+  };
 }
 
 /**
  * Diffuse irradiance of the generated faces, integrated by Babylon's own cube
  * map tooling instead of read back from the GPU: a readback is asynchronous,
  * which would leave the PBR materials without any ambient term on the frame the
- * visit starts.
+ * visit starts. The integration runs on a downsampled copy — the first three
+ * spherical harmonics cannot resolve more than that.
  */
-export function bouncePolynomial(faces: {
-  right: Uint8Array;
-  left: Uint8Array;
-  up: Uint8Array;
-  down: Uint8Array;
-  front: Uint8Array;
-  back: Uint8Array;
-}) {
-  return CubeMapToSphericalPolynomialTools.ConvertCubeMapToSphericalPolynomial({
-    ...faces,
-    size: FACE_SIZE,
-    format: Constants.TEXTUREFORMAT_RGBA,
-    type: Constants.TEXTURETYPE_UNSIGNED_BYTE,
-    gammaSpace: true,
-  });
+export function bouncePolynomial(faces: BounceFaces) {
+  return CubeMapToSphericalPolynomialTools.ConvertCubeMapToSphericalPolynomial(
+    {
+      ...faces,
+      size: FACE_SIZE,
+      format: Constants.TEXTUREFORMAT_RGBA,
+      type: Constants.TEXTURETYPE_FLOAT,
+      gammaSpace: false,
+    },
+    32,
+  );
 }
 
-/** The six generated faces, named as Babylon's cube map tooling expects them. */
-export function bounceFaces() {
+/** The same faces as half floats, which is what the GPU upload takes. */
+export function encodeHalfFloat(faces: BounceFaces): Record<BounceFace, Uint16Array> {
+  const encode = (face: Float32Array) => {
+    const data = new Uint16Array(face.length);
+    for (let i = 0; i < face.length; i++) data[i] = toHalfFloat(face[i]);
+    return data;
+  };
   return {
-    right: faceData(verticalBounce),
-    left: faceData(verticalBounce),
-    up: faceData(() => CEILING_BOUNCE),
-    down: faceData(() => FLOOR_BOUNCE),
-    front: faceData(verticalBounce),
-    back: faceData(verticalBounce),
+    right: encode(faces.right),
+    left: encode(faces.left),
+    up: encode(faces.up),
+    down: encode(faces.down),
+    front: encode(faces.front),
+    back: encode(faces.back),
   };
 }
 
@@ -164,19 +289,21 @@ export function bounceFaces() {
 export function createInteriorEnvironment(scene: Scene): RawCubeTexture | undefined {
   try {
     const faces = bounceFaces();
+    const half = encodeHalfFloat(faces);
     // Babylon uploads raw cube faces as +X, +Y, +Z, -X, -Y, -Z.
     const texture = new RawCubeTexture(
       scene,
-      [faces.right, faces.up, faces.front, faces.left, faces.down, faces.back],
+      [half.right, half.up, half.front, half.left, half.down, half.back],
       FACE_SIZE,
       Constants.TEXTUREFORMAT_RGBA,
-      Constants.TEXTURETYPE_UNSIGNED_BYTE,
+      Constants.TEXTURETYPE_HALF_FLOAT,
       true,
       false,
       Texture.TRILINEAR_SAMPLINGMODE,
     );
     texture.name = 'interior-bounce';
-    texture.gammaSpace = true;
+    // The faces are authored in linear light, so no gamma conversion on sample.
+    texture.gammaSpace = false;
     texture.sphericalPolynomial = bouncePolynomial(faces);
     return texture;
   } catch (error) {
