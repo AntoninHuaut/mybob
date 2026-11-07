@@ -191,6 +191,31 @@ test('audit flags duplicate walls', () => {
   assert.ok(issues.some((i) => i.kind === 'duplicate-wall'));
 });
 
+test('audit flags a partition floating outside the outline, not a straddling exterior wall', () => {
+  const issues = auditPlan(
+    project({
+      walls: [
+        // entièrement au-delà du contour : le mur fantôme de cage d'escalier
+        { id: 'ghost', start: [2, 4.6], end: [4, 4.6], thickness: 0.12 },
+        // mur extérieur à cheval sur le contour : un arêtier d'étage en retrait
+        { id: 'knee', start: [6.05, 0], end: [6.05, 4], thickness: 0.2, exterior: true },
+        // cloison moitié dedans moitié dehors : elle garde un contact de plancher
+        { id: 'straddle', start: [0, 1], end: [0, 3], thickness: 0.1 },
+      ],
+    }),
+  ).issues;
+  const ghost = issues.find((i) => i.kind === 'interior-wall-outside-outline');
+  assert.ok(ghost, 'expected an interior-wall-outside-outline issue for the ghost wall');
+  assert.ok(ghost!.ids.includes('ghost'));
+  assert.ok(Math.abs(ghost!.value - 0.24) < 1e-6);
+  assert.ok(
+    !issues.some((i) => i.kind === 'interior-wall-outside-outline' && i.ids.includes('knee')),
+  );
+  assert.ok(
+    !issues.some((i) => i.kind === 'interior-wall-outside-outline' && i.ids.includes('straddle')),
+  );
+});
+
 test('audit flags a spawn outside every room', () => {
   const issues = auditPlan(
     project({

@@ -21,6 +21,9 @@ const GRID_SAFETY = 2; // une cellule doit rester plus petite que la demi-épais
 // Un chevauchement pièce/mur plus fin que ça est un arrondi d'ajustement de
 // surface, pas un défaut de plan : 1 cm sur 5 m fait 0,05 m².
 const ROOM_WALL_TOLERANCE = 0.05;
+// Une cloison doit garder au moins ce contact de plancher avec le contour,
+// sinon elle flotte hors du niveau ; les murs extérieurs en sont exemptés.
+const OUTLINE_FLOOR_TOLERANCE = 0.01;
 const MAX_CELLS = 400_000;
 const cross = (a: Point2, b: Point2, c: Point2) =>
   (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
@@ -265,6 +268,25 @@ export function auditPlan(project: HouseProject) {
         value: overlap,
         unit: 'm',
       });
+    // A partition that lives entirely outside the outline floats over nothing:
+    // plan B's combles carried the ghost of a stairwell wall 59 cm beyond a
+    // floor that stops at the roof slope, rendered as a bar hanging under the
+    // house. Exterior walls legitimately straddle a recessed outline — a knee
+    // wall sits half outside an inset floor — so only interior walls count,
+    // and a wall that keeps any floor contact is left alone.
+    for (const { wall, solids } of walls) {
+      if (wall.exterior || !solids.length) continue;
+      const total = solids.reduce((sum, solid) => sum + polygonArea(solid), 0);
+      const inside = solids.reduce((sum, solid) => sum + intersectionArea(level.outline, solid), 0);
+      if (inside >= OUTLINE_FLOOR_TOLERANCE) continue;
+      issues.push({
+        level: level.id,
+        kind: 'interior-wall-outside-outline',
+        ids: [wall.id],
+        value: total - inside,
+        unit: 'm²',
+      });
+    }
     // Wall ends that stop just short of another wall or of the outline: the classic
     // "almost joined" gap that leaves a sliver of floor or a hole in a partition.
     for (const { wall } of walls) {
