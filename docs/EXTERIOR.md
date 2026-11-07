@@ -10,6 +10,8 @@ Le terrain est plat par défaut. Un projet peut déclarer des points plus bas pr
 
 La toiture est décrite par `roofs` : sommets, faces planes et pignons. Le format accepte plusieurs pans, des raccords en croupe et des hauteurs d’égout et de faîtage quelconques ; leur projection doit couvrir l’enveloppe de toiture sans trou ni chevauchement. Une entrée en retrait est couverte. Les débords, gouttières, épaisseurs et charpente ne sont pas représentés. La pente déclarée n’est pas reproduite à l’identique : elle reste indicative et n’est pas présentée comme une cote vérifiée.
 
+Un pan peut porter des chiens-assis dans `dormers` : une emprise au sol, `wallId` vers le mur de fond, et une pente facultative. Le mur de fond reste le mur du niveau traversé (`exterior: true`, parallèle aux côtés de l’emprise) : il porte seul sa hauteur et sa fenêtre, comme toutes les autres menuiseries, et c’est le seul mur autorisé à dépasser la hauteur de plafond de son niveau — c’est lui qui perce la couverture. Le rendu découpe le pan sur l’emprise, du nu intérieur du mur jusqu’à son parement extérieur, puis construit les deux joues en enduit et le toit de la lucarne en couverture. Sans `slope`, ce toit rejoint le pan à l’arrière de l’emprise ; avec `slope` (montée par mètre de repli), il le rejoint à l’intérieur de l’emprise. La validation refuse ce que le moteur ne peut pas rendre : une emprise hors d’un pan unique non vertical, un pan qui s’incline le long de la lucarne, un mur de fond qui ne dépasse pas la couverture, une pente sans jonction possible. La pente du toit de la lucarne reste non cotée sur beaucoup de plans : l’absence de `slope` suit alors le dessin.
+
 Les couleurs extérieures viennent de `facadeColor` et `roofColor`, sans valeur colorimétrique certifiée. Les faces intérieures restent blanches. Les menuiseries bicolores et les teintes de porte ne sont pas encore reproduites : les menuiseries existantes restent simplifiées.
 
 Les documents de référence servent à vérifier les ouvertures et volumes intérieurs. Aucune clôture ni plantation n’est inventée : seules les surfaces déclarées sont rendues. Le gazon présente une texture de bruit fine, déterministe et générée localement, sans téléchargement d’images.
@@ -33,6 +35,13 @@ site?: {
     vertices: [number, number, number][]; // x/y/z, y relatif au RDC
     faces: number[][];                   // indices de polygones plans
     gables?: number[][];                 // faces traitées avec l’enduit
+    dormers?: {
+      id: string;
+      start: [number, number]; // coins opposés de l’emprise, en plan (x, z)
+      end: [number, number];
+      wallId: string;          // mur de fond du niveau traversé
+      slope?: number;          // montée du toit de lucarne par mètre de repli
+    }[];
   }[];
   notes: string[];
 }
@@ -40,7 +49,7 @@ site?: {
 
 Ce format accepte une autre parcelle et une autre enveloppe de toiture sans réécrire le moteur. Les polygones doivent être simples, les accès restent dans la parcelle et l’emprise du RDC doit y tenir. Les faces de toiture doivent être planes, non dégénérées, sans croisement et ne référencer que des indices entiers valides. Les couleurs et nombres sont vérifiés à l’import. Le format de projet reste en version 1 : les projets sans `site` continuent de fonctionner.
 
-`buildExterior(project, level, scene)` retourne un groupe indépendant et ses maillages : terrain et accès, façades identifiées par `metadata.wallId`, toiture/pignons initialement masqués, limites horizontales et hauteur maximale. La vue contrôle la visibilité des faces extérieures en même temps que celle des murs en coupe. Le gazon est évidé sous la maison, y compris quand le mur touche la limite de parcelle ; il ne traverse donc pas une pièce abaissée.
+`buildExterior(project, level, scene)` retourne un groupe indépendant et ses maillages : terrain et accès, façades identifiées par `metadata.wallId`, toiture/pignons initialement masqués, limites horizontales et hauteur maximale. Les pans percés par une lucarne sont triangulés avec leur jour ; les joues et le toit de la lucarne suivent la toiture dans sa visibilité et ses ombres. La vue contrôle la visibilité des faces extérieures en même temps que celle des murs en coupe. Le gazon est évidé sous la maison, y compris quand le mur touche la limite de parcelle ; il ne traverse donc pas une pièce abaissée.
 
 Les ouvertures des façades utilisent la même cote de sol adjacente que les murs intérieurs, quelle que soit la catégorie de pièce abaissée. En visite, le plafond visible participe aux ombres solaires, et la toiture reste affichée : le plafond la masque depuis l'intérieur, elle rend la maison entière depuis la pelouse. L'aperçu reste simplifié et ne simule pas la lumière indirecte, la météo ou les bâtiments voisins.
 

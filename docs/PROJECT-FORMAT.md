@@ -101,7 +101,7 @@ Le contrat TypeScript est dans `src/model/types.ts` ; `validateProject()` est ex
 
 ## Murs et ouvertures
 
-Les murs peuvent être orientés librement. Les angles ne sont pas raccordés par une opération booléenne : leurs extrémités doivent être prolongées ou ajustées pour fermer les jonctions. Le générateur répartit les parties solides du mur autour des ouvertures, y compris l’allège et le linteau. Les collisions correspondent à ces solides.
+Les murs peuvent être orientés librement. Les angles ne sont pas raccordés par une opération booléenne : leurs extrémités doivent être prolongées ou ajustées pour fermer les jonctions. Le générateur répartit les parties solides du mur autour des ouvertures, y compris l’allège et le linteau. Les collisions correspondent à ces solides. La hauteur d’un mur ne dépasse pas la hauteur de plafond de son niveau, sauf un mur de fond de lucarne, qui traverse la couverture : sa déclaration est décrite avec [la toiture](EXTERIOR.md).
 
 `kind` vaut `door`, `window`, `sliding` ou `garage`. L’allège `sill` vaut zéro par défaut. `offset`, `width` et `height` sont exprimés en mètres et l’ouverture doit rester entièrement dans son mur. Les ouvertures ne doivent pas se chevaucher.
 
