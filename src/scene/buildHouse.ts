@@ -3,6 +3,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
+import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import type { Material } from '@babylonjs/core/Materials/material';
@@ -39,6 +40,43 @@ export interface HouseScene {
   highlights: Map<string, Mesh>;
 }
 
+/**
+ * Boxes come with 0..1 UVs on every face, so a 4 m wall and a 0.5 m skirting
+ * would show the same relief stretched differently. Rewrite them in metres: the
+ * normal and roughness maps then keep one grain size across the whole house.
+ * The face is picked from the normal, so the vertex order does not matter.
+ */
+export function worldScaleUvs(mesh: Mesh, tile = 1) {
+  const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
+  const normals = mesh.getVerticesData(VertexBuffer.NormalKind);
+  if (!positions || !normals) return;
+  const count = positions.length / 3;
+  const uvs = new Float32Array(count * 2);
+  for (let i = 0; i < count; i++) {
+    const x = positions[i * 3];
+    const y = positions[i * 3 + 1];
+    const z = positions[i * 3 + 2];
+    const nx = Math.abs(normals[i * 3]);
+    const ny = Math.abs(normals[i * 3 + 1]);
+    const nz = Math.abs(normals[i * 3 + 2]);
+    let u: number;
+    let v: number;
+    if (nx >= ny && nx >= nz) {
+      u = z;
+      v = y;
+    } else if (ny >= nx && ny >= nz) {
+      u = x;
+      v = z;
+    } else {
+      u = x;
+      v = y;
+    }
+    uvs[i * 2] = u / tile;
+    uvs[i * 2 + 1] = v / tile;
+  }
+  mesh.setVerticesData(VertexBuffer.UVKind, uvs);
+}
+
 export function polygonMesh(
   name: string,
   points: Point2[],
@@ -46,6 +84,7 @@ export function polygonMesh(
   scene: Scene,
   holes: Point2[][] = [],
   facing: 1 | -1 = 1,
+  uvTile: [number, number] = [4.8, 3.2],
 ): Mesh {
   const allPoints = [...points];
   const holeIndices: number[] = [];
@@ -68,7 +107,7 @@ export function polygonMesh(
   data.positions = positions;
   data.indices = indices;
   data.normals = allPoints.flatMap(() => [0, facing, 0]);
-  data.uvs = allPoints.flatMap(([x, z]) => [x / 4.8, z / 3.2]);
+  data.uvs = allPoints.flatMap(([x, z]) => [x / uvTile[0], z / uvTile[1]]);
   const mesh = new Mesh(name, scene);
   data.applyToMesh(mesh);
   return mesh;
@@ -129,6 +168,7 @@ export function buildHouse(
     collision = true,
   ) => {
     const mesh = MeshBuilder.CreateBox(name, { width, height, depth }, scene);
+    worldScaleUvs(mesh);
     mesh.position.set(x, y, z);
     mesh.parent = parent;
     mesh.material = material;
@@ -554,6 +594,8 @@ export function buildHouse(
     scene,
     ceilingVoids,
     -1,
+    // The ceiling is plaster, so it takes the plaster grain, not the parquet tile.
+    [1, 1],
   );
   ceiling.parent = root;
   ceiling.material = materials.plaster;

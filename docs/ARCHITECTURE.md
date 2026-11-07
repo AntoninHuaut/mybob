@@ -32,6 +32,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Géométrie de la maison | `src/scene/buildHouse.ts`               | Murs, sols, plafonds, menuiseries, portes                           |
 | Extérieur              | `src/scene/buildExterior.ts`            | Façades, toiture, terrain                                           |
 | Matériaux              | `src/scene/materials.ts`                | Matériaux partagés, carrelage procédural                            |
+| Relief et rugosité     | `src/scene/surfaceTextures.ts`          | Normal maps et roughness maps procédurales, tuilées au mètre        |
 | Repère                 | `src/scene/coordinates.ts`              | Passage au repère du plan, cadrage plan, déplacement clavier        |
 | Cadrage                | `src/scene/framing.ts`                  | `fitOverview`, `fitPlan`, marges d'interface                        |
 | Navigation             | `src/scene/navigation.ts`               | Destination de visite, plan de coupe, mur face caméra               |
@@ -118,6 +119,12 @@ ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`
   leur éclairage : l'environnement et le tampon de géométrie ne sont attachés qu'en visite et
   libérés en sortie, et l'environnement précédent est restauré plutôt qu'effacé. Avec un aperçu
   solaire appliqué, l'ambiance suit le soleil comme ailleurs.
+- Les surfaces ne sont plus des couleurs unies : plâtre, parquet, béton et acier portent une
+  normal map et une roughness map, générées par bruit fractal et tuilées au mètre. Les UV des
+  boîtes sont réécrits en mètres par `worldScaleUvs`, sinon un mur de 4 m et une plinthe de
+  50 cm étireraient le même grain différemment. Le parquet garde sa tuile de 4,8 × 3,2 m, celle
+  de son albédo, et sa roughness varie planche par planche. Les données de pixels sont calculées
+  une fois par session et mises en cache : changer de projet reconstruit la scène, pas le bruit.
 - La chaîne de post-traitements de la visite est ordonnée et l'ordre compte : Babylon ajoute
   chaque pipeline à la fin de la chaîne de la caméra, donc `updateInteriorAmbience` construit
   le TAA d'abord, l'occlusion ensuite, le bloom en dernier. On lit

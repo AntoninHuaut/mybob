@@ -5,19 +5,40 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseProject } from '../model/types';
+import { createSurfaceTextures } from './surfaceTextures';
+
+/**
+ * Relief and roughness maps, tiled in metres. The UVs of the walls are rewritten
+ * in metres by `worldScaleUvs`, and the floor polygons already are, so one scale
+ * here means one grain size across the whole house.
+ */
+function tile(texture: Texture, uScale: number, vScale = uScale) {
+  texture.uScale = uScale;
+  texture.vScale = vScale;
+  return texture;
+}
 
 export function createMaterials(scene: Scene, finishes: HouseProject['finishes'] = {}) {
+  const surfaces = createSurfaceTextures(scene);
+
   const plaster = new PBRMaterial('white-plaster', scene);
   plaster.albedoColor = Color3.FromHexString(finishes.wallColor ?? '#eeede8');
   plaster.roughness = 0.93;
   plaster.metallic = 0;
   plaster.maxSimultaneousLights = 6;
+  // Half a metre per tile: plaster relief is a millimetre, so the grain has to be
+  // fine enough that a wall reads as smooth from across the room.
+  plaster.bumpTexture = tile(surfaces.plasterNormal, 2);
+  plaster.microSurfaceTexture = tile(surfaces.plasterRoughness, 2);
 
   const wood = new PBRMaterial('porcelain-oak', scene);
   wood.roughness = 0.72;
   wood.albedoColor = Color3.FromHexString(finishes.floorTint ?? '#ffffff');
   wood.metallic = 0;
   wood.maxSimultaneousLights = 6;
+  // The parquet tile is 4.8 × 3.2 m, the same footprint as the albedo below.
+  wood.bumpTexture = tile(surfaces.woodNormal, 1);
+  wood.microSurfaceTexture = tile(surfaces.woodRoughness, 1);
 
   // Deterministic, locally generated texture: 1.20 × 0.20 m porcelain planks.
   const texture = new DynamicTexture(
@@ -63,6 +84,9 @@ export function createMaterials(scene: Scene, finishes: HouseProject['finishes']
   concrete.albedoColor = Color3.FromHexString(finishes.garageColor ?? '#bcbdb6');
   concrete.roughness = 0.95;
   concrete.metallic = 0;
+  // Garage floors are polygons, so their UVs are the parquet's 4.8 × 3.2 m tile.
+  concrete.bumpTexture = tile(surfaces.concreteNormal, 4.8, 3.2);
+  concrete.microSurfaceTexture = tile(surfaces.concreteRoughness, 4.8, 3.2);
   const frame = new PBRMaterial('joinery-white', scene);
   frame.albedoColor = Color3.FromHexString(finishes.joineryColor ?? '#f3f2ec');
   frame.roughness = 0.42;
@@ -78,6 +102,9 @@ export function createMaterials(scene: Scene, finishes: HouseProject['finishes']
   metal.albedoColor = Color3.FromHexString('#8d9694');
   metal.metallic = 0.8;
   metal.roughness = 0.3;
+  // Brushing is a quarter-millimetre feature: four tiles per metre, not one.
+  metal.bumpTexture = tile(surfaces.metalNormal, 4);
+  metal.microSurfaceTexture = tile(surfaces.metalRoughness, 4);
   const slab = new PBRMaterial('slab-edge', scene);
   slab.albedoColor = Color3.FromHexString('#d5d2c8');
   slab.roughness = 1;
@@ -91,6 +118,18 @@ export function createMaterials(scene: Scene, finishes: HouseProject['finishes']
   selection.alpha = 0.12;
   selection.backFaceCulling = false;
   selection.disableLighting = true;
-  return { plaster, wood, concrete, frame, glass, metal, slab, glow, selection, texture };
+  return {
+    plaster,
+    wood,
+    concrete,
+    frame,
+    glass,
+    metal,
+    slab,
+    glow,
+    selection,
+    texture,
+    surfaces,
+  };
 }
 export type Materials = ReturnType<typeof createMaterials>;
