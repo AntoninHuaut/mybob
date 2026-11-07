@@ -101,12 +101,18 @@ def fit(pairs):
     return scale, mean_p - scale * mean_c
 
 
-def axis_frame(chains, axis):
+def axis_frame(chains, axis, extent=None, dimensions=None):
     """Échelle médiane des chaînes, origine de la chaîne qui couvre tout l'axe.
 
     Les chaînes partielles ne commencent pas au même endroit : on ne peut pas
     les fondre en un seul ajustement. Chacune donne une échelle ; la plus longue
     donne l'origine, parce que c'est la seule qui parte du bord du niveau.
+
+    Sauf quand aucune chaîne ne couvre l'axe. La page 14 de Sannerville n'a
+    qu'une chaîne verticale partielle (2,78 + 1,27) pour une emprise de 8,50 m :
+    l'origine tombait 3,5 m trop bas et toutes les étiquettes de surface se
+    projetaient à z négatif. La cote d'ensemble « 8.50 » est alors la seule
+    source — elle est centrée sur l'emprise, donc son milieu donne l'origine.
     """
     fitted = []
     for chain in chains:
@@ -122,9 +128,27 @@ def axis_frame(chains, axis):
     scales = sorted(scale for _, scale, _ in fitted)
     scale = scales[len(scales) // 2]
     _, _, longest = max(fitted, key=lambda item: item[0])
+    span = longest.get("sum") or 0.0
+    if extent is not None and span < extent - 0.05:
+        overall = overall_dimension(dimensions, axis, extent)
+        if overall is not None:
+            along = 0 if axis == "horizontal" else 1
+            origin = overall["at"][along] - extent * scale / 2
+            return scale, origin, scales[0], scales[-1], extent
     first = longest["segments"][0]
     origin = first["at"][0 if axis == "horizontal" else 1] - first["value"] * scale / 2
-    return scale, origin, scales[0], scales[-1], longest.get("sum")
+    return scale, origin, scales[0], scales[-1], span
+
+
+def overall_dimension(dimensions, axis, extent, tolerance=0.02):
+    """Cote d'ensemble d'un axe : celle qui vaut l'emprise du niveau."""
+    horizontal = axis == "horizontal"
+    for dimension in dimensions or []:
+        if bool(dimension.get("horizontal")) != horizontal:
+            continue
+        if abs((dimension.get("value") or 0.0) - extent) <= tolerance:
+            return dimension
+    return None
 
 
 def scale_hint(scale):
@@ -143,11 +167,21 @@ def scale_hint(scale):
     }
 
 
-def transform(page):
+def transform(page, level=None):
     """Repère points -> mètres, déduit des chaînes de cotes de la page."""
     chains = page.get("chains") or []
-    scale_x, origin_x, low_x, high_x, span_x = axis_frame(chains, "horizontal")
-    scale_z, origin_z, low_z, high_z, span_z = axis_frame(chains, "vertical")
+    dimensions = (page.get("labels") or {}).get("dimensions") or []
+    outline = (level or {}).get("outline") or []
+    extents = {}
+    for axis, along in (("horizontal", 0), ("vertical", 1)):
+        values = [point[along] for point in outline]
+        extents[axis] = (max(values) - min(values)) if values else None
+    scale_x, origin_x, low_x, high_x, span_x = axis_frame(
+        chains, "horizontal", extents["horizontal"], dimensions
+    )
+    scale_z, origin_z, low_z, high_z, span_z = axis_frame(
+        chains, "vertical", extents["vertical"], dimensions
+    )
     return {
         "scaleX": round(scale_x, 4),
         "scaleZ": round(scale_z, 4),
@@ -327,7 +361,7 @@ def build(registry, project, level_id, page_index, tolerance):
     if level is None:
         raise ValueError(f"niveau {level_id} absent du projet")
     rooms = [room for room in level.get("rooms") or [] if room.get("polygon")]
-    frame = transform(page)
+    frame = transform(page, level)
     surfaces = printed_surfaces(page, frame)
     pairs, orphans = match(surfaces, rooms)
     rows = report(pairs, orphans, tolerance)
@@ -429,6 +463,79 @@ def self_test():
         failures.append(f"pièce b {by_room['b']}")
     if result["summary"]["printed"] != 2 or result["summary"]["rooms"] != 2:
         failures.append(f"appariement {result['summary']}")
+
+    # Une chaîne partielle ne donne pas l'origine : la cote d'ensemble, si.
+    # Sans elle, l'origine tombait au début de la chaîne partielle et toutes les
+    # étiquettes se projetaient hors du niveau.
+    partial = {
+        "pages": [
+            {
+                "index": 2,
+                "chains": [
+                    {
+                        "axis": "horizontal",
+                        "segments": [
+                            {"value": 4.0, "at": [origin + 4 * scale / 2, 0]},
+                            {"value": 6.0, "at": [origin + 4 * scale + 6 * scale / 2, 0]},
+                        ],
+                    },
+                    {
+                        "axis": "vertical",
+                        "segments": [
+                            {"value": 2.0, "at": [0, origin + 4 * scale + 2 * scale / 2]},
+                            {"value": 2.0, "at": [0, origin + 6 * scale + 2 * scale / 2]},
+                        ],
+                    },
+                ],
+                "labels": {
+                    "dimensions": [
+                        {
+                            "kind": "linear",
+                            "text": "8.00",
+                            "value": 8.0,
+                            "horizontal": False,
+                            "at": [0, origin + 4 * scale],
+                        }
+                    ],
+                    "rooms": [
+                        {
+                            "text": "SH : 12.00 m²",
+                            "surface": "SH",
+                            "area": 12.0,
+                            "at": [origin + 2 * scale, origin + 1.5 * scale],
+                        }
+                    ],
+                },
+            }
+        ]
+    }
+    partial_project = {
+        "id": "auto-test-partiel",
+        "levels": [
+            {
+                "id": "rdc",
+                "outline": [[0, 0], [10, 0], [10, 8], [0, 8]],
+                "rooms": [
+                    {
+                        "id": "a",
+                        "name": "A",
+                        "polygon": [[0, 0], [4, 0], [4, 3], [0, 3]],
+                        "planArea": 12.0,
+                    }
+                ],
+            }
+        ],
+    }
+    partial_result = build(partial, partial_project, "rdc", 2, DEFAULT_TOLERANCE)
+    partial_frame = partial_result["frame"]
+    if abs(partial_frame["originZ"] - origin) > 0.01:
+        failures.append(
+            f"origine verticale {partial_frame['originZ']} au lieu de {origin} "
+            "sur une chaîne partielle"
+        )
+    if partial_result["rows"][0]["verdict"] != "exact":
+        failures.append(f"étiquette mal projetée : {partial_result['rows'][0]}")
+
     if failures:
         for failure in failures:
             print(f"ECHEC {failure}")

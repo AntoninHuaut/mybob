@@ -265,6 +265,25 @@ la mesure reste celle des cotes.
 Sur un scan il n'y a pas de chaîne : l'échelle se lit dans le cartouche, et le
 ratio redevient la seule source, avec l'incertitude qui va avec.
 
+### L'origine, quand aucune chaîne ne couvre l'axe
+
+L'échelle vient des chaînes ; l'**origine** aussi, et c'est là que ça casse. Une
+chaîne partielle ne commence pas au bord du niveau : prendre son début pour
+l'origine décale tout le niveau. La page 14 de Sannerville n'a qu'une chaîne
+verticale de 2,78 + 1,27 = 4,05 m pour une emprise de 8,50 m ; l'origine tombait
+3,5 m trop bas, toutes les étiquettes de surface se projetaient à z négatif, et
+les sept pièces des combles sortaient « pièce sans étiquette ». On croit alors
+que les noms de pièces ne correspondent pas, alors que c'est le repère.
+
+La règle : si la plus longue chaîne d'un axe ne couvre pas l'emprise du niveau,
+c'est la **cote d'ensemble** qui donne l'origine — elle est centrée sur l'emprise,
+donc son milieu moins une demi-emprise est le bord. Chercher une cote dont la
+valeur vaut l'emprise (`8.50`, `12.40`) et de la bonne orientation.
+
+Le symptôme à reconnaître : des étiquettes de surface qui tombent hors du niveau,
+ou un total calculé très inférieur au total imprimé. Vérifier le repère avant de
+soupçonner la géométrie.
+
 ## Les trois couches
 
 Garder extraction, décision et construction séparées pour qu'une erreur ne
