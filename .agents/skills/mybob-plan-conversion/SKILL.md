@@ -44,6 +44,11 @@ approximatif qu'on croit.
 
 ## L'inventaire
 
+Les scripts listés ici vivent dans `scripts/` à la racine du dépôt, pas dans
+le dossier du skill : ils sont partagés avec la CI (mode `--self-test`), les
+scripts npm et d'autres skills, et suivis par Prettier. Ne pas les déplacer ni
+les dupliquer dans `.agents/`.
+
 | script                     | ce qu'il fait                                      | exactitude                                                              |
 | -------------------------- | -------------------------------------------------- | ----------------------------------------------------------------------- |
 | `extract_plan_evidence.py` | lit cotes, chaînes, étiquettes de surface          | **100 %** — lecture, aucune interprétation                              |
