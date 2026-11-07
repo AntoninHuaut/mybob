@@ -59,21 +59,22 @@ les dupliquer dans `.agents/`.
 | `check-plan-decisions.ts`  | arithmétique des décisions et rejeu de l'enveloppe                      | **100 %** — calcul                                                      |
 | `extract_plan.py`          | cloisons, par l'aplat de couleur du dessin                              | **100 % sur les cloisons**, aveugle sur les bandes hachurées            |
 | `derive_outline.py`        | contour du niveau, des chaînes fermées et de l'encre                    | **exact sur le plan A**, refuse le plan B (encoche non séparable)       |
+| `extract_doors.py`         | portes intérieures, par les arcs de débattement du dessin               | **exact sur l'arc**, muet sur les portes sans arc (voir plus bas)       |
 | `generate_project.py`      | murs extérieurs, épaisseurs et baies lues au plan                       | **exact mais incomplet** : n'invente jamais, oublie ce qu'il ne lit pas |
 
-Les trois derniers sont les seuls qui produisent de la géométrie. Ils sont
+Les quatre derniers sont les seuls qui produisent de la géométrie. Ils sont
 utilisables parce qu'ils n'inventent rien : `extract_plan.py` ne rend que des
 rectangles remplis, `derive_outline.py` ne retient un contour que si chaque
 arête est reproduite par une suite imprimée ou comblée par une épaisseur cotée,
-`generate_project.py` ne place une baie que sur une chaîne refermée. Ce qu'ils
-ne savent pas lire manque, et c'est à l'IA de le voir.
+`extract_doors.py` ne rend une porte que si un quart de cercle et son vantail se
+mesurent, `generate_project.py` ne place une baie que sur une chaîne refermée.
+Ce qu'ils ne savent pas lire manque, et c'est à l'IA de le voir.
 
-Les **portes intérieures** ne sont dans aucune de ces colonnes : elles ne sont
-pas cotées, donc aucun script ne peut les rendre exactes. Elles se lisent à
-l'encre et se posent à la main, ce que le propriétaire a explicitement autorisé
-(« porte intérieure, si c'est un truc à peu près c'est ok ; murs c'est gênant »).
-Ne pas les confondre avec une mesure : ce sont des décisions appuyées sur une
-lecture.
+Les **portes intérieures** ne sont pas cotées, donc aucune chaîne ne les porte —
+mais leur **symbole** est normalisé, et c'est lui qui se mesure. Voir « Les
+portes intérieures, lues sur l'arc » plus bas : le script rend la charnière, la
+largeur et le sens de débattement, et il rapporte les portes qu'il ne lit pas au
+lieu de les deviner.
 
 ## Deux boucles, et ne pas les confondre
 
@@ -113,6 +114,10 @@ uvx --from pymupdf python scripts/extract_plan.py plan.pdf plan.json \
 # 1 bis. Dériver le contour du niveau, au lieu de l'écrire à la main.
 python scripts/derive_outline.py registry.json outline.json --pages 8 \
     --pdf plan.pdf --plan plan.json
+
+# 1 ter. Lire les portes intérieures sur leurs arcs, et confronter au projet.
+python scripts/extract_doors.py plan.pdf 8 doors.json --registry registry.json \
+    --pages 8 --compare out.json --level rdc
 
 # 2. Construire : murs extérieurs, cloisons, baies, épaisseurs lues au plan.
 python scripts/generate_project.py plan.json registry.json modele.json rdc out.json \
@@ -428,6 +433,81 @@ du trait continu qui passe par la sonde et rejette tout ce qui est en dessous de
 0,45 m. Le motif est dans la fixture `tests/fixtures/plan-outline/` et dans
 l'auto-test, pas seulement dans ce paragraphe.
 
+### 0 ter. Les portes intérieures, lues sur l'arc
+
+Une porte intérieure n'est pas cotée, mais son **symbole est normalisé** : un
+quart de cercle de rayon égal à la largeur du vantail, dont le **centre est la
+charnière**, plus le **vantail tracé ouvert**, perpendiculaire au mur.
+`scripts/extract_doors.py` mesure ces trois choses et rien d'autre.
+
+```sh
+# Le cadre se déduit des chaînes refermées, comme pour le contour.
+python scripts/extract_doors.py plan.pdf 8 doors.json \
+    --registry artifacts/plan-review/registry.json --pages 8
+# Puis on confronte les portes lues aux portes écrites, et on lit les écarts.
+python scripts/extract_doors.py plan.pdf 8 doors.json \
+    --registry artifacts/plan-review/registry.json --pages 8 \
+    --compare public/projects/private-maison.json --level rdc
+```
+
+**Ce qui écarte une hachure, ce n'est pas la densité.** Le plan A porte 156
+tracés remplis et 165 cellules denses de six segments ou plus : compter les
+segments courts ne donne rien. Trois conditions ensemble, et elles seules :
+
+1. le tracé n'est **pas rempli** — un arc est un trait, une hachure est un aplat ;
+2. l'ajustement circulaire laisse un **résidu ≤ 0,15 pt** — un amas de hachure ne
+   se pose pas sur un cercle ;
+3. la **couverture angulaire** vaut 80–100° — un quart de cercle, pas un demi-tour.
+
+Le **vantail** tranche ensuite entre les deux extrémités de l'arc : celle qui
+porte un segment partant de la charnière est la position **ouverte**, donc le sens
+de débattement ; l'autre est la position **fermée**, donc l'ouverture dans le mur.
+Sans ce segment, les deux extrémités sont interchangeables et le script ne compte
+pas la porte.
+
+**État mesuré sur les deux plans** (19 arcs, 21 portes à vantail écrites) :
+
+| plan       | arcs lus | portes écrites | appariées | dans ±5 cm le long du mur |
+| ---------- | -------- | -------------- | --------- | ------------------------- |
+| A, RDC     | 8        | 8              | 8         | 5                         |
+| B, RDC     | 6        | 7              | 6         | 5                         |
+| B, combles | 5        | 6              | 5         | 5                         |
+
+Les écarts sont **listés, jamais corrigés en silence** :
+
+- **deux portes n'ont aucun arc** — `hall-nord-door-1` (plan B, RDC, 1,36 m) et
+  `p-dressing` (combles, 1,00 m). Le dessin y montre une bande hachurée et des
+  traits de tableau, pas un quart de cercle. Le script dit `AUCUN ARC LU` ; il ne
+  les invente pas ;
+- **une porte-fenêtre à deux vantaux** n'a qu'un arc complet : le second est
+  tronqué à 37,7°. Le script le rapporte comme **arc partiel** et ne compte que le
+  vantail entier, donc 0,583 m au lieu de 1,20 m ;
+- **trois portes du plan A et trois du plan B ont la charnière de l'autre côté**
+  de l'ouverture par rapport au champ `hinge` écrit à la main. L'ouverture, elle,
+  est au bon endroit : c'est le côté du pivot qui est faux ;
+- **deux murs du projet sont décalés** et emportent leur porte : `entree-fond`
+  (plan B, RDC) de 0,51 m et le mur nord du WC des combles de 0,76 m. La position
+  le long du mur est juste à 2 cm ; c'est le mur qui n'est pas là où le projet le
+  dit. Le rapport sépare les deux, parce que corriger la porte ne corrigerait pas
+  le mur ;
+- **deux portes sont à plus de 5 cm** : `porte-ch2` du plan A (+0,72 m, la cloison
+  `ch2-nord` du projet est décalée de 0,44 m et trop longue de 0,57 m) et
+  `wc-ouest-door-1` du plan B (−0,76 m, l'ouverture est écrite du mauvais côté de
+  la charnière).
+
+**Ce que le script ne décide pas.** Le sens de débattement est rendu comme un
+**vecteur**, pas comme un signe : le champ `swing` du projet est une direction de
+rotation dans le repère local du mur, et les deux ne se comparent pas sans le
+code du viewer. Le côté de la pièce reste une interprétation à confirmer sur
+place, et le projet doit le dire.
+
+**Le cadre, et son refus.** `--registry` déduit l'origine et l'échelle des
+chaînes refermées, avec la règle de `derive_outline.py`. La page des combles du
+plan B n'a **aucune chaîne verticale refermée** : le script refuse et demande
+`--origin`, plutôt que de deviner un axe. Sur cette page l'origine en z vient de
+l'emprise dessinée (les deux façades à 8,50 m l'une de l'autre), et c'est écrit
+comme une mesure, pas comme une déduction.
+
 ### 1. Extraction
 
 `scripts/extract_plan_evidence.py` transforme un PDF en registre déterministe :
@@ -639,20 +719,20 @@ visite. Chaque baie est donc placée sur l'arête dont l'intervalle la contient,
 à distance égale la plus proche du côté mesuré — le renfoncement d'entrée est à
 0,35 m du nu de façade, une tolérance ne le distinguerait pas.
 
-Deux limites mesurées sur de vrais plans : **les portes intérieures ne sont pas
-extractibles** — elles sont dessinées en polylignes, pas en arcs, et leurs
-libellés sont du texte vectorisé, donc ni l'arc ni le texte ne se lisent ; et une
-façade dont les baies ne sont que des cotes isolées (pas une chaîne fermée) ne
-donne aucune baie. Les deux se rapportent comme manquantes, jamais inventées.
+Deux limites mesurées sur de vrais plans : **une façade dont les baies ne sont
+que des cotes isolées** (pas une chaîne fermée) ne donne aucune baie, et **une
+porte intérieure sans arc de débattement** ne se lit pas par le symbole. Les deux
+se rapportent comme manquantes, jamais inventées.
 
-Les portes intérieures se lisent donc **à l'encre**, mur par mur, et c'est l'IA
-qui les pose : le propriétaire accepte qu'elles soient approchées, à condition
-que les murs soient justes. La méthode qui marche : balayer l'axe du mur tous les
-centimètres et relever les plages sans encre d'au moins 30 cm. Un balayage sur
-une seule ligne ne suffit pas — une cloison de 7 cm fait deux pixels, et la
-hachure d'un mur épais donne des trous qui n'en sont pas. Trois droites dans
-l'épaisseur (les deux faces et l'axe), et on retient la plage où **aucune** n'a
-d'encre.
+Les portes intérieures qui portent un arc se lisent par `extract_doors.py` (voir
+« Les portes intérieures, lues sur l'arc »). Celles qui n'en portent pas se lisent
+**à l'encre**, mur par mur, et c'est l'IA qui les pose : le propriétaire accepte
+qu'elles soient approchées, à condition que les murs soient justes. La méthode qui
+marche : balayer l'axe du mur tous les centimètres et relever les plages sans
+encre d'au moins 30 cm. Un balayage sur une seule ligne ne suffit pas — une
+cloison de 7 cm fait deux pixels, et la hachure d'un mur épais donne des trous qui
+n'en sont pas. Trois droites dans l'épaisseur (les deux faces et l'axe), et on
+retient la plage où **aucune** n'a d'encre.
 
 `--openings-only` garde les murs du modèle et n'ajoute que les baies des chaînes.
 C'est le mode d'une maison dont les murs sont déjà justes : il ne touche ni aux
