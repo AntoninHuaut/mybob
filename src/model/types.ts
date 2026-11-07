@@ -80,6 +80,20 @@ export interface RoofDormer {
    */
   slope?: number;
 }
+/**
+ * Fenêtre de toit posée sur un pan, sans volume de lucarne : le rendu ouvre le
+ * versant sur la baie et pose le châssis dans le plan du rampant. Sa position
+ * en profondeur se lit sur la coupe, pas sur le plan horizontal.
+ */
+export interface RoofWindow {
+  id: string;
+  /** Centre de la baie en plan (x, z) : un point du pan projeté au sol. */
+  center: Point2;
+  /** Largeur de la baie, horizontale, en mètres. */
+  width: number;
+  /** Hauteur de la baie mesurée dans le plan du pan, le long du rampant, en mètres. */
+  height: number;
+}
 export interface SiteRoof {
   id: string;
   /** Metres in the level coordinate system: x, height above level datum, z. */
@@ -90,6 +104,8 @@ export interface SiteRoof {
   gables?: number[][];
   /** Chiens-assis percés dans les pans de cette toiture. */
   dormers?: RoofDormer[];
+  /** Fenêtres de toit percées dans les pans de cette toiture. */
+  windows?: RoofWindow[];
 }
 export interface ProjectSite {
   /** Parcel in the same x/z coordinate system as the floor plan. */

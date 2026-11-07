@@ -15,7 +15,9 @@ import {
   bounds,
   pointInPolygon,
   resolveRoofDormer,
+  resolveRoofWindow,
   roofFaceHeightAt,
+  roofWindowPoint,
   wallLength,
   wallSections,
 } from '../model/geometry';
@@ -238,6 +240,24 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       roofMeshes.push(band);
     }
   }
+  // Les matériaux du châssis reprennent ceux des menuiseries du niveau
+  // (`src/scene/materials.ts`) et ne se créent qu'à la première fenêtre de toit.
+  let chasisMaterials: { glass: PBRMaterial; joinery: PBRMaterial } | undefined;
+  const roofWindowMaterials = () => {
+    if (chasisMaterials) return chasisMaterials;
+    const pane = material('roof-window-glass', '#bfd7d0');
+    pane.alpha = 0.18;
+    pane.roughness = 0.14;
+    pane.metallic = 0.12;
+    pane.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+    pane.backFaceCulling = false;
+    pane.twoSidedLighting = true;
+    const joinery = material('roof-window-joinery', project.finishes?.joineryColor ?? '#f3f2ec');
+    joinery.roughness = 0.42;
+    joinery.backFaceCulling = false;
+    joinery.twoSidedLighting = true;
+    return (chasisMaterials = { glass: pane, joinery });
+  };
   for (const r of site.roofs ?? []) {
     // Un chien-assis n'existe que si son emprise, son mur de fond et son pan se
     // rejoignent : tout vient du projet importé, aucune forme n'est propre à
@@ -303,6 +323,65 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
           ),
         );
       result.height = Math.max(result.height, frame.frontTop);
+    }
+    // Une fenêtre de toit vit sur le pan, pas sur un mur : le rendu ouvre le
+    // versant et pose le châssis dans le plan du rampant, à sa cote de la
+    // coupe — jamais à l'aplomb du chéneau.
+    for (const window of r.windows ?? []) {
+      const resolved = resolveRoofWindow(r.vertices, r.faces, window);
+      if (!resolved.frame) continue;
+      const { frame } = resolved;
+      const hole = holes.get(frame.faceIndex) ?? [];
+      hole.push(frame.corners);
+      holes.set(frame.faceIndex, hole);
+      // Le cadre, le vitrage et le meneau sont des rectangles du plan du pan :
+      // la largeur reste horizontale, la hauteur se mesure le long du rampant.
+      const ring = (halfAcross: number, halfUp: number, depth = 0) => [
+        roofWindowPoint(frame, -halfAcross, -halfUp, depth),
+        roofWindowPoint(frame, halfAcross, -halfUp, depth),
+        roofWindowPoint(frame, halfAcross, halfUp, depth),
+        roofWindowPoint(frame, -halfAcross, halfUp, depth),
+      ];
+      const { glass, joinery } = roofWindowMaterials();
+      // Le cadre garde 4,5 cm comme les menuiseries du niveau, sauf sur une
+      // baie étroite où il se réduit pour laisser un vitrage : jamais de
+      // quadrilatère nul, même à la taille minimale acceptée à l'import.
+      const profile = Math.min(0.045, window.width / 4, window.height / 4);
+      const chasis = (
+        part: string,
+        mat: PBRMaterial,
+        outline: [number, number, number][],
+        inner?: [number, number, number][],
+      ) => {
+        const mesh = add(
+          faceMesh(
+            `roof-window-${part}:${r.id}:${window.id}`,
+            outline,
+            outline.map((_, i) => i),
+            scene,
+            inner ? [inner] : [],
+          ),
+          mat,
+          'roof',
+        );
+        roofMeshes.push(mesh);
+        return mesh;
+      };
+      chasis(
+        'cadre',
+        joinery,
+        frame.corners,
+        ring(window.width / 2 - profile, window.height / 2 - profile),
+      );
+      // Le vitrage recule sous la couverture : le rampant le masque, et le
+      // châssis ne traverse jamais le pan.
+      const pane = chasis(
+        'vitrage',
+        glass,
+        ring(window.width / 2 - profile - 0.005, window.height / 2 - profile - 0.005, -0.006),
+      );
+      pane.receiveShadows = false;
+      chasis('meneau', joinery, ring(profile / 2, window.height / 2 - profile - 0.01));
     }
     for (const [i, face] of r.faces.entries())
       roofMeshes.push(

@@ -1,4 +1,13 @@
-import type { HouseProject, Level, Opening, Point2, ProjectSite, RoofDormer, Wall } from './types';
+import type {
+  HouseProject,
+  Level,
+  Opening,
+  Point2,
+  ProjectSite,
+  RoofDormer,
+  RoofWindow,
+  Wall,
+} from './types';
 
 export function polygonArea(points: Point2[]): number {
   return (
@@ -414,4 +423,165 @@ export function resolveRoofDormer(
     };
   }
   return { error: unplaced ?? `Aucun pan ne porte l'emprise de la lucarne ${dormer.id}.` };
+}
+
+/** Piercing frame of a resolved roof window, in the level plan coordinates. */
+export interface RoofWindowFrame {
+  /** Index of the pierced face within the roof. */
+  faceIndex: number;
+  /** The four corners of the baie, lying on the pan, in ring order. */
+  corners: [number, number, number][];
+  /** Centre of the baie, on the pan plane. */
+  center: [number, number, number];
+  /** Unit normal of the pan, pointing above the roofing (y positive). */
+  normal: [number, number, number];
+  /** Unit direction up the versant, in the pan plane. */
+  up: [number, number, number];
+  /** Unit direction across the versant, horizontal, in the pan plane. */
+  across: [number, number, number];
+}
+
+export type RoofWindowResolution =
+  { frame: RoofWindowFrame; error?: undefined } | { frame?: undefined; error: string };
+
+const ROOF_WINDOW_MIN_SIZE = 0.1;
+// A pan flatter than this is read as a wall: a baie would stand upright.
+const ROOF_WINDOW_MIN_NORMAL_Y = 0.05;
+// The châssis keeps this clearance from the pan edges: a baie laid on the eave
+// would hang over the gutter, and earcut cannot cut a ring on the boundary.
+const ROOF_WINDOW_EDGE_MARGIN = 0.005;
+
+/**
+ * A point of the pan plane, `across` and `up` metres from the centre of the
+ * baie, `depth` metres along the normal — negative sinks under the covering.
+ * The renderer builds the frame, the glazing and the mullion from this alone,
+ * so no second copy of the slope arithmetic can drift from the resolution.
+ */
+export function roofWindowPoint(
+  frame: Omit<RoofWindowFrame, 'corners'>,
+  across: number,
+  up: number,
+  depth = 0,
+): [number, number, number] {
+  return [
+    frame.center[0] + frame.across[0] * across + frame.up[0] * up + frame.normal[0] * depth,
+    frame.center[1] + frame.across[1] * across + frame.up[1] * up + frame.normal[1] * depth,
+    frame.center[2] + frame.across[2] * across + frame.up[2] * up + frame.normal[2] * depth,
+  ];
+}
+
+/**
+ * Resolve the piercing frame of a roof window from the roof data alone: the
+ * plan centre, the width across the versant and the height measured along the
+ * ramp. Shared by the import validation and the exterior renderer, like the
+ * lucarnes: a fenêtre acceptée à l'import est une fenêtre que le rendu peut
+ * poser dans le plan du rampant.
+ */
+export function resolveRoofWindow(
+  vertices: [number, number, number][],
+  faces: number[][],
+  window: RoofWindow,
+): RoofWindowResolution {
+  const id = window.id;
+  if (
+    !Number.isFinite(window.width) ||
+    !Number.isFinite(window.height) ||
+    !isFinitePoint(window.center)
+  )
+    return { error: `La fenêtre de toit ${id} doit avoir une position et des dimensions valides.` };
+  if (window.width < ROOF_WINDOW_MIN_SIZE || window.height < ROOF_WINDOW_MIN_SIZE)
+    return {
+      error: `Une fenêtre de toit doit mesurer au moins 10 cm de large et de haut pour les profils du modèle : ${id}`,
+    };
+  let unplaced: string | undefined;
+  let overflow: string | undefined;
+  for (const [faceIndex, face] of faces.entries()) {
+    const normal = roofFaceNormal(vertices, face);
+    if (normal.every((component) => component === 0)) continue;
+    const outline = roofFacePlanOutline(vertices, face);
+    if (!pointInOrOnPolygon(window.center, outline)) continue;
+    const upward: [number, number, number] =
+      normal[1] < 0 ? [-normal[0], -normal[1], -normal[2]] : [normal[0], normal[1], normal[2]];
+    if (upward[1] < ROOF_WINDOW_MIN_NORMAL_Y) {
+      unplaced = unplaced ?? `La fenêtre de toit ${id} tombe sur un pan vertical de la toiture.`;
+      continue;
+    }
+    const horizontal = Math.hypot(upward[0], upward[2]);
+    if (horizontal < 1e-6)
+      return {
+        error: `La fenêtre de toit ${id} tombe sur un pan horizontal de la toiture : le châssis ne peut pas s'y poser.`,
+      };
+    const centerY = roofFaceHeightAt(vertices, face, window.center[0], window.center[1]);
+    if (!Number.isFinite(centerY)) {
+      unplaced = unplaced ?? `La fenêtre de toit ${id} tombe sur un pan vertical de la toiture.`;
+      continue;
+    }
+    // Basis of the pan: `up` climbs the versant, `across` stays horizontal, so
+    // the printed width is read across the slope and the height along it.
+    const up: [number, number, number] = [
+      (-upward[1] * upward[0]) / horizontal,
+      horizontal,
+      (-upward[1] * upward[2]) / horizontal,
+    ];
+    const across: [number, number, number] = [-upward[2] / horizontal, 0, upward[0] / horizontal];
+    const frame = {
+      faceIndex,
+      center: [window.center[0], centerY, window.center[1]] as [number, number, number],
+      normal: upward,
+      up,
+      across,
+    } satisfies Omit<RoofWindowFrame, 'corners'>;
+    const halfAcross = window.width / 2,
+      halfUp = window.height / 2;
+    const corners: [number, number, number][] = [
+      roofWindowPoint(frame, -halfAcross, -halfUp),
+      roofWindowPoint(frame, halfAcross, -halfUp),
+      roofWindowPoint(frame, halfAcross, halfUp),
+      roofWindowPoint(frame, -halfAcross, halfUp),
+    ];
+    const plan = corners.map((corner) => [corner[0], corner[2]] as Point2);
+    if (
+      !polygonInsidePolygon(plan, outline) ||
+      plan.some((corner) => distanceToPolygonBoundary(corner, outline) < ROOF_WINDOW_EDGE_MARGIN)
+    ) {
+      overflow = `La fenêtre de toit ${id} déborde du pan qui la porte : son châssis doit rester à ${ROOF_WINDOW_EDGE_MARGIN * 1000} mm des arêtes.`;
+      continue;
+    }
+    return { frame: { ...frame, corners } };
+  }
+  return { error: overflow ?? unplaced ?? `Aucun pan ne porte la fenêtre de toit ${id}.` };
+}
+
+/** Distance from a plan point to the closest edge of a plan polygon. */
+function distanceToPolygonBoundary(point: Point2, polygon: Point2[]): number {
+  let closest = Number.POSITIVE_INFINITY;
+  for (let i = 0; i < polygon.length; i++) {
+    const a = polygon[i],
+      b = polygon[(i + 1) % polygon.length];
+    const edge: Point2 = [b[0] - a[0], b[1] - a[1]];
+    const lengthSquared = edge[0] * edge[0] + edge[1] * edge[1];
+    const along =
+      lengthSquared < 1e-12
+        ? 0
+        : Math.max(
+            0,
+            Math.min(
+              1,
+              ((point[0] - a[0]) * edge[0] + (point[1] - a[1]) * edge[1]) / lengthSquared,
+            ),
+          );
+    closest = Math.min(
+      closest,
+      Math.hypot(point[0] - a[0] - along * edge[0], point[1] - a[1] - along * edge[1]),
+    );
+  }
+  return closest;
+}
+
+function isFinitePoint(point: Point2): boolean {
+  return (
+    Array.isArray(point) &&
+    point.length === 2 &&
+    point.every((component) => Number.isFinite(component))
+  );
 }
