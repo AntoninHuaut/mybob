@@ -16,7 +16,8 @@ import type { HouseProject, Level, Point2, Wall } from '../src/model/types';
 const EPS = 1e-9;
 const TOUCH = 0.02; // m, endpoints closer than this are considered joined
 const NEAR_GAP = 0.3; // m, endpoints this close but not joined are suspicious
-const GRID = 0.1; // m, connectivity grid
+const GRID = 0.1; // m, connectivity grid, plafonnée par la cloison la plus fine
+const GRID_SAFETY = 2; // une cellule doit rester plus petite que la demi-épaisseur
 const MAX_CELLS = 400_000;
 const cross = (a: Point2, b: Point2, c: Point2) =>
   (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
@@ -146,7 +147,11 @@ interface Grid {
   passable: Uint8Array;
 }
 
-function buildGrid(level: Level, solids: Point2[][], cell = GRID): Grid {
+function buildGrid(level: Level, solids: Point2[][], cell?: number): Grid {
+  // Une cellule plus large que la cloison la plus fine peut sauter par-dessus :
+  // son centre tombe de part et d'autre du mur et le remplissage passe au travers.
+  const thinnest = Math.min(...level.walls.map((wall) => wall.thickness));
+  cell = Math.min(cell ?? GRID, thinnest / GRID_SAFETY);
   const xs = level.outline.map((p) => p[0]),
     zs = level.outline.map((p) => p[1]);
   const x0 = Math.min(...xs),
