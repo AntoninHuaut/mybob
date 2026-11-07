@@ -2,6 +2,7 @@ import './style.css';
 import { SolarPanel } from './ui/solarPanel';
 import { appTemplate } from './ui/appTemplate';
 import { fullHelpHtml, shortHelpHtml } from './ui/firstSteps';
+import { sourceDialogHtml } from './ui/sourcePanel';
 import {
   ONBOARDING_STORAGE,
   parseOnboarding,
@@ -1414,11 +1415,7 @@ function wireViewportControls() {
   });
   el('#close-start-card').addEventListener('click', dismissStartCard);
   el('#source-info').addEventListener('click', () => {
-    const rooms = viewer.level.rooms;
-    openDialog(
-      'PLANS & PRÉCISION',
-      `<h2>Les dimensions d’abord.</h2><p class="source-title">${esc(current.source.title)}${current.source.date ? ` · ${esc(current.source.date)}` : ''}</p><span class="status-pill">${esc(current.source.status)}</span><ul class="source-notes">${current.source.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>${current.site ? `<h3>Terrain et extérieur</h3><ul class="source-notes">${current.site.notes.map((n) => `<li>${esc(n)}</li>`).join('')}</ul>` : ''}<h3>Surfaces : plan et reconstruction</h3><p>Les surfaces calculées concernent les contours de pièces enregistrés. Elles permettent de repérer les écarts ; elles ne constituent pas un relevé sur chantier.</p><table class="area-table"><thead><tr><th>Pièce</th><th>Au plan</th><th>Reconstruite</th></tr></thead><tbody>${rooms.map((r) => `<tr${r.planArea && Math.abs(r.planArea - polygonArea(r.polygon)) > 0.1 ? ' class="area-warning"' : ''}><td>${esc(r.name)}</td><td>${r.planArea === undefined ? '—' : area(r.planArea)}</td><td>${area(polygonArea(r.polygon))}</td></tr>`).join('')}</tbody></table>`,
-    );
+    openDialog('PLANS & PRÉCISION', sourceDialogHtml(current, viewer.level.rooms));
   });
   const dialog = el<HTMLDialogElement>('#info-dialog');
   el('#close-dialog').addEventListener('click', () => dialog.close());
