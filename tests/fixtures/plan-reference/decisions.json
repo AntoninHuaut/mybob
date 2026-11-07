@@ -4,6 +4,29 @@
   "level": "rdc",
   "registry": "tests/fixtures/plan-reference/registry.json",
   "pages": [1],
+  "envelopes": [
+    {
+      "page": 1,
+      "axis": "horizontal",
+      "perpendicular": 50.0,
+      "base": 0,
+      "sign": 1
+    },
+    {
+      "page": 1,
+      "axis": "horizontal",
+      "perpendicular": 350.0,
+      "base": 0,
+      "sign": 1
+    },
+    {
+      "page": 1,
+      "axis": "vertical",
+      "perpendicular": 50.0,
+      "base": 0,
+      "sign": 1
+    }
+  ],
   "faces": [
     {
       "id": "nord",
@@ -22,6 +45,7 @@
         "length": 6.0,
         "startOffset": 0.0,
         "endOffset": 0.0,
+        "anchor": "openings",
         "note": "cote imprimée 6.000 m = segments 0..4 (6.000 m) de la chaîne ; origine du mur 0.000 m sur la chaîne",
         "wallOrigin": 0.0
       },
@@ -44,6 +68,7 @@
         "length": 6.0,
         "startOffset": 0.0,
         "endOffset": 0.0,
+        "anchor": "openings",
         "note": "cote imprimée 6.000 m = segments 0..3 (6.000 m) de la chaîne ; origine du mur 0.000 m sur la chaîne",
         "wallOrigin": 0.0
       },
@@ -66,6 +91,7 @@
         "length": 4.0,
         "startOffset": -0.1,
         "endOffset": 0.1,
+        "anchor": "openings",
         "note": "cote imprimée 4.000 m = segments 0..2 (4.000 m) de la chaîne ; décalages -0.100/+0.100 m d'épaisseurs déclarées → axe 3.800 m ; origine du mur 0.100 m sur la chaîne",
         "wallOrigin": 0.1
       },
@@ -88,7 +114,8 @@
         "length": 4,
         "startOffset": -0.1,
         "endOffset": 0.1,
-        "note": "cote imprimée 4.000 m = segments 0..2 (4.000 m) de la chaîne ; décalages -0.100/+0.100 m d'épaisseurs déclarées → axe 3.800 m"
+        "anchor": "envelope",
+        "note": "cote imprimée 4.000 m = segments 0..2 (4.000 m) de la chaîne ; chaîne calée sur l'emprise du niveau ; décalages -0.100/+0.100 m d'épaisseurs déclarées → axe 3.800 m"
       },
       "unresolved": false
     },
@@ -109,6 +136,7 @@
         "length": 3.6,
         "startOffset": 0.0,
         "endOffset": 0.0,
+        "anchor": "openings",
         "note": "cote imprimée 3.600 m = segments 0..3 (3.600 m) de la chaîne ; chaîne ouverte, preuve partielle ; origine du mur 0.000 m sur la chaîne",
         "wallOrigin": 0.0
       },
@@ -131,8 +159,8 @@
         "printedWidth": 1.2,
         "printedHeight": 2.1,
         "convention": "both",
-        "note": "cote imprimée 1.20/2.10 m (convention : both) ; position vérifiée sur la suite du mur",
-        "wallOrigin": 0.0
+        "anchor": "envelope",
+        "note": "cote imprimée 1.20/2.10 m, position absolue sur une chaîne calée sur l'emprise"
       },
       "unresolved": false
     },
@@ -151,8 +179,8 @@
         "printedWidth": 0.8,
         "printedHeight": 1.0,
         "convention": "both",
-        "note": "cote imprimée 0.80/1.00 m (convention : both) ; position vérifiée sur la suite du mur",
-        "wallOrigin": 0.0
+        "anchor": "envelope",
+        "note": "cote imprimée 0.80/1.00 m, position absolue sur une chaîne calée sur l'emprise"
       },
       "unresolved": false
     },
@@ -171,8 +199,8 @@
         "printedWidth": 0.9,
         "printedHeight": 2.1,
         "convention": "both",
-        "note": "cote imprimée 0.90/2.10 m (convention : both) ; position vérifiée sur la suite du mur",
-        "wallOrigin": 0.0
+        "anchor": "envelope",
+        "note": "cote imprimée 0.90/2.10 m, position absolue sur une chaîne calée sur l'emprise"
       },
       "unresolved": false
     },
@@ -191,8 +219,8 @@
         "printedWidth": 1.0,
         "printedHeight": 1.0,
         "convention": "both",
-        "note": "cote imprimée 1.00/1.00 m (convention : both) ; position vérifiée sur la suite du mur",
-        "wallOrigin": 0.1
+        "anchor": "envelope",
+        "note": "cote imprimée 1.00/1.00 m, position absolue sur une chaîne calée sur l'emprise"
       },
       "unresolved": false
     },
@@ -211,6 +239,7 @@
         "printedWidth": 0.8,
         "printedHeight": 2.1,
         "convention": "both",
+        "anchor": "openings",
         "note": "cote imprimée 0.80/2.10 m (convention : both) ; position vérifiée sur la suite du mur",
         "wallOrigin": 0.0
       },

@@ -113,6 +113,184 @@ def chain_ref(chain):
     return {"page": chain["page"], "axis": chain["axis"], "perpendicular": chain["perpendicular"]}
 
 
+def outline_bounds(outline, axis):
+    """Bord bas et étendue du contour du niveau le long d'un axe."""
+    along = 0 if axis == "horizontal" else 1
+    values = [point[along] for point in outline]
+    return round(min(values), 4), round(max(values) - min(values), 4)
+
+
+def chain_cumulative(chain):
+    cumulative = [0.0]
+    for segment in chain["segments"]:
+        cumulative.append(cumulative[-1] + segment["value"])
+    return cumulative
+
+
+def run_interval(chain, start, end, base, sign):
+    """Intervalle monde d'une suite, une fois la chaîne calée sur le contour."""
+    cumulative = chain_cumulative(chain)
+    first = base + sign * cumulative[start]
+    last = base + sign * cumulative[end + 1]
+    return (min(first, last), max(first, last))
+
+
+def face_span(wall, start_offset, end_offset):
+    """Étendue monde des faces finies d'un mur, le long de son axe."""
+    axis, along, low, high = oriented_span(wall)
+    return (low[along] + start_offset, high[along] + end_offset)
+
+
+def opening_span(opening, wall):
+    """Étendue monde d'une baie, le long de l'axe de son mur."""
+    _, along, low, _ = oriented_span(wall)
+    return (low[along] + opening["offset"], low[along] + opening["offset"] + opening["width"])
+
+
+def model_boundaries(walls, axis):
+    """Repères du modèle le long d'un axe : abouts de murs et tableaux de baies."""
+    along = 0 if axis == "horizontal" else 1
+    points = []
+    for wall in walls:
+        if wall_axis(wall) != axis:
+            continue
+        _, _, low, high = oriented_span(wall)
+        points.extend([low[along], high[along]])
+        for opening in wall.get("openings", []):
+            points.extend(opening_span(opening, wall))
+    return points
+
+
+def envelope_orientations(chains, outline, walls):
+    """Chaînes refermées qui portent l'emprise, calées sur le bord du contour.
+
+    Une chaîne dont la somme égale l'étendue du niveau le long de son axe couvre
+    exactement cette étendue : son origine est donc un bord du contour, et ses
+    segments deviennent des coordonnées absolues. Le sens de lecture n'est pas
+    connu : on garde celui qui retrouve le plus de repères du modèle, et une
+    égalité ne tranche pas — la chaîne est alors écartée.
+    """
+    found = []
+    for axis in ("horizontal", "vertical"):
+        low, extent = outline_bounds(outline, axis)
+        boundaries = model_boundaries(walls, axis)
+        for chain in chains:
+            if chain["axis"] != axis or not chain["closed"]:
+                continue
+            if abs(chain["sum"] - extent) > TOL:
+                continue
+            cumulative = chain_cumulative(chain)
+            scores = []
+            for sign, base in ((1, low), (-1, low + extent)):
+                score = sum(
+                    1
+                    for value in cumulative
+                    if any(abs(base + sign * value - point) <= TOL for point in boundaries)
+                )
+                scores.append((score, sign, base))
+            scores.sort(key=lambda item: -item[0])
+            if scores[0][0] > scores[1][0]:
+                found.append({"chain": chain, "sign": scores[0][1], "base": scores[0][2]})
+    return found
+
+
+def envelope_frame(envelopes):
+    """Origines du repère de tracé, déduites des chaînes calées sur l'emprise.
+
+    Une chaîne calée donne la position absolue de ses segments le long de son
+    axe ; la position de sa ligne de cote, elle, se lit dans le repère de l'autre
+    axe. Les deux axes se fournissent donc mutuellement leur origine.
+    """
+    origins = {}
+    for envelope in envelopes:
+        chain = envelope["chain"]
+        along = 0 if chain["axis"] == "horizontal" else 1
+        ppm = chain["printedPointsPerMetre"]
+        first = chain["segments"][0]
+        start_pt = first["at"][along] - first["value"] / 2 * ppm
+        origins[along] = round(start_pt - envelope["base"] * ppm, 3)
+    return origins
+
+
+def chain_side(chain, origins):
+    """Côté du contour que mesure une chaîne, ou None si sa ligne n'est pas plaçable."""
+    along = 0 if chain["axis"] == "horizontal" else 1
+    origin = origins.get(1 - along)
+    if origin is None:
+        return None
+    ppm = chain["printedPointsPerMetre"]
+    return round((chain["perpendicular"] - origin) / ppm, 3)
+
+
+def touches_side(wall, side, outline):
+    """Le mur porte-t-il la face du contour que la chaîne mesure ?"""
+    axis = wall_axis(wall)
+    across = 1 if axis == "horizontal" else 0
+    values = [point[across] for point in outline]
+    low, high = min(values), max(values)
+    centre = wall["start"][across]
+    half = wall["thickness"] / 2
+    if side > high:
+        return abs(centre + half - high) <= TOL
+    if side < low:
+        return abs(centre - half - low) <= TOL
+    return False
+
+
+def positional_face_matches(wall, walls, envelopes, origins, outline):
+    """Suites d'une chaîne calée dont l'intervalle monde est celui des faces du mur."""
+    axis = wall_axis(wall)
+    candidates = candidate_lengths(wall, walls)
+    found = []
+    for envelope in envelopes:
+        chain = envelope["chain"]
+        if chain["axis"] != axis:
+            continue
+        side = chain_side(chain, origins)
+        if side is None or not touches_side(wall, side, outline):
+            continue
+        for start, end, total in contiguous_runs(chain):
+            for value, (start_offset, end_offset) in candidates.items():
+                if abs(total - value) > TOL:
+                    continue
+                span = face_span(wall, start_offset, end_offset)
+                interval = run_interval(chain, start, end, envelope["base"], envelope["sign"])
+                if abs(interval[0] - span[0]) <= TOL and abs(interval[1] - span[1]) <= TOL:
+                    found.append(
+                        {
+                            "chain": chain,
+                            "start": start,
+                            "end": end,
+                            "total": total,
+                            "length": value,
+                            "startOffset": start_offset,
+                            "endOffset": end_offset,
+                        }
+                    )
+    return found
+
+
+def positional_opening_matches(opening, wall, envelopes, origins, outline):
+    """Cotes de baie d'une chaîne calée dont l'intervalle monde est celui de la baie."""
+    axis = wall_axis(wall)
+    span = opening_span(opening, wall)
+    found = []
+    for envelope in envelopes:
+        chain = envelope["chain"]
+        if chain["axis"] != axis:
+            continue
+        side = chain_side(chain, origins)
+        if side is None or not touches_side(wall, side, outline):
+            continue
+        for index, segment in enumerate(chain["segments"]):
+            if segment["kind"] != "opening":
+                continue
+            interval = run_interval(chain, index, index, envelope["base"], envelope["sign"])
+            if abs(interval[0] - span[0]) <= TOL and abs(interval[1] - span[1]) <= TOL:
+                found.append({"chain": chain, "index": index, "segment": segment})
+    return found
+
+
 def length_matches(chains, wall, walls):
     """Suites imprimées qui reproduisent une longueur entre faces du mur."""
     axis = wall_axis(wall)
@@ -235,7 +413,7 @@ def envelope_match(wall, chains, outline):
     }
 
 
-def face_decision(wall, walls, chains, outline):
+def face_decision(wall, walls, chains, outline, envelopes, origins):
     length = wall_length(wall)
     axis = wall_axis(wall)
     matches = length_matches(chains, wall, walls)
@@ -245,10 +423,19 @@ def face_decision(wall, walls, chains, outline):
         if origin is not None:
             anchored.append((match, origin))
 
-    match, origin = (anchored[0] if len(anchored) == 1 else (None, None))
+    if len(anchored) == 1:
+        match, origin = anchored[0]
+        anchor = "openings"
+    else:
+        match, origin, anchor = None, None, None
+    if match is None:
+        positioned = positional_face_matches(wall, walls, envelopes, origins, outline)
+        if len(positioned) == 1:
+            match, origin, anchor = positioned[0], None, "envelope"
     if match is None:
         match = envelope_match(wall, chains, outline)
         origin = None
+        anchor = "envelope" if match is not None else None
 
     if match is not None:
         chain = match["chain"]
@@ -265,11 +452,14 @@ def face_decision(wall, walls, chains, outline):
             "length": round(match["length"], 4),
             "startOffset": match["startOffset"],
             "endOffset": match["endOffset"],
+            "anchor": anchor,
             "note": (
                 f"cote imprimée {match['length']:.3f} m = segments {match['start']}..{match['end']} "
                 f"({match['total']:.3f} m) de la chaîne"
             ),
         }
+        if anchor == "envelope":
+            evidence["note"] += " ; chaîne calée sur l'emprise du niveau"
         if not exact:
             evidence["note"] += (
                 f" ; décalages {match['startOffset']:+.3f}/{match['endOffset']:+.3f} m "
@@ -333,7 +523,7 @@ def opening_candidates(opening, wall, chains):
     return found
 
 
-def opening_decision(opening, wall, chains, face):
+def opening_decision(opening, wall, chains, face, envelopes, origins, outline):
     candidates = opening_candidates(opening, wall, chains)
     # Une cote qui donne largeur et hauteur est une meilleure preuve qu'une cote
     # qui n'en donne qu'une : la convention partielle ne sert qu'à défaut.
@@ -361,6 +551,38 @@ def opening_decision(opening, wall, chains, face):
         )
         return cumulative if abs(cumulative - (face_origin + opening["offset"])) <= TOL else None
 
+    # Une chaîne calée sur l'emprise donne la position absolue de la baie : c'est
+    # une preuve plus forte que la seule concordance de largeur et de hauteur.
+    placed_by_envelope = positional_opening_matches(opening, wall, envelopes, origins, outline)
+    if len(placed_by_envelope) == 1:
+        candidate = placed_by_envelope[0]
+        chain = candidate["chain"]
+        parsed = OPENING_TEXT.match(candidate["segment"]["text"])
+        width, height = metres(parsed.group(1)), metres(parsed.group(2))
+        width_ok = abs(width - opening["width"]) <= TOL
+        height_ok = abs(height - opening["height"]) <= TOL
+        if width_ok or height_ok:
+            cumulative = sum(item["value"] for item in chain["segments"][: candidate["index"]])
+            return {
+                "id": opening["id"],
+                "wall": wall["id"],
+                "evidence": {
+                    "class": "printed",
+                    "chain": chain_ref(chain),
+                    "segmentIndex": candidate["index"],
+                    "cumulativeOffset": round(cumulative, 4),
+                    "printedWidth": width,
+                    "printedHeight": height,
+                    "convention": "both" if width_ok and height_ok else ("width" if width_ok else "height"),
+                    "anchor": "envelope",
+                    "note": (
+                        f"cote imprimée {width:.2f}/{height:.2f} m, position absolue "
+                        "sur une chaîne calée sur l'emprise"
+                    ),
+                },
+                "unresolved": False,
+            }
+
     if len(candidates) > 1:
         placed = [candidate for candidate in candidates if positioned(candidate) is not None]
         if len(placed) == 1:
@@ -378,6 +600,7 @@ def opening_decision(opening, wall, chains, face):
             "printedWidth": candidate["width"],
             "printedHeight": candidate["height"],
             "convention": candidate["convention"],
+            "anchor": "openings",
             "note": (
                 f"cote imprimée {candidate['width']:.2f}/{candidate['height']:.2f} m "
                 f"(convention : {candidate['convention']})"
@@ -416,10 +639,15 @@ def build_decisions(project, registry, level_id, registry_path, pages=None):
         raise SystemExit(f"aucune page {pages} dans le registre")
     chains = [chain for page in selected for chain in page["chains"]]
     walls = level["walls"]
-    faces = [face_decision(wall, walls, chains, level["outline"]) for wall in walls]
+    envelopes = envelope_orientations(chains, level["outline"], walls)
+    origins = envelope_frame(envelopes)
+    faces = [
+        face_decision(wall, walls, chains, level["outline"], envelopes, origins)
+        for wall in walls
+    ]
     by_wall = {decision["wall"]: decision for decision in faces}
     openings = [
-        opening_decision(opening, wall, chains, by_wall[wall["id"]])
+        opening_decision(opening, wall, chains, by_wall[wall["id"]], envelopes, origins, level["outline"])
         for wall in walls
         for opening in wall.get("openings", [])
     ]
@@ -429,6 +657,16 @@ def build_decisions(project, registry, level_id, registry_path, pages=None):
         "level": level_id,
         "registry": registry_path.replace("\\", "/"),
         "pages": sorted(page["index"] for page in selected),
+        "envelopes": [
+            {
+                "page": envelope["chain"]["page"],
+                "axis": envelope["chain"]["axis"],
+                "perpendicular": envelope["chain"]["perpendicular"],
+                "base": envelope["base"],
+                "sign": envelope["sign"],
+            }
+            for envelope in envelopes
+        ],
         "faces": faces,
         "openings": openings,
     }

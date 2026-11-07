@@ -55,3 +55,20 @@ test('la porte refuse une preuve empruntée à la page d’un autre niveau', () 
   assert.equal(report.ready, false);
   assert.ok(report.errors.some((error) => error.includes('hors des pages du niveau')));
 });
+
+test('la porte refuse une chaîne calée dont l’origine ne tombe plus sur les faces', () => {
+  const shifted: DecisionsFile = JSON.parse(JSON.stringify(decisions));
+  assert.ok(shifted.envelopes && shifted.envelopes.length > 0);
+  shifted.envelopes[0].base += 0.5;
+  const report = checkDecisions(shifted, registry, project);
+  assert.equal(report.ready, false);
+  assert.ok(report.errors.some((error) => error.includes('intervalle imprimé')));
+});
+
+test('la porte refuse une preuve d’emprise sans chaîne calée déclarée', () => {
+  const bare: DecisionsFile = JSON.parse(JSON.stringify(decisions));
+  bare.envelopes = [];
+  const report = checkDecisions(bare, registry, project);
+  assert.equal(report.ready, false);
+  assert.ok(report.errors.some((error) => error.includes('sans chaîne calée déclarée')));
+});
