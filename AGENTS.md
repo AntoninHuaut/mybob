@@ -1,6 +1,6 @@
 # Mybob / Maison — agent instructions
 
-Read the local passation journal `docs/HANDOFF.md` first (git-ignored: present on the owner's clone, never committed), then the relevant technical docs. For maintenance and releases, follow [.agents/skills/mybob-maintenance/SKILL.md](.agents/skills/mybob-maintenance/SKILL.md). These files replace reliance on any previous chat context.
+Read the local passation journal `docs/HANDOFF.md` first (git-ignored: present on the owner's clone, never committed), then the relevant technical docs. For maintenance and releases, follow [.agents/skills/mybob-maintenance/SKILL.md](.agents/skills/mybob-maintenance/SKILL.md). To reconstruct a plan from an architectural PDF, follow [.agents/skills/mybob-plan-conversion/SKILL.md](.agents/skills/mybob-plan-conversion/SKILL.md). These files replace reliance on any previous chat context.
 
 ## Product and privacy
 

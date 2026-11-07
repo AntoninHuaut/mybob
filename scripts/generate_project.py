@@ -250,6 +250,101 @@ def apply_overrides(walls, overrides):
                     opening[key] = opening_patch[key]
 
 
+def split_exterior(walls, registry, pages, frame, outline, tolerance=0.15):
+    """Découpe un mur extérieur là où une cloison le rencontre.
+
+    Une façade n'a pas une épaisseur : sur Émiéville le nord fait 22 cm côté
+    garage et 34 cm côté chambres. Prendre une seule cote pour toute l'arête
+    fait grandir les pièces — 0,65 m² sur chambre-3. On coupe aux jonctions, puis
+    chaque tronçon reprend la cote qui le longe.
+
+    Les baies suivent : chacune est reportée sur le tronçon qui la contient, par
+    son intervalle monde, jamais par un offset recopié.
+    """
+    exterior = [wall for wall in walls if wall.get("exterior")]
+    others = [wall for wall in walls if not wall.get("exterior")]
+    result = [wall for wall in walls if not wall.get("exterior")]
+    for wall in exterior:
+        along_x = abs(wall["start"][0] - wall["end"][0]) >= abs(
+            wall["start"][1] - wall["end"][1]
+        )
+        along, across = (0, 1) if along_x else (1, 0)
+        axis = wall["start"][across]
+        low, high = sorted((wall["start"][along], wall["end"][along]))
+        # La face extérieure est celle qui tombe sur le contour : c'est elle qui
+        # reste fixe quand l'épaisseur change, pas l'axe.
+        outline_values = {round(point[across], 4) for point in outline}
+        half = wall["thickness"] / 2
+        if round(axis - half, 4) in outline_values:
+            outer, sign = axis - half, 1
+        elif round(axis + half, 4) in outline_values:
+            outer, sign = axis + half, -1
+        else:
+            outer, sign = axis - half, 1
+        cuts = {round(low, 4), round(high, 4)}
+        for other in others:
+            for point in (other["start"], other["end"]):
+                if abs(point[across] - axis) > tolerance:
+                    continue
+                if low - tolerance <= point[along] <= high + tolerance:
+                    cuts.add(round(min(max(point[along], low), high), 4))
+        ordered = sorted(cuts)
+        forward = wall["end"][along] >= wall["start"][along]
+        segments = []
+        for index in range(len(ordered) - 1):
+            start, end = ordered[index], ordered[index + 1]
+            if end - start < 0.05:
+                continue
+            # Le premier tronçon garde l'identifiant du mur : une surcharge qui
+            # visait ce mur continue de le viser.
+            segment = {
+                "id": wall["id"] if index == 0 else f"{wall['id']}-{index + 1}",
+                "start": [0.0, 0.0],
+                "end": [0.0, 0.0],
+                "exterior": True,
+                "openings": [],
+            }
+            # Le sens du mur d'origine est conservé : les offsets de baies et le
+            # sens d'ouverture des portes en dépendent.
+            if forward:
+                segment["start"][along], segment["end"][along] = start, end
+            else:
+                segment["start"][along], segment["end"][along] = end, start
+            segment["start"][across] = segment["end"][across] = axis
+            edge = {
+                "axis": "horizontal" if along_x else "vertical",
+                "start": segment["start"],
+                "end": segment["end"],
+            }
+            measured = printed_thickness(registry, pages, edge, frame)
+            segment["thickness"] = wall["thickness"] if measured is None else measured
+            segment["start"][across] = segment["end"][across] = round(
+                outer + sign * segment["thickness"] / 2, 4
+            )
+            segments.append(segment)
+        for opening in wall.get("openings") or []:
+            if forward:
+                world_low = low + opening["offset"]
+            else:
+                world_low = high - opening["offset"] - opening["width"]
+            world_high = world_low + opening["width"]
+            for segment in segments:
+                seg_low, seg_high = sorted(
+                    (segment["start"][along], segment["end"][along])
+                )
+                if world_low < seg_low - 1e-6 or world_high > seg_high + 1e-6:
+                    continue
+                copy = json.loads(json.dumps(opening))
+                copy["offset"] = round(
+                    world_low - seg_low if forward else seg_high - world_high, 4
+                )
+                copy["id"] = f"{segment['id']}-o{len(segment['openings']) + 1}"
+                segment["openings"].append(copy)
+                break
+        result.extend(segments)
+    return result
+
+
 def merge_partitions(model_walls, partitions, tolerance=0.15, thickness_gap=0.03):
     """Remplace les cloisons du modèle par celles lues sur le dessin.
 
@@ -576,6 +671,7 @@ def build(
                     "openings": [],
                 }
             )
+        walls = split_exterior(walls, registry, pages, frame, outline)
 
     result = json.loads(json.dumps(template))
     target = next(candidate for candidate in result["levels"] if candidate["id"] == level_id)

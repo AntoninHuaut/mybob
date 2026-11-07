@@ -85,20 +85,27 @@ auto-test synthétique est un filet de régression, pas une validation.
 ```sh
 # 1. Lire le document.
 uvx --from pymupdf python scripts/extract_plan_evidence.py plan.pdf registry.json --pages 8
-uvx --from pymupdf python scripts/extract_plan.py plan.pdf plan.json     --scale 37.795 --envelope x0,y0,x1,y1
+uvx --from pymupdf python scripts/extract_plan.py plan.pdf plan.json \
+    --scale 37.795 --envelope x0,y0,x1,y1
 
-# 2. Décider, puis construire.
+# 2. Construire : murs extérieurs, cloisons, baies, épaisseurs lues au plan.
 python scripts/generate_project.py plan.json registry.json modele.json rdc out.json --pages 8
 
 # 3. Juger le résultat, pas le dessin.
 python scripts/check_plan_surfaces.py registry.json out.json --level rdc --page 8
 python scripts/plan_faces.py out.json --level rdc --compare
 node --import tsx scripts/audit-plan.ts out.json
+
+# 4. Recalculer les pièces fermées depuis les murs, et réécrire le projet.
+python scripts/plan_faces.py out.json --level rdc --apply --write out.json
 ```
 
 La troisième étape est celle qui compte. Tant qu'une pièce est hors tolérance,
 le plan n'est pas fini — sauf si l'écart est documenté comme une incohérence du
 plan lui-même, ce qui est un résultat, pas un échec.
+
+La quatrième supprime les retours de cloison qui dépassaient dans une pièce :
+sur Émiéville, l'audit passe de huit réserves à une.
 
 Quand un vrai plan révèle un motif que les fixtures ne couvrent pas, ajouter le
 motif à la fixture **et** la ligne dans ce fichier. Une fixture qui ne vient pas
@@ -376,6 +383,18 @@ cote en centimètres posée contre lui (22, 34, 15), l'**allège** sur la cote
 combien de murs il a lus et lesquels gardent une valeur de repli. Sur Émiéville :
 7 murs sur 8, allège 1,10 m.
 
+**Une façade n'a pas une épaisseur.** Sur Émiéville le nord fait 22 cm côté
+garage et 34 cm côté chambres ; prendre une seule cote pour toute l'arête faisait
+grandir chambre-3 de 0,65 m². Le script coupe donc chaque arête là où une cloison
+la rencontre, redonne à chaque tronçon la cote qui le longe, et garde la **face
+extérieure** fixe — c'est elle qui est sur le contour, pas l'axe. Les baies
+suivent, reportées par leur intervalle monde.
+
+Effet mesuré : le plan **entièrement généré**, sans un seul mur écrit à la main,
+passe de 6 à **8 pièces sur 10** à ±0,05 m². Les deux qui restent sont le hall
+(incohérence du plan) et le WC (+0,09, cloison garage brute à 10,2 cm contre
+15 cm finie).
+
 Attention à l'ambiguïté : deux cotes voisines peuvent décrire le même mur (21 et
 22 pour la même façade, brut et fini). Le script prend la plus proche ; c'est une
 proposition, et c'est une surcharge qui tranche.
@@ -495,24 +514,34 @@ python scripts/check_plan_surfaces.py registry.json projet.json --level rdc --pa
 
 Le script apparie chaque étiquette à la pièce qui la contient, calcule la surface
 du polygone et rapporte l'écart. Tolérance : **0,05 m²**. Tant qu'une pièce est
-hors tolérance, le plan n'est pas fini. Vérifier d'abord que l'étiquette comparée
-est bien la surface de plancher (voir le piège `planArea` ci-dessus) : sur un
-niveau à plafond plat, SH et SU coïncident ; sous pente, non.
+hors tolérance, le plan n'est pas fini.
+
+**Quelle surface comparer.** Un polygone de pièce est un **plancher**, donc un
+SU. La SH est le plancher moins ce qui est sous 1,80 m de hauteur. Sur un niveau
+à plafond plat les deux coïncident ; sous pente ou sous escalier, non. Quand le
+plan imprime les deux, le script prend la **SU** — sur Sannerville le hall imprime
+`SH 5,19` et `SU 6,97`, et comparer au SH aurait affiché une fausse erreur de
+1,78 m². Corollaire : c'est la SU qu'il faut stocker dans `planArea`, sinon l'app
+affiche « contour à vérifier » sur une pièce juste.
 
 État mesuré sur Émiéville RDC (page 8, 1/75), tolérance 0,05 m² :
 
-| version                 | pièces hors tolérance | garage   | total calculé |
-| ----------------------- | --------------------- | -------- | ------------- |
-| modèle avant correction | 4                     | exact    | 106,14 m²     |
-| modèle corrigé          | 1                     | exact    | 106,33 m²     |
-| génération `--replace`  | 6                     | −1,04 m² | 105,10 m²     |
+| version                               | hors tolérance | total calculé |
+| ------------------------------------- | -------------- | ------------- |
+| modèle d'origine                      | 4              | 106,14 m²     |
+| modèle corrigé, pièces calculées      | 1 (le hall)    | 106,29 m²     |
+| génération seule, aucun mur à la main | 2 (hall, wc)   | 106,47 m²     |
 
 Imprimé : 106,33 m². Les quatre écarts de départ étaient `chambre-1` +0,64,
 `degagement` −1,26, `sejour` +0,58, `hall` −0,17. Deux cotes imprimées les ont
 résolus : `chambre-1` parce que son décrochement fait **4,05 m** de large et non
 4,77 (3,65 × 2,57 + 4,05 × 0,90 = 13,03), et le dégagement parce que le couloir
 se prolonge jusqu'à z = 5,46 le long du retour de la salle de bains (cote 60).
-Le séjour suivait. Reste le hall, à −0,09, non résolu et documenté.
+Le séjour suivait.
+
+Reste le hall, à −0,09, non résolu et documenté : le plan imprime 0,60 + 1,73 =
+2,33 m² pour un bloc de 1,27 × 1,79 = 2,27 m². Et le WC de la génération seule,
+à +0,09, parce que la cloison garage/WC fait 10,2 cm à l'aplat et 15 cm finie.
 
 **Une surface ne s'hérite pas, elle se recalcule** — corriger un mur doit faire
 bouger la pièce, et c'est cette porte qui le prouve.
@@ -531,6 +560,11 @@ la surface est un calcul, pas une détection.
 ```sh
 python scripts/plan_faces.py projet.json --level rdc --compare
 ```
+
+`--apply` remplace le polygone des pièces **fermées** par le contour calculé, et
+laisse les espaces ouverts tels quels en le disant. C'est ce qui supprime les
+retours de cloison qui dépassaient dans une pièce : sur Émiéville, sept pièces
+repassent au contour exact et l'audit tombe de huit réserves à une.
 
 Il répond à une question que la porte des surfaces ne peut pas poser : **les murs
 ferment-ils vraiment les pièces ?** Sur Émiéville, avant correction, le séjour,
