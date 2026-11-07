@@ -161,7 +161,7 @@ export function beveledBoxFacets(
 }
 
 /** World-scale UVs: the face is picked from the normal, so the order does not matter. */
-function project(point: [number, number, number], normal: [number, number, number]) {
+export function project(point: [number, number, number], normal: [number, number, number]) {
   const [x, y, z] = point;
   const [nx, ny, nz] = normal.map(Math.abs) as [number, number, number];
   if (nx >= ny && nx >= nz) return [z, y];
@@ -174,7 +174,10 @@ function project(point: [number, number, number], normal: [number, number, numbe
  * points *against* the vertex normal in a right-handed scene. A facet wound the
  * other way is culled as a back face, so this is what keeps the chamfers visible.
  */
-function windsWithNormal(points: [number, number, number][], normal: [number, number, number]) {
+export function windsWithNormal(
+  points: [number, number, number][],
+  normal: [number, number, number],
+) {
   const [a, b, c] = points;
   const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
   const e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];

@@ -1652,6 +1652,11 @@ async function start() {
       /* optional persistence */
     }
     loadProject(initial);
+    // Development-only bench: the dynamic import behind `DEV` is what keeps the
+    // whole module out of a production build.
+    if (import.meta.env.DEV) {
+      void import('./ui/fxLab').then(({ mountFxLab }) => mountFxLab(viewer));
+    }
     installDiagnostics(() =>
       collectDiagnostics(viewer.engine, viewer.scene, {
         mode,
