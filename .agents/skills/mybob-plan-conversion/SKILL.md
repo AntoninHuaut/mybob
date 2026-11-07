@@ -58,7 +58,7 @@ les dupliquer dans `.agents/`.
 | `audit-plan.ts`            | cohérence interne du projet                                             | **100 %** — calcul                                                      |
 | `check-plan-decisions.ts`  | arithmétique des décisions et rejeu de l'enveloppe                      | **100 %** — calcul                                                      |
 | `extract_plan.py`          | cloisons, par l'aplat de couleur du dessin                              | **100 % sur les cloisons**, aveugle sur les bandes hachurées            |
-| `derive_outline.py`        | contour du niveau, des chaînes fermées et de l'encre                    | **exact sur le plan A**, refuse le plan B (encoche non séparable)       |
+| `derive_outline.py`        | contour du niveau, des chaînes fermées et de l'encre                    | **exact sur le plan A**, refuse le plan B (profondeur non cotée)        |
 | `extract_doors.py`         | portes intérieures, par les arcs de débattement du dessin               | **exact sur l'arc**, muet sur les portes sans arc (voir plus bas)       |
 | `generate_project.py`      | murs extérieurs, épaisseurs et baies lues au plan                       | **exact mais incomplet** : n'invente jamais, oublie ce qu'il ne lit pas |
 
@@ -420,14 +420,30 @@ python scripts/generate_project.py plan.json registry.json modele.json rdc out.j
 `[[0,0],[12.55,0],[12.55,12.54],[5.55,12.54],[5.55,7],[0,7]]`, et le remplacer
 dans la chaîne ne change aucune surface (9 pièces sur 10 exactes, le hall à
 −0,09 comme avant). Plan B (page 13) : le script **refuse** — 0 contour retenu,
-112 candidats refusés. La façade sud y est tracée en **trait mixte** au droit de
-l'encoche d'entrée, et le hachurage des murs y est trop clairsemé pour qu'une
-sonde perpendiculaire distingue la façade de la ligne de plancher haut. Le
-contour du plan B reste donc une décision, et c'est écrit ici pour que la
-session suivante ne le prenne pas pour une mesure.
+112 candidats refusés. Le contour du plan B reste donc une décision, et c'est
+écrit ici pour que la session suivante ne le prenne pas pour une mesure.
 
-**Un trait mixte n'est pas une face de mur.** C'est le piège que la couche encre
-a payé : une ligne en tirets de 9 cm au nu de la façade se lit comme un mur
+**Pourquoi le plan B ne se referme pas.** Deux causes mesurées, et ce n'est ni
+le trait mixte ni le hachurage :
+
+- **Le trou de la façade ouest est une baie, pas une encoche.** La chaîne le dit
+  elle-même : `0,69 / 2.40/2.15 / 5,41` — 2,40 de large, 2,15 de haut. Le script
+  l'essaie comme un redent et cherche un fond de mur à 2,40 ou 3,09 m ; la sonde
+  n'y trouve **0 % d'encre** (`x=2.40 -> [(0.21,0.35), (4.17,4.82), (7.92,8.30)]`).
+  Il refuse d'inventer ce fond, et c'est le bon comportement. Sur le plan A
+  l'encoche est réelle : son fond à x=5,55 tient 2,7 m de mur sur 5,54 m, soit
+  49 % — au-dessus du seuil de 40 % — avec une ouverture de 1,71 m au milieu.
+- **Le plan B ne cote pas sa profondeur.** L'axe z n'a **qu'une chaîne ancrée,
+  en 3 segments** (0,69 / 2,40 / 5,41) : quatre frontières, 12 suites. Les
+  découpes viennent des baies des façades sud et nord (17 et 18 sauts), et
+  aucune n'existe sur l'axe z. La couche fermeture exige que chaque arête soit
+  une suite contiguë imprimée _sur l'axe perpendiculaire_ : aucun rectangle ne
+  peut se fermer. Le plan A a 3 chaînes ancrées et 178 suites sur le même axe,
+  ses façades cotées en 10 et 7 segments.
+
+**Un trait mixte n'est pas une face de mur.** Ce n'est pas ce qui bloque le plan
+B — sa façade sud est continue à z=0 — mais c'est un piège réel de la couche
+encre : une ligne en tirets de 9 cm au nu de la façade se lit comme un mur
 continu dès qu'on fusionne les traits proches. `Ink.solid()` mesure la longueur
 du trait continu qui passe par la sonde et rejette tout ce qui est en dessous de
 0,45 m. Le motif est dans la fixture `tests/fixtures/plan-outline/` et dans
