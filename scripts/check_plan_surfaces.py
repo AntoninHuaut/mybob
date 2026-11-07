@@ -133,7 +133,11 @@ def axis_frame(chains, axis, extent=None, dimensions=None):
         overall = overall_dimension(dimensions, axis, extent)
         if overall is not None:
             along = 0 if axis == "horizontal" else 1
-            origin = overall["at"][along] - extent * scale / 2
+            # La cote d'ensemble mesure le bâtiment, pas le plancher du niveau :
+            # un niveau en retrait (combles entre rampants) a une emprise plus
+            # petite que la cote. L'origine est le coin du bâtiment, donc c'est
+            # la valeur de la cote qui la donne, pas l'emprise du niveau.
+            origin = overall["at"][along] - overall["value"] * scale / 2
             return scale, origin, scales[0], scales[-1], extent
     first = longest["segments"][0]
     origin = first["at"][0 if axis == "horizontal" else 1] - first["value"] * scale / 2
@@ -141,14 +145,23 @@ def axis_frame(chains, axis, extent=None, dimensions=None):
 
 
 def overall_dimension(dimensions, axis, extent, tolerance=0.02):
-    """Cote d'ensemble d'un axe : celle qui vaut l'emprise du niveau."""
+    """Cote d'ensemble d'un axe : celle qui vaut l'emprise du niveau.
+
+    À défaut, la plus grande cote de l'axe : c'est celle du bâtiment, et un
+    niveau en retrait s'y rattache encore.
+    """
     horizontal = axis == "horizontal"
-    for dimension in dimensions or []:
-        if bool(dimension.get("horizontal")) != horizontal:
-            continue
+    candidates = [
+        dimension
+        for dimension in dimensions or []
+        if bool(dimension.get("horizontal")) == horizontal
+    ]
+    for dimension in candidates:
         if abs((dimension.get("value") or 0.0) - extent) <= tolerance:
             return dimension
-    return None
+    if not candidates:
+        return None
+    return max(candidates, key=lambda dimension: dimension.get("value") or 0.0)
 
 
 def scale_hint(scale):
@@ -535,6 +548,38 @@ def self_test():
         )
     if partial_result["rows"][0]["verdict"] != "exact":
         failures.append(f"étiquette mal projetée : {partial_result['rows'][0]}")
+
+    # Un niveau en retrait — des combles entre rampants — a une emprise plus
+    # petite que la cote d'ensemble. L'origine reste le coin du bâtiment : la
+    # calculer avec l'emprise du niveau décalait tout de la moitié de l'écart.
+    retreat_project = {
+        "id": "auto-test-retrait",
+        "levels": [
+            {
+                "id": "combles",
+                "outline": [[0, 1], [10, 1], [10, 7], [0, 7]],
+                "rooms": [
+                    {
+                        "id": "a",
+                        "name": "A",
+                        "polygon": [[0, 1], [4, 1], [4, 4], [0, 4]],
+                        "planArea": 12.0,
+                    }
+                ],
+            }
+        ],
+    }
+    retreat_result = build(partial, retreat_project, "combles", 2, DEFAULT_TOLERANCE)
+    retreat_frame = retreat_result["frame"]
+    if abs(retreat_frame["originZ"] - origin) > 0.01:
+        failures.append(
+            f"origine verticale {retreat_frame['originZ']} au lieu de {origin} "
+            "sur un niveau en retrait"
+        )
+    if retreat_result["rows"][0]["verdict"] != "exact":
+        failures.append(
+            f"étiquette mal projetée en retrait : {retreat_result['rows'][0]}"
+        )
 
     if failures:
         for failure in failures:
