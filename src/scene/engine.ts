@@ -87,12 +87,23 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractE
           stencil: true,
           powerPreference: 'high-performance',
         });
-        const initialised = await withTimeout(engine.initAsync(), 4000);
+        const init = engine.initAsync();
+        const initialised = await withTimeout(init, 8000);
         // Un driver peut répondre à l'init puis échouer à la première écriture
         // (validation WebGPU : clearQuad/write_buffer). On observe le device
         // pendant un court rodage : la moindre erreur disqualifie le WebGPU.
         if (!initialised) {
-          engine.dispose();
+          // Détruire le device pendant l'init laisse des commandes en vol :
+          // Babylon écrit alors dans un buffer invalidé et crache une erreur de
+          // validation. On attend que l'init retombe avant de libérer.
+          const release = () => {
+            try {
+              engine.dispose();
+            } catch {
+              /* device déjà libéré */
+            }
+          };
+          void init.then(release, release);
           webglFallback('initialisation WebGPU trop lente');
         } else if (await failsUnderWatchdog(engine)) {
           engine.dispose();
