@@ -227,17 +227,17 @@ recoupement (la somme des pièces doit atteindre le total imprimé) ; ne jamais
 déduire une dimension linéaire d'une surface annoncée.
 
 **Une page se repère par son texte, pas par son numéro d'ancienne note.** Les
-scripts du dépôt numérotent à partir de 1 (`--pages 8` ouvre `doc[7]`), pymupdf
-et `extract_walls.py` à partir de 0, et une note de passation peut compter dans
-n'importe laquelle des deux conventions. Deux pages voisines du même
+scripts du dépôt numérotent à partir de 1 (`--pages 8` ouvre `doc[7]`) ; seul
+pymupdf lui-même compte à partir de 0, et une note de passation peut compter
+dans n'importe laquelle des deux conventions. Deux pages voisines du même
 constructeur se ressemblent assez pour qu'un calque pressé se croie aligné.
 Localiser la page d'un niveau par un texte qui n'existe que sur elle — la
 surface d'une pièce donnée, un titre de dessin — et consigner ce texte dans le
-registre, pas un numéro hérité. `grid_page.py` et `overlay_page.py` impriment
-les premiers mots de la page lue : vérifier cette ligne avant de lire le rendu.
-Une passe du soir a rendu la page des combles en cherchant celle du
-rez-de-chaussée : le numéro venait d'une note, la page changeait d'index selon
-la convention.
+registre, pas un numéro hérité. `grid_page.py`, `overlay_page.py` et
+`extract_walls.py` impriment les premiers mots de la page lue : vérifier cette
+ligne avant de lire un rendu. Une passe du soir a rendu la page des combles en
+cherchant celle du rez-de-chaussée : le numéro venait d'une note, la page
+changeait d'index selon la convention.
 
 Pour confronter un modèle à la source sans passer par la géométrie du modèle,
 mesurer directement le plan rendu : `scripts/measure_plan.py` balaye des lignes
