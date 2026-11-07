@@ -8,6 +8,11 @@ function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T | undefined>
   ]);
 }
 
+/** A silent downgrade is undiagnosable; every WebGPU refusal states its reason. */
+function webglFallback(reason: string): void {
+  console.info(`[moteur] WebGPU écarté : ${reason}. Rendu en WebGL.`);
+}
+
 /** Software rasterizers (CI, machines sans GPU) hang instead of failing; skip them. */
 async function adapterIsSoftware(adapter: unknown): Promise<boolean> {
   const info =
@@ -55,12 +60,16 @@ async function failsUnderWatchdog(engine: AbstractEngine): Promise<boolean> {
 /**
  * WebGPU by default when a real hardware adapter answers quickly; WebGL otherwise.
  * A software adapter, an automated browser (`navigator.webdriver`, used by the E2E
- * suite) or a slow startup falls back silently; `?webgl=1` forces WebGL.
+ * suite) or a slow startup falls back to WebGL; `?webgl=1` forces WebGL.
+ * Every fallback logs its reason, otherwise a silent downgrade is undiagnosable.
  */
 export async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractEngine> {
   const gpu = typeof navigator !== 'undefined' ? (navigator as { gpu?: unknown }).gpu : undefined;
   const forcedWebGL = new URLSearchParams(window.location.search).get('webgl') === '1';
   const automated = typeof navigator !== 'undefined' && navigator.webdriver === true;
+  if (!gpu) webglFallback('navigator.gpu absent');
+  else if (forcedWebGL) webglFallback('?webgl=1 demandé');
+  else if (automated) webglFallback('navigateur piloté (navigator.webdriver)');
   if (gpu && !forcedWebGL && !automated) {
     try {
       const adapter = await withTimeout(
@@ -69,7 +78,9 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractE
         }),
         3000,
       );
-      if (adapter && !(await adapterIsSoftware(adapter))) {
+      if (!adapter) webglFallback('aucun adaptateur GPU');
+      else if (await adapterIsSoftware(adapter)) webglFallback('adaptateur logiciel');
+      else {
         const { WebGPUEngine } = await import('@babylonjs/core/Engines/webgpuEngine');
         const engine = new WebGPUEngine(canvas, {
           antialias: true,
@@ -80,11 +91,16 @@ export async function createEngine(canvas: HTMLCanvasElement): Promise<AbstractE
         // Un driver peut répondre à l'init puis échouer à la première écriture
         // (validation WebGPU : clearQuad/write_buffer). On observe le device
         // pendant un court rodage : la moindre erreur disqualifie le WebGPU.
-        if (initialised && !(await failsUnderWatchdog(engine))) return engine;
-        engine.dispose();
+        if (!initialised) {
+          engine.dispose();
+          webglFallback('initialisation WebGPU trop lente');
+        } else if (await failsUnderWatchdog(engine)) {
+          engine.dispose();
+          webglFallback('erreur du device WebGPU au démarrage');
+        } else return engine;
       }
-    } catch {
-      /* Any WebGPU failure falls back to the proven WebGL engine below. */
+    } catch (error) {
+      webglFallback(error instanceof Error ? error.message : 'échec WebGPU inconnu');
     }
     // Le canvas vient de réclamer son contexte (webgpu) : un élément HTML ne peut
     // pas en changer de type, le repli WebGL doit donc repartir d'un canvas neuf.
