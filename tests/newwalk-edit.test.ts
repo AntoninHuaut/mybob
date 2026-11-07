@@ -169,3 +169,92 @@ test('walk HUD exposes furniture at three metres while keeping the shorter door 
     engine.dispose();
   }
 });
+
+test('a capture refused in the rebind window retries once; a refused retry is reported', async () => {
+  const { engine, scene } = fixture();
+  // A promise rejection delivered to captureMouse runs in a microtask.
+  const flush = async () => {
+    for (let i = 0; i < 3; i++) await Promise.resolve();
+  };
+  const windowDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'window');
+  Object.defineProperty(globalThis, 'window', {
+    value: {
+      setTimeout: (callback: () => void, delay: number) => {
+        retry = { callback, delay };
+        return 1;
+      },
+      clearTimeout: () => {
+        retry = undefined;
+      },
+    },
+    configurable: true,
+  });
+  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  let failures = 0;
+  let locks = 0;
+  const canvas = {
+    focus() {},
+    requestPointerLock() {
+      locks += 1;
+      if (failures > 0) {
+        failures -= 1;
+        return Promise.reject(new Error('user exited the lock'));
+      }
+      return Promise.resolve();
+    },
+  };
+  Object.defineProperty(globalThis, 'document', {
+    value: { activeElement: canvas, pointerLockElement: null },
+    configurable: true,
+  });
+  let retry: { callback: () => void; delay: number } | undefined;
+  const errors: string[] = [];
+  const viewer = Object.assign(Object.create(HouseViewer.prototype), {
+    canvas,
+    mode: 'walk',
+    paused: false,
+    onPointerLockError: () => errors.push('capture'),
+  }) as HouseViewer;
+  try {
+    // Firing the timer consumes it, like the browser removes it once run.
+    const fireRetry = () => {
+      const run = retry!;
+      retry = undefined;
+      run.callback();
+    };
+    // Chromium refuses a re-lock right after the pointer lock left through the
+    // keyboard (Échap) — captureMouse schedules the one-shot silent retry.
+    failures = 1;
+    viewer.captureMouse();
+    await flush();
+    assert.equal(locks, 1);
+    assert.equal(errors.length, 0);
+    assert.equal(retry!.delay, 1300);
+    // At the end of the window, still in the visit and unlocked: retry wins.
+    fireRetry();
+    await flush();
+    assert.equal(locks, 2);
+    assert.equal(errors.length, 0);
+    // Later captures are immediate again, and never linger on a timer.
+    viewer.captureMouse();
+    await flush();
+    assert.equal(locks, 3);
+    assert.equal(retry, undefined);
+    // A refusal also at the retry reports the capture to the user.
+    failures = 2;
+    viewer.captureMouse();
+    await flush();
+    assert.equal(locks, 4);
+    fireRetry();
+    await flush();
+    assert.equal(locks, 5);
+    assert.deepEqual(errors, ['capture']);
+  } finally {
+    if (windowDescriptor) Object.defineProperty(globalThis, 'window', windowDescriptor);
+    else Reflect.deleteProperty(globalThis, 'window');
+    if (descriptor) Object.defineProperty(globalThis, 'document', descriptor);
+    else Reflect.deleteProperty(globalThis, 'document');
+    scene.dispose();
+    engine.dispose();
+  }
+});

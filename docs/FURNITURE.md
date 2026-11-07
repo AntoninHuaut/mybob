@@ -78,4 +78,4 @@ Modifier ouvre une fenêtre modale avec Annuler et Enregistrer. Fermer, Annuler 
 
 La barre de sélection est désormais compacte et dockée en bas de la vue ; elle ne suit plus le meuble et ne masque pas son déplacement. Navigation est un panneau distinct, près des outils de vue, pour les réglages de caméra.
 
-En visite, viser un meuble à moins de trois mètres puis appuyer sur F ouvre sa popup. Les murs et portes arrêtent la visée ; E conserve le contrôle des portes. La visite est pausée et la souris libérée pendant l’édition. Après fermeture, Reprendre la visite permet de capturer de nouveau la souris.
+En visite, viser un meuble à moins de trois mètres puis appuyer sur F ouvre sa popup. Les murs et portes arrêtent la visée ; E conserve le contrôle des portes. La visite est pausée et la souris libérée pendant l’édition. Après fermeture, Reprendre la visite ou un simple clic dans la vue recapturent la souris ; la demande refusée dans la fenêtre de recharge qui suit Échap (Chromium) est retentée automatiquement une fois, et seul un nouvel échec lève le message.

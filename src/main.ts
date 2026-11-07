@@ -1526,7 +1526,6 @@ async function start() {
       toast(
         'Capture indisponible : cliquez dans la vue, puis glissez pour regarder autour de vous.',
       );
-      el('#resume-walk').hidden = true;
       el<HTMLCanvasElement>('#scene').focus();
     };
     viewer.onMeasure = (measurement) => measureBar.sync(measurement);
