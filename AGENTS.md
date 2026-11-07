@@ -2,7 +2,11 @@
 
 ## Start here
 
-1. `docs/HANDOFF.md` — local passation journal (git-ignored, present on the owner's clone only).
+1. `docs/HANDOFF.md` — local passation journal (git-ignored, present on the owner's clone
+   only): **short-lived state**, not a knowledge base. Read the recent entries for the
+   current state of the private plans and the owner's last decisions; the full history sits
+   in `docs/HANDOFF.archive.md`. A durable rule, trap or method belongs to the doc or skill
+   that owns the area — never keep it only in the journal.
 2. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the code map: modules, data flow, the three
    view modes, invariants, verification recipes, known traps.
 3. The one doc for the area you touch: [PROJECT-FORMAT](docs/PROJECT-FORMAT.md),

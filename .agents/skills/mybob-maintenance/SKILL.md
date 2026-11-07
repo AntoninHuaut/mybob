@@ -41,6 +41,6 @@ Check both day and night, multiple time zones and project switches when changing
 3. Commit a coherent change. Push only within the user's authorized scope. Find the GitHub remote using `git remote -v` (usually `origin` after a fresh clone; it was `github` in the cloud workspace).
 4. Inspect GitHub checks for that exact commit, for example `gh api repos/AntoninHuaut/mybob/commits/<sha>/check-runs`. Both CI and Cloudflare Pages must succeed. The public URL is in `docs/DEPLOYMENT.md`.
 5. Cloudflare Access may return HTTP 302 to an unauthenticated request. This is not evidence of a rendering failure or successful authenticated visual inspection. Never weaken Access to make a check easier.
-6. Update the local passation journal `docs/HANDOFF.md` (git-ignored) with changes, checks performed and unresolved material limitations. State clearly if deployment or real-browser checks remain unverified.
+6. Update the local passation journal `docs/HANDOFF.md` (git-ignored) with changes, checks performed and unresolved material limitations. It is short-lived state, not a knowledge base: move any durable trap or method into the doc or skill that owns the area, keep entries short, and archive old ones in `docs/HANDOFF.archive.md`. State clearly if deployment or real-browser checks remain unverified.
 
 No special approvals are introduced by this skill. Follow the current user's authorization, environment permissions and actual destructive-action requirements.
