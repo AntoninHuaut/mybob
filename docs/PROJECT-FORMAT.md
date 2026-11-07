@@ -101,13 +101,13 @@ Le contrat TypeScript est dans `src/model/types.ts` ; `validateProject()` est ex
 
 ## Murs et ouvertures
 
-Les murs peuvent être orientés librement. Les angles ne sont pas raccordés par une opération booléenne : leurs extrémités doivent être prolongées ou ajustées pour fermer les jonctions. Le générateur répartit les parties solides du mur autour des ouvertures, y compris l’allège et le linteau. Les collisions correspondent à ces solides.
+Les murs peuvent être orientés librement. Les angles ne sont pas raccordés par une opération booléenne : leurs extrémités doivent être prolongées ou ajustées pour fermer les jonctions. Le générateur répartit les parties solides du mur autour des ouvertures, y compris l’allège et le linteau. Les collisions correspondent à ces solides. La hauteur d’un mur ne dépasse pas la hauteur de plafond de son niveau, sauf un mur de fond de lucarne, qui traverse la couverture : sa déclaration est décrite avec [la toiture](EXTERIOR.md).
 
-`kind` vaut `door`, `window`, `sliding` ou `garage`. L’allège `sill` vaut zéro par défaut. `offset`, `width` et `height` sont exprimés en mètres et l’ouverture doit rester entièrement dans son mur. Les ouvertures ne doivent pas se chevaucher.
+`kind` vaut `door`, `window`, `sliding` ou `garage`. L’allège `sill` vaut zéro par défaut. `offset`, `width` et `height` sont exprimés en mètres et l’ouverture doit rester entièrement dans son mur. Les ouvertures ne doivent pas se chevaucher. Une fenêtre de toit n’est pas une ouverture de mur : elle se déclare sur le pan qui la porte, dans `site.roofs[].windows`, et se lit sur la coupe plutôt que sur le plan horizontal — voir [la toiture](EXTERIOR.md).
 
 Pour une porte battante, `hinge` vaut `start` ou `end` et `swing` vaut `1` ou `-1`. La rotation s’effectue autour de l’axe vertical local. Le sens est à contrôler en 3D après avoir interprété le symbole du plan. La hauteur nominale est celle du passage, avant les petits profils de menuiserie visuels.
 
-Les fenêtres sont fixes dans cette version. Les baies coulissantes ont un panneau mobile et un panneau fixe. La porte de garage est simplifiée et se relève verticalement, sans mécanisme de rails.
+Les fenêtres sont fixes dans cette version. Les baies coulissantes ont un panneau mobile et un panneau fixe ; une allège non nulle en fait une fenêtre coulissante posée sur un mur d'allège. Une porte battante peut porter `glazed: true` pour un vantail vitré (porte-fenêtre) qui s'ouvre comme une porte. La porte de garage est un rideau sectionnel : les panneaux suivent un rail vertical, un quart de tour au linteau, puis un plan horizontal sous plafond, sans modélisation des rails eux-mêmes.
 
 ## Pièces
 

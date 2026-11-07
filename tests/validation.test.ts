@@ -59,9 +59,15 @@ test('import rejects openings smaller than their joinery profiles', () => {
   }
 });
 
-test('import permits window sills and rejects raised traversable openings', () => {
+test('import permits window sills, sliding-window sills and rejects raised doors', () => {
   assert.doesNotThrow(() => validateProject(original));
-  for (const kind of ['door', 'sliding', 'garage'] as const) {
+  const sliding = structuredClone(original);
+  const window = sliding.levels[0].walls[0].openings![0];
+  window.kind = 'sliding';
+  window.sill = 0.5;
+  window.height = 1.5;
+  assert.doesNotThrow(() => validateProject(sliding));
+  for (const kind of ['door', 'garage'] as const) {
     expectInvalid((p) => {
       const opening = p.levels[0].walls[0].openings![0];
       opening.kind = kind;
@@ -69,6 +75,12 @@ test('import permits window sills and rejects raised traversable openings', () =
       opening.height = 1.5;
     }, /partir du sol/);
   }
+  expectInvalid((p) => {
+    const opening = p.levels[0].walls[0].openings![0];
+    opening.glazed = true;
+    opening.kind = 'sliding';
+    opening.sill = 0;
+  }, /Seule une porte battante/);
 });
 
 test('import rejects a ceiling too low for the fixed-height walk camera', () => {

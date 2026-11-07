@@ -10,6 +10,10 @@ Le terrain est plat par défaut. Un projet peut déclarer des points plus bas pr
 
 La toiture est décrite par `roofs` : sommets, faces planes et pignons. Le format accepte plusieurs pans, des raccords en croupe et des hauteurs d’égout et de faîtage quelconques ; leur projection doit couvrir l’enveloppe de toiture sans trou ni chevauchement. Une entrée en retrait est couverte. Les débords, gouttières, épaisseurs et charpente ne sont pas représentés. La pente déclarée n’est pas reproduite à l’identique : elle reste indicative et n’est pas présentée comme une cote vérifiée.
 
+Un pan peut porter des chiens-assis dans `dormers` : une emprise au sol, `wallId` vers le mur de fond, et une pente facultative. Le mur de fond reste le mur du niveau traversé (`exterior: true`, parallèle aux côtés de l’emprise) : il porte seul sa hauteur et sa fenêtre, comme toutes les autres menuiseries, et c’est le seul mur autorisé à dépasser la hauteur de plafond de son niveau — c’est lui qui perce la couverture. Le rendu découpe le pan sur l’emprise, du nu intérieur du mur jusqu’à son parement extérieur, puis construit les deux joues en enduit et le toit de la lucarne en couverture. Sans `slope`, ce toit rejoint le pan à l’arrière de l’emprise ; avec `slope` (montée par mètre de repli), il le rejoint à l’intérieur de l’emprise. La validation refuse ce que le moteur ne peut pas rendre : une emprise hors d’un pan unique non vertical, un pan qui s’incline le long de la lucarne, un mur de fond qui ne dépasse pas la couverture, une pente sans jonction possible. La pente du toit de la lucarne reste non cotée sur beaucoup de plans : l’absence de `slope` suit alors le dessin.
+
+Un pan peut aussi porter des fenêtres de toit dans `windows` : un centre en plan, une largeur horizontale et une hauteur mesurée le long du rampant. Une fenêtre de toit n'appartient à aucun mur : le rendu ouvre le versant et pose le châssis dans le plan du pan, à sa cote de la coupe. La largeur imprimée reste lue à l'horizontale, la hauteur le long du rampant ; la position en profondeur ne se lit pas sur le plan horizontal mais sur la coupe, et c'est elle qui distingue un velux d'une baie verticale collée à l'égout. Le cadre, le vitrage et le meneau suivent la toiture dans sa visibilité et ses ombres ; le vitrage recule de 6 mm sous la couverture et aucun sommet ne sort du pan, donc le rampant masque la baie partout où il masque la couverture. La validation refuse ce que le moteur ne peut pas poser : une baie hors d'un pan unique, un pan vertical ou horizontal, une baie qui déborde ou qui touche une arête du pan (5 mm de retrait), une baie plus petite que les profils du modèle (10 cm). Une fenêtre de toit reste une baie de couverture : ni tabatière, ni raccord d'étanchéité, ni débord de couverture ne sont représentés.
+
 Les couleurs extérieures viennent de `facadeColor` et `roofColor`, sans valeur colorimétrique certifiée. Les faces intérieures restent blanches. Les menuiseries bicolores et les teintes de porte ne sont pas encore reproduites : les menuiseries existantes restent simplifiées.
 
 Les documents de référence servent à vérifier les ouvertures et volumes intérieurs. Aucune clôture ni plantation n’est inventée : seules les surfaces déclarées sont rendues. Le gazon présente une texture de bruit fine, déterministe et générée localement, sans téléchargement d’images.
@@ -33,6 +37,19 @@ site?: {
     vertices: [number, number, number][]; // x/y/z, y relatif au RDC
     faces: number[][];                   // indices de polygones plans
     gables?: number[][];                 // faces traitées avec l’enduit
+    dormers?: {
+      id: string;
+      start: [number, number]; // coins opposés de l’emprise, en plan (x, z)
+      end: [number, number];
+      wallId: string;          // mur de fond du niveau traversé
+      slope?: number;          // montée du toit de lucarne par mètre de repli
+    }[];
+    windows?: {
+      id: string;
+      center: [number, number]; // centre de la baie en plan (x, z)
+      width: number;            // largeur horizontale, en mètres
+      height: number;           // hauteur le long du rampant, en mètres
+    }[];
   }[];
   notes: string[];
 }
@@ -40,9 +57,21 @@ site?: {
 
 Ce format accepte une autre parcelle et une autre enveloppe de toiture sans réécrire le moteur. Les polygones doivent être simples, les accès restent dans la parcelle et l’emprise du RDC doit y tenir. Les faces de toiture doivent être planes, non dégénérées, sans croisement et ne référencer que des indices entiers valides. Les couleurs et nombres sont vérifiés à l’import. Le format de projet reste en version 1 : les projets sans `site` continuent de fonctionner.
 
-`buildExterior(project, level, scene)` retourne un groupe indépendant et ses maillages : terrain et accès, façades identifiées par `metadata.wallId`, toiture/pignons initialement masqués, limites horizontales et hauteur maximale. La vue contrôle la visibilité des faces extérieures en même temps que celle des murs en coupe. Le gazon est évidé sous la maison, y compris quand le mur touche la limite de parcelle ; il ne traverse donc pas une pièce abaissée.
+`buildExterior(project, level, scene)` retourne un groupe indépendant et ses maillages : terrain et accès, façades identifiées par `metadata.wallId`, toiture/pignons initialement masqués, limites horizontales et hauteur maximale. Les pans percés par une lucarne ou par une fenêtre de toit sont triangulés avec leur jour ; les joues et le toit de la lucarne, comme le châssis de la fenêtre de toit, suivent la toiture dans sa visibilité et ses ombres. La vue contrôle la visibilité des faces extérieures en même temps que celle des murs en coupe. Le gazon est évidé sous la maison, y compris quand le mur touche la limite de parcelle ; il ne traverse donc pas une pièce abaissée.
 
 Les ouvertures des façades utilisent la même cote de sol adjacente que les murs intérieurs, quelle que soit la catégorie de pièce abaissée. En visite, le plafond visible participe aux ombres solaires, et la toiture reste affichée : le plafond la masque depuis l'intérieur, elle rend la maison entière depuis la pelouse. L'aperçu reste simplifié et ne simule pas la lumière indirecte, la météo ou les bâtiments voisins.
+
+## Cadrage de la vue extérieure
+
+La vue extérieure cadre sur le **bâti**, pas sur la parcelle : l'union du contour du niveau bas
+et de l'emprise du toit (`src/scene/framing.ts`), plus un recul proportionnel de 10 % de la
+plus grande dimension du bâti. La parcelle donne l'échelle et le recul ; elle reste
+entièrement visible en fond — glissée puis dézoomée derrière le sujet si nécessaire — mais ne
+dicte plus le cadrage. L'azimut est lui aussi un choix de cadrage : parmi l'angle courant et
+les quatre points cardinaux, la vue garde celui où la maison occupe le plus de largeur à
+l'écran, ce qui garde la vue utilisable sur une parcelle étroite et longue au bâtiment
+décentré. Le cadrage se calcule toujours depuis le niveau bas : passer d'un niveau à l'autre ne
+le change pas, et le sol comme la pelouse ne sont jamais coupés par le bord de l'image.
 
 La visite sort de la maison. Sa limite est `boundary` : le visiteur marche sur le terrain plat, franchit une porte extérieure ouverte, et n'est ramené au départ que s'il quitte la parcelle, passe sous le sol ou au-dessus du plafond. Sans `site`, l'emprise du niveau reste la limite. Le sol sous le visiteur suit la pièce à l'intérieur et `elevation` à l'extérieur ; une pièce abaissée garde son propre plancher. Le terrain n'ajoute ni rampe, ni clôture, ni marche dessinée : quand `elevation` place le terrain sous le plancher, la différence reste une marche franchie par l'assistance de seuil, jusqu'à 20 cm. Au-delà, le visiteur ne rentre plus : c'est un signal que la cote de terrain est à revoir, pas un défaut de collision.
 

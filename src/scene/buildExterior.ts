@@ -10,7 +10,17 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import earcut from 'earcut';
 import type { HouseProject, Level, Point2 } from '../model/types';
-import { alongWall, bounds, pointInPolygon, wallLength, wallSections } from '../model/geometry';
+import {
+  alongWall,
+  bounds,
+  pointInPolygon,
+  resolveRoofDormer,
+  resolveRoofWindow,
+  roofFaceHeightAt,
+  roofWindowPoint,
+  wallLength,
+  wallSections,
+} from '../model/geometry';
 import { polygonMesh, wallFloorSpan } from './buildHouse';
 
 export interface ExteriorScene {
@@ -25,12 +35,16 @@ export interface ExteriorScene {
   dispose(): void;
 }
 
-/** Triangulate planar faces in their dominant plane, including vertical gables. */
+/**
+ * Triangulate planar faces in their dominant plane, including vertical gables.
+ * Dormer piercings arrive as hole rings lying on the face plane.
+ */
 function faceMesh(
   name: string,
   vertices: [number, number, number][],
   face: number[],
   scene: Scene,
+  holes: [number, number, number][][] = [],
 ) {
   const points = face.map((index) => vertices[index]);
   const normal = [0, 0, 0];
@@ -42,12 +56,22 @@ function faceMesh(
     normal[2] += (a[0] - b[0]) * (a[1] + b[1]);
   }
   const dominant = normal.map(Math.abs).indexOf(Math.max(...normal.map(Math.abs)));
+  const rings = [points, ...holes];
+  const flat: number[] = [];
+  const holeIndices: number[] = [];
+  for (const [index, ring] of rings.entries()) {
+    if (index > 0) holeIndices.push(flat.length / 2);
+    for (const point of ring) {
+      const projected = point.filter((_, i) => i !== dominant);
+      flat.push(projected[0], projected[1]);
+    }
+  }
   const data = new VertexData();
-  data.positions = points.flat();
-  data.indices = earcut(points.flatMap((p) => p.filter((_, i) => i !== dominant)));
+  data.positions = rings.flat().flat();
+  data.indices = earcut(flat, holeIndices);
   data.normals = [];
   VertexData.ComputeNormals(data.positions, data.indices, data.normals);
-  data.uvs = points.flatMap(([x, y, z]) => [Math.hypot(x, z), y]);
+  data.uvs = rings.flat().flatMap(([x, y, z]) => [Math.hypot(x, z), y]);
   const mesh = new Mesh(name, scene);
   data.applyToMesh(mesh);
   return mesh;
@@ -216,9 +240,153 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       roofMeshes.push(band);
     }
   }
+  // Les matériaux du châssis reprennent ceux des menuiseries du niveau
+  // (`src/scene/materials.ts`) et ne se créent qu'à la première fenêtre de toit.
+  let chasisMaterials: { glass: PBRMaterial; joinery: PBRMaterial } | undefined;
+  const roofWindowMaterials = () => {
+    if (chasisMaterials) return chasisMaterials;
+    const pane = material('roof-window-glass', '#bfd7d0');
+    pane.alpha = 0.18;
+    pane.roughness = 0.14;
+    pane.metallic = 0.12;
+    pane.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+    pane.backFaceCulling = false;
+    pane.twoSidedLighting = true;
+    const joinery = material('roof-window-joinery', project.finishes?.joineryColor ?? '#f3f2ec');
+    joinery.roughness = 0.42;
+    joinery.backFaceCulling = false;
+    joinery.twoSidedLighting = true;
+    return (chasisMaterials = { glass: pane, joinery });
+  };
   for (const r of site.roofs ?? []) {
+    // Un chien-assis n'existe que si son emprise, son mur de fond et son pan se
+    // rejoignent : tout vient du projet importé, aucune forme n'est propre à
+    // une maison.
+    const holes = new Map<number, [number, number, number][][]>();
+    for (const dormer of r.dormers ?? []) {
+      const resolved = resolveRoofDormer(project, r.vertices, r.faces, dormer);
+      if (!resolved.frame) continue;
+      const { frame } = resolved;
+      const face = r.faces[frame.faceIndex];
+      const panAt = (side: number, across: number): [number, number, number] =>
+        frame.acrossZ
+          ? [side, roofFaceHeightAt(r.vertices, face, side, across), across]
+          : [across, roofFaceHeightAt(r.vertices, face, across, side), side];
+      const topAt = (side: number, across: number, height: number): [number, number, number] =>
+        frame.acrossZ ? [side, height, across] : [across, height, side];
+      // The pan is opened from the join on the versant to the outer face of the mur de fond.
+      const hole: [number, number, number][] = [
+        panAt(frame.sideLow, frame.meet),
+        panAt(frame.sideHigh, frame.meet),
+        panAt(frame.sideHigh, frame.front),
+        panAt(frame.sideLow, frame.front),
+      ];
+      const list = holes.get(frame.faceIndex) ?? [];
+      list.push(hole);
+      holes.set(frame.faceIndex, list);
+      // The joues rise from the pan to the top of the mur de fond, then rejoin
+      // the pan where the dormer roof meets it.
+      for (const [index, side] of [frame.sideLow, frame.sideHigh].entries()) {
+        const ring: [number, number, number][] = [
+          panAt(side, frame.front),
+          topAt(side, frame.front, frame.frontTop),
+          panAt(side, frame.meet),
+        ];
+        roofMeshes.push(
+          add(
+            faceMesh(
+              `dormer-joue:${r.id}:${dormer.id}:${index}`,
+              ring,
+              ring.map((_, i) => i),
+              scene,
+            ),
+            plaster,
+            'roof',
+          ),
+        );
+      }
+      // Le toit de la lucarne : deux triangles, pour qu'un pan qui dérive un
+      // peu le long de l'emprise reste dans la tolérance de face.
+      const joinLow = panAt(frame.sideLow, frame.meet);
+      const joinHigh = panAt(frame.sideHigh, frame.meet);
+      const capFrontLow = topAt(frame.sideLow, frame.front, frame.frontTop);
+      const capFrontHigh = topAt(frame.sideHigh, frame.front, frame.frontTop);
+      for (const [index, triangle] of [
+        [capFrontLow, capFrontHigh, joinHigh],
+        [capFrontLow, joinHigh, joinLow],
+      ].entries())
+        roofMeshes.push(
+          add(
+            faceMesh(`dormer-toit:${r.id}:${dormer.id}:${index}`, triangle, [0, 1, 2], scene),
+            roof,
+            'roof',
+          ),
+        );
+      result.height = Math.max(result.height, frame.frontTop);
+    }
+    // Une fenêtre de toit vit sur le pan, pas sur un mur : le rendu ouvre le
+    // versant et pose le châssis dans le plan du rampant, à sa cote de la
+    // coupe — jamais à l'aplomb du chéneau.
+    for (const window of r.windows ?? []) {
+      const resolved = resolveRoofWindow(r.vertices, r.faces, window);
+      if (!resolved.frame) continue;
+      const { frame } = resolved;
+      const hole = holes.get(frame.faceIndex) ?? [];
+      hole.push(frame.corners);
+      holes.set(frame.faceIndex, hole);
+      // Le cadre, le vitrage et le meneau sont des rectangles du plan du pan :
+      // la largeur reste horizontale, la hauteur se mesure le long du rampant.
+      const ring = (halfAcross: number, halfUp: number, depth = 0) => [
+        roofWindowPoint(frame, -halfAcross, -halfUp, depth),
+        roofWindowPoint(frame, halfAcross, -halfUp, depth),
+        roofWindowPoint(frame, halfAcross, halfUp, depth),
+        roofWindowPoint(frame, -halfAcross, halfUp, depth),
+      ];
+      const { glass, joinery } = roofWindowMaterials();
+      // Le cadre garde 4,5 cm comme les menuiseries du niveau, sauf sur une
+      // baie étroite où il se réduit pour laisser un vitrage : jamais de
+      // quadrilatère nul, même à la taille minimale acceptée à l'import.
+      const profile = Math.min(0.045, window.width / 4, window.height / 4);
+      const chasis = (
+        part: string,
+        mat: PBRMaterial,
+        outline: [number, number, number][],
+        inner?: [number, number, number][],
+      ) => {
+        const mesh = add(
+          faceMesh(
+            `roof-window-${part}:${r.id}:${window.id}`,
+            outline,
+            outline.map((_, i) => i),
+            scene,
+            inner ? [inner] : [],
+          ),
+          mat,
+          'roof',
+        );
+        roofMeshes.push(mesh);
+        return mesh;
+      };
+      chasis(
+        'cadre',
+        joinery,
+        frame.corners,
+        ring(window.width / 2 - profile, window.height / 2 - profile),
+      );
+      // Le vitrage recule sous la couverture : le rampant le masque, et le
+      // châssis ne traverse jamais le pan.
+      const pane = chasis(
+        'vitrage',
+        glass,
+        ring(window.width / 2 - profile - 0.005, window.height / 2 - profile - 0.005, -0.006),
+      );
+      pane.receiveShadows = false;
+      chasis('meneau', joinery, ring(profile / 2, window.height / 2 - profile - 0.01));
+    }
     for (const [i, face] of r.faces.entries())
-      roofMeshes.push(add(faceMesh(`roof:${r.id}:${i}`, r.vertices, face, scene), roof, 'roof'));
+      roofMeshes.push(
+        add(faceMesh(`roof:${r.id}:${i}`, r.vertices, face, scene, holes.get(i)), roof, 'roof'),
+      );
     for (const [i, face] of (r.gables ?? []).entries())
       roofMeshes.push(
         add(faceMesh(`gable:${r.id}:${i}`, r.vertices, face, scene), plaster, 'roof'),

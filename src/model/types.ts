@@ -10,6 +10,8 @@ export interface Opening {
   hinge?: 'start' | 'end';
   swing?: 1 | -1;
   exterior?: boolean;
+  /** A `door` leaf built as a glazed French window instead of a solid slab. */
+  glazed?: boolean;
 }
 export interface Wall {
   id: string;
@@ -60,6 +62,38 @@ export interface Level {
   lights: { id: string; position: Point2; provisional?: boolean }[];
   spawn: { position: Point2; yaw: number };
 }
+/**
+ * Chien-assis percé dans un pan : le rendu ouvre le versant sur l'emprise et
+ * bâtit les joues et le toit. La face avant reste portée par le mur de fond du
+ * niveau traversé, qui garde sa hauteur et sa fenêtre.
+ */
+export interface RoofDormer {
+  id: string;
+  /** Emprise au sol en plan (x, z) : deux coins opposés du rectangle, dans le repère du projet. */
+  start: Point2;
+  end: Point2;
+  /** Mur de fond du niveau traversé : il porte la face avant et sa fenêtre. */
+  wallId: string;
+  /**
+   * Pente du toit de la lucarne vers le faîtage, en montée par mètre de repli.
+   * Sans valeur, le toit rejoint la couverture à l'arrière de l'emprise.
+   */
+  slope?: number;
+}
+/**
+ * Fenêtre de toit posée sur un pan, sans volume de lucarne : le rendu ouvre le
+ * versant sur la baie et pose le châssis dans le plan du rampant. Sa position
+ * en profondeur se lit sur la coupe, pas sur le plan horizontal.
+ */
+export interface RoofWindow {
+  id: string;
+  /** Centre de la baie en plan (x, z) : un point du pan projeté au sol. */
+  center: Point2;
+  /** Largeur de la baie, horizontale, en mètres. */
+  width: number;
+  /** Hauteur de la baie mesurée dans le plan du pan, le long du rampant, en mètres. */
+  height: number;
+}
 export interface SiteRoof {
   id: string;
   /** Metres in the level coordinate system: x, height above level datum, z. */
@@ -68,6 +102,10 @@ export interface SiteRoof {
   faces: number[][];
   /** Rendered with the exterior plaster instead of the roof material. */
   gables?: number[][];
+  /** Chiens-assis percés dans les pans de cette toiture. */
+  dormers?: RoofDormer[];
+  /** Fenêtres de toit percées dans les pans de cette toiture. */
+  windows?: RoofWindow[];
 }
 export interface ProjectSite {
   /** Parcel in the same x/z coordinate system as the floor plan. */
