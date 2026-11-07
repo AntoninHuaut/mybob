@@ -10,7 +10,15 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import earcut from 'earcut';
 import type { HouseProject, Level, Point2 } from '../model/types';
-import { alongWall, bounds, pointInPolygon, wallLength, wallSections } from '../model/geometry';
+import {
+  alongWall,
+  bounds,
+  pointInPolygon,
+  resolveRoofDormer,
+  roofFaceHeightAt,
+  wallLength,
+  wallSections,
+} from '../model/geometry';
 import { polygonMesh, wallFloorSpan } from './buildHouse';
 
 export interface ExteriorScene {
@@ -25,12 +33,16 @@ export interface ExteriorScene {
   dispose(): void;
 }
 
-/** Triangulate planar faces in their dominant plane, including vertical gables. */
+/**
+ * Triangulate planar faces in their dominant plane, including vertical gables.
+ * Dormer piercings arrive as hole rings lying on the face plane.
+ */
 function faceMesh(
   name: string,
   vertices: [number, number, number][],
   face: number[],
   scene: Scene,
+  holes: [number, number, number][][] = [],
 ) {
   const points = face.map((index) => vertices[index]);
   const normal = [0, 0, 0];
@@ -42,12 +54,22 @@ function faceMesh(
     normal[2] += (a[0] - b[0]) * (a[1] + b[1]);
   }
   const dominant = normal.map(Math.abs).indexOf(Math.max(...normal.map(Math.abs)));
+  const rings = [points, ...holes];
+  const flat: number[] = [];
+  const holeIndices: number[] = [];
+  for (const [index, ring] of rings.entries()) {
+    if (index > 0) holeIndices.push(flat.length / 2);
+    for (const point of ring) {
+      const projected = point.filter((_, i) => i !== dominant);
+      flat.push(projected[0], projected[1]);
+    }
+  }
   const data = new VertexData();
-  data.positions = points.flat();
-  data.indices = earcut(points.flatMap((p) => p.filter((_, i) => i !== dominant)));
+  data.positions = rings.flat().flat();
+  data.indices = earcut(flat, holeIndices);
   data.normals = [];
   VertexData.ComputeNormals(data.positions, data.indices, data.normals);
-  data.uvs = points.flatMap(([x, y, z]) => [Math.hypot(x, z), y]);
+  data.uvs = rings.flat().flatMap(([x, y, z]) => [Math.hypot(x, z), y]);
   const mesh = new Mesh(name, scene);
   data.applyToMesh(mesh);
   return mesh;
@@ -217,8 +239,75 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     }
   }
   for (const r of site.roofs ?? []) {
+    // Un chien-assis n'existe que si son emprise, son mur de fond et son pan se
+    // rejoignent : tout vient du projet importé, aucune forme n'est propre à
+    // une maison.
+    const holes = new Map<number, [number, number, number][][]>();
+    for (const dormer of r.dormers ?? []) {
+      const resolved = resolveRoofDormer(project, r.vertices, r.faces, dormer);
+      if (!resolved.frame) continue;
+      const { frame } = resolved;
+      const face = r.faces[frame.faceIndex];
+      const panAt = (side: number, across: number): [number, number, number] =>
+        frame.acrossZ
+          ? [side, roofFaceHeightAt(r.vertices, face, side, across), across]
+          : [across, roofFaceHeightAt(r.vertices, face, across, side), side];
+      const topAt = (side: number, across: number, height: number): [number, number, number] =>
+        frame.acrossZ ? [side, height, across] : [across, height, side];
+      // The pan is opened from the join on the versant to the outer face of the mur de fond.
+      const hole: [number, number, number][] = [
+        panAt(frame.sideLow, frame.meet),
+        panAt(frame.sideHigh, frame.meet),
+        panAt(frame.sideHigh, frame.front),
+        panAt(frame.sideLow, frame.front),
+      ];
+      const list = holes.get(frame.faceIndex) ?? [];
+      list.push(hole);
+      holes.set(frame.faceIndex, list);
+      // The joues rise from the pan to the top of the mur de fond, then rejoin
+      // the pan where the dormer roof meets it.
+      for (const [index, side] of [frame.sideLow, frame.sideHigh].entries()) {
+        const ring: [number, number, number][] = [
+          panAt(side, frame.front),
+          topAt(side, frame.front, frame.frontTop),
+          panAt(side, frame.meet),
+        ];
+        roofMeshes.push(
+          add(
+            faceMesh(
+              `dormer-joue:${r.id}:${dormer.id}:${index}`,
+              ring,
+              ring.map((_, i) => i),
+              scene,
+            ),
+            plaster,
+            'roof',
+          ),
+        );
+      }
+      // Le toit de la lucarne : deux triangles, pour qu'un pan qui dérive un
+      // peu le long de l'emprise reste dans la tolérance de face.
+      const joinLow = panAt(frame.sideLow, frame.meet);
+      const joinHigh = panAt(frame.sideHigh, frame.meet);
+      const capFrontLow = topAt(frame.sideLow, frame.front, frame.frontTop);
+      const capFrontHigh = topAt(frame.sideHigh, frame.front, frame.frontTop);
+      for (const [index, triangle] of [
+        [capFrontLow, capFrontHigh, joinHigh],
+        [capFrontLow, joinHigh, joinLow],
+      ].entries())
+        roofMeshes.push(
+          add(
+            faceMesh(`dormer-toit:${r.id}:${dormer.id}:${index}`, triangle, [0, 1, 2], scene),
+            roof,
+            'roof',
+          ),
+        );
+      result.height = Math.max(result.height, frame.frontTop);
+    }
     for (const [i, face] of r.faces.entries())
-      roofMeshes.push(add(faceMesh(`roof:${r.id}:${i}`, r.vertices, face, scene), roof, 'roof'));
+      roofMeshes.push(
+        add(faceMesh(`roof:${r.id}:${i}`, r.vertices, face, scene, holes.get(i)), roof, 'roof'),
+      );
     for (const [i, face] of (r.gables ?? []).entries())
       roofMeshes.push(
         add(faceMesh(`gable:${r.id}:${i}`, r.vertices, face, scene), plaster, 'roof'),
