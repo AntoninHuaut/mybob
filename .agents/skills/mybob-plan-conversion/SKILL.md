@@ -1056,3 +1056,28 @@ conversion, avant de la déclarer terminée :
 Poser les questions une fois, à la fin de la passe, sous forme de liste courte et
 précise. Ne pas demander confirmation à chaque étape : le propriétaire a demandé
 le travail, pas un commentaire continu.
+
+## Sauvegarder les projets personnels
+
+Un projet `private-*.json` n'existe qu'à deux endroits : le clone local et le
+stockage du navigateur. Perdre le clone, c'est perdre la maison.
+
+```sh
+pnpm run backup:private
+```
+
+Copie chaque `public/projects/private-*.json` vers `reference-documents/<id>.json`.
+**À lancer après chaque passe de décision**, pas seulement à la fin : une copie
+qui date de trois passes est pire qu'aucune copie, parce qu'elle a l'air d'une
+sauvegarde. Sur une session réelle, les deux copies avaient dérivé de trois clés
+et de dix clés — dont tout le `site` du second plan, ajouté après la copie.
+
+`reference-documents/` peut être une **jonction** vers un dossier synchronisé
+(kDrive, OneDrive) : les scripts n'y voient aucune différence, et les PDF comme
+les copies sortent du dépôt. Le dossier est git-ignoré, donc git ne traverse
+jamais la jonction. Vérifier après création que `reference-documents/Plans.pdf`
+s'ouvre : une jonction cassée se voit à l'ouverture, pas à la création.
+
+Garder les états intermédiaires dans `reference-documents/historique/` plutôt que
+de les écraser : un modèle provisoire faux est la preuve de ce qui a échoué, et
+c'est ce qui a permis de comprendre pourquoi le second plan ne tenait pas.
