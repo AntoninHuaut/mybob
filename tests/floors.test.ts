@@ -115,9 +115,29 @@ test('garage walls reach the lower floor and service-door datum remains the high
   garageDoor.progress = 0;
   poseDoor(garageDoor);
   near(garageDoor.pivot.position.y, -0.12);
+  // Closed: stacked vertical panels centered in the door plane.
+  const count = garageDoor.leaves.length;
+  assert.ok(count >= 4, 'a sectional curtain needs several panels');
+  for (const [j, panel] of garageDoor.leaves.entries()) {
+    near(panel.position.y, ((j + 0.5) * garageDoor.opening.height) / count);
+    near(panel.position.z, 0);
+    near(panel.rotation.x, 0);
+  }
   garageDoor.progress = 1;
   poseDoor(garageDoor);
-  near(garageDoor.pivot.position.y, garageDoor.opening.height - 0.12 + 0.05);
+  // Open: the curtain rolled under the lintel and lies flat inside the garage.
+  for (const panel of garageDoor.leaves) {
+    near(panel.rotation.x, (garageDoor.fold * Math.PI) / 2, 0.01);
+    assert.ok(panel.position.z * garageDoor.fold > 0, 'each panel must fold into the garage');
+  }
+  garageDoor.leaves.forEach((mesh) => mesh.computeWorldMatrix(true));
+  for (const panel of garageDoor.leaves) {
+    const box = panel.getBoundingInfo().boundingBox;
+    assert.ok(
+      box.maximumWorld.y <= garageDoor.baseElevation + garageDoor.opening.height + 0.02,
+      'the rolled curtain stays under the lintel',
+    );
+  }
   const threshold = scene.getMeshByName('threshold:porte-service')!;
   assert.equal(threshold.checkCollisions, true);
   near(threshold.getBoundingInfo().boundingBox.minimumWorld.y, -0.12);

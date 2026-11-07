@@ -750,6 +750,25 @@ def printed_sill(registry, pages):
     return max(counts, key=counts.get)
 
 
+def stamp_exterior_openings(walls):
+    """Marque chaque baie d'un mur extérieur comme extérieure.
+
+    C'est un fait du mur, pas une décision : le mur porte déjà
+    ``exterior``. Sans le drapeau, le rendu coulisse un panneau plein au
+    lieu du vitrage et une porte de garage démarre ouverte — c'est ce
+    qu'un retour propriétaire a coûté sur un plan complet.
+    """
+    stamped = 0
+    for wall in walls:
+        if not wall.get("exterior"):
+            continue
+        for opening in wall.get("openings", []):
+            if not opening.get("exterior"):
+                opening["exterior"] = True
+                stamped += 1
+    return stamped
+
+
 def merge_openings(model_walls, generated_walls, tolerance=0.12):
     """Reporte sur le modèle les baies que les chaînes prouvent et qu'il n'a pas.
 
@@ -993,6 +1012,7 @@ def build(
     target = next(candidate for candidate in result["levels"] if candidate["id"] == level_id)
     if overrides:
         apply_overrides(walls, overrides)
+    stamped = stamp_exterior_openings(walls)
     target["walls"] = walls
     # En mode « baies seules », les pièces du modèle sont déjà justes : les
     # recaler sur les faces les déplacerait pour rien et casserait les surfaces.
@@ -1008,6 +1028,7 @@ def build(
         report["sill"] = sill
         report["openingsDropped"] = dropped
         report["sillGuessed"] = guessed
+        report["exteriorOpenings"] = stamped
     return result
 
 
@@ -1113,6 +1134,8 @@ def self_test():
     # L'arête sud va de x=6 vers x=0 : la porte à x 2,00..2,90 est à 3,10 du début.
     elif abs(openings[0]["width"] - 0.9) > 0.01 or abs(openings[0]["offset"] - 3.1) > 0.01:
         failures.append(f"baie mal placée : {openings[0]}")
+    elif not openings[0].get("exterior"):
+        failures.append("une baie de mur extérieur n'est pas marquée extérieure")
     # La fusion garde les murs du modèle que le dessin ne donne pas.
     with_model = json.loads(json.dumps(template))
     with_model["levels"][0]["walls"] = [

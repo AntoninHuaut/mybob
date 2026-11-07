@@ -24,6 +24,9 @@ const ROOM_WALL_TOLERANCE = 0.05;
 // Une cloison doit garder au moins ce contact de plancher avec le contour,
 // sinon elle flotte hors du niveau ; les murs extérieurs en sont exemptés.
 const OUTLINE_FLOOR_TOLERANCE = 0.01;
+// Un mur qui pénètre une trémie déclarée de plus que ce seuil flotte sur le
+// vide ; un mur qui en borde la face reste au-dessous.
+const VOID_OVERLAP_TOLERANCE = 0.01;
 const MAX_CELLS = 400_000;
 const cross = (a: Point2, b: Point2, c: Point2) =>
   (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
@@ -286,6 +289,25 @@ export function auditPlan(project: HouseProject) {
         value: total - inside,
         unit: 'm²',
       });
+    }
+    // A solid wall standing over a declared stairwell void floats on the hole:
+    // plan B's combles carried an invented wall hugging the flight where the
+    // drawing only shows a handrail, and it survived surfaces, connectivity
+    // and the outline check because its solids touch floor on both sides.
+    // Flanking walls end at the void faces and stay under the threshold.
+    for (const { wall, solids } of walls) {
+      if (wall.exterior) continue;
+      let overlap = 0;
+      for (const voidPolygon of level.floorVoids ?? [])
+        for (const solid of solids) overlap += intersectionArea(voidPolygon, solid);
+      if (overlap > VOID_OVERLAP_TOLERANCE)
+        issues.push({
+          level: level.id,
+          kind: 'wall-over-void',
+          ids: [wall.id],
+          value: overlap,
+          unit: 'm²',
+        });
     }
     // Wall ends that stop just short of another wall or of the outline: the classic
     // "almost joined" gap that leaves a sliver of floor or a hole in a partition.

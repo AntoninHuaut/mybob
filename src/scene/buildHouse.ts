@@ -26,6 +26,11 @@ export const WALL_BEVEL = 0.004;
 export const FIXTURE_LIGHT_INTENSITY = 0.32;
 export const FIXTURE_LIGHT_RANGE = 5.5;
 
+/** Panel count of a garage curtain; the roll animation uses one leaf per panel. */
+export const GARAGE_PANELS = 5;
+/** Track radius of the quarter-turn the curtain follows at the lintel. */
+export const GARAGE_TRACK_RADIUS = 0.12;
+
 export interface DoorInstance {
   id: string;
   exterior: boolean;
@@ -38,6 +43,8 @@ export interface DoorInstance {
   open: boolean;
   progress: number;
   target: number;
+  /** Local z direction the garage curtain folds into: the room side of the wall. */
+  fold: 1 | -1;
 }
 export interface HouseScene {
   root: TransformNode;
@@ -470,11 +477,19 @@ export function buildHouse(
     pivot.position.set(o.offset + (hingeEnd ? o.width - 0.025 : 0.025), openingBase, -0.025);
     const direction = hingeEnd ? -1 : 1;
     const width = o.width - 0.05;
+    // Local z towards the rooms behind the wall: a folding garage curtain rolls inside.
+    const fold: 1 | -1 =
+      ([1, -1] as const).find((sign) =>
+        level.rooms.some((room) =>
+          pointInPolygon(alongWall(wall, x, sign * (wall.thickness / 2 + 0.06)), room.polygon),
+        ),
+      ) ?? 1;
     const leaves: Mesh[] = [];
     let leaf: Mesh;
     if (o.kind === 'sliding') {
       // Two glazed panels. One translates behind the other when opened.
-      pivot.position.set(o.offset + 0.025, openingBase, 0);
+      // A sill above zero gives a sliding window on an apron wall.
+      pivot.position.set(o.offset + 0.025, sill, 0);
       leaf = box(
         `sliding-panel:${o.id}`,
         width / 2,
@@ -525,33 +540,35 @@ export function buildHouse(
       leaves.push(leaf, movingFrame);
       fixed.metadata = { kind: 'door', id: o.id };
     } else if (o.kind === 'garage') {
+      // A sectional curtain: each panel follows the track on its own, so the
+      // door rolls under the lintel instead of lifting as one rigid slab.
       pivot.position.set(x, openingBase, 0);
       leaf = box(
-        `garage-panel:${o.id}`,
+        `garage-panel:${o.id}:0`,
         width,
-        o.height - 0.04,
+        o.height / GARAGE_PANELS - 0.008,
         0.06,
         0,
-        o.height / 2,
+        0,
         0,
         materials.frame,
         pivot,
       );
       leaves.push(leaf);
-      for (let i = 1; i < 5; i++) {
-        const seam = box(
-          `garage-seam:${o.id}:${i}`,
-          width,
-          0.008,
-          0.064,
-          0,
-          (i * o.height) / 5,
-          0,
-          materials.slab,
-          pivot,
-          false,
+      for (let j = 1; j < GARAGE_PANELS; j++) {
+        leaves.push(
+          box(
+            `garage-panel:${o.id}:${j}`,
+            width,
+            o.height / GARAGE_PANELS - 0.008,
+            0.06,
+            0,
+            0,
+            0,
+            materials.frame,
+            pivot,
+          ),
         );
-        leaves.push(seam);
       }
     } else {
       leaf = box(
@@ -566,6 +583,52 @@ export function buildHouse(
         pivot,
       );
       leaves.push(leaf);
+      if (o.glazed) {
+        // French window: the solid leaf becomes stiles and rails around glass.
+        const stile = 0.05;
+        const rail = 0.05;
+        const pane = box(
+          `door-pane:${o.id}`,
+          width - 2 * stile,
+          o.height - 0.035 - 2 * rail,
+          0.012,
+          (direction * width) / 2,
+          o.height / 2,
+          0,
+          materials.glass,
+          pivot,
+        );
+        pane.receiveShadows = false;
+        leaves.push(pane);
+        for (const end of [0, 1] as const) {
+          leaves.push(
+            box(
+              `door-stile:${o.id}:${end}`,
+              stile,
+              o.height - 0.035,
+              0.04,
+              direction * (end ? width - stile / 2 : stile / 2),
+              o.height / 2,
+              0,
+              materials.frame,
+              pivot,
+            ),
+          );
+          leaves.push(
+            box(
+              `door-rail:${o.id}:${end}`,
+              Math.max(0.01, width - 2 * stile),
+              rail,
+              0.04,
+              (direction * width) / 2,
+              o.height / 2 + (end ? 1 : -1) * ((o.height - 0.035 - rail) / 2),
+              0,
+              materials.frame,
+              pivot,
+            ),
+          );
+        }
+      }
       for (const sign of [-1, 1]) {
         const handle = box(
           `handle:${o.id}:${sign}`,
@@ -597,6 +660,7 @@ export function buildHouse(
       open,
       progress: open ? 1 : 0,
       target: open ? 1 : 0,
+      fold,
     };
     doors.push(instance);
     poseDoor(instance);
@@ -659,7 +723,37 @@ export function poseDoor(door: DoorInstance) {
     door.leaf.position.x = width / 4 + (progress * width) / 2;
     if (door.leaves[1]) door.leaves[1].position.x = width / 2 + (progress * width) / 2;
   } else if (kind === 'garage') {
-    door.pivot.position.y = door.baseElevation + progress * (door.opening.height + 0.05);
+    // Sectional track: straight up the door plane, a quarter-turn of radius
+    // GARAGE_TRACK_RADIUS at the lintel, then horizontal under the ceiling.
+    // Each panel sits at its own arc station, so the curtain rolls instead of
+    // translating as one rigid slab.
+    const height = door.opening.height;
+    const radius = GARAGE_TRACK_RADIUS;
+    const bend = (Math.PI * radius) / 2;
+    const panel = height / door.leaves.length;
+    const travel = progress * height;
+    for (const [j, mesh] of door.leaves.entries()) {
+      const station = travel + (j + 0.5) * panel;
+      let y: number;
+      let depth: number;
+      let tilt: number;
+      if (station <= height - bend) {
+        y = station;
+        depth = 0;
+        tilt = 0;
+      } else if (station <= height) {
+        const theta = (station - (height - bend)) / radius;
+        y = height - bend + radius * Math.sin(theta);
+        depth = door.fold * radius * (1 - Math.cos(theta));
+        tilt = door.fold * theta;
+      } else {
+        y = height - bend + radius;
+        depth = door.fold * (radius + (station - height));
+        tilt = (door.fold * Math.PI) / 2;
+      }
+      mesh.position.set(0, y, depth);
+      mesh.rotation.x = tilt;
+    }
   } else {
     door.pivot.rotation.y =
       progress *

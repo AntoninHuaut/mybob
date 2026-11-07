@@ -107,7 +107,7 @@ Les murs peuvent être orientés librement. Les angles ne sont pas raccordés pa
 
 Pour une porte battante, `hinge` vaut `start` ou `end` et `swing` vaut `1` ou `-1`. La rotation s’effectue autour de l’axe vertical local. Le sens est à contrôler en 3D après avoir interprété le symbole du plan. La hauteur nominale est celle du passage, avant les petits profils de menuiserie visuels.
 
-Les fenêtres sont fixes dans cette version. Les baies coulissantes ont un panneau mobile et un panneau fixe. La porte de garage est simplifiée et se relève verticalement, sans mécanisme de rails.
+Les fenêtres sont fixes dans cette version. Les baies coulissantes ont un panneau mobile et un panneau fixe ; une allège non nulle en fait une fenêtre coulissante posée sur un mur d'allège. Une porte battante peut porter `glazed: true` pour un vantail vitré (porte-fenêtre) qui s'ouvre comme une porte. La porte de garage est un rideau sectionnel : les panneaux suivent un rail vertical, un quart de tour au linteau, puis un plan horizontal sous plafond, sans modélisation des rails eux-mêmes.
 
 ## Pièces
 
