@@ -130,6 +130,10 @@ ne comparent que les pièces qu'on leur donne. Il faut les trois portes, et
 La quatrième supprime les retours de cloison qui dépassaient dans une pièce :
 sur le plan A, l'audit passe de huit réserves à une.
 
+Un niveau sous versant ne suit pas cette boucle telle quelle : le plancher
+s'arrête au rampant et la page imprime trois tableaux de surfaces. Voir
+« Un niveau sous versant », plus bas.
+
 Quand un vrai plan révèle un motif que les fixtures ne couvrent pas, ajouter le
 motif à la fixture **et** la ligne dans ce fichier. Une fixture qui ne vient pas
 d'un vrai cas est une fixture qui rassure à tort.
@@ -281,13 +285,21 @@ les sept pièces des combles sortaient « pièce sans étiquette ». On croit al
 que les noms de pièces ne correspondent pas, alors que c'est le repère.
 
 La règle : si la plus longue chaîne d'un axe ne couvre pas l'emprise du niveau,
-c'est la **cote d'ensemble** qui donne l'origine — elle est centrée sur l'emprise,
-donc son milieu moins une demi-emprise est le bord. Chercher une cote dont la
-valeur vaut l'emprise (`8.50`, `12.40`) et de la bonne orientation.
+c'est la **cote d'ensemble** qui donne l'origine. Attention à ce qu'on appelle
+« l'emprise » : c'est celle du **bâtiment**, pas celle du plancher du niveau. Un
+niveau en retrait — des combles entre rampants, dont le plancher commence à
+1,27 m de la façade — a une emprise plus petite que la cote d'ensemble. Calculer
+l'origine avec l'emprise du niveau décale tout de la moitié de l'écart : sur le
+plan B, 4,45 m, et les sept pièces des combles ressortent « pièce sans étiquette ».
+
+Donc : chercher la cote dont la valeur vaut l'emprise du niveau ; à défaut, la
+plus grande cote de l'axe, et prendre **sa** valeur pour l'origine
+(`at - value * scale / 2`), jamais celle du niveau.
 
 Le symptôme à reconnaître : des étiquettes de surface qui tombent hors du niveau,
-ou un total calculé très inférieur au total imprimé. Vérifier le repère avant de
-soupçonner la géométrie.
+un total calculé très inférieur au total imprimé, ou un repère dont l'origine
+change entre deux niveaux de la même page. Vérifier le repère avant de soupçonner
+la géométrie.
 
 ## Les trois couches
 
@@ -625,6 +637,51 @@ bouger la pièce, et c'est cette porte qui le prouve.
 Un écart de surface ne dit pas _quel_ mur corriger. Il dit qu'il y en a un. La
 table `compare_plan.py --table` donne le candidat : `décalé` d'abord,
 `épaisseur divergente` ensuite.
+
+### Un niveau sous versant
+
+Un niveau de combles ne se lit pas comme un rez-de-chaussée, et trois choses y
+trompent :
+
+**Le plancher ne va pas jusqu'à la façade.** Le dessin porte un trait à 1,27 m de
+chaque façade longue : c'est là que le versant touche le plancher. Ce trait est
+la **limite du plancher**, pas une limite de hauteur. Le prendre pour une cloison
+de 5 cm est correct ; l'ignorer fait déborder les pièces sous le toit. La preuve
+est arithmétique : sur le plan B, la salle de bains fait 3,72 × 2,52 = 9,37 m²
+entre ce trait et sa cloison sud, contre 9,38 imprimé.
+
+**La limite H = 1,80 m est une autre ligne.** C'est un trait mixte, à 1,83 m et
+6,67 m sur le plan B, et ce n'est pas un mur : elle sépare la SH de l'annexe.
+Ne pas la confondre avec le rampant, et ne pas la poser en cloison.
+
+**La page imprime trois tableaux, pas un.** `SURFACES HABITABLES`,
+`SURFACES ANNEXES`, `SURFACES GARAGE`. La surface d'une pièce est
+**SH + annexe** — c'est le plancher, donc la SU. Sur le plan B : dressing 5,51 +
+1,61 = 7,12, salle de bains 7,67 + 1,71 = 9,38. Prendre la SH seule fait
+afficher une fausse erreur sur chaque pièce.
+
+**Et les surfaces imprimées ne se referment pas toujours.** Sur le plan B, après
+reconstruction depuis les aplats et les traits :
+
+| pièce           | imprimé | dessin | écart | cause                                                    |
+| --------------- | ------- | ------ | ----- | -------------------------------------------------------- |
+| salle de bains  | 9,38    | 9,37   | −0,01 | —                                                        |
+| chambre 2       | 14,44   | 14,44  | 0,00  | —                                                        |
+| dressing        | 7,12    | 7,04   | −0,08 | placard technique                                        |
+| chambre 3 ouest | 16,10   | 15,33  | −0,77 | 4,55 × 3,37 = 15,33 : le plan se contredit               |
+| chambre 3 est   | 13,90   | 13,11  | −0,79 | surface comptée en rectangle, sans l'about du couloir    |
+| WC              | 1,24    | 2,01   | +0,77 | pièce dessinée 0,85 × 2,39, surface imprimée 0,85 × 1,46 |
+| dégagement      | 4,14    | 3,48   | −0,66 | l'imprimé compte le passage de 0,67 m² à côté de la cage |
+
+Deux pièces tombent juste, une à 1 %, et quatre s'expliquent par le plan
+lui-même. **On ne redimensionne pas une pièce pour faire tomber le nombre** : on
+garde la géométrie du dessin, on stocke la surface imprimée, et on écrit la cause.
+Un niveau sous versant demande donc sa propre passe de décision, comme le RDC —
+la chaîne ne le devine pas.
+
+Dernière approximation à déclarer : les fenêtres de toit. L'app ne modélise pas
+de toit, donc un velux se pose sur le rampant, à l'arête basse, avec la largeur
+et la hauteur imprimées. C'est faux de 0,8 m en profondeur et il faut le dire.
 
 ### Les pièces se calculent depuis les murs
 
