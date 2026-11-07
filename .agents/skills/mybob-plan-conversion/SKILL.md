@@ -958,6 +958,25 @@ tout objet dont la face supérieure a la couleur de la surface en dessous. Donne
 à cette géométrie un matériau distinct et vérifier sur une capture plutôt qu'en
 raisonnant sur la scène.
 
+**Comment obtenir la capture.** Le projet est git-ignoré, donc il ne suffit pas
+d'ouvrir l'URL : il faut l'injecter dans le stockage local avant le rendu.
+
+```sh
+npx vite --host 127.0.0.1 --port <libre> --mode private
+```
+
+Puis un script Playwright qui, dans cet ordre : injecte le projet sous
+`maison-atelier:projects:v1`, pose `maison-atelier:last-project` à son `id`,
+met `maison-atelier:onboarding` à `{version: 1, cardSeen: true}`, recharge,
+attend trois secondes, ferme le panneau « premiers pas » (il masque le bas de la
+vue), puis clique `Vue 3D`, `Extérieur`, `Plan`, `Visite`. Couper les requêtes
+externes avec `page.route` pour que la capture ne dépende pas du réseau.
+
+Deux pièges : un port fixe entre en collision avec les autres agents et avec la
+suite e2e, qui prend le sien — en tirer un au hasard ; et l'état de la vue est
+mémorisé, donc une capture « Plan » après une capture « Visite » ne montre pas
+la même chose qu'au premier lancement.
+
 Puis corriger le registre et le modèle, et refaire les contrôles concernés.
 Lancer les vérifications CI et de confidentialité applicables ; ne publier que
 par le flux de pull request du dépôt.
