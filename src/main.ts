@@ -751,8 +751,13 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
   }
   if (viewer.mode !== next) {
     syncingViewerMode = true;
-    viewer.setMode(next);
-    syncingViewerMode = false;
+    try {
+      viewer.setMode(next);
+    } finally {
+      // A throw inside the viewer must not leave the guard armed: every later
+      // mode change would then be ignored and the chrome would never follow.
+      syncingViewerMode = false;
+    }
   }
   if (viewer.mode !== next) {
     mode = viewer.mode;

@@ -186,12 +186,15 @@ export function createInteriorOcclusion(
   scene: Scene,
   camera: Camera,
 ): SSAO2RenderingPipeline | undefined {
-  const buffer = scene.enableGeometryBufferRenderer();
-  if (!buffer || !buffer.isSupported) {
-    scene.disableGeometryBufferRenderer();
-    return undefined;
-  }
   try {
+    // The geometry buffer is a WebGL feature: on WebGPU `createMultipleRenderTarget`
+    // does not exist and Babylon throws instead of returning null. A visit without
+    // occlusion is still a visit, so the failure has to stay local to this function.
+    const buffer = scene.enableGeometryBufferRenderer();
+    if (!buffer || !buffer.isSupported) {
+      scene.disableGeometryBufferRenderer();
+      return undefined;
+    }
     const pipeline = new SSAO2RenderingPipeline(
       'interior-occlusion',
       scene,

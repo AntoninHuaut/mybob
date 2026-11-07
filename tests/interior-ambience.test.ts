@@ -4,6 +4,9 @@ import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import type { Level } from '../src/model/types';
+import { HouseViewer } from '../src/scene/viewer';
+import { createWalkCamera } from '../src/scene/walkCamera';
 import {
   bounceFaces,
   bouncePolynomial,
@@ -162,5 +165,114 @@ test('a hidden tab restarts the window instead of judging the resume hitch', () 
     hidden.probe.nextAt,
     INTERIOR_OCCLUSION_WARMUP_MS + INTERIOR_OCCLUSION_WARMUP_MS,
     'the visit gets a fresh warm-up after the tab comes back',
+  );
+});
+
+test('a backend without multiple render targets loses occlusion, not the visit', () => {
+  const { engine, scene, camera } = fixture();
+  try {
+    // WebGPU has no `createMultipleRenderTarget`: Babylon throws instead of returning
+    // null, and the throw used to escape `setMode` before the mode change completed.
+    (
+      scene as unknown as { enableGeometryBufferRenderer: () => never }
+    ).enableGeometryBufferRenderer = () => {
+      throw new TypeError('this._getEngine().createMultipleRenderTarget is not a function');
+    };
+    assert.equal(
+      createInteriorOcclusion(scene, camera),
+      undefined,
+      'an unsupported backend must degrade to no occlusion',
+    );
+    assert.ok(!scene.geometryBufferRenderer, 'the failed attempt must not leave a buffer behind');
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+const visitLevel: Level = {
+  id: 'level',
+  name: 'Test',
+  elevation: 0,
+  ceilingHeight: 2.5,
+  outline: [
+    [0, 0],
+    [4, 0],
+    [4, 4],
+    [0, 4],
+  ],
+  walls: [],
+  rooms: [
+    {
+      id: 'room',
+      name: 'Pièce',
+      kind: 'living',
+      polygon: [
+        [0, 0],
+        [4, 0],
+        [4, 4],
+        [0, 4],
+      ],
+      label: [2, 2],
+      viewpoint: [2, 2],
+    },
+  ],
+  lights: [],
+  spawn: { position: [2, 2], yaw: 0 },
+};
+
+test('a failing ambience never leaves the visit half-applied', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const orbit = new ArcRotateCamera('orbit', 0, 0.7, 8, Vector3.Zero(), scene);
+  const walk = createWalkCamera(scene, visitLevel);
+  const calls: string[] = [];
+  const canvas = { classList: { toggle() {} }, style: {} } as unknown as HTMLCanvasElement;
+  const viewer = Object.assign(Object.create(HouseViewer.prototype), {
+    scene,
+    level: visitLevel,
+    orbit,
+    walk,
+    canvas,
+    mode: 'plan',
+    eyeHeight: 1.65,
+    dimensions: [],
+    measureMeshes: [],
+    measureMode: false,
+    goToMode: false,
+    exteriorView: false,
+    sectionHeight: undefined,
+    clearKeys() {},
+    updateLighting() {
+      throw new Error('ambience down');
+    },
+    updateInteriorAmbience() {
+      throw new Error('ambience down');
+    },
+    updateSection() {
+      calls.push('section');
+    },
+    updateCutaway() {
+      calls.push('cutaway');
+    },
+    onModeChange: (mode: string) => calls.push(`mode:${mode}`),
+  }) as HouseViewer;
+  const camera = walk as unknown as { attachControl: () => void; detachControl: () => void };
+  camera.attachControl = () => {};
+  camera.detachControl = () => {};
+  const previousDocument = globalThis.document;
+  globalThis.document = { pointerLockElement: null } as unknown as Document;
+  try {
+    viewer.setMode('walk');
+  } finally {
+    globalThis.document = previousDocument;
+    scene.dispose();
+    engine.dispose();
+  }
+  assert.equal(viewer.mode, 'walk', 'the mode change itself must complete');
+  assert.deepEqual(
+    calls,
+    ['section', 'cutaway', 'mode:walk'],
+    'the section plane, the cutaways and the chrome all depend on reaching the end',
   );
 });
