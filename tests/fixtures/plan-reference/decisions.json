@@ -1,0 +1,220 @@
+{
+  "schemaVersion": 1,
+  "project": "maison-reference",
+  "level": "rdc",
+  "registry": "tests/fixtures/plan-reference/registry.json",
+  "pages": [1],
+  "faces": [
+    {
+      "id": "nord",
+      "wall": "nord",
+      "evidence": {
+        "class": "printed",
+        "chain": {
+          "page": 1,
+          "axis": "horizontal",
+          "perpendicular": 50.0
+        },
+        "span": {
+          "start": 0,
+          "end": 4
+        },
+        "length": 6.0,
+        "startOffset": 0.0,
+        "endOffset": 0.0,
+        "note": "cote imprimée 6.000 m = segments 0..4 (6.000 m) de la chaîne ; origine du mur 0.000 m sur la chaîne",
+        "wallOrigin": 0.0
+      },
+      "unresolved": false
+    },
+    {
+      "id": "sud",
+      "wall": "sud",
+      "evidence": {
+        "class": "printed",
+        "chain": {
+          "page": 1,
+          "axis": "horizontal",
+          "perpendicular": 350.0
+        },
+        "span": {
+          "start": 0,
+          "end": 3
+        },
+        "length": 6.0,
+        "startOffset": 0.0,
+        "endOffset": 0.0,
+        "note": "cote imprimée 6.000 m = segments 0..3 (6.000 m) de la chaîne ; origine du mur 0.000 m sur la chaîne",
+        "wallOrigin": 0.0
+      },
+      "unresolved": false
+    },
+    {
+      "id": "ouest",
+      "wall": "ouest",
+      "evidence": {
+        "class": "derived",
+        "chain": {
+          "page": 1,
+          "axis": "vertical",
+          "perpendicular": 50.0
+        },
+        "span": {
+          "start": 0,
+          "end": 2
+        },
+        "length": 4.0,
+        "startOffset": -0.1,
+        "endOffset": 0.1,
+        "note": "cote imprimée 4.000 m = segments 0..2 (4.000 m) de la chaîne ; décalages -0.100/+0.100 m d'épaisseurs déclarées → axe 3.800 m ; origine du mur 0.100 m sur la chaîne",
+        "wallOrigin": 0.1
+      },
+      "unresolved": false
+    },
+    {
+      "id": "est",
+      "wall": "est",
+      "evidence": {
+        "class": "derived",
+        "chain": {
+          "page": 1,
+          "axis": "vertical",
+          "perpendicular": 50.0
+        },
+        "span": {
+          "start": 0,
+          "end": 2
+        },
+        "length": 4,
+        "startOffset": -0.1,
+        "endOffset": 0.1,
+        "note": "cote imprimée 4.000 m = segments 0..2 (4.000 m) de la chaîne ; décalages -0.100/+0.100 m d'épaisseurs déclarées → axe 3.800 m"
+      },
+      "unresolved": false
+    },
+    {
+      "id": "refend",
+      "wall": "refend",
+      "evidence": {
+        "class": "printed-partial",
+        "chain": {
+          "page": 1,
+          "axis": "vertical",
+          "perpendicular": 300.0
+        },
+        "span": {
+          "start": 0,
+          "end": 3
+        },
+        "length": 3.6,
+        "startOffset": 0.0,
+        "endOffset": 0.0,
+        "note": "cote imprimée 3.600 m = segments 0..3 (3.600 m) de la chaîne ; chaîne ouverte, preuve partielle ; origine du mur 0.000 m sur la chaîne",
+        "wallOrigin": 0.0
+      },
+      "unresolved": false
+    }
+  ],
+  "openings": [
+    {
+      "id": "baie-nord",
+      "wall": "nord",
+      "evidence": {
+        "class": "printed",
+        "chain": {
+          "page": 1,
+          "axis": "horizontal",
+          "perpendicular": 50.0
+        },
+        "segmentIndex": 1,
+        "cumulativeOffset": 0.5,
+        "printedWidth": 1.2,
+        "printedHeight": 2.1,
+        "convention": "both",
+        "note": "cote imprimée 1.20/2.10 m (convention : both) ; position vérifiée sur la suite du mur",
+        "wallOrigin": 0.0
+      },
+      "unresolved": false
+    },
+    {
+      "id": "fen-nord",
+      "wall": "nord",
+      "evidence": {
+        "class": "printed",
+        "chain": {
+          "page": 1,
+          "axis": "horizontal",
+          "perpendicular": 50.0
+        },
+        "segmentIndex": 3,
+        "cumulativeOffset": 3.0,
+        "printedWidth": 0.8,
+        "printedHeight": 1.0,
+        "convention": "both",
+        "note": "cote imprimée 0.80/1.00 m (convention : both) ; position vérifiée sur la suite du mur",
+        "wallOrigin": 0.0
+      },
+      "unresolved": false
+    },
+    {
+      "id": "porte-sud",
+      "wall": "sud",
+      "evidence": {
+        "class": "printed",
+        "chain": {
+          "page": 1,
+          "axis": "horizontal",
+          "perpendicular": 350.0
+        },
+        "segmentIndex": 1,
+        "cumulativeOffset": 2.0,
+        "printedWidth": 0.9,
+        "printedHeight": 2.1,
+        "convention": "both",
+        "note": "cote imprimée 0.90/2.10 m (convention : both) ; position vérifiée sur la suite du mur",
+        "wallOrigin": 0.0
+      },
+      "unresolved": false
+    },
+    {
+      "id": "fen-ouest",
+      "wall": "ouest",
+      "evidence": {
+        "class": "printed",
+        "chain": {
+          "page": 1,
+          "axis": "vertical",
+          "perpendicular": 50.0
+        },
+        "segmentIndex": 1,
+        "cumulativeOffset": 1.1,
+        "printedWidth": 1.0,
+        "printedHeight": 1.0,
+        "convention": "both",
+        "note": "cote imprimée 1.00/1.00 m (convention : both) ; position vérifiée sur la suite du mur",
+        "wallOrigin": 0.1
+      },
+      "unresolved": false
+    },
+    {
+      "id": "porte-refend",
+      "wall": "refend",
+      "evidence": {
+        "class": "printed",
+        "chain": {
+          "page": 1,
+          "axis": "vertical",
+          "perpendicular": 300.0
+        },
+        "segmentIndex": 1,
+        "cumulativeOffset": 1.0,
+        "printedWidth": 0.8,
+        "printedHeight": 2.1,
+        "convention": "both",
+        "note": "cote imprimée 0.80/2.10 m (convention : both) ; position vérifiée sur la suite du mur",
+        "wallOrigin": 0.0
+      },
+      "unresolved": false
+    }
+  ]
+}
