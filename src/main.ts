@@ -114,9 +114,11 @@ let receivedShare: DecodedShareLink | undefined;
 let linkHashTimer: ReturnType<typeof setTimeout>;
 let desiredLinkHash: string | undefined;
 let linkHashPending = false;
+let linkHashWriteScheduled = false;
 const LINK_HASH_DEBOUNCE = 500;
 const READ_ONLY_TOAST =
   'Ce projet a été reçu par lien : il est en lecture seule. « Ajouter à mes projets » pour le modifier.';
+const LINK_HASH_MEMORY = 'maison-atelier:last-link-hash';
 
 el('#app').innerHTML = appTemplate();
 
@@ -943,6 +945,7 @@ function downloadProject() {
 
 function scheduleLinkHashUpdate() {
   clearTimeout(linkHashTimer);
+  linkHashWriteScheduled = true;
   linkHashTimer = setTimeout(() => void writeLinkHash(), LINK_HASH_DEBOUNCE);
 }
 
@@ -953,6 +956,7 @@ function scheduleLinkHashUpdate() {
  */
 async function writeLinkHash() {
   clearTimeout(linkHashTimer);
+  linkHashWriteScheduled = false;
   if (readOnlyLink || !current) return;
   let hash: string;
   try {
@@ -962,6 +966,11 @@ async function writeLinkHash() {
   }
   desiredLinkHash = hash;
   try {
+    sessionStorage.setItem(LINK_HASH_MEMORY, hash);
+  } catch {
+    /* Sans ce souvenir, un hash périmé pourrait être pris pour un vieux lien. */
+  }
+  try {
     history.replaceState(null, '', hash);
     linkHashPending = false;
   } catch {
@@ -969,11 +978,26 @@ async function writeLinkHash() {
   }
 }
 
-/** Le hash raté (replaceState refusé) est rattrapé à la prochaine interaction ou à la sortie. */
+/**
+ * En quittant la page, une écriture du hash en attente ne partira jamais (le deflate est
+ * asynchrone) : l'URL restée sur place décrirait un état périmé, et un rechargement la
+ * prendrait pour un vieux lien. Le hash est retiré synchronement — l'état d'un projet
+ * possédé vit dans le stockage local, et la prochaine modification réécrira le hash.
+ */
 function wireLinkHashFlush() {
-  window.addEventListener('pagehide', () => void writeLinkHash());
+  const dropStaleHash = () => {
+    if (readOnlyLink || !current || !linkHashWriteScheduled) return;
+    linkHashWriteScheduled = false;
+    desiredLinkHash = undefined;
+    try {
+      history.replaceState(null, '', location.pathname + location.search);
+    } catch {
+      /* Le hash périmé reste : sans suite, il n'est jamais relu qu'au chargement. */
+    }
+  };
+  window.addEventListener('pagehide', dropStaleHash);
   document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') void writeLinkHash();
+    if (document.visibilityState === 'hidden') dropStaleHash();
   });
   window.addEventListener('pointerup', () => {
     if (!current || readOnlyLink) return;
@@ -1143,6 +1167,24 @@ async function importProject(file: File) {
  * jusqu'à « Ajouter à mes projets ».
  */
 async function openSharedLink(fallbackId: string) {
+  // Reprise d'onglet : une écriture du hash interrompue par un rechargement laisse dans
+  // l'URL un hash périmé. S'il est le dernier écrit par cet onglet, ce n'est pas un lien
+  // partageable : l'état local (plus récent) est chargé sans dialogue.
+  let ownLastHash: string | null = null;
+  try {
+    ownLastHash = sessionStorage.getItem(LINK_HASH_MEMORY);
+  } catch {
+    /* Sans mémoire, le dialogue jugera normalement. */
+  }
+  if (ownLastHash !== null && ownLastHash === location.hash) {
+    try {
+      history.replaceState(null, '', location.pathname + location.search);
+    } catch {
+      /* Sans conséquence : rechargé, le hash sera reconnu de nouveau. */
+    }
+    loadProject(fallbackId);
+    return;
+  }
   let link: DecodedShareLink;
   try {
     link = await decodeShareLinkHash(location.hash);
