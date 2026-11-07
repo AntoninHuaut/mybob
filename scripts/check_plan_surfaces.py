@@ -27,6 +27,9 @@ from pathlib import Path
 
 DEFAULT_TOLERANCE = 0.05  # m², écart accepté entre surface calculée et imprimée
 NEAREST_LIMIT = 2.0  # m, distance maximale pour apparier une étiquette orpheline
+POINTS_PER_METRE = 2834.6457  # 1000 mm à 1:1, en points PostScript
+STANDARD_SCALES = (20, 25, 33.333, 50, 75, 100, 125, 200, 250, 500)
+SCALE_TOLERANCE = 0.01  # 1 %, au-delà le fichier n'est pas à l'échelle 1:1
 
 
 def load(path):
@@ -124,6 +127,22 @@ def axis_frame(chains, axis):
     return scale, origin, scales[0], scales[-1], longest.get("sum")
 
 
+def scale_hint(scale):
+    """Échelle normalisée la plus proche, et l'écart relatif.
+
+    Un PDF vectoriel exporté à 1:1 tombe exactement sur 2834,6457 / N points par
+    mètre. Un écart franc veut dire que le fichier a été redimensionné à
+    l'export : la cote imprimée reste juste, le ratio du cartouche non.
+    """
+    denominator = min(STANDARD_SCALES, key=lambda n: abs(POINTS_PER_METRE / n - scale))
+    expected = POINTS_PER_METRE / denominator
+    return {
+        "denominator": denominator,
+        "expected": round(expected, 3),
+        "deviation": round(scale / expected - 1, 4),
+    }
+
+
 def transform(page):
     """Repère points -> mètres, déduit des chaînes de cotes de la page."""
     chains = page.get("chains") or []
@@ -136,6 +155,7 @@ def transform(page):
         "originZ": round(origin_z, 4),
         "scaleSpread": [round(min(low_x, low_z), 3), round(max(high_x, high_z), 3)],
         "span": [span_x, span_z],
+        "scale": scale_hint((scale_x + scale_z) / 2),
     }
 
 
@@ -304,7 +324,7 @@ def build(registry, project, level_id, page_index, tolerance):
 
 def self_test():
     """Non-régression sur un registre et un projet synthétiques."""
-    scale, origin = 40.0, 100.0
+    scale, origin = POINTS_PER_METRE / 50, 100.0
     registry = {
         "pages": [
             {
@@ -373,6 +393,8 @@ def self_test():
         failures.append(f"échelle {frame['scaleX']}/{frame['scaleZ']} au lieu de {scale}")
     if abs(frame["originX"] - origin) > 0.01 or abs(frame["originZ"] - origin) > 0.01:
         failures.append(f"origine {frame['originX']}/{frame['originZ']} au lieu de {origin}")
+    if frame["scale"]["denominator"] != 50 or abs(frame["scale"]["deviation"]) > 0.001:
+        failures.append(f"échelle reconnue {frame['scale']} au lieu de 1/50 exact")
     by_room = {row["room"]: row for row in result["rows"]}
     if by_room["a"]["verdict"] != "exact":
         failures.append(f"pièce a {by_room['a']}")
@@ -407,10 +429,20 @@ def main(argv):
     )
     print_table(result["rows"], args.tolerance)
     print()
+    frame = result["frame"]
+    hint = frame["scale"]
     print(
-        f"repère : {result['frame']['scaleX']:.2f} pt/m, "
-        f"origine {result['frame']['originX']:.2f}/{result['frame']['originZ']:.2f}"
+        f"repère : {frame['scaleX']:.2f} pt/m, "
+        f"origine {frame['originX']:.2f}/{frame['originZ']:.2f}, "
+        f"1/{hint['denominator']:g} attendu {hint['expected']:.3f} "
+        f"({hint['deviation'] * 100:+.1f} %)"
     )
+    if abs(hint["deviation"]) > SCALE_TOLERANCE:
+        print(
+            "attention : le fichier n'est pas à l'échelle 1:1, il a été "
+            "redimensionné à l'export. Les cotes imprimées restent justes, le "
+            "ratio du cartouche non."
+        )
     print(
         f"total imprimé {result['summary']['printedTotal']:.2f} m², "
         f"total calculé {result['summary']['computedTotal']:.2f} m²"

@@ -52,6 +52,44 @@ utilisables parce qu'ils n'inventent rien : `extract_plan.py` ne rend que des
 rectangles remplis, `generate_project.py` ne place une baie que sur une chaîne
 refermée. Ce qu'ils ne savent pas lire manque, et c'est à l'IA de le voir.
 
+## Ce que dit l'état de l'art
+
+Deux familles de méthodes, et le choix dépend d'une seule question : le PDF
+est-il vectoriel ?
+
+- **Vectoriel** — les méthodes géométriques et à base de règles dominent et
+  atteignent une bonne exactitude. C'est notre cas. La littérature récente
+  décrit la chaîne en quatre modules : grille d'axes et détection des cotes,
+  reconnaissance du texte et **récupération de l'échelle**, reconstruction de la
+  topologie des traits, rectification géométrique. C'est exactement la nôtre.
+- **Scan** — il faut de l'apprentissage profond (segmentation sémantique,
+  détection d'objets, OCR). Les méthodes géométriques y échouent sur le bruit et
+  les traits cassés.
+
+Ne pas sortir l'apprentissage profond pour un plan vectoriel : il n'apporte rien
+et il coûte la reproductibilité.
+
+Deux résultats établis ailleurs qui confirment le partage :
+
+- **Les modèles de vision lisent mal les plans.** Un modèle récent extrait
+  correctement les noms de pièces et les surfaces, mais hallucine ou rate des
+  détails de mur, et un mur mal lu produit une conclusion absurde. Une image de
+  feuille envoyée à un modèle est de plus réduite à environ 1568 px sur le grand
+  côté : le texte des cotes d'un A3 dense y disparaît. La lecture reste au
+  script.
+- **La méthode du manuel « traits épais = murs, traits fins = portes » ne
+  s'applique pas à un PDF.** Elle suppose des calques ou un dessin propre. Dans
+  un PDF il n'y a pas de calques, et les lignes de cote sont aussi des paires de
+  traits parallèles : c'est précisément pour cela que l'appariement de traits a
+  rendu 44 murs au lieu de 25. Le manuel ne dit pas comment distinguer une cote
+  d'un mur ; le dessin, si — par l'aplat de couleur des cloisons et par les
+  chaînes refermées.
+
+Sources utiles : `solidtakeoff.com/guides/how-to-find-the-scale-of-a-pdf-drawing`
+(hiérarchie des sources d'échelle), `mdpi.com/2075-5309/16/5/1043` (chaîne en
+quatre modules, vectoriel contre scan), `axcelerate.ai/blogs/ai-powered-floor-plan-analysis`
+(limites mesurées des modèles de vision sur les plans).
+
 ## Établir la preuve avant de générer
 
 Inventorier les fichiers source réels, leurs empreintes SHA-256, le nombre de
@@ -115,6 +153,40 @@ l'échelle imprimée : 200 dpi suffisent à 1/50, mais un dessin à 1/75 demande
 cinq murs d'un plan à 1/75 ont été déclarés manquants à 120 dpi et sont tous
 réapparus à 300 dpi. `compare_plan.py` avertit quand le mur déclaré le plus fin
 tombe sous huit pixels.
+
+### L'échelle
+
+Trois sources, et elles ne se valent pas. L'ordre de préférence est celui de la
+pratique du métier, pas une préférence personnelle :
+
+1. **Une cote imprimée** — une cote isolée ou une chaîne refermée. Elle reste
+   juste même si le PDF a été redimensionné à l'export. C'est la seule source
+   dont on se sert pour mesurer.
+2. **Une échelle graphique** — un cartouche gradué dessiné sur la feuille. Il
+   rétrécit avec le dessin, donc il reste juste après un redimensionnement. Bon
+   recoupement, jamais une source de mesure.
+3. **Le ratio du cartouche** (`1/75`, `1:50`) — une affirmation sur la feuille
+   imprimée d'origine, pas sur le fichier reçu. Un PDF exporté à 117 % garde son
+   `1/75` et ne mesure plus rien. À lire comme une indication, à ne jamais
+   utiliser comme échelle.
+
+Un plan vectoriel exporté à l'échelle 1:1 donne exactement **37,795 pt/m à 1/75**
+et **56,693 pt/m à 1/50**. Mesuré sur les deux maisons du constructeur : 37,79
+sur Émiéville, 56,66 à 56,71 sur Sannerville. Si la valeur déduite des chaînes
+s'écarte de ces nombres, c'est le fichier qui a été redimensionné, pas la méthode
+qui est fausse : garder la valeur déduite et le noter.
+
+Prendre la **médiane** des échelles par chaîne, jamais la moyenne : une chaîne
+mal appariée donne un point aberrant (53,11 pt/m relevé sur une page à 1/50) et
+la moyenne l'emporterait sur les six chaînes justes.
+
+`check_plan_surfaces.py` imprime l'échelle reconnue et son écart au standard le
+plus proche (`1/75 attendu 37.795 (-0.0 %)`). Au-delà de 1 %, il avertit : le
+fichier a été redimensionné à l'export. C'est un diagnostic, pas une correction —
+la mesure reste celle des cotes.
+
+Sur un scan il n'y a pas de chaîne : l'échelle se lit dans le cartouche, et le
+ratio redevient la seule source, avec l'incertitude qui va avec.
 
 ## Les trois couches
 
