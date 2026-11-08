@@ -214,6 +214,43 @@ test('un lien plus ancien que l’état local propose de garder les deux', async
   await expect(page.locator('#received-banner')).toBeHidden();
 });
 
+test('à 10 projets, « Garder les deux » affiche la limite sans écran fatal', async ({ page }) => {
+  // Neuf projets déjà conservés, le dixième est celui du lien.
+  const demo = JSON.parse(await readFile('public/projects/studio-demo.json', 'utf8'));
+  await page.evaluate((base) => {
+    const others = Array.from({ length: 9 }, (_, i) => ({
+      ...base,
+      id: `remplissage-${i}`,
+      name: `Remplissage ${i}`,
+    }));
+    localStorage.setItem('maison-atelier:projects:v1', JSON.stringify(others));
+  }, demo);
+  await page.reload();
+  await expect(page.locator('#project-select')).toContainText('Remplissage 8');
+  await importLinkProject(page);
+  const older = await sharedHash(page);
+  await furnishings(page);
+  await page.getByRole('button', { name: 'Ajouter un meuble', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Ajouter un meuble', exact: true });
+  await dialog.getByLabel('Nom', { exact: true }).fill('Fauteuil limite');
+  await dialog
+    .getByLabel(/Largeur/)
+    .first()
+    .fill('90');
+  await dialog.getByRole('button', { name: 'Ajouter dans la maison' }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect.poll(() => new URL(page.url()).hash).not.toBe(new URL(older).hash);
+
+  await page.goto(older);
+  await page.reload();
+  await expect(page.getByText('diffèrent', { exact: false })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Garder les deux' }).click();
+  await expect(page.locator('#toast')).toContainText('10 projets');
+  await expect(page.locator('#fatal-error')).toBeHidden();
+  await expect(page.getByRole('button', { name: 'Plan', exact: true })).toBeEnabled();
+  await expect(page.locator('#project-select option')).toHaveCount(11);
+});
+
 test('un lien au hash corrompu charge le projet local avec un avertissement', async ({ page }) => {
   // L'application réécrit le hash de l'état courant 500 ms après le chargement. Sans attendre
   // cette écriture, elle écrase `#p1:abc` avant le rechargement et aucun avertissement
