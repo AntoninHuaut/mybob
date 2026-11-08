@@ -214,7 +214,9 @@ test('un lien plus ancien que l’état local propose de garder les deux', async
   await expect(page.locator('#received-banner')).toBeHidden();
 });
 
-test('à 10 projets, « Garder les deux » affiche la limite sans écran fatal', async ({ page }) => {
+test('à 10 projets, « Garder les deux » propose de remplacer un projet, sans écran fatal', async ({
+  page,
+}) => {
   // Neuf projets déjà conservés, le dixième est celui du lien.
   const demo = JSON.parse(await readFile('public/projects/studio-demo.json', 'utf8'));
   await page.evaluate((base) => {
@@ -244,11 +246,28 @@ test('à 10 projets, « Garder les deux » affiche la limite sans écran fatal',
   await page.goto(older);
   await page.reload();
   await expect(page.getByText('diffèrent', { exact: false })).toBeVisible({ timeout: 20_000 });
+  const total = await page.locator('#project-select option').count();
   await page.getByRole('button', { name: 'Garder les deux' }).click();
-  await expect(page.locator('#toast')).toContainText('10 projets');
+  const limit = page.getByRole('dialog', { name: /Limite de 10 projets/ });
+  await expect(limit).toBeVisible();
   await expect(page.locator('#fatal-error')).toBeHidden();
-  await expect(page.getByRole('button', { name: 'Plan', exact: true })).toBeEnabled();
-  await expect(page.locator('#project-select option')).toHaveCount(11);
+
+  // Annuler ne supprime ni n'ajoute rien.
+  await limit.getByRole('button', { name: 'Annuler' }).click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.locator('#project-select option')).toHaveCount(total);
+
+  // Remplacer : la copie est ajoutée, le projet choisi disparaît, le total reste à 10 importés.
+  await page.reload();
+  await expect(page.getByText('diffèrent', { exact: false })).toBeVisible({ timeout: 20_000 });
+  await page.getByRole('button', { name: 'Garder les deux' }).click();
+  await page.getByLabel('Projet à remplacer').selectOption({ label: 'Remplissage 0' });
+  await page.getByRole('button', { name: 'Remplacer ce projet' }).click();
+  await expect(page.locator('#toast')).toContainText('vos projets');
+  await expect(page.locator('#fatal-error')).toBeHidden();
+  await expect(page.locator('#project-select option')).toHaveCount(total);
+  await expect(page.locator('#project-select')).not.toContainText('Remplissage 0');
+  await expect(page.locator('#project-select')).toContainText('Remplissage 8');
 });
 
 test('un lien au hash corrompu charge le projet local avec un avertissement', async ({ page }) => {

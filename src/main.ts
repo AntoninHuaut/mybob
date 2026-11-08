@@ -72,9 +72,11 @@ import {
   type DecodedShareLink,
 } from './model/shareLink';
 import { packShareDocument, type ShareDocument } from './model/linkPacker';
+import { chooseProjectToReplace } from './ui/chooseProjectToReplace';
 import { confirmLinkDivergence } from './ui/confirmLinkDivergence';
 
 const STORAGE = 'maison-atelier:projects:v1';
+const MAX_IMPORTED = 10;
 const el = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
 let viewer: HouseViewer;
@@ -1174,6 +1176,23 @@ function readProjectDocument(input: unknown): ProjectDocument {
   return { project, staged, variants };
 }
 
+function purgeProjectData(project: HouseProject) {
+  const keys = [
+    variantsStorageKey(project.id),
+    `maison-atelier:solar:${project.id}`,
+    ...project.levels.map((level) => layoutStorageKey(project.id, level.id)),
+  ];
+  for (const key of keys) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      /* Données orphelines sans conséquence : le projet n'est plus listé. */
+    }
+  }
+  layoutSession.forgetProject(project.id);
+  clearProjectHistories(project.id);
+}
+
 /**
  * Installe un projet validé dans ce navigateur : sauvegarde locale, variantes, puis
  * chargement. `confirmed` court-circuite la demande de remplacement (choix déjà posé
@@ -1215,8 +1234,23 @@ async function installProjectDocument(
   const previous = imported;
   const previousProjectId = current.id;
   const previousLevelId = viewer.level.id;
-  const next = [...imported.filter((p) => p.id !== project.id), project];
-  if (next.length > 10) throw new Error('Vous pouvez conserver jusqu’à 10 projets importés.');
+  let next = [...imported.filter((p) => p.id !== project.id), project];
+  let replaced: HouseProject | undefined;
+  if (next.length > MAX_IMPORTED) {
+    // Limite atteinte : on propose de remplacer un projet plutôt que d'échouer. Rien n'est
+    // supprimé avant que l'installation du nouveau n'ait réussi.
+    const choice = await chooseProjectToReplace(
+      imported.filter((p) => p.id !== project.id).map(({ id, name }) => ({ id, name })),
+      MAX_IMPORTED,
+      (open) => {
+        if (open && document.pointerLockElement) document.exitPointerLock();
+        viewer.setPaused(open);
+      },
+    );
+    replaced = imported.find((p) => p.id === choice);
+    if (!replaced) return false;
+    next = [...imported.filter((p) => p.id !== project.id && p.id !== replaced!.id), project];
+  }
   assertProjectsUnchanged();
   const backups = [
     [variantsStorageKey(project.id), localStorage.getItem(variantsStorageKey(project.id))],
@@ -1251,6 +1285,7 @@ async function installProjectDocument(
     loadProject(previousProjectId, previousLevelId);
     throw error;
   }
+  if (replaced) purgeProjectData(replaced);
   return true;
 }
 
