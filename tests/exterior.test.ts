@@ -517,3 +517,22 @@ test('dormer validation rejects misaligned emprises, hidden walls and runaway sl
   q.levels[1].walls[2].height = 2.2;
   assert.throws(() => validateProject(q), /Hauteur de mur invalide/);
 });
+
+test('facade skins reach the corner instead of uncovering the neighbour end cap', () => {
+  const { built, engine, scene } = exterior();
+  const facades = (id: string) => built.meshes.filter((m) => m.name.startsWith(`facade:${id}:`));
+  const facadeMax = (id: string, axis: 'x' | 'z') =>
+    Math.max(...facades(id).map((m) => m.getBoundingInfo().boundingBox.maximumWorld[axis]));
+  const facadeMin = (id: string, axis: 'x' | 'z') =>
+    Math.min(...facades(id).map((m) => m.getBoundingInfo().boundingBox.minimumWorld[axis]));
+  // A centreline-to-centreline corner: the east skin must reach the north
+  // wall's outer skin plane, 6.112 m, not stop at the centreline endpoint 6.
+  near(facadeMax('mur-est-01', 'z'), 6.112, 0.01);
+  near(facadeMax('mur-nord-01', 'x'), 12.112, 0.01);
+  // Collinear joins keep their span: the west garage section starts where the
+  // first west section ends, no stretch over its neighbour.
+  near(facadeMin('mur-ouest-garage', 'z'), 0.391, 0.01);
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
+});

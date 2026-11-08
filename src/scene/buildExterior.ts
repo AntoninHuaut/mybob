@@ -81,13 +81,17 @@ function faceMesh(
  * Height of the roof over a wall strip: the lowest point of the pans that cover
  * it. A band cut at the drip edge leaves a slit into the attic wherever the roof
  * overhangs, because the eave sits lower than the roof at the wall plane.
+ * The strip is measured between two offsets along the centre line: the band
+ * reaches into the corners, where the pan hangs lower than above the wall.
  */
-function roofOverStrip(roofs: SiteRoof[], wall: Wall, length: number): number {
+function roofOverStrip(roofs: SiteRoof[], wall: Wall, from: number, to: number): number {
   let lowest = Number.POSITIVE_INFINITY;
-  const steps = Math.max(2, Math.ceil(length / 0.1));
+  const span = to - from;
+  if (span <= 0) return lowest;
+  const steps = Math.max(2, Math.ceil(span / 0.1));
   for (let i = 0; i <= steps; i++) {
     for (const side of [-1, 0, 1]) {
-      const [x, z] = alongWall(wall, (i / steps) * length, (side * wall.thickness) / 2);
+      const [x, z] = alongWall(wall, from + (i / steps) * span, (side * wall.thickness) / 2);
       for (const roof of roofs)
         for (const face of roof.faces) {
           if (!pointInOrOnPolygon([x, z], roofFacePlanOutline(roof.vertices, face))) continue;
@@ -97,6 +101,58 @@ function roofOverStrip(roofs: SiteRoof[], wall: Wall, length: number): number {
     }
   }
   return lowest;
+}
+
+/**
+ * A facade skin spans the wall's centerline length, but a skin panel ends
+ * where the wall does: at a corner joined centerline against centerline, the
+ * neighbour's end cap then shows as a pale strip. Each wall end that terminates
+ * inside a perpendicular exterior wall's core must instead reach that
+ * neighbour's outer skin plane. Ends already cut at the neighbour's outer face,
+ * collinear joins and oblique corners keep their span: they close by
+ * themselves or need a miter that no offset reproduces.
+ */
+function cornerStretch(
+  exterior: Wall[],
+  wall: Wall,
+  outline: Point2[],
+): { start: number; end: number } {
+  const length = wallLength(wall);
+  const dx = (wall.end[0] - wall.start[0]) / length;
+  const dz = (wall.end[1] - wall.start[1]) / length;
+  let start = 0;
+  let end = 0;
+  for (const w of exterior) {
+    if (w.id === wall.id) continue;
+    const wLen = wallLength(w);
+    if (wLen < 1e-6) continue;
+    const wdx = (w.end[0] - w.start[0]) / wLen;
+    const wdz = (w.end[1] - w.start[1]) / wLen;
+    if (Math.abs(wdx * dx + wdz * dz) > 0.1) continue;
+    const half = w.thickness / 2;
+    const probe = alongWall(w, wLen / 2, half + 0.037);
+    const signW = pointInPolygon(probe, outline) ? -1 : 1;
+    const nx = signW * -wdz;
+    const nz = signW * wdx;
+    const axis = dx * nx + dz * nz;
+    if (Math.abs(axis) < 0.9) continue;
+    const rel0 = [wall.start[0] - w.start[0], wall.start[1] - w.start[1]];
+    const cap = 1.5;
+    // Where w's outer skin plane crosses this wall, as an offset along the
+    // centre line: the corner the skin has to reach.
+    const corner = (half + 0.012 - (rel0[0] * nx + rel0[1] * nz)) / axis;
+    if (corner <= -cap || corner >= length + cap) continue;
+    for (const point of [wall.start, wall.end] as const) {
+      const rel = [point[0] - w.start[0], point[1] - w.start[1]];
+      const alongW = rel[0] * wdx + rel[1] * wdz;
+      if (alongW < -0.02 || alongW > wLen + 0.02) continue;
+      const outW = rel[0] * nx + rel[1] * nz;
+      if (Math.abs(outW) + 0.001 >= half) continue;
+      if (corner <= -0.001) start = Math.max(start, Math.min(-corner, cap));
+      else if (corner >= length + 0.001) end = Math.max(end, Math.min(corner - length, cap));
+    }
+  }
+  return { start, end };
 }
 
 /** All geometry comes from the imported project: no personal land data in the bundle. */
@@ -218,16 +274,23 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       })),
     };
     const sections = wallSections(effectiveWall, height);
+    const stretch = cornerStretch(
+      level.walls.filter((w) => w.exterior),
+      wall,
+      level.outline,
+    );
     // The base course continues below the internal finished floor to the simplified yard.
     for (const [i, section] of sections.entries()) {
       const bottom = section.bottom === 0 ? Math.min(site.elevation, floorOffset) : section.bottom;
       if (section.top <= bottom) continue;
-      const [x, z] = alongWall(wall, (section.start + section.end) / 2, sign * normal);
+      const start = section.start === 0 ? section.start - stretch.start : section.start;
+      const end = section.end === length ? section.end + stretch.end : section.end;
+      const [x, z] = alongWall(wall, (start + end) / 2, sign * normal);
       const mesh = add(
         MeshBuilder.CreateBox(
           `facade:${wall.id}:${i}`,
           {
-            width: section.end - section.start,
+            width: end - start,
             height: section.top - bottom,
             depth: 0.018,
           },
@@ -242,15 +305,15 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       facadeMeshes.push(mesh);
     }
     const eaveHeight = Math.min(...(site.roofs ?? []).flatMap((r) => r.vertices.map((v) => v[1])));
-    const roofHeight = roofOverStrip(site.roofs ?? [], wall, length);
+    const roofHeight = roofOverStrip(site.roofs ?? [], wall, -stretch.start, length + stretch.end);
     const bandTop = Number.isFinite(roofHeight) ? roofHeight : eaveHeight;
     if (Number.isFinite(bandTop) && bandTop > height) {
-      const [x, z] = alongWall(wall, length / 2);
+      const [x, z] = alongWall(wall, length / 2 + (stretch.end - stretch.start) / 2);
       const band = add(
         MeshBuilder.CreateBox(
           `roof-wall-band:${wall.id}`,
           {
-            width: length,
+            width: length + stretch.start + stretch.end,
             height: bandTop - height,
             depth: wall.thickness,
           },
