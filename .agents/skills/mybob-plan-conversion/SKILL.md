@@ -207,14 +207,14 @@ continuer le travail d'audit indépendant et réclamer cette source ; ne pas
 déclarer vérifié un ancien JSON régénéré.
 
 Une maison a souvent plusieurs PDF, et le nom évident n'est pas le bon. Un
-`Plans VP.pdf` s'est révélé être un scan de 15 pages d'une édition antérieure
-alors que l'original vectoriel dormait à côté sous `Plans.pdf` ; une session
-entière a conclu que la maison n'avait pas de plan vectoriel. Avant d'accepter
-une source, lister tous les fichiers candidats de cette maison et les comparer
-sur `page.get_drawings()` et `page.get_text("words")`. Préférer le vectoriel, et
-dire quel fichier et quelle page ont servi. Quand le propriétaire mentionne un
-document introuvable, demander son emplacement plutôt que de substituer le nom le
-plus proche.
+`plans-emieville-scan.pdf` s'est révélé être un scan de 15 pages d'une édition
+antérieure alors que l'original vectoriel dormait à côté sous
+`plans-emieville.pdf` ; une session entière a conclu que la maison n'avait pas de
+plan vectoriel. Avant d'accepter une source, lister tous les fichiers candidats
+de cette maison et les comparer sur `page.get_drawings()` et
+`page.get_text("words")`. Préférer le vectoriel, et dire quel fichier et quelle
+page ont servi. Quand le propriétaire mentionne un document introuvable, demander
+son emplacement plutôt que de substituer le nom le plus proche.
 
 Vérifier si la source est un dessin vectoriel ou un scan avant de promettre une
 chaîne. `page.get_text()` et `page.get_drawings()` répondent en un appel : un PDF
@@ -409,7 +409,7 @@ pas sur un contour deviné.
 
 ```sh
 python scripts/derive_outline.py artifacts/plan-review/registry.json contour.json \
-    --pages 8 --pdf reference-documents/Plans.pdf --plan artifacts/plan-review/plan.json
+    --pages 8 --pdf reference-documents/plans-emieville.pdf --plan artifacts/plan-review/plan.json
 python scripts/derive_plan_decisions.py projet.json registry.json rdc decisions.json \
     --pages 8 --outline contour.json
 python scripts/generate_project.py plan.json registry.json modele.json rdc out.json \
@@ -1337,8 +1337,9 @@ et de dix clés — dont tout le `site` du second plan, ajouté après la copie.
 `reference-documents/` peut être une **jonction** vers un dossier synchronisé
 (kDrive, OneDrive) : les scripts n'y voient aucune différence, et les PDF comme
 les copies sortent du dépôt. Le dossier est git-ignoré, donc git ne traverse
-jamais la jonction. Vérifier après création que `reference-documents/Plans.pdf`
-s'ouvre : une jonction cassée se voit à l'ouverture, pas à la création.
+jamais la jonction. Vérifier après création que
+`reference-documents/plans-emieville.pdf` s'ouvre : une jonction cassée se voit à
+l'ouverture, pas à la création.
 
 Garder les états intermédiaires dans `reference-documents/historique/` plutôt que
 de les écraser : un modèle provisoire faux est la preuve de ce qui a échoué, et
