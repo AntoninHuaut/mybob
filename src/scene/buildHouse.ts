@@ -35,6 +35,8 @@ export interface DoorInstance {
   id: string;
   exterior: boolean;
   pivot: TransformNode;
+  /** Second jamb of a two-leaf door; the primary pivot stays the first jamb. */
+  pivotB?: TransformNode;
   leaf: Mesh;
   leaves: Mesh[];
   opening: Opening;
@@ -486,6 +488,7 @@ export function buildHouse(
       ) ?? 1;
     const leaves: Mesh[] = [];
     let leaf: Mesh;
+    let pivotB: TransformNode | undefined;
     if (o.kind === 'sliding') {
       // Two glazed panels. One translates behind the other when opened.
       // A sill above zero gives a sliding window on an apron wall.
@@ -573,79 +576,95 @@ export function buildHouse(
     } else {
       const stile = 0.05;
       const rail = 0.05;
-      if (o.glazed) {
-        // French window: stiles and rails around glass, no solid slab. The
-        // pane is the leaf: it rides the hinge like a battant leaf.
-        const pane = box(
-          `door-pane:${o.id}`,
-          width - 2 * stile,
-          o.height - 0.035 - 2 * rail,
-          0.012,
-          (direction * width) / 2,
-          o.height / 2,
-          0,
-          materials.glass,
-          pivot,
-        );
-        pane.receiveShadows = false;
-        leaf = pane;
-        leaves.push(pane);
-        for (const end of [0, 1] as const) {
-          leaves.push(
-            box(
-              `door-stile:${o.id}:${end}`,
-              stile,
-              o.height - 0.035,
-              0.04,
-              direction * (end ? width - stile / 2 : stile / 2),
-              o.height / 2,
-              0,
-              materials.frame,
-              pivot,
-            ),
+      const batant = (dir: 1 | -1, w: number, node: TransformNode, tag: string): Mesh => {
+        let frame: Mesh;
+        if (o.glazed) {
+          // French window: stiles and rails around glass, no solid slab. The
+          // pane is the leaf: it rides the hinge like a battant leaf.
+          const pane = box(
+            `door-pane:${tag}`,
+            w - 2 * stile,
+            o.height - 0.035 - 2 * rail,
+            0.012,
+            (dir * w) / 2,
+            o.height / 2,
+            0,
+            materials.glass,
+            node,
           );
-          leaves.push(
-            box(
-              `door-rail:${o.id}:${end}`,
-              Math.max(0.01, width - 2 * stile),
-              rail,
-              0.04,
-              (direction * width) / 2,
-              o.height / 2 + (end ? 1 : -1) * ((o.height - 0.035 - rail) / 2),
-              0,
-              materials.frame,
-              pivot,
-            ),
+          pane.receiveShadows = false;
+          frame = pane;
+          leaves.push(pane);
+          for (const end of [0, 1] as const) {
+            leaves.push(
+              box(
+                `door-stile:${tag}:${end}`,
+                stile,
+                o.height - 0.035,
+                0.04,
+                dir * (end ? w - stile / 2 : stile / 2),
+                o.height / 2,
+                0,
+                materials.frame,
+                node,
+              ),
+            );
+            leaves.push(
+              box(
+                `door-rail:${tag}:${end}`,
+                Math.max(0.01, w - 2 * stile),
+                rail,
+                0.04,
+                (dir * w) / 2,
+                o.height / 2 + (end ? 1 : -1) * ((o.height - 0.035 - rail) / 2),
+                0,
+                materials.frame,
+                node,
+              ),
+            );
+          }
+        } else {
+          frame = box(
+            `door-leaf:${tag}`,
+            w,
+            o.height - 0.035,
+            0.04,
+            (dir * w) / 2,
+            o.height / 2,
+            0,
+            materials.frame,
+            node,
           );
+          leaves.push(frame);
         }
+        for (const sign of [-1, 1]) {
+          const handle = box(
+            `handle:${tag}:${sign}`,
+            0.11,
+            0.018,
+            0.025,
+            dir * (w - 0.1),
+            1.04,
+            sign * 0.04,
+            materials.metal,
+            node,
+            false,
+          );
+          leaves.push(handle);
+        }
+        return frame;
+      };
+      if (o.leaves === 2) {
+        // Two leaves, two jambs: the single `hinge` then says nothing about
+        // which side opens, each leaf hangs on its own jamb.
+        pivot.position.set(o.offset + 0.025, openingBase, -0.025);
+        pivotB = new TransformNode(`hinge:${o.id}:1`, scene);
+        pivotB.parent = parent;
+        pivotB.position.set(o.offset + o.width - 0.025, openingBase, -0.025);
+        leaf = batant(1, width / 2, pivot, `${o.id}:0`);
+        batant(-1, width / 2, pivotB, `${o.id}:1`);
       } else {
-        leaf = box(
-          `door-leaf:${o.id}`,
-          width,
-          o.height - 0.035,
-          0.04,
-          (direction * width) / 2,
-          o.height / 2,
-          0,
-          materials.frame,
-          pivot,
-        );
-        leaves.push(leaf);
-      }
-      for (const sign of [-1, 1]) {
-        const handle = box(
-          `handle:${o.id}:${sign}`,
-          0.11,
-          0.018,
-          0.025,
-          direction * (width - 0.1),
-          1.04,
-          sign * 0.04,
-          materials.metal,
-          pivot,
-          false,
-        );
-        leaves.push(handle);
+        leaf = batant(direction, width, pivot, o.id);
       }
     }
     for (const m of [...openingMeshes, ...leaves]) m.metadata = { kind: 'door', id: o.id };
@@ -655,6 +674,7 @@ export function buildHouse(
       id: o.id,
       exterior: !!o.exterior,
       pivot,
+      pivotB,
       leaf,
       leaves,
       opening: o,
@@ -757,6 +777,12 @@ export function poseDoor(door: DoorInstance) {
       mesh.position.set(0, y, depth);
       mesh.rotation.x = tilt;
     }
+  } else if (door.pivotB) {
+    // Two leaves on two jambs turn in opposite senses, so both swing to the
+    // same side of the wall; `hinge` belongs to a single leaf and stays aside.
+    const swing = progress * Math.PI * 0.5 * (door.opening.swing ?? 1);
+    door.pivot.rotation.y = swing;
+    door.pivotB.rotation.y = -swing;
   } else {
     door.pivot.rotation.y =
       progress *
