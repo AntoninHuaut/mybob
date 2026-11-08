@@ -1,4 +1,4 @@
-import type { HouseProject, ProjectSite, Point2 } from './types';
+import type { HouseProject, Opening, ProjectSite, Point2, RoofDormer } from './types';
 import type {
   DressingConfiguration,
   FurnitureItem,
@@ -28,7 +28,11 @@ export interface UnpackedShare {
   variants: VariantBook;
 }
 
-export const LINK_PACK_VERSION = 1;
+/**
+ * Révision 2 : vitrage et vantaux des ouvertures, lucarnes et fenêtres de toit. La lecture
+ * accepte encore la révision 1 (liens déjà partagés) ; l'écriture produit toujours la 2.
+ */
+export const LINK_PACK_VERSION = 2;
 
 type OpeningKind = 'door' | 'window' | 'sliding' | 'garage';
 type RoomKind = 'living' | 'bedroom' | 'bathroom' | 'circulation' | 'garage' | 'storage';
@@ -279,6 +283,11 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
     furnishing?.levels ?? activeVariant?.levels ?? {};
   const packer = new Packer();
   packer.u(LINK_PACK_VERSION);
+  // Position (niveau, mur) de chaque mur : les identifiants sont renumérotés au déballage.
+  const wallPositions = new Map<string, [number, number]>();
+  project.levels.forEach((level, l) =>
+    level.walls.forEach((wall, w) => wallPositions.set(wall.id, [l, w])),
+  );
   packer.u(
     (project.site ? 1 : 0) |
       (project.solar ? 2 : 0) |
@@ -336,6 +345,8 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
         packer.u(opening.hinge === undefined ? 0 : opening.hinge === 'start' ? 1 : 2);
         packer.u(opening.swing === undefined ? 0 : opening.swing === 1 ? 1 : 2);
         packer.tri(opening.exterior);
+        packer.tri(opening.glazed);
+        packer.u(opening.leaves === undefined ? 0 : opening.leaves);
       }
     }
     packer.u(level.rooms.length);
@@ -402,6 +413,25 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
       for (const face of gables) {
         packer.u(face.length);
         for (const index of face) packer.u(index);
+      }
+      const dormers = roof.dormers ?? [];
+      packer.u(dormers.length);
+      for (const dormer of dormers) {
+        const position = wallPositions.get(dormer.wallId);
+        if (!position) throw new LinkPackError('Mur de fond de lucarne introuvable.');
+        packer.point(dormer.start);
+        packer.point(dormer.end);
+        packer.u(position[0]);
+        packer.u(position[1]);
+        packer.u(dormer.slope === undefined ? 0 : 1);
+        if (dormer.slope !== undefined) packer.u(Math.round(dormer.slope * 10000));
+      }
+      const windows = roof.windows ?? [];
+      packer.u(windows.length);
+      for (const window of windows) {
+        packer.point(window.center);
+        packer.mm(window.width);
+        packer.mm(window.height);
       }
     }
     packer.u(site.notes.length);
@@ -516,7 +546,9 @@ const textDecoder = new TextDecoder();
 /** Déballe des octets packés en document d'export complet, prêt pour le pipeline de validation de l'import. */
 export function unpackShareDocument(data: Uint8Array): ShareDocument {
   const reader = new Unpacker(data);
-  if (reader.u() !== LINK_PACK_VERSION) throw new LinkPackError('Version du pack inconnue.');
+  const version = reader.u();
+  if (version !== 1 && version !== LINK_PACK_VERSION)
+    throw new LinkPackError('Version du pack inconnue.');
   const flags = reader.u();
   const project: ShareDocument = {
     schemaVersion: 1,
@@ -602,12 +634,21 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
         };
         const hinge = reader.u();
         const swing = reader.u();
-        openings.push({
+        const exterior = reader.tri();
+        const read: Opening = {
           ...opening,
           hinge: hinge === 0 ? undefined : hinge === 1 ? 'start' : 'end',
           swing: swing === 0 ? undefined : swing === 1 ? 1 : -1,
-          exterior: reader.tri(),
-        });
+          exterior,
+        };
+        if (version >= 2) {
+          const glazed = reader.tri();
+          const leaves = reader.u();
+          if (leaves > 2) throw new LinkPackError('Lien illisible.');
+          if (glazed !== undefined) read.glazed = glazed;
+          if (leaves !== 0) read.leaves = leaves as 1 | 2;
+        }
+        openings.push(read);
       }
       if (openings.length) wall.openings = openings;
       level.walls.push(wall);
@@ -697,6 +738,32 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
           roof.gables = [];
           for (let g = 0; g < gableCount; g++)
             roof.gables.push(Array.from({ length: reader.count(100) }, () => reader.u()));
+        }
+        if (version >= 2) {
+          const dormerCount = reader.count(100);
+          for (let d = 0; d < dormerCount; d++) {
+            const start = reader.point();
+            const end = reader.point();
+            const level = reader.u();
+            const wall = reader.u();
+            const hasSlope = reader.u() === 1;
+            const dormer: RoofDormer = {
+              id: `lucarne-${r}-${d}`,
+              start,
+              end,
+              wallId: `mur-${level}-${wall}`,
+            };
+            if (hasSlope) dormer.slope = reader.u() / 10000;
+            (roof.dormers ??= []).push(dormer);
+          }
+          const windowCount = reader.count(100);
+          for (let w = 0; w < windowCount; w++)
+            (roof.windows ??= []).push({
+              id: `fenetre-toit-${r}-${w}`,
+              center: reader.point(),
+              width: reader.mm(),
+              height: reader.mm(),
+            });
         }
         site.roofs.push(roof);
       }
