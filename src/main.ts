@@ -18,6 +18,7 @@ import { collectDiagnostics, installDiagnostics } from './scene/diagnostics';
 import { FrameRateMeter } from './ui/frameRate';
 import type { HouseProject, Room } from './model/types';
 import { validateProject } from './model/validate';
+import { restoreProjects } from './projectStorage';
 import { bounds, floorElevationAt, pointInPolygon, polygonArea } from './model/geometry';
 import { icon } from './ui/icons';
 import { area, escapeHtml as esc, number } from './ui/format';
@@ -1863,20 +1864,9 @@ async function start() {
     );
     builtins = loaded;
     projectsRaw = localStorage.getItem(STORAGE);
-    let storageWarning = false;
-    try {
-      const saved: unknown = JSON.parse(localStorage.getItem(STORAGE) ?? '[]');
-      if (Array.isArray(saved))
-        for (const p of saved.slice(0, 10)) {
-          try {
-            imported.push(validateProject(p));
-          } catch {
-            storageWarning = true;
-          }
-        }
-    } catch {
-      storageWarning = true;
-    }
+    const restored = restoreProjects(localStorage, STORAGE, validateProject);
+    imported.push(...restored.projects);
+    const storageWarning = restored.unreadable > 0;
     const sceneEngine = createEngine(el<HTMLCanvasElement>('#scene'));
     viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'), sceneEngine);
     frameRate = new FrameRateMeter(el('#frame-rate'));
@@ -2058,7 +2048,7 @@ async function start() {
     showStartCard();
     if (storageWarning)
       toast(
-        'Certains projets locaux n’ont pas pu être restaurés. Les projets fournis restent disponibles.',
+        'Certains projets locaux n’ont pas pu être ouverts. Ils sont conservés sur cet ordinateur, sans être supprimés.',
       );
   } catch (error) {
     el('#loading').hidden = true;
