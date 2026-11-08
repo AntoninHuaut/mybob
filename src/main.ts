@@ -18,6 +18,7 @@ import { collectDiagnostics, installDiagnostics } from './scene/diagnostics';
 import { FrameRateMeter } from './ui/frameRate';
 import type { HouseProject, Room } from './model/types';
 import { validateProject } from './model/validate';
+import { quarantineExport, restoreProjects } from './projectStorage';
 import { bounds, floorElevationAt, pointInPolygon, polygonArea } from './model/geometry';
 import { icon } from './ui/icons';
 import { area, escapeHtml as esc, number } from './ui/format';
@@ -206,6 +207,39 @@ function showStaleBanner() {
   banner.append(text, reload);
   document.body.prepend(banner);
   setLayoutStatus('Modifié dans un autre onglet · rechargez la page', true);
+}
+
+/** Des projets locaux n'ont pas pu être ouverts : ils sont conservés, et exportables en un clic. */
+function showQuarantineBanner(count: number) {
+  const banner = document.createElement('div');
+  banner.id = 'quarantine-banner';
+  banner.className = 'stale-banner';
+  banner.setAttribute('role', 'status');
+  const text = document.createElement('span');
+  text.textContent =
+    count === 1
+      ? '1 projet local n’a pas pu être ouvert. Il est conservé : exportez-le pour le récupérer.'
+      : `${count} projets locaux n’ont pas pu être ouverts. Ils sont conservés : exportez-les pour les récupérer.`;
+  const download = document.createElement('button');
+  download.type = 'button';
+  download.className = 'text-button';
+  download.textContent = 'Télécharger';
+  download.addEventListener('click', () => {
+    const blob = new Blob([quarantineExport(localStorage, STORAGE)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'projets-non-restaures.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  });
+  const close = document.createElement('button');
+  close.type = 'button';
+  close.className = 'text-button';
+  close.textContent = 'Fermer';
+  close.addEventListener('click', () => banner.remove());
+  banner.append(text, download, close);
+  document.body.prepend(banner);
 }
 
 /** Refuse d'écraser la liste des projets si un autre onglet l'a réécrite depuis notre lecture. */
@@ -1881,20 +1915,9 @@ async function start() {
     );
     builtins = loaded;
     projectsRaw = localStorage.getItem(STORAGE);
-    let storageWarning = false;
-    try {
-      const saved: unknown = JSON.parse(localStorage.getItem(STORAGE) ?? '[]');
-      if (Array.isArray(saved))
-        for (const p of saved.slice(0, 10)) {
-          try {
-            imported.push(validateProject(p));
-          } catch {
-            storageWarning = true;
-          }
-        }
-    } catch {
-      storageWarning = true;
-    }
+    const restored = restoreProjects(localStorage, STORAGE, validateProject);
+    imported.push(...restored.projects);
+    const unreadableProjects = restored.unreadable;
     const sceneEngine = createEngine(el<HTMLCanvasElement>('#scene'));
     viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'), sceneEngine);
     frameRate = new FrameRateMeter(el('#frame-rate'));
@@ -2087,10 +2110,7 @@ async function start() {
     el('#loading').hidden = true;
     onboarding = readOnboarding();
     showStartCard();
-    if (storageWarning)
-      toast(
-        'Certains projets locaux n’ont pas pu être restaurés. Les projets fournis restent disponibles.',
-      );
+    if (unreadableProjects > 0) showQuarantineBanner(unreadableProjects);
   } catch (error) {
     el('#loading').hidden = true;
     el('#fatal-error').hidden = false;
