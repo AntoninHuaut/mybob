@@ -2,8 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createFurniture } from '../src/furniture/model';
 
-// Le lien porte l'état du projet : vérifier l'émission (#p1:), la lecture seule du
-// destinataire, l'adoption, le silence pour le propriétaire et la divergence d'un vieux lien.
+// The link carries the project state: check the emission (#p1:), the recipient's
+// read-only state, adoption, silence for the owner and the divergence of an old link.
 test.beforeEach(async ({ page }) => {
   await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
@@ -51,7 +51,7 @@ async function importLinkProject(page: Page, options: { upperLevel?: boolean } =
     lights: [],
     spawn: { position: [4, 3], yaw: 0 },
   };
-  // Second niveau du même contour : les identifiants sont uniques à travers tous les niveaux.
+  // Second level with the same outline: identifiers are unique across all levels.
   const upper = {
     ...structuredClone(level),
     id: 'lien-etage',
@@ -86,9 +86,9 @@ async function importLinkProject(page: Page, options: { upperLevel?: boolean } =
 }
 
 /**
- * Copie le lien de l'état courant. Le hash contient déjà `#p1:` avant l'import — celui de la
- * démonstration — donc sa seule présence ne prouve rien : `copyShareLink` écrit le hash puis
- * affiche son toast, et c'est ce toast qui garantit que `page.url()` décrit bien l'état attendu.
+ * Copies the current state's link. The hash already contains `#p1:` before the import — the
+ * demonstration's — so its mere presence proves nothing: `copyShareLink` writes the hash then
+ * shows its toast, and that toast guarantees that `page.url()` does describe the expected state.
  */
 async function sharedHash(page: Page) {
   await page.locator('#copy-link').click();
@@ -97,7 +97,7 @@ async function sharedHash(page: Page) {
   return page.url();
 }
 
-test('un lien partagé s’ouvre en lecture seule, puis modifiable après l’ajout', async ({
+test('a shared link opens read-only, then editable after adding it', async ({
   page,
   browser,
 }, testInfo) => {
@@ -106,7 +106,7 @@ test('un lien partagé s’ouvre en lecture seule, puis modifiable après l’aj
   const shared = await sharedHash(page);
   await page.close();
 
-  // Un destinataire sans mémoire locale ouvre le lien : bandeau, mutation refusée.
+  // A recipient without local memory opens the link: banner, mutation refused.
   const context = await browser.newContext(testInfo.project.use);
   try {
     const received = await context.newPage();
@@ -122,7 +122,7 @@ test('un lien partagé s’ouvre en lecture seule, puis modifiable après l’aj
     await expect(received.getByRole('dialog', { name: 'Modifier Canapé lien' })).toHaveCount(0);
     await expect(received.locator('[data-furniture-edit-id]')).toHaveCount(1);
 
-    // « Ajouter à mes projets » : copie sous un nouvel identifiant, maintenant modifiable.
+    // « Ajouter à mes projets »: copy under a new identifier, now editable.
     await banner.getByRole('button', { name: 'Ajouter à mes projets' }).click();
     await expect(received.locator('#toast')).toContainText('vos projets');
     await expect(banner).toBeHidden();
@@ -132,7 +132,7 @@ test('un lien partagé s’ouvre en lecture seule, puis modifiable après l’aj
     await expect(
       received.getByRole('button', { name: 'Modifier Canapé lien', exact: true }),
     ).toBeVisible();
-    // Le projet possédé réécrit lui aussi le hash, sans bandeau ni dialogue.
+    // The owned project also rewrites the hash, without banner nor dialog.
     const owned = await sharedHash(received);
     expect(new URL(owned).hash).toContain('#p1:');
   } finally {
@@ -140,7 +140,7 @@ test('un lien partagé s’ouvre en lecture seule, puis modifiable après l’aj
   }
 });
 
-test('changer de niveau garde le projet reçu, sans repasser par la démonstration', async ({
+test('changing level keeps the project received by link, without going back to the demonstration', async ({
   page,
   browser,
 }, testInfo) => {
@@ -160,11 +160,11 @@ test('changer de niveau garde le projet reçu, sans repasser par la démonstrati
       'Maison du lien — reçu',
     );
 
-    // Le pack renumérote les identifiants de niveau : le libellé, lui, est conservé.
+    // The pack renumbers level identifiers: the label, however, is kept.
     await received.locator('#level-select').selectOption({ label: 'Étage du lien' });
 
-    // Le projet reçu ne figure pas dans la liste des projets : le recharger par son
-    // identifiant retombait sur la démonstration.
+    // The received project is not in the project list: reloading it by its
+    // identifier fell back to the demonstration.
     await expect(received.locator('#header-level')).toHaveText('Étage du lien');
     await expect(received.locator('#project-select option:checked')).toHaveText(
       'Maison du lien — reçu',
@@ -176,7 +176,7 @@ test('changer de niveau garde le projet reçu, sans repasser par la démonstrati
   }
 });
 
-test('le propriétaire qui recharge son propre lien ne voit aucun dialogue', async ({ page }) => {
+test('the owner reloading their own link sees no dialog', async ({ page }) => {
   await importLinkProject(page);
   const shared = await sharedHash(page);
   await page.reload();
@@ -187,11 +187,11 @@ test('le propriétaire qui recharge son propre lien ne voit aucun dialogue', asy
   await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
 });
 
-test('un lien plus ancien que l’état local propose de garder les deux', async ({ page }) => {
+test('a link older than the local state offers to keep both', async ({ page }) => {
   await importLinkProject(page);
   const before = await page.locator('#project-select option').count();
   const older = await sharedHash(page);
-  // Une modification après l'émission rend le lien divergent.
+  // A change after emission makes the link divergent.
   await furnishings(page);
   await page.getByRole('button', { name: 'Ajouter un meuble', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Ajouter un meuble', exact: true });
@@ -210,8 +210,8 @@ test('un lien plus ancien que l’état local propose de garder les deux', async
   await expect(divergence).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: 'Garder les deux' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  // L'adoption est asynchrone : compter avant qu'elle n'ait installé la copie ferait
-  // croire que le rechargement ajoute un projet.
+  // Adoption is asynchronous: counting before it has installed the copy would
+  // suggest that the reload adds a project.
   await expect(page.locator('#toast')).toContainText('vos projets');
   await expect(page.locator('#project-select option')).toHaveCount(before + 1);
   await page.reload();
@@ -219,12 +219,12 @@ test('un lien plus ancien que l’état local propose de garder les deux', async
   await expect(page.locator('#received-banner')).toBeHidden();
 });
 
-test('à 10 projets, « Garder les deux » propose de remplacer un projet, sans écran fatal', async ({
+test('at 10 projects, « Garder les deux » offers to replace a project from the link, no fatal screen', async ({
   page,
 }) => {
-  // Trois ouvertures du lien, chacune avec sa session WebGL : laisse de la marge au runner.
+  // Three openings of the link, each with its WebGL session: leave headroom for the runner.
   test.slow();
-  // Neuf projets déjà conservés, le dixième est celui du lien.
+  // Nine projects already kept, the tenth is the link's.
   const demo = JSON.parse(await readFile('public/projects/studio-demo.json', 'utf8'));
   await page.evaluate((base) => {
     const others = Array.from({ length: 9 }, (_, i) => ({
@@ -250,8 +250,8 @@ test('à 10 projets, « Garder les deux » propose de remplacer un projet, sans 
   await expect(dialog).not.toBeVisible();
   await expect.poll(() => new URL(page.url()).hash).not.toBe(new URL(older).hash);
 
-  // Chaque ouverture du lien se fait dans un nouvel onglet : un onglet qui a écrit le hash de
-  // son état reconnaît son propre lien au rechargement et n'affiche alors aucun dialogue.
+  // Each opening of the link happens in a new tab: a tab that wrote the hash of
+  // its state recognises its own link on reload and then shows no dialog.
   const context = page.context();
   await page.close();
   const first = await context.newPage();
@@ -264,12 +264,12 @@ test('à 10 projets, « Garder les deux » propose de remplacer un projet, sans 
   await expect(limit).toBeVisible();
   await expect(first.locator('#fatal-error')).toBeHidden();
 
-  // Annuler ne supprime ni n'ajoute rien.
+  // Annuler deletes and adds nothing.
   await limit.getByRole('button', { name: 'Annuler' }).click();
   await expect(first.getByRole('dialog')).toHaveCount(0);
   await expect(first.locator('#project-select option')).toHaveCount(total);
 
-  // Remplacer : la copie est ajoutée, le projet choisi disparaît, le total reste à 10 importés.
+  // Replace: the copy is added, the chosen project disappears, the total stays at 10 imported.
   await first.close();
   const reopened = await context.newPage();
   await reopened.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
@@ -285,11 +285,13 @@ test('à 10 projets, « Garder les deux » propose de remplacer un projet, sans 
   await expect(reopened.locator('#project-select')).toContainText('Remplissage 8');
 });
 
-test('une publication d’URL refusée ne fait pas du rechargement un lien reçu', async ({ page }) => {
-  // L'application retient en session le dernier hash qu'elle a publié. S'il était mémorisé
-  // avant `history.replaceState`, une publication refusée laisserait cette mémoire en avance
-  // sur l'URL : au rechargement, l'onglet prendrait son propre hash périmé pour un lien reçu
-  // et resterait bloqué derrière le dialogue de divergence.
+test('a refused URL publication does not turn the reload into a received link', async ({
+  page,
+}) => {
+  // The application remembers in session the last hash it published. If it were remembered
+  // before `history.replaceState`, a refused publication would leave that memory ahead
+  // of the URL: on reload, the tab would take its own stale hash for a received link
+  // and stay stuck behind the divergence dialog.
   await page.evaluate(() => {
     const state = window as unknown as { refuseShareHash: boolean; refusedHashWrites: number };
     const replaceState = History.prototype.replaceState;
@@ -308,7 +310,7 @@ test('une publication d’URL refusée ne fait pas du rechargement un lien reçu
   await page.evaluate(() => {
     (window as unknown as { refuseShareHash: boolean }).refuseShareHash = true;
   });
-  // La modification ne peut plus rejoindre l'URL : elle ne vit que dans le stockage local.
+  // The change can no longer reach the URL: it only lives in local storage.
   await furnishings(page);
   await page.getByRole('button', { name: 'Ajouter un meuble', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Ajouter un meuble', exact: true });
@@ -319,7 +321,7 @@ test('une publication d’URL refusée ne fait pas du rechargement un lien reçu
     .fill('90');
   await dialog.getByRole('button', { name: 'Ajouter dans la maison' }).click();
   await expect(dialog).not.toBeVisible();
-  // L'écriture a bien été tentée et refusée avant le rechargement.
+  // The write was indeed attempted and refused before the reload.
   await expect
     .poll(() =>
       page.evaluate(() => (window as unknown as { refusedHashWrites: number }).refusedHashWrites),
@@ -331,7 +333,7 @@ test('une publication d’URL refusée ne fait pas du rechargement un lien reçu
   await expect(page.getByText('diffèrent', { exact: false })).toHaveCount(0);
   await expect(page.locator('#received-banner')).toBeHidden();
   await furnishings(page);
-  // L'état local, plus récent que l'URL, reste la référence au rechargement.
+  // The local state, more recent than the URL, stays the reference on reload.
   await expect(
     page.getByRole('button', { name: 'Modifier Fauteuil refusé', exact: true }),
   ).toBeVisible();
@@ -340,10 +342,10 @@ test('une publication d’URL refusée ne fait pas du rechargement un lien reçu
     .not.toBe(new URL(older).hash);
 });
 
-test('un lien au hash corrompu charge le projet local avec un avertissement', async ({ page }) => {
-  // L'application réécrit le hash de l'état courant 500 ms après le chargement. Sans attendre
-  // cette écriture, elle écrase `#p1:abc` avant le rechargement et aucun avertissement
-  // n'apparaît : le test ne tenait qu'à la vitesse de la machine.
+test('a link with a corrupted hash loads the local project with a warning', async ({ page }) => {
+  // The application rewrites the current state's hash 500 ms after loading. Without waiting
+  // for that write, it overwrites `#p1:abc` before the reload and no warning
+  // appears: the test only held thanks to the machine's speed.
   await expect.poll(() => new URL(page.url()).hash).toContain('#p1:');
   await page.goto('/#p1:abc');
   await page.reload();

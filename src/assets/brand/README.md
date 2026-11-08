@@ -1,7 +1,17 @@
-# Illustrations de Bob
+# Bob illustrations
 
-Deux illustrations originales créées avec l’outil intégré de génération d’images OpenAI le 6 novembre 2026, puis réduites à 384 × 576 pixels avec transparence préservée : `bob.png` (source de la pose d’accueil) et `bob-plan.png` (aide). `bob-portrait.png` est un recadrage de la première pose pour l’accueil compact. Aucun plan personnel ou photographie n’a servi de référence. La seconde pose utilise la première comme référence du personnage.
+Two original illustrations created with the OpenAI built-in image generation tool on
+6 November 2026, then reduced to 384 × 576 pixels with transparency preserved: `bob.png`
+(source of the welcome pose) and `bob-plan.png` (help). `bob-portrait.png` is a crop of the
+first pose for the compact welcome. No personal plan or photograph was used as a reference. The
+second pose uses the first one as the character reference.
 
-Consigne de création : compagnon adulte de l’atelier MyBob, sourire accueillant, surchemise sauge, détails corail et mètre, illustration éditoriale chaleureuse et adaptée aux adultes, silhouette originale sans texte ni logo. Deuxième pose : Bob étudie un plan architectural générique.
+Creation brief: adult companion of the MyBob workshop, welcoming smile, sage overshirt, coral
+details and tape measure, warm editorial illustration suited to adults, original silhouette
+with no text or logo. Second pose: Bob studies a generic architectural plan.
 
-Les trois poses vectorielles `bob-contrainte.svg`, `bob-idee.svg` et `bob-mesure.svg` ont été dessinées à la main en SVG le 7 novembre 2026 (issue #17, conformément à `docs/IDENTITE-MYBOB.md`) : palette surchemise sauge `#37695C`, accent corail `#D66B4E`, encre `#20312E`, fond transparent, 512 × 768. Le personnage suit la pose d’accueil `bob.png` comme unique référence ; aucune photo ni plan personnel n’a servi de modèle.
+The three vector poses `bob-contrainte.svg`, `bob-idee.svg` and `bob-mesure.svg` were drawn by
+hand in SVG on 7 November 2026 (issue #17, following `docs/BRAND.md`): sage overshirt palette
+`#37695C`, coral accent `#D66B4E`, ink `#20312E`, transparent background, 512 × 768. The
+character follows the `bob.png` welcome pose as its only reference; no personal photo or plan
+was used as a model.

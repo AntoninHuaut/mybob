@@ -1,9 +1,9 @@
 /**
- * Lecture du stockage local des projets importés.
+ * Reading the local storage of imported projects.
  *
- * Le stockage local est la seule copie de la maison tant que l'utilisateur n'a pas exporté :
- * ce que le build ne sait pas relire (validateur plus strict, version antérieure, JSON tronqué)
- * est mis en quarantaine dans une clé séparée que plus aucune écriture ne touche.
+ * Local storage is the only copy of the house until the user has exported it:
+ * whatever the build cannot read back (stricter validator, older version, truncated JSON)
+ * is quarantined in a separate key that no write touches any more.
  */
 import type { HouseProject } from './model/types';
 
@@ -12,9 +12,9 @@ export const MAX_IMPORTED_PROJECTS = 10;
 
 export interface RestoredProjects {
   projects: HouseProject[];
-  /** Entrées conservées en quarantaine après cette lecture (anciennes comprises). */
+  /** Entries kept in quarantine after this read (older ones included). */
   quarantined: number;
-  /** Entrées non restaurées cette fois-ci. */
+  /** Entries not restored this time. */
   unreadable: number;
 }
 
@@ -55,7 +55,7 @@ export function restoreProjects(
             projects.push(validate(entry));
             return;
           } catch {
-            /* mis en quarantaine ci-dessous */
+            /* quarantined below */
           }
         }
         rejected.push(JSON.stringify(entry));
@@ -68,13 +68,13 @@ export function restoreProjects(
     try {
       storage.setItem(key + QUARANTINE_SUFFIX, JSON.stringify(merged));
     } catch {
-      /* Le stockage plein ne doit pas empêcher l'ouverture ; la clé d'origine reste intacte. */
+      /* Full storage must not prevent opening; the original key stays intact. */
     }
   }
   return { projects, quarantined: merged.length, unreadable: rejected.length };
 }
 
-/** Contenu du fichier de secours : les entrées lisibles en JSON, les autres en texte brut. */
+/** Content of the rescue file: entries readable as JSON, the others as raw text. */
 export function quarantineExport(storage: Storage, key: string): string {
   const entries = readQuarantine(storage, key).map((entry) => {
     try {

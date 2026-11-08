@@ -80,11 +80,11 @@ function faceMesh(
 }
 
 /**
- * Height of the roof over a wall strip: the lowest point of the pans that cover
+ * Height of the roof over a wall strip: the lowest point of the roof faces that cover
  * it. A band cut at the drip edge leaves a slit into the attic wherever the roof
  * overhangs, because the eave sits lower than the roof at the wall plane.
  * The strip is measured between two offsets along the centre line: the band
- * reaches into the corners, where the pan hangs lower than above the wall.
+ * reaches into the corners, where the roof face hangs lower than above the wall.
  */
 function roofOverStrip(roofs: SiteRoof[], wall: Wall, from: number, to: number): number {
   let lowest = Number.POSITIVE_INFINITY;
@@ -329,8 +329,8 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       roofMeshes.push(band);
     }
   }
-  // Les matériaux du châssis reprennent ceux des menuiseries du niveau
-  // (`src/scene/materials.ts`) et ne se créent qu'à la première fenêtre de toit.
+  // The frame materials reuse those of the level's joinery
+  // (`src/scene/materials.ts`) and are only created at the first roof window.
   let chasisMaterials: { glass: PBRMaterial; joinery: PBRMaterial } | undefined;
   const roofWindowMaterials = () => {
     if (chasisMaterials) return chasisMaterials;
@@ -348,9 +348,9 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     return (chasisMaterials = { glass: pane, joinery });
   };
   for (const r of site.roofs ?? []) {
-    // Un chien-assis n'existe que si son emprise, son mur de fond et son pan se
-    // rejoignent : tout vient du projet importé, aucune forme n'est propre à
-    // une maison.
+    // A dormer only exists if its footprint, its back wall and its roof face
+    // meet: everything comes from the imported project, no shape is specific to
+    // one house.
     const holes = new Map<number, [number, number, number][][]>();
     for (const dormer of r.dormers ?? []) {
       const resolved = resolveRoofDormer(project, r.vertices, r.faces, dormer);
@@ -363,7 +363,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
           : [across, roofFaceHeightAt(r.vertices, face, across, side), side];
       const topAt = (side: number, across: number, height: number): [number, number, number] =>
         frame.acrossZ ? [side, height, across] : [across, height, side];
-      // The pan is opened from the join on the versant to the outer face of the mur de fond.
+      // The roof face is opened from the join on the slope to the outer face of the back wall.
       const hole: [number, number, number][] = [
         panAt(frame.sideLow, frame.meet),
         panAt(frame.sideHigh, frame.meet),
@@ -373,8 +373,8 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       const list = holes.get(frame.faceIndex) ?? [];
       list.push(hole);
       holes.set(frame.faceIndex, list);
-      // The joues rise from the pan to the top of the mur de fond, then rejoin
-      // the pan where the dormer roof meets it.
+      // The cheeks rise from the roof face to the top of the back wall, then rejoin
+      // the roof face where the dormer roof meets it.
       for (const [index, side] of [frame.sideLow, frame.sideHigh].entries()) {
         const ring: [number, number, number][] = [
           panAt(side, frame.front),
@@ -394,8 +394,8 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
           ),
         );
       }
-      // Le toit de la lucarne : deux triangles, pour qu'un pan qui dérive un
-      // peu le long de l'emprise reste dans la tolérance de face.
+      // The dormer roof: two triangles, so that a roof face drifting a little
+      // along the footprint stays within the face tolerance.
       const joinLow = panAt(frame.sideLow, frame.meet);
       const joinHigh = panAt(frame.sideHigh, frame.meet);
       const capFrontLow = topAt(frame.sideLow, frame.front, frame.frontTop);
@@ -413,9 +413,9 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
         );
       result.height = Math.max(result.height, frame.frontTop);
     }
-    // Une fenêtre de toit vit sur le pan, pas sur un mur : le rendu ouvre le
-    // versant et pose le châssis dans le plan du rampant, à sa cote de la
-    // coupe — jamais à l'aplomb du chéneau.
+    // A roof window lives on the roof face, not on a wall: the renderer opens the
+    // slope and sets the frame in the plane of the rafter, at its height from the
+    // section — never plumb with the gutter.
     for (const window of r.windows ?? []) {
       const resolved = resolveRoofWindow(r.vertices, r.faces, window);
       if (!resolved.frame) continue;
@@ -423,8 +423,8 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       const hole = holes.get(frame.faceIndex) ?? [];
       hole.push(frame.corners);
       holes.set(frame.faceIndex, hole);
-      // Le cadre, le vitrage et le meneau sont des rectangles du plan du pan :
-      // la largeur reste horizontale, la hauteur se mesure le long du rampant.
+      // Frame, glazing and mullion are rectangles of the roof face plane:
+      // the width stays horizontal, the height is measured along the rafter.
       const ring = (halfAcross: number, halfUp: number, depth = 0) => [
         roofWindowPoint(frame, -halfAcross, -halfUp, depth),
         roofWindowPoint(frame, halfAcross, -halfUp, depth),
@@ -432,9 +432,9 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
         roofWindowPoint(frame, -halfAcross, halfUp, depth),
       ];
       const { glass, joinery } = roofWindowMaterials();
-      // Le cadre garde 4,5 cm comme les menuiseries du niveau, sauf sur une
-      // baie étroite où il se réduit pour laisser un vitrage : jamais de
-      // quadrilatère nul, même à la taille minimale acceptée à l'import.
+      // The frame keeps 4.5 cm like the level's joinery, except on a
+      // narrow window where it shrinks to leave some glazing: never a
+      // zero quadrilateral, even at the minimum size accepted at import.
       const profile = Math.min(0.045, window.width / 4, window.height / 4);
       const chasis = (
         part: string,
@@ -462,8 +462,8 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
         frame.corners,
         ring(window.width / 2 - profile, window.height / 2 - profile),
       );
-      // Le vitrage recule sous la couverture : le rampant le masque, et le
-      // châssis ne traverse jamais le pan.
+      // The glazing sits back under the covering: the rafter hides it, and the
+      // frame never crosses the roof face.
       const pane = chasis(
         'vitrage',
         glass,

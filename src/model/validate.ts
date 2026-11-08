@@ -127,8 +127,8 @@ export function validateProject(input: unknown): HouseProject {
     fail('Les informations de référence sont invalides.');
   if (!Array.isArray(p.levels) || !p.levels.length || p.levels.length > 20)
     fail('Le projet doit contenir entre 1 et 20 niveaux.');
-  // Un mur de fond de lucarne traverse le plafond de son niveau : c'est le
-  // volume perçant la couverture, pas un mur plus haut que le bâtiment.
+  // A dormer back wall crosses its level's ceiling: it is the
+  // volume piercing the covering, not a wall taller than the building.
   const dormerWallIds = new Set(
     ((p.site as ProjectSite | undefined)?.roofs ?? [])
       .flatMap((roof) => roof.dormers ?? [])
@@ -387,8 +387,8 @@ export function validateProject(input: unknown): HouseProject {
             id(window.id);
             if (!point(window.center) || !positive(window.width) || !positive(window.height))
               fail(`Fenêtre de toit invalide : ${window.id}`);
-            // La taille minimale, le pan porteur et le débordement se résolvent
-            // avec la même fonction que le rendu : une seule règle.
+            // The minimum size, the carrying roof face and the overflow are resolved
+            // with the same function as the renderer: a single rule.
             const resolved = resolveRoofWindow(roof.vertices, roof.faces, window);
             if (resolved.error) fail(resolved.error);
           }

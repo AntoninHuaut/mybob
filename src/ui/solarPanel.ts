@@ -91,8 +91,8 @@ export class SolarPanel {
     this.timeline?.update(this.settings, instant);
   }
   /**
-   * Réglages effectifs d'un projet : la préférence locale prime, sinon ceux du projet.
-   * Sert au lien d'état avant même que le projet ne soit chargé dans le panneau.
+   * Effective settings of a project: the local preference wins, otherwise the project's.
+   * Used by the state link even before the project is loaded into the panel.
    */
   settingsFor(project: HouseProject): SolarSettings | undefined {
     let value: SolarSettings | undefined = project.solar;

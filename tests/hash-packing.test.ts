@@ -23,8 +23,8 @@ import {
 } from '../src/model/shareLink';
 
 /**
- * Les deux plans de test du dépôt : le gabarit maison-atelier et le plan converti.
- * Le lien de partage est une projection de transport : pack → deflate-raw → base64url.
+ * The repository's two test plans: the maison-atelier template and the converted plan.
+ * The share link is a transport projection: pack → deflate-raw → base64url.
  */
 const PLANS = [
   'public/projects/maison-atelier.json',
@@ -35,7 +35,7 @@ const PLANS = [
 const readPlan = (path: string): HouseProject =>
   validateProject(JSON.parse(readFileSync(path, 'utf8')));
 
-/** Famille de meubles variée : canapé en L, dressing à angles, douche paroi, téléviseur, liaison. */
+/** Varied furniture family: L sofa, cornered wardrobe, shower panel, television, link. */
 function planFurnishing(project: HouseProject): VariantBook {
   const levelIds = project.levels.map((level) => level.id);
   const groups = validateFurnitureList([
@@ -89,7 +89,7 @@ function shareDocument(project: HouseProject, book: VariantBook): ShareDocument 
   };
 }
 
-/** Applique au document d'origine la renumérotation des identifiants opérée par le pack. */
+/** Applies to the original document the identifier renumbering performed by the pack. */
 function renumberLikePack(doc: ShareDocument): ShareDocument {
   const clone = structuredClone(doc) as ShareDocument & { levels: HouseProject['levels'] };
   const levelIdMap = new Map<string, string>();
@@ -152,10 +152,10 @@ function renumberLikePack(doc: ShareDocument): ShareDocument {
 }
 
 /**
- * Comparaison profonde, quantification millimétrique près : les couleurs passent en
- * minuscules (le pack normalise), les booléens absents valent faux ou `undefined`.
+ * Deep comparison, up to millimetre quantisation: colours become
+ * lowercase (the pack normalises), absent booleans count as false or `undefined`.
  */
-const NUMERIC_TOLERANCE = 0.006; // > l'erreur max de quantification : 0,005 degré d'angle
+const NUMERIC_TOLERANCE = 0.006; // > the maximum quantisation error: 0.005 degree of angle
 function canonical(value: unknown): unknown {
   if (typeof value === 'string')
     return /^#[0-9a-fA-F]{6}$/.test(value) ? value.toLowerCase() : value;
@@ -199,30 +199,30 @@ function expectDeepEqual(actual: unknown, expected: unknown, path = 'document'):
   assert.deepEqual(a, b, path);
 }
 
-test('aller-retour pack / déballage sur les deux plans : projet identique, quantification près', async () => {
+test('pack / unpack round trip on both plans: identical project, up to quantisation', async () => {
   for (const plan of PLANS) {
     const project = readPlan(plan);
     const doc = shareDocument(project, planFurnishing(project));
     const hash = await encodeShareLinkHash(doc);
     const decoded = await decodeShareLinkHash(hash);
-    // Le pipeline de l'import s'applique au document déballé, jamais court-circuité.
+    // The import pipeline applies to the unpacked document, never short-circuited.
     const validated = validateProject(decoded.document);
     const levelIds = validated.levels.map((level) => level.id);
     const outputBook = validateVariantBook(decoded.document.furnishing?.variants, levelIds);
     for (const variant of outputBook.variants)
       for (const id of levelIds) validateFurnitureList(variant.levels[id]);
-    // Le lien est une projection : les identifiants générés deviennent positionnels.
+    // The link is a projection: generated identifiers become positional.
     expectDeepEqual(decoded.document, renumberLikePack(doc), plan);
-    // Le même état, repacké, redonne exactement les mêmes octets canoniques.
+    // The same state, repacked, gives back exactly the same canonical bytes.
     const repacked = packShareDocument(decoded.document);
     assert.ok(samePackedState(repacked, decoded.packed), `${plan} : le repack n'est pas stable`);
   }
 });
 
-test('un sommet de surface posé sur le bord de parcelle survit au lien', async () => {
+test('a surface vertex lying on the plot edge survives the link', async () => {
   const project = readPlan(PLANS[0]);
-  // Bord de parcelle en biais : le sommet est exactement dessus, la quantification au
-  // millimètre l'arrondit vers l'extérieur (0,375 mm) et le projet déballé doit rester valide.
+  // Slanted plot edge: the vertex is exactly on it, millimetre quantisation
+  // rounds it outwards (0.375 mm) and the unpacked project must stay valid.
   project.site!.boundary = [
     [-9, -3],
     [15, -3],
@@ -246,7 +246,7 @@ test('un sommet de surface posé sur le bord de parcelle survit au lien', async 
   validateProject(decoded.document);
 });
 
-test('le pack est déterministe : deux packs du même état donnent les mêmes octets', () => {
+test('the pack is deterministic: two packs of the same state give the same bytes', () => {
   const project = readPlan(PLANS[0]);
   const doc = shareDocument(project, planFurnishing(project));
   assert.ok(samePackedState(packShareDocument(doc), packShareDocument(doc)));
@@ -255,7 +255,7 @@ test('le pack est déterministe : deux packs du même état donnent les mêmes o
   assert.ok(!samePackedState(packShareDocument(doc), packShareDocument(other)));
 });
 
-test('préfixe inconnu, hash tronqué ou base64url invalide : erreur lisible, jamais d’écran vide', async () => {
+test('unknown prefix, truncated hash or invalid base64url: readable error, never a blank screen', async () => {
   const project = readPlan(PLANS[0]);
   const hash = await encodeShareLinkHash(shareDocument(project, planFurnishing(project)));
   for (const bad of [
@@ -268,11 +268,11 @@ test('préfixe inconnu, hash tronqué ou base64url invalide : erreur lisible, ja
     await assert.rejects(() => decodeShareLinkHash(bad), ShareLinkError, bad);
   }
   assert.throws(() => unpackShareDocument(new Uint8Array([9, 0])), LinkPackError);
-  // ... mais un hash valide issu d'un autre état sait encore se relire :
+  // ... but a valid hash from another state can still be read:
   await decodeShareLinkHash(hash);
 });
 
-test('un pack tronqué ou de version inconnue est rejeté par la lecture', () => {
+test('a truncated or unknown-version pack is rejected on reading', () => {
   const project = readPlan(PLANS[1]);
   const packed = packShareDocument(shareDocument(project, planFurnishing(project)));
   assert.throws(() => unpackShareDocument(new Uint8Array([9, 0])), LinkPackError);
@@ -286,14 +286,14 @@ test('un pack tronqué ou de version inconnue est rejeté par la lecture', () =>
   assert.throws(() => unpackShareDocument(versionFlipped), LinkPackError);
 });
 
-test('maison-atelier à deux niveaux et 60 meubles : le lien le plus chargé tient sous 3 Ko', async () => {
+test('maison-atelier with two levels and 60 pieces: the heaviest link fits under 3 KB', async () => {
   const project = readPlan(PLANS[0]);
   const twoLevels = structuredClone(project);
   const upper = structuredClone(project.levels[0]);
   upper.id = 'atelier-etage';
   upper.name = 'Premier étage';
   upper.elevation = 2.8;
-  // Les identifiants sont uniques à travers tous les niveaux : le duplicata renomme tout.
+  // Identifiers are unique across all levels: the duplicate renames everything.
   upper.walls.forEach((wall) => {
     wall.id = `${wall.id}-etage`;
     (wall.openings ?? []).forEach((opening) => {
@@ -368,7 +368,7 @@ test('maison-atelier à deux niveaux et 60 meubles : le lien le plus chargé tie
   );
 });
 
-test('#116 : vitrage, vantaux, lucarnes et fenêtres de toit survivent à l’aller-retour', async () => {
+test('#116: glazing, leaves, dormers and roof windows survive the round trip', async () => {
   const project = readPlan(PLANS[0]);
   const wall = project.levels[0].walls.find((candidate) => (candidate.openings ?? []).length)!;
   const door = wall.openings!.find((opening) => opening.kind === 'door') ?? wall.openings![0];
@@ -419,7 +419,7 @@ test('#116 : vitrage, vantaux, lucarnes et fenêtres de toit survivent à l’al
     roof.windows!.map(({ center, width, height }) => ({ center, width, height })),
     [{ center: [1.5, 2.25], width: 0.78, height: 1.18 }],
   );
-  // Un lien qui ne diffère que par une lucarne n'est pas jugé identique.
+  // A link differing only by a dormer is not judged identical.
   const other = structuredClone(project);
   other.site!.roofs![0].dormers!.pop();
   assert.ok(
@@ -430,8 +430,8 @@ test('#116 : vitrage, vantaux, lucarnes et fenêtres de toit survivent à l’al
   );
 });
 
-test('#116 non-régression : un lien de révision 1 déjà partagé se lit toujours', async () => {
-  // Généré par le packer d'avant la révision 2 (maison-atelier) : ces octets sont figés.
+test('#116 non-regression: an already shared revision-1 link is still readable', async () => {
+  // Generated by the packer from before revision 2 (maison-atelier): these bytes are frozen.
   const oldHash = readFileSync('tests/fixtures/share-link-v1-maison-atelier.txt', 'utf8').trim();
   const decoded = await decodeShareLinkHash(oldHash);
   const original = readPlan(PLANS[0]);
@@ -444,6 +444,6 @@ test('#116 non-régression : un lien de révision 1 déjà partagé se lit toujo
         assert.equal(opening.glazed, undefined);
         assert.equal(opening.leaves, undefined);
       }
-  // Comparé à l'état local identique : pas de fausse divergence entre révisions.
+  // Compared with the identical local state: no false divergence between revisions.
   assert.ok(samePackedState(decoded.packed, packShareDocument(original as ShareDocument)));
 });

@@ -13,7 +13,7 @@ const { fullHelpHtml, shortHelpHtml, startCardHtml } = await import('../src/ui/f
 const { ONBOARDING_VERSION, parseOnboarding, serializeOnboarding, shouldShowStartCard } =
   await import('../src/ui/onboarding');
 
-test('un état absent, illisible ou d’une autre version repart de zéro', () => {
+test('an absent, unreadable or other-version state starts from scratch', () => {
   for (const raw of [null, '', 'pas du json', '[]', 'null', '{"version":0,"cardSeen":true}']) {
     const state = parseOnboarding(raw);
     assert.equal(state.version, ONBOARDING_VERSION, `${raw} garde la version courante`);
@@ -21,7 +21,7 @@ test('un état absent, illisible ou d’une autre version repart de zéro', () =
   }
 });
 
-test('la carte vue une fois reste vue au rechargement', () => {
+test('a card seen once stays seen after reload', () => {
   const saved = serializeOnboarding({ version: ONBOARDING_VERSION, cardSeen: true });
   const state = parseOnboarding(saved);
   assert.equal(state.cardSeen, true);
@@ -29,7 +29,7 @@ test('la carte vue une fois reste vue au rechargement', () => {
   assert.equal(shouldShowStartCard(parseOnboarding(null)), true);
 });
 
-test('la carte de démarrage propose trois actions réelles et reste masquée par défaut', () => {
+test('the start card offers three real actions and stays hidden by default', () => {
   const html = startCardHtml();
   const actions = [...html.matchAll(/data-start-action="([a-z]+)"/g)].map((match) => match[1]);
   assert.deepEqual(actions, ['orbit', 'plan', 'walk']);
@@ -38,7 +38,7 @@ test('la carte de démarrage propose trois actions réelles et reste masquée pa
   assert.doesNotMatch(html, /Passer/, 'il n’y a rien à passer : la scène reste utilisable');
 });
 
-test('l’aide courte tient en trois gestes et garde le texte détaillé accessible', () => {
+test('the short help fits in three gestures and keeps the detailed text reachable', () => {
   const short = shortHelpHtml();
   assert.equal([...short.matchAll(/<li>/g)].length, 3);
   assert.match(short, /id="show-full-help"/);

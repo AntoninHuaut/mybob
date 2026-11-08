@@ -1,8 +1,8 @@
-// Copie les projets personnels vers reference-documents/, qui vit hors du dépôt.
+// Copies personal projects to reference-documents/, which lives outside the repository.
 //
-// Les projets `private-*.json` sont git-ignorés : ils n'existent que sur ce
-// clone. Cette copie est la seule sauvegarde hors du navigateur, donc elle doit
-// être refaite après chaque passe de décision, sinon elle ment.
+// `private-*.json` projects are git-ignored: they only exist on this
+// clone. This copy is the only backup outside the browser, so it must
+// be redone after every decision pass, otherwise it lies.
 import { copyFile, mkdir, readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
@@ -13,7 +13,7 @@ const entries = await readdir(SOURCE);
 const projects = entries.filter((name) => name.startsWith('private-') && name.endsWith('.json'));
 
 if (projects.length === 0) {
-  console.error(`Aucun projet personnel dans ${SOURCE}/.`);
+  console.error(`No personal project in ${SOURCE}/.`);
   process.exit(1);
 }
 

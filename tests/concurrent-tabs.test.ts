@@ -29,7 +29,7 @@ function openTab() {
   return session;
 }
 
-test('le second onglet ne peut pas écraser le travail du premier', () =>
+test('the second tab cannot overwrite the first one’s work', () =>
   withStorage((storage) => {
     const a = openTab();
     const b = openTab();
@@ -44,11 +44,11 @@ test('le second onglet ne peut pas écraser le travail du premier', () =>
     assert.equal(storage.get(variantsStorageKey('p')), written);
     assert.equal(b.isStale('p'), true);
     assert.deepEqual(stale, ['p']);
-    // Même sans nouvelle comparaison, l'onglet reste en lecture seule.
+    // Even without a new comparison, the tab stays read-only.
     assert.throws(() => b.select('p', 'initial'), new Error(STALE_MESSAGE));
   }));
 
-test('un onglet seul continue d’enregistrer normalement', () =>
+test('a lone tab keeps saving normally', () =>
   withStorage(() => {
     const a = openTab();
     a.save('p', 'ground', [createFurniture({ kind: 'sofa', position: [3, 3] })]);
@@ -57,7 +57,7 @@ test('un onglet seul continue d’enregistrer normalement', () =>
     assert.equal(a.load('p', 'ground')[0].kind, 'table');
   }));
 
-test('l’événement storage passe l’onglet en lecture seule avant toute écriture', () =>
+test('the storage event switches the tab to read-only before any write', () =>
   withStorage(() => {
     const a = openTab();
     a.markStale('p');

@@ -64,20 +64,20 @@ export const INTERIOR_FIXTURE_RANGE = 7;
 export const INTERIOR_GROUND_COLOR = Color3.FromHexString('#6d6a5f');
 
 /**
- * Bloom de la visite, calibré à l'œil sur la maison de test. Le seuil est
- * affiché (les matériaux appliquent déjà le tone mapping) et les murs blancs
- * éclairés tiennent entre 0,6 et 0,9 : un seuil à 0,6 faisait fleurer la pièce
- * entière, ce qui se lisait comme un reflet laiteux. À 0,9, seuls la lampe et
- * la vue à travers la baie dépassent le plafond.
+ * Walk bloom, calibrated by eye on the test house. The threshold is a
+ * displayed value (materials already apply tone mapping) and lit white
+ * walls sit between 0.6 and 0.9: a threshold at 0.6 made the whole room
+ * bloom, which read as a milky sheen. At 0.9, only the lamp and
+ * the view through the bay window exceed the ceiling.
  */
 export const INTERIOR_BLOOM_THRESHOLD = 0.9;
 export const INTERIOR_BLOOM_WEIGHT = 0.2;
 
 /**
- * Bloom de l'orbite, un cran au-dessus de la visite : le fond de ciel de la Vue
- * 3D et de l'Extérieur est plat à ~0,92 — au seuil de la visite, le ciel entier
- * fleurait et voilerait le décor. À 0,95, ne dépassent que les surfaces
- * réellement éblouies par le soleil et les reflets spéculaires : le halo voulu.
+ * Orbit bloom, one notch above the walk: the sky background of the 3D view
+ * and the Exterior is flat at ~0.92 — at the walk threshold, the whole sky
+ * bloomed and would veil the scene. At 0.95, only surfaces truly dazzled by
+ * the sun and specular highlights exceed it: the intended halo.
  */
 export const ORBIT_BLOOM_THRESHOLD = 0.95;
 
@@ -409,11 +409,11 @@ export function createInteriorBloom(
 }
 
 /**
- * Bloom de la caméra orbite, donc de la Vue 3D et de l'Extérieur. Mêmes valeur
- * de poids que la visite, seuil au-dessus du ciel plat (voir
- * `ORBIT_BLOOM_THRESHOLD`). Le plan réutilise la même caméra en orthographique :
- * `viewer` coupe le bloom dans ce mode plutôt que de détruire le pipeline à
- * chaque bascule.
+ * Bloom of the orbit camera, hence of the 3D view and the Exterior. Same weight
+ * value as the walk, threshold above the flat sky (see
+ * `ORBIT_BLOOM_THRESHOLD`). Plan reuses the same camera in orthographic mode:
+ * `viewer` turns the bloom off in that mode rather than destroying the pipeline on
+ * every switch.
  */
 export function createOrbitBloom(
   scene: Scene,

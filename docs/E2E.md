@@ -1,40 +1,40 @@
-# Tests de bout en bout
+# End-to-end tests
 
-Les scénarios Playwright utilisent uniquement le build public de démonstration, servi sur `127.0.0.1`, sur un port libre tiré à chaque exécution. Ils ne ciblent ni le site déployé ni un projet personnel. Chaque test démarre avec un contexte navigateur et un stockage vierges.
+Playwright scenarios only use the public demonstration build, served on `127.0.0.1`, on a free port drawn on every run. They target neither the deployed site nor a personal project. Every test starts with a blank browser context and storage.
 
-Prérequis une seule fois : `pnpm exec playwright install chromium` (sous Linux,
-`pnpm exec playwright install --with-deps chromium` à la première installation). Choix du
-port et serveur : `playwright.config.ts`.
+One-time prerequisite: `pnpm exec playwright install chromium` (on Linux,
+`pnpm exec playwright install --with-deps chromium` on first install). Port choice and
+server: `playwright.config.ts`.
 
-## En local : cibler la fonctionnalité, jamais la suite entière
+## Locally: target the feature, never the whole suite
 
-La suite e2e complète est l'affaire du pipeline : la CI la joue sharded en trois
-(`test:e2e:built --shard=n/3`, `ci.yml`). En local, un scénario e2e ne sert qu'à itérer sur
-le workflow navigateur touché par un changement — par titre avec `--grep`, ou par fichier :
+The full e2e suite belongs to the pipeline: CI runs it sharded in three
+(`test:e2e:built --shard=n/3`, `ci.yml`). Locally, an e2e scenario is only for iterating on
+the browser workflow touched by a change — by title with `--grep`, or by file:
 
 ```sh
-pnpm run build                                   # une fois, fige dist/
-pnpm exec playwright test --grep "mesure"        # les scénarios dont le titre contient « mesure »
-pnpm exec playwright test --grep "lien"          # le partage par URL (e2e/share-link.spec.ts)
-pnpm exec playwright test e2e/furniture-actions.spec.ts   # tous ceux d'un fichier
+pnpm run build                                   # once, freezes dist/
+pnpm exec playwright test --grep "measure"       # scenarios whose title contains "measure"
+pnpm exec playwright test --grep "link"          # URL sharing (e2e/share-link.spec.ts)
+pnpm exec playwright test e2e/furniture-actions.spec.ts   # every scenario of a file
 ```
 
-Scénarios : `e2e/workflows.spec.ts` (canapé contre un mur, brouillon, variantes,
-export/import JSON, plan/PNG, mesures, accueil), `e2e/furniture-actions.spec.ts`
-(chaises et table, liaison TV, glisser), `e2e/share-link.spec.ts` (partage par lien :
-lecture seule du destinataire, adoption, silence pour le propriétaire, vieux lien, hash
-corrompu), `e2e/first-steps.spec.ts` (carte Premiers pas, aide). Choisir le fichier
-d'abord, le `--grep` ensuite.
+Scenarios: `e2e/workflows.spec.ts` (sofa against a wall, draft, variants, JSON
+export/import, plan/PNG, measurements, welcome), `e2e/furniture-actions.spec.ts` (chairs and
+table, TV link, dragging), `e2e/share-link.spec.ts` (link sharing: recipient read-only,
+adoption, silence for the owner, old link, corrupted hash), `e2e/first-steps.spec.ts`
+(« Premiers pas » card, help), `e2e/concurrent-tabs.spec.ts` (two tabs on the same storage).
+Pick the file first, the `--grep` second.
 
-`pnpm run test:e2e` (build complet + exclusion du plan personnel + tous les scénarios)
-n'est pas la boucle locale : il n'existe que pour la CI, qui rejoue tout sur le build
-vérifié. Après un build public déjà vérifié, `pnpm run test:e2e:built` lance les scénarios
-seuls — c'est lui qui reçoit le `--grep` ou le fichier. `pnpm run test:e2e:report` ouvre
-le rapport HTML local. `--headed` affiche le navigateur.
+`pnpm run test:e2e` (full build + personal-plan exclusion + every scenario) is not the local
+loop: it only exists for CI, which replays everything on the verified build. After an already
+verified public build, `pnpm run test:e2e:built` runs the scenarios alone — it is the one that
+takes the `--grep` or the file. `pnpm run test:e2e:report` opens the local HTML report.
+`--headed` shows the browser.
 
-Les scénarios tournent en Chromium ordinateur, sur le rendu logiciel SwiftShader, pour
-rester exécutables sur une machine sans GPU. Ils passent par l'interface et les fichiers
-téléchargés, sans accéder à l'instance interne du moteur ni modifier directement
-`localStorage`.
+Scenarios run in desktop Chromium, on the SwiftShader software renderer, to stay runnable on a
+machine without a GPU. They go through the interface and downloaded files, without accessing
+the engine's internal instance nor modifying `localStorage` directly. Assertions on visible
+text match the French interface.
 
-Configuration : `playwright.config.ts`.
+Configuration: `playwright.config.ts`.

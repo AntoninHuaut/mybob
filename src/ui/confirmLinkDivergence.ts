@@ -3,8 +3,8 @@ import { escapeHtml } from './format';
 export type LinkDivergenceChoice = 'replace' | 'copy' | 'ignore';
 
 /**
- * Le propriétaire ouvre un lien de son propre projet plus ancien que l'état local :
- * trois issues, jamais de perte silencieuse. Sur le modèle de `confirmImportReplacement`.
+ * The owner opens a link to their own project that is older than the local state:
+ * three outcomes, never a silent loss. Modelled on `confirmImportReplacement`.
  */
 export function confirmLinkDivergence(
   projectName: string,

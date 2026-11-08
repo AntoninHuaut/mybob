@@ -1,314 +1,307 @@
-# Architecture — carte du code
+# Architecture — code map
 
-Ce document existe pour éviter de relire tout `src/` à chaque tâche. Lire cette page, puis
-seulement les fichiers de la zone concernée. Les règles produit et les contraintes de
-livraison sont dans [AGENTS.md](../AGENTS.md) ; le format des données dans
-[PROJECT-FORMAT.md](PROJECT-FORMAT.md).
+This document exists so that nobody has to re-read all of `src/` for every task. Read this
+page, then only the files of the area concerned. Product rules and delivery constraints are in
+[AGENTS.md](../AGENTS.md); the data format in [PROJECT-FORMAT.md](PROJECT-FORMAT.md).
 
-## En une minute
+## In one minute
 
-Application statique Vite + TypeScript + Babylon.js 9. Aucun backend, aucun compte : tout
-l'état persistant vit dans le `localStorage` du navigateur.
+Static Vite + TypeScript + Babylon.js 9 application. No backend, no account: all persistent
+state lives in the browser's `localStorage`.
 
-- `src/main.ts` — composition de l'interface et **état de l'écran** : mode courant, sélection,
-  préférences, projets. Il possède le DOM.
-- `src/scene/viewer.ts` — la scène Babylon : caméras, modes, coupe, éclairage, mesures,
-  collisions. Il possède le rendu.
-- `src/model/` — données pures : types, validation, géométrie. Ni DOM ni Babylon.
-- `src/furniture/` — meubles : modèle, placement, groupes, historique, couche de rendu.
-- `src/ui/` — fragments HTML purs et panneaux autonomes.
+- `src/main.ts` — UI composition and **screen state**: current mode, selection, preferences,
+  projects. It owns the DOM.
+- `src/scene/viewer.ts` — the Babylon scene: cameras, modes, cutaway, lighting, measurements,
+  collisions. It owns rendering.
+- `src/model/` — pure data: types, validation, geometry. Neither DOM nor Babylon.
+- `src/furniture/` — furniture: model, placement, groups, history, render layer.
+- `src/ui/` — pure HTML fragments and self-contained panels.
 
-Les deux mondes se parlent dans un seul sens à la fois : `main.ts` appelle des méthodes du
-viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSelectRoom`,
-`onDestination`, `onMeasure`, `onEditFurniture`).
+The two worlds talk in one direction at a time: `main.ts` calls viewer methods, and the viewer
+reports back through callbacks (`onModeChange`, `onFrame`, `onSelectRoom`, `onDestination`,
+`onMeasure`, `onEditFurniture`).
 
-## Carte des modules
+## Module map
 
-| Zone                   | Fichier                                 | Rôle                                                                |
-| ---------------------- | --------------------------------------- | ------------------------------------------------------------------- |
-| Composition            | `src/main.ts`                           | Câblage DOM, `setMode`, projets, préférences, raccourcis            |
-| Moteur                 | `src/scene/engine.ts`                   | Moteur WebGL, message si l'accélération graphique manque            |
-| Scène                  | `src/scene/viewer.ts`                   | `HouseViewer` : modes, caméras, coupe, ombres, mesures, portes      |
-| Géométrie de la maison | `src/scene/buildHouse.ts`               | Murs, sols, plafonds, menuiseries, portes                           |
-| Arêtes de mur          | `src/scene/beveledBox.ts`               | Boîte à arêtes chanfreinées, pour les murs                          |
-| Angles verticaux       | `src/scene/cornerBead.ts`               | Chanfrein des angles concaves entre deux murs                       |
-| Extérieur              | `src/scene/buildExterior.ts`            | Façades, toiture, terrain                                           |
-| Matériaux              | `src/scene/materials.ts`                | Matériaux partagés, carrelage procédural                            |
-| Relief et rugosité     | `src/scene/surfaceTextures.ts`          | Normal maps et roughness maps procédurales, tuilées au mètre        |
-| Repère                 | `src/scene/coordinates.ts`              | Passage au repère du plan, cadrage plan, déplacement clavier        |
-| Cadrage                | `src/scene/framing.ts`                  | `fitOverview`, `fitPlan`, marges d'interface                        |
-| Navigation             | `src/scene/navigation.ts`               | Destination de visite, plan de coupe, mur face caméra               |
-| Caméra de visite       | `src/scene/walkCamera.ts`               | Hauteur du regard, rayon visiteur, vitesse, pas                     |
-| Coupe des murs         | `src/scene/wallCutaway.ts`              | `auto` / `full` / `low`, plans de découpe par matériau              |
-| Carte d'ombres         | `src/scene/shadowRefresh.ts`            | Carte du soleil redessinée seulement sur un changement d'ombre      |
-| Rendu au repos         | `src/scene/renderScheduler.ts`          | Image dessinée seulement quand la scène change                      |
-| Résolution dynamique   | `src/scene/adaptiveResolution.ts`       | Paliers de résolution en mouvement, selon le temps d'image          |
-| Ouvertures en plan     | `src/scene/planOpenings.ts`             | Baies et portes dessinées dans la vue Plan, faces de coupe          |
-| Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, TAA, occlusion, bloom (visite, Vue 3D et Extérieur)     |
-| Diagnostic             | `src/scene/diagnostics.ts`              | `mybob.diag()` : moteur, GPU, cadence, résolution, scène            |
-| Mesure                 | `src/scene/measurement.ts`              | Accrochage aux axes du plan                                         |
-| Soleil                 | `src/scene/solar.ts`                    | Équations NOAA, fuseaux IANA                                        |
-| Données                | `src/model/types.ts`                    | Format versionné (`schemaVersion: 1`)                               |
-| Validation             | `src/model/validate.ts`                 | Contrôle à l'import, erreurs lisibles                               |
-| Géométrie pure         | `src/model/geometry.ts`                 | Surfaces, appartenance, tronçons de mur, altitude du sol            |
-| Lien de partage — pack | `src/model/linkPacker.ts`               | Pack binaire sémantique du hash `#p1:` (varints, quantification)    |
-| Lien de partage — URL  | `src/model/shareLink.ts`                | Encodage/décodage du hash, comparaison canonique d'états            |
-| Meubles — modèle       | `src/furniture/model.ts`                | Types, identifiants, clé de stockage, historique                    |
-| Meubles — rendu        | `src/furniture/layer.ts`                | Maillages, sélection, glisser, calques, découpe en plan             |
-| Meubles — placement    | `src/furniture/placement.ts`            | Contraintes bâtiment, recherche de place                            |
-| Meubles — groupes      | `src/furniture/groups.ts`               | Liaison, transformations, glisser contraint                         |
-| Meubles — édition      | `src/furniture/editorDraft.ts`          | Brouillon transactionnel de la popup                                |
-| Meubles — panneau      | `src/furniture/panel.ts`                | Liste, ajout, popup d'édition                                       |
-| Meubles — variantes    | `src/furniture/variants.ts`             | Livre de variantes par projet                                       |
-| Meubles — session      | `src/furniture/layoutSession.ts`        | Chargement/écriture par projet et niveau                            |
-| Interface              | `src/ui/appTemplate.ts`                 | Gabarit statique de l'application                                   |
-| Textes de mode         | `src/ui/modeChrome.ts`                  | Titres, aides clavier et tactile par mode                           |
-| Compteur de cadence    | `src/ui/frameRate.ts`                   | Affichage des fps, écriture limitée à quatre par seconde            |
-| Panneaux               | `src/ui/roomPanels.ts`, `minimap.ts`    | Liste des pièces, fiche, plan miniature                             |
-| Divergence de lien     | `src/ui/confirmLinkDivergence.ts`       | Trois issues quand un lien et l'état local diffèrent                |
-| Aide et accueil        | `src/ui/firstSteps.ts`, `onboarding.ts` | Carte « Premiers pas », aide courte et complète                     |
-| Export image           | `src/ui/imageExport.ts`                 | PNG de la caméra, cartouche, options                                |
-| Banc d'essai (dev)     | `src/ui/fxLab.ts`                       | Questions de rendu non tranchées — jamais dans un build             |
-| Styles                 | `src/style.css` + `src/style/*.css`     | `chrome`, `scene`, `feedback` ; `furniture/panel.css` pour la popup |
+| Area                  | File                                    | Role                                                                 |
+| --------------------- | --------------------------------------- | -------------------------------------------------------------------- |
+| Composition           | `src/main.ts`                           | DOM wiring, `setMode`, projects, preferences, shortcuts              |
+| Engine                | `src/scene/engine.ts`                   | WebGL engine, message when graphics acceleration is missing          |
+| Scene                 | `src/scene/viewer.ts`                   | `HouseViewer`: modes, cameras, cutaway, shadows, measurements, doors |
+| House geometry        | `src/scene/buildHouse.ts`               | Walls, floors, ceilings, joinery, doors                              |
+| Wall edges            | `src/scene/beveledBox.ts`               | Box with chamfered edges, for walls                                  |
+| Vertical corners      | `src/scene/cornerBead.ts`               | Chamfer of the concave corners between two walls                     |
+| Exterior              | `src/scene/buildExterior.ts`            | Façades, roof, terrain                                               |
+| Materials             | `src/scene/materials.ts`                | Shared materials, procedural tiling                                  |
+| Relief and roughness  | `src/scene/surfaceTextures.ts`          | Procedural normal and roughness maps, tiled per metre                |
+| Frame of reference    | `src/scene/coordinates.ts`              | Conversion to the plan frame, plan framing, keyboard movement        |
+| Framing               | `src/scene/framing.ts`                  | `fitOverview`, `fitPlan`, UI margins                                 |
+| Navigation            | `src/scene/navigation.ts`               | Walk destination, section plane, wall facing the camera              |
+| Walk camera           | `src/scene/walkCamera.ts`               | Eye height, visitor radius, speed, step                              |
+| Wall cutaway          | `src/scene/wallCutaway.ts`              | `auto` / `full` / `low`, clipping planes per material                |
+| Shadow map            | `src/scene/shadowRefresh.ts`            | Sun map redrawn only when a shadow changes                           |
+| Idle rendering        | `src/scene/renderScheduler.ts`          | Frame drawn only when the scene changes                              |
+| Dynamic resolution    | `src/scene/adaptiveResolution.ts`       | Resolution steps while moving, driven by frame time                  |
+| Openings in plan      | `src/scene/planOpenings.ts`             | Windows and doors drawn in Plan view, cut faces                      |
+| Walk ambience         | `src/scene/interiorAmbience.ts`         | Local IBL, TAA, occlusion, bloom (walk, 3D view and Exterior)        |
+| Diagnostics           | `src/scene/diagnostics.ts`              | `mybob.diag()`: engine, GPU, frame rate, resolution, scene           |
+| Measurement           | `src/scene/measurement.ts`              | Snapping to the plan axes                                            |
+| Sun                   | `src/scene/solar.ts`                    | NOAA equations, IANA time zones                                      |
+| Data                  | `src/model/types.ts`                    | Versioned format (`schemaVersion: 1`)                                |
+| Validation            | `src/model/validate.ts`                 | Import checks, readable errors                                       |
+| Pure geometry         | `src/model/geometry.ts`                 | Areas, containment, wall segments, floor elevation                   |
+| Share link — pack     | `src/model/linkPacker.ts`               | Semantic binary pack of the `#p1:` hash (varints, quantisation)      |
+| Share link — URL      | `src/model/shareLink.ts`                | Hash encoding/decoding, canonical state comparison                   |
+| Furniture — model     | `src/furniture/model.ts`                | Types, identifiers, storage key, history                             |
+| Furniture — rendering | `src/furniture/layer.ts`                | Meshes, selection, dragging, layers, plan clipping                   |
+| Furniture — placement | `src/furniture/placement.ts`            | Building constraints, free-spot search                               |
+| Furniture — groups    | `src/furniture/groups.ts`               | Linking, transforms, constrained dragging                            |
+| Furniture — editing   | `src/furniture/editorDraft.ts`          | Transactional draft of the popup                                     |
+| Furniture — panel     | `src/furniture/panel.ts`                | List, add, edit popup                                                |
+| Furniture — variants  | `src/furniture/variants.ts`             | Variant book per project                                             |
+| Furniture — session   | `src/furniture/layoutSession.ts`        | Loading/writing per project and level                                |
+| Interface             | `src/ui/appTemplate.ts`                 | Static application template                                          |
+| Mode texts            | `src/ui/modeChrome.ts`                  | Titles, keyboard and touch help per mode                             |
+| Frame-rate counter    | `src/ui/frameRate.ts`                   | fps display, written at most four times per second                   |
+| Panels                | `src/ui/roomPanels.ts`, `minimap.ts`    | Room list, room card, mini-map                                       |
+| Link divergence       | `src/ui/confirmLinkDivergence.ts`       | Three outcomes when a link and the local state differ                |
+| Help and welcome      | `src/ui/firstSteps.ts`, `onboarding.ts` | "Premiers pas" card, short and full help                             |
+| Image export          | `src/ui/imageExport.ts`                 | PNG of the camera, title block, options                              |
+| Test bench (dev)      | `src/ui/fxLab.ts`                       | Unsettled rendering questions — never in a build                     |
+| Styles                | `src/style.css` + `src/style/*.css`     | `chrome`, `scene`, `feedback`; `furniture/panel.css` for the popup   |
 
-## Le flux d'une donnée
+## The path of a piece of data
 
 ```text
 public/projects/*.json
   → validateProject()            src/model/validate.ts
   → HouseViewer.load()           src/scene/viewer.ts
-      → buildHouse()             murs, sols, portes
-      → buildExterior()          façades, toiture, terrain
-      → buildWallCutaway()       plans de découpe
-      → buildPlanOpenings()      baies en plan
+      → buildHouse()             walls, floors, doors
+      → buildExterior()          façades, roof, terrain
+      → buildWallCutaway()       clipping planes
+      → buildPlanOpenings()      openings in plan
   → FurnitureLayer               src/furniture/layer.ts
-  → localStorage                 clés ci-dessous
+  → localStorage                 keys below
 ```
 
-Clés de stockage, toutes préfixées `maison-atelier:` — `projects:v1` (projets importés),
-`layout:v1:<projet>:<niveau>` (aménagement), `variants:v1:<projet>`, `navigation:v1`,
-`onboarding`, `solar:<projet>`, `last-project`. Changer une clé casse les données locales :
-ne le faire qu'avec une migration.
+Storage keys, all prefixed `maison-atelier:` — `projects:v1` (imported projects),
+`layout:v1:<project>:<level>` (arrangement), `variants:v1:<project>`, `navigation:v1`,
+`onboarding`, `solar:<project>`, `last-project`. Changing a key breaks local data: only do it
+with a migration.
 
-## Les trois modes et leur état — le point le plus fragile
+## The three modes and their state — the most fragile point
 
-`overview`, `plan` et `walk` existent **deux fois** : `mode` dans `src/main.ts` (ce que
-montre l'interface) et `viewer.mode` dans `src/scene/viewer.ts` (ce que rend la scène).
+`overview`, `plan` and `walk` exist **twice**: `mode` in `src/main.ts` (what the interface
+shows) and `viewer.mode` in `src/scene/viewer.ts` (what the scene renders).
 
-- `main.setMode(next, fromViewer)` est le seul point d'entrée de l'interface. Il pose `mode`,
-  appelle `viewer.setMode(next)` si nécessaire, puis met à jour les boutons, les titres,
-  les aides et `syncDisplayControls()`.
-- `viewer.setMode()` peut **refuser** : sans destination de visite valide, il appelle
-  `onDestinationRejected` et sort sans changer `viewer.mode`. `main.setMode` relit alors
-  `viewer.mode` et rend `false` : c'est pour cela que `setMode` retourne un booléen.
-- `viewer.onModeChange` remonte vers `main.setMode(next, true)`. Le drapeau
-  `syncingViewerMode` empêche la récursion quand c'est `main` qui a déclenché le changement.
-- Ne jamais écrire `viewer.mode` directement, ni changer de caméra active hors de
-  `viewer.setMode` : la coupe (`updateSection`), les découpes (`updateCutaway`), les ombres
-  (`updateShadowPolicy`) et l'ambiance sont toutes dérivées de `viewer.mode`.
+- `main.setMode(next, fromViewer)` is the interface's only entry point. It sets `mode`, calls
+  `viewer.setMode(next)` if needed, then updates the buttons, titles, help and
+  `syncDisplayControls()`.
+- `viewer.setMode()` may **refuse**: without a valid walk destination it calls
+  `onDestinationRejected` and returns without changing `viewer.mode`. `main.setMode` then
+  re-reads `viewer.mode` and returns `false`: that is why `setMode` returns a boolean.
+- `viewer.onModeChange` reports back to `main.setMode(next, true)`. The `syncingViewerMode`
+  flag prevents recursion when `main` triggered the change.
+- Never write `viewer.mode` directly, nor switch the active camera outside `viewer.setMode`:
+  the section (`updateSection`), the cutaways (`updateCutaway`), the shadows
+  (`updateShadowPolicy`) and the ambience are all derived from `viewer.mode`.
 
-Symptôme d'une désynchronisation : l'interface affiche encore « Plan » alors que la caméra
-marche, ou l'inverse. Toute nouvelle façon d'entrer en visite doit passer par `main.setMode`
-ou par une méthode du viewer qui appelle `setMode` (comme `goTo` et `focusRoom`).
+Symptom of a desynchronisation: the interface still shows "Plan" while the camera walks, or
+the reverse. Any new way of entering the walk must go through `main.setMode` or through a
+viewer method that calls `setMode` (such as `goTo` and `focusRoom`).
 
-## Visite et rendu
+## Walk and rendering
 
-- Vitesse de marche 2,8 m/s par défaut, réglable de 1 à 5 m/s ; Maj multiplie par 1,7. La
-  sensibilité du regard va de 50 à 200 %. Les deux réglages sont locaux
-  (`maison-atelier:navigation:v1`) et s'appliquent à tous les projets.
-- Tone mapping ACES, intensités ciel et soleil réduites. Le bouton Lumière ne commande que les
-  luminaires intérieurs, jamais le soleil.
-- La visite a sa propre ambiance : environnement cubique généré localement (aucun fichier
-  distant) pour un reflet ambiant, lisible surtout sur le verre et l'acier ; le relief vient de
-  l'occlusion ambiante et des luminaires du niveau, renforcés parce que le plafond masque le
-  soleil. Cet environnement est en **demi-flottants**, donc linéaire et au-delà du blanc : la
-  baie et le luminaire y valent plusieurs fois un mur, ce qui donne aux reflets un point chaud
-  au lieu d'une tache grise. Il est généré en 128 px — un reflet n'en résout pas plus, et les
-  six faces coûtent une trentaine de millisecondes à l'entrée en visite. Plan et Vue 3D gardent
-  leur éclairage : l'environnement et le tampon de géométrie ne sont attachés qu'en visite et
-  libérés en sortie, et l'environnement précédent est restauré plutôt qu'effacé. Avec un aperçu
-  solaire appliqué, l'ambiance suit le soleil comme ailleurs.
-- Les murs sont des boîtes à arêtes chanfreinées (`beveledBox.ts`, 4 mm) : un angle vif est le
-  marqueur n°1 de l'image de synthèse, un chanfrein accroche la lumière. Les jonctions
-  mur/plafond et mur/sol en portent un.
-- Les angles **verticaux** entre deux murs n'en portent pas, et c'est mesuré, pas supposé. Un
-  tel angle est concave : ses deux faces intérieures se croisent, il n'y a aucune arête à
-  chanfreiner. Le couper en onglet ne changerait rien à l'image — l'onglet ne déplace que le
-  recouvrement caché à l'intérieur du mur, la face visible reste la même. `cornerBead.ts` sait
-  poser un chanfrein de 45° par-dessus, mais à 4 mm il est invisible et à 12 mm il efface le
-  creux que l'occlusion dessine : les deux murs y diffèrent de 6 niveaux sur 255, il n'y a rien
-  à adoucir. Le module reste, le banc d'essai permet de le revérifier.
-- Le banc d'essai (`src/ui/fxLab.ts`) n'existe qu'en développement : `main.ts` l'importe
-  derrière `import.meta.env.DEV` et en dynamique, donc Vite le retire entièrement d'un build.
-  Il porte les questions de rendu non tranchées, pour les juger sur la vraie maison plutôt
-  qu'à l'aveugle. Des particules de poussière y ont été essayées puis retirées : un grain réel
-  fait quelques dizaines de microns, sous un pixel à toute distance, et un sprite assez gros
-  pour se voir lit neige. Aucun réglage ne passe entre les deux.
-- Les surfaces ne sont plus des couleurs unies : plâtre, parquet, béton et acier portent une
-  normal map et une roughness map, générées par bruit fractal et tuilées au mètre. Les UV des
-  boîtes sont réécrits en mètres par `worldScaleUvs`, sinon un mur de 4 m et une plinthe de
-  50 cm étireraient le même grain différemment. Le parquet garde sa tuile de 4,8 × 3,2 m, celle
-  de son albédo, et sa roughness varie planche par planche. Les données de pixels sont calculées
-  une fois par session et mises en cache : changer de projet reconstruit la scène, pas le bruit.
-- La chaîne de post-traitements de la visite est ordonnée et l'ordre compte : Babylon ajoute
-  chaque pipeline à la fin de la chaîne de la caméra, donc `updateInteriorAmbience` construit
-  le TAA d'abord, l'occlusion ensuite, le bloom en dernier. On lit
-  `TAA, TAAPass, SSAO…, ssaoCombine, bloom`. Le bloom est réglé à un seuil de 0,9 et un poids
-  de 0,2 : les valeurs sont affichées (le tone mapping est déjà passé) et les murs blancs
-  éclairés tiennent entre 0,6 et 0,9 — à 0,6 la pièce entière fleurissait et se lisait comme
-  un reflet laiteux sur les murs. Seuls la lampe et la vue à travers la baie dépassent le
-  seuil. Son
-  `imageProcessingEnabled` est faux, sinon le tone mapping serait appliqué deux fois — l'app
-  tone-map déjà dans les shaders des matériaux — et ses sous-effets sont configurés avant la
-  coupure, qui détruit le post-process et nullifie `imageProcessing`.
-- L'occlusion de la visite est **inconditionnelle** : le sondage qui la retirait sous 24 images
-  par seconde a été supprimé — jugée au banc d'essai, la perte des creux d'angle coûtait plus
-  que quelques images par seconde sur une machine faible. Seul refus restant : un backend sans
-  cibles de rendu multiples, que `createInteriorOcclusion` détecte et mémorise pour ne pas
-  rejeter à chaque entrée en visite. Un GPU lent garde donc l'occlusion et rend moins d'images.
-- La cadence s'affiche en tout petit dans le pied de la scène et passe en ambre sous 24 images
-  par seconde. C'est un affichage, pas un réglage de qualité. Pour diagnostiquer une machine lente à distance,
-  `mybob.diag()` imprime moteur, GPU, cadence, résolution réellement rendue, état de l'ambiance
-  de visite, taille de la scène et caractéristiques de la machine ; la commande est rappelée au
-  démarrage. `mybob.diag()` ne renvoie rien — la console réafficherait la valeur de retour et le
-  rapport apparaîtrait deux fois — et `mybob.report()` donne le même texte sans l'imprimer, pour
+- Walking speed is 2.8 m/s by default, adjustable from 1 to 5 m/s; Shift multiplies it by 1.7.
+  Look sensitivity ranges from 50 to 200 %. Both settings are local
+  (`maison-atelier:navigation:v1`) and apply to every project.
+- ACES tone mapping, reduced sky and sun intensities. The Light button only controls the
+  interior light fittings, never the sun.
+- The walk has its own ambience: a locally generated cube environment (no remote file) for an
+  ambient reflection, visible mostly on glass and steel; relief comes from ambient occlusion
+  and the level's light fittings, boosted because the ceiling hides the sun. This environment
+  is in **half floats**, hence linear and beyond white: the bay window and the light fitting
+  are worth several times a wall in it, which gives reflections a hot spot instead of a grey
+  smudge. It is generated at 128 px — a reflection resolves no more than that, and the six
+  faces cost about thirty milliseconds when entering the walk. Plan and 3D view keep their
+  lighting: the environment and the geometry buffer are only attached during the walk and
+  released on exit, and the previous environment is restored rather than cleared. With a
+  solar preview applied, the ambience follows the sun as elsewhere.
+- Walls are boxes with chamfered edges (`beveledBox.ts`, 4 mm): a sharp edge is the number-one
+  marker of a computer-generated image, a chamfer catches the light. The wall/ceiling and
+  wall/floor junctions carry one.
+- **Vertical** corners between two walls carry none, and that is measured, not assumed. Such
+  a corner is concave: its two inner faces intersect, there is no edge to chamfer. Mitring it
+  would change nothing in the image — the mitre only moves the overlap hidden inside the wall,
+  the visible face stays the same. `cornerBead.ts` can lay a 45° chamfer on top, but at 4 mm
+  it is invisible and at 12 mm it erases the hollow drawn by the occlusion: the two walls
+  differ there by 6 levels out of 255, there is nothing to soften. The module stays, the test
+  bench lets you check it again.
+- The test bench (`src/ui/fxLab.ts`) only exists in development: `main.ts` imports it behind
+  `import.meta.env.DEV` and dynamically, so Vite removes it entirely from a build. It carries
+  the unsettled rendering questions, to judge them on the real house rather than blindly. Dust
+  particles were tried there then removed: a real speck is a few tens of microns, below a
+  pixel at any distance, and a sprite big enough to be seen reads as snow. No setting fits in
+  between.
+- Surfaces are no longer flat colours: plaster, parquet, concrete and steel carry a normal map
+  and a roughness map, generated from fractal noise and tiled per metre. Box UVs are rewritten
+  in metres by `worldScaleUvs`, otherwise a 4 m wall and a 50 cm skirting board would stretch
+  the same grain differently. Parquet keeps its 4.8 × 3.2 m tile, that of its albedo, and its
+  roughness varies plank by plank. Pixel data is computed once per session and cached:
+  switching project rebuilds the scene, not the noise.
+- The walk post-processing chain is ordered and the order matters: Babylon appends each
+  pipeline at the end of the camera's chain, so `updateInteriorAmbience` builds the TAA first,
+  the occlusion next, the bloom last. It reads `TAA, TAAPass, SSAO…, ssaoCombine, bloom`. The
+  bloom is set to a threshold of 0.9 and a weight of 0.2: the values are displayed values (tone
+  mapping has already run) and lit white walls sit between 0.6 and 0.9 — at 0.6 the whole room
+  bloomed and read as a milky sheen on the walls. Only the lamp and the view through the bay
+  window exceed the threshold. Its `imageProcessingEnabled` is false, otherwise tone mapping
+  would be applied twice — the app already tone-maps in the material shaders — and its
+  sub-effects are configured before the cut-off, which destroys the post-process and nulls
+  `imageProcessing`.
+- Walk occlusion is **unconditional**: the probe that removed it below 24 frames per second has
+  been deleted — judged on the test bench, losing the corner hollows cost more than a few
+  frames per second on a weak machine. The only remaining refusal: a backend without multiple
+  render targets, which `createInteriorOcclusion` detects and remembers so as not to reject on
+  every walk entry. A slow GPU therefore keeps the occlusion and renders fewer frames.
+- The frame rate is shown very small in the scene footer and turns amber below 24 frames per
+  second. It is a display, not a quality setting. To diagnose a slow machine remotely,
+  `mybob.diag()` prints engine, GPU, frame rate, actually rendered resolution, walk ambience
+  state, scene size and machine characteristics; the command is recalled at start-up.
+  `mybob.diag()` returns nothing — the console would echo the return value and the report
+  would appear twice — and `mybob.report()` gives the same text without printing it, for
   `copy(mybob.report())`.
-- L'extérieur cadre le bâti et son toit — le recul et l'azimut sont choisis avec eux, et la
-  parcelle reste entière à l'image en fond sans dicter le cadrage ; Vue 3D montre la maison
-  ouverte ; Plan masque terrain et toiture. Sélectionner une pièce ou ajouter un meuble depuis
-  l'extérieur revient à la vue intérieure.
-- La visite sort de la maison : la limite est la parcelle (`site.boundary`), pas l'emprise du
-  niveau. Sans `site`, l'emprise reste la limite. Le garde-fou de `beforeFrame` ne renvoie au
-  départ que hors parcelle, sous le sol ou au-dessus du plafond ; le sol sous le visiteur est
-  celui de la pièce dedans, celui du terrain plat dehors (`groundElevationAt`). La marche entre
-  les deux est franchie par `prepareWalkStep`, qui mesure la montée depuis ce sol-là : un terrain
-  déclaré sous le plancher ne bloque plus le retour. Revenir du
-  plan en visite depuis la pelouse garde le point courant (`isParcelDestination`) au lieu de
-  refuser la destination. La toiture est visible en visite : dedans le plafond la masque, dehors
-  elle rend la maison entière. Les murs extérieurs gardent leurs collisions, donc on ne sort que
-  par une porte ouverte.
+- The exterior frames the building and its roof — distance and azimuth are chosen with them,
+  and the plot stays whole in the background without dictating the framing; 3D view shows the
+  house open; Plan hides terrain and roof. Selecting a room or adding furniture from the
+  exterior returns to the interior view.
+- The walk leaves the house: the limit is the plot (`site.boundary`), not the level footprint.
+  Without `site`, the footprint stays the limit. The `beforeFrame` guard only sends the visitor
+  back to the start when outside the plot, below the floor or above the ceiling; the floor
+  under the visitor is the room's inside and the flat terrain's outside (`groundElevationAt`).
+  The step between the two is climbed by `prepareWalkStep`, which measures the rise from that
+  floor: terrain declared below the floor no longer blocks the way back. Returning from the
+  plan to the walk from the lawn keeps the current point (`isParcelDestination`) instead of
+  refusing the destination. The roof is visible during the walk: inside, the ceiling hides it;
+  outside, it renders the whole house. Exterior walls keep their collisions, so you only leave
+  through an open door.
 
-## Le lien de partage
+## The share link
 
-Le bouton **Lien** de l'en-tête copie une URL dont le fragment `#p1:<base64url>` est une
-photographie de l'état courant (`history.replaceState`, jamais `location.hash` : la
-navigation ne s'empile pas). Le fragment est écrit après chaque modification, avec un
-rebattement de 500 ms garanti au dernier appel, et relu au démarrage.
+The header's **Lien** button copies a URL whose `#p1:<base64url>` fragment is a snapshot of
+the current state (`history.replaceState`, never `location.hash`: navigation does not stack
+up). The fragment is written after every change, with a 500 ms debounce guaranteed on the
+last call, and read back at start-up.
 
-- **Contenu** : `model/linkPacker.ts` packe un document d'export complet — projet, aménagement
-  de chaque niveau et toutes les variantes — jamais la caméra ni les préférences de navigation.
-- **Projection de transport** : le pack n'existe que dans l'URL. Les identifiants (meubles,
-  niveaux, murs, ouvertures, pièces) y sont **renumérotés positionnellement** (`meuble-0`,
-  `mur-0-1`…) : l'entropie des UUID ne tient pas sous 3 Ko. Ne sont conservés que les champs
-  qui portent un sens stable : `project.id`, les noms, les notes, la description, la source,
-  les identifiants de variantes. Repacker un document déballé rend les mêmes octets.
-- **Lecture au démarrage** (`main.ts`, `openSharedLink`) : le hash prime sur `localStorage`.
-  - Le projet existe déjà ici (propriétaire) : comparaison silencieuse sur les **octets
-    packés canoniques** (`samePackedState`, pas sur le hash compressé, déflate non
-    déterministe d'un navigateur à l'autre). Identique → rien. Différent →
-    `ui/confirmLinkDivergence.ts` : remplacer, garder les deux, ou ignorer — jamais de
-    perte silencieuse.
-  - Le projet n'existe pas ici (destinataire) : ouverture **en mémoire seule** (aucune
-    écriture `localStorage`), lecture seule avec bandeau et bouton **Ajouter à mes projets**
-    qui copie le document sous un nouvel identifiant puis l'installe normalement.
-- **Rechargement de l'onglet** : `sessionStorage` retient le dernier hash publié par cet onglet,
-  et seulement après le succès de `replaceState` — la mémoire ne devance donc jamais l'URL.
-  Au chargement, un hash identique à cette mémoire est celui de l'onglet, pas un lien reçu :
-  l'état local, plus récent, est chargé sans dialogue.
-- Un hash illisible n'empêche jamais le démarrage : le projet local est chargé, un avertissement
-  est affiché.
+- **Content**: `model/linkPacker.ts` packs a complete export document — project, arrangement
+  of every level and all the variants — never the camera nor the navigation preferences.
+- **Transport projection**: the pack only exists in the URL. Identifiers (furniture, levels,
+  walls, openings, rooms) are **renumbered positionally** in it (`meuble-0`, `mur-0-1`…): UUID
+  entropy does not fit under 3 KB. Only fields carrying a stable meaning are kept:
+  `project.id`, names, notes, description, source, variant identifiers. Repacking an unpacked
+  document yields the same bytes.
+- **Reading at start-up** (`main.ts`, `openSharedLink`): the hash wins over `localStorage`.
+  - The project already exists here (owner): silent comparison on the **canonical packed
+    bytes** (`samePackedState`, not on the compressed hash, deflate being non-deterministic
+    across browsers). Identical → nothing. Different → `ui/confirmLinkDivergence.ts`: replace,
+    keep both, or ignore — never a silent loss.
+  - The project does not exist here (recipient): opened **in memory only** (no `localStorage`
+    write), read-only with a banner and an **Ajouter à mes projets** button that copies the
+    document under a new identifier then installs it normally.
+- **Tab reload**: `sessionStorage` remembers the last hash published by this tab, and only
+  after `replaceState` succeeded — so the memory never runs ahead of the URL. On load, a hash
+  identical to that memory is the tab's own, not a received link: the more recent local state
+  is loaded without a dialog.
+- An unreadable hash never prevents start-up: the local project is loaded, a warning is shown.
 
-## Invariants à ne pas casser
+## Invariants not to break
 
-- Mètres en interne, centimètres dans les champs ; les valeurs non modifiées gardent leur
-  valeur exacte malgré l'arrondi d'affichage.
-- Identifiants stables, `schemaVersion: 1`, validation à l'import.
-- Les identifiants ne vivent que dans la mémoire et le `localStorage` ; le pack du lien est
-  une projection de transport qui les renumérote — ne jamais réutiliser le pack comme état.
-- Les dialogues de meubles sont transactionnels : tout reste un brouillon jusqu'à
-  Enregistrer, Annuler jette l'ensemble.
-- La réactivité ne remplace pas un contrôle natif pendant la saisie.
-- Visite et extérieur gardent les volumes complets ; une coupe explicite garde la priorité.
-- Au repos, la scène n'est plus redessinée (`renderScheduler.ts`) : une image par seconde
-  seulement, après 32 images de lissage. Une interaction dans la page (pointeur, clavier,
-  saisie), un mouvement de caméra, une porte qui pivote ou un shader qui compile relancent le
-  dessin. Un changement de scène qui ne vient d'aucun de ces signaux (minuterie, chargement,
-  animation pilotée par `requestAnimationFrame`) appelle `viewer.requestRender()`, sinon il
-  n'apparaît qu'à l'image de la seconde suivante.
-- Résolution dynamique (`adaptiveResolution.ts`), en mouvement seulement : si la médiane des
-  images dépasse 25 ms (moins de 40 fps), le rendu descend d'un palier (100, 80, 67, 50 %) ;
-  à l'arrêt, il revient toujours à 100 % et la TAA finit l'image fixe. Un PC qui tient la
-  cadence ne quitte jamais 100 %. `mybob.diag()` affiche le palier atteint.
-- La carte d'ombres du soleil n'est redessinée que sur un changement de ses porteurs
-  (`shadowRefresh.ts`) : mode, coupe, toiture, soleil, porte animée. Un nouveau porteur
-  d'ombre qui bouge appelle `invalidate()`.
-- Le build public ne contient que la démonstration : `vite.config.ts` et
-  `scripts/check-public-build.mjs` portent l'allowlist.
-- Aucune donnée personnelle dans le dépôt : les plans privés sont des
-  `public/projects/private-*.json` git-ignorés.
+- Metres internally, centimetres in fields; unedited values keep their exact value despite
+  display rounding.
+- Stable identifiers, `schemaVersion: 1`, validation on import.
+- Identifiers only live in memory and in `localStorage`; the link pack is a transport
+  projection that renumbers them — never reuse the pack as state.
+- Furniture dialogs are transactional: everything stays a draft until Enregistrer (Save),
+  Annuler (Cancel) discards it all.
+- Reactivity does not replace a native control while typing.
+- Walk and exterior keep full volumes; an explicit cutaway keeps priority.
+- At rest the scene is no longer redrawn (`renderScheduler.ts`): one frame per second only,
+  after 32 smoothing frames. An interaction in the page (pointer, keyboard, input), a camera
+  movement, a swinging door or a compiling shader restarts drawing. A scene change that comes
+  from none of these signals (timer, loading, animation driven by `requestAnimationFrame`)
+  calls `viewer.requestRender()`, otherwise it only appears with the next second's frame.
+- Dynamic resolution (`adaptiveResolution.ts`), only while moving: if the median frame time
+  exceeds 25 ms (under 40 fps), rendering drops one step (100, 80, 67, 50 %); when still, it
+  always returns to 100 % and TAA finishes the still image. A PC that holds the frame rate
+  never leaves 100 %. `mybob.diag()` shows the step reached.
+- The sun shadow map is only redrawn when its casters change (`shadowRefresh.ts`): mode,
+  cutaway, roof, sun, animated door. A new moving shadow caster calls `invalidate()`.
+- The public build only contains the demonstration: `vite.config.ts` and
+  `scripts/check-public-build.mjs` carry the allowlist.
+- No personal data in the repository: private plans are git-ignored
+  `public/projects/private-*.json`.
 
-## Recettes
+## Recipes
 
-**Ajouter un mode de vue** — `ViewMode` dans `viewer.ts`, une branche dans `viewer.setMode`
-(caméra, coupe, découpes), un titre et une aide dans `ui/modeChrome.ts`, un bouton
-`[data-view]` dans `ui/appTemplate.ts`, puis vérifier `syncDisplayControls` et les gardes
-`mode === 'walk'` dispersées dans `main.ts`.
+**Add a view mode** — `ViewMode` in `viewer.ts`, a branch in `viewer.setMode` (camera,
+section, cutaways), a title and help in `ui/modeChrome.ts`, a `[data-view]` button in
+`ui/appTemplate.ts`, then check `syncDisplayControls` and the `mode === 'walk'` guards
+scattered through `main.ts`.
 
-**Ajouter un type de meuble** — `FurnitureKind` et les dimensions par défaut dans
-`furniture/model.ts`, la géométrie dans `furniture/layer.ts`, les champs de la popup dans
-`furniture/panel.ts` et `measurements.ts`, les contraintes dans `placement.ts` et `checks.ts`.
+**Add a furniture type** — `FurnitureKind` and the default dimensions in `furniture/model.ts`,
+the geometry in `furniture/layer.ts`, the popup fields in `furniture/panel.ts` and
+`measurements.ts`, the constraints in `placement.ts` and `checks.ts`.
 
-**Ajouter un champ au format projet** — `model/types.ts`, `model/validate.ts` (avec un
-message d'erreur en français), la consommation dans `scene/` ou `ui/`, un test dans
-`tests/model.test.ts`, et la documentation dans `PROJECT-FORMAT.md`.
+**Add a field to the project format** — `model/types.ts`, `model/validate.ts` (with an error
+message in French, it is shown to the user), the consumer in `scene/` or `ui/`, a test in
+`tests/model.test.ts`, and the documentation in `PROJECT-FORMAT.md`.
 
-**Changer un texte d'interface** — les libellés de mode sont dans `ui/modeChrome.ts`, l'aide
-dans `ui/firstSteps.ts`, les pièces dans `ui/roomPanels.ts`, le reste dans `ui/appTemplate.ts`
-et `main.ts`. Respecter la voix décrite dans [IDENTITE-MYBOB.md](IDENTITE-MYBOB.md).
+**Change an interface text** — mode labels are in `ui/modeChrome.ts`, help in
+`ui/firstSteps.ts`, rooms in `ui/roomPanels.ts`, the rest in `ui/appTemplate.ts` and
+`main.ts`. Follow the voice described in [BRAND.md](BRAND.md).
 
-## Vérifier
+## Verify
 
 ```sh
 pnpm install --frozen-lockfile
-pnpm test          # node --test + tsx : DOM (Happy DOM) et géométrie (NullEngine)
-node --import tsx --test --test-isolation=none tests/<zone>.test.ts   # un seul fichier de zone
-pnpm run ci        # format, tests, build, contrôle du build public (pas d'e2e)
+pnpm test          # node --test + tsx: DOM (Happy DOM) and geometry (NullEngine)
+node --import tsx --test --test-isolation=none tests/<area>.test.ts   # a single area file
+pnpm run ci        # format, tests, build, public-build check (no e2e)
 ```
 
-Un workflow navigateur se vérifie localement par les seuls scénarios e2e de la
-fonctionnalité touchée — `--grep` ou fichier, jamais la suite entière : la recette et les
-commandes sont dans [E2E.md](E2E.md), la suite complète appartient à la CI.
+A browser workflow is verified locally by the e2e scenarios of the touched feature only —
+`--grep` or file, never the whole suite: the recipe and commands are in [E2E.md](E2E.md), the
+full suite belongs to CI.
 
-Les tests DOM utilisent Happy DOM et les tests de scène un `NullEngine` : ils prouvent le
-comportement, pas le rendu. Pour juger un rendu, ouvrir un vrai navigateur et dire ce qui a
-été regardé.
+DOM tests use Happy DOM and scene tests a `NullEngine`: they prove behaviour, not rendering. To
+judge a rendering, open a real browser and say what was looked at.
 
-Recette navigateur utile quand un bug dépend d'un projet multi-niveaux, sans jamais créer de
-fichier privé dans le dépôt : lancer `pnpm run dev`, puis injecter un projet de test dans le
-`localStorage` avant le chargement de la page (clé `maison-atelier:projects:v1`, tableau de
-projets validés) et le sélectionner dans `#project-select`. Un niveau « Premier étage » se
-fabrique en dupliquant le niveau du studio avec `elevation: 2.8`.
+A useful browser recipe when a bug depends on a multi-level project, without ever creating a
+private file in the repository: run `pnpm run dev`, then inject a test project into
+`localStorage` before the page loads (key `maison-atelier:projects:v1`, array of validated
+projects) and select it in `#project-select`. A "Premier étage" level is made by duplicating
+the studio's level with `elevation: 2.8`.
 
-Sur une fixture qu'on s'apprête à utiliser dans un test, lancer `scripts/audit-plan.ts` :
-une suite verte sur une géométrie fausse ne distingue pas le correct de l'incorrect.
+On a fixture you are about to use in a test, run `scripts/audit-plan.ts`: a green suite on
+wrong geometry does not tell the correct from the incorrect.
 
-## Pièges connus
+## Known traps
 
-- `public/projects/maison-atelier.json` est un **gabarit synthétique** de test, pas la maison
-  de l'owner ; `studio-demo.json` est la démonstration publique. Les deux sont modifiables.
-- `planArea` doit coller au polygone à un centimètre carré près (`tests/model.test.ts`).
-- Un meuble en L ou tourné ne se teste pas avec sa boîte englobante : elle rejette des
-  placements valides. Utiliser les triangles projetés.
-- Le Plan pose un plan de coupe horizontal ; la visite doit le remettre à `null`, sinon les
-  murs restent tronqués.
-- Les ombres sont coupées quand les murs sont abaissés : une façade tronquée ne doit pas
-  projeter l'ombre de son volume.
-- La coupe automatique passe à 0,85 m, sous l'allège des fenêtres (0,90 m) : c'est ce qui les
-  fait disparaître entières. Baies et portes partent du sol et sont tranchées ; leur face de
-  coupe est pleine (`plan-wall-cap-full`) et la menuiserie s'arrête 18 mm plus bas. Remonter la
-  coupe au-dessus de 0,90 m reslice toutes les fenêtres.
-- La suite e2e prend un port libre : jamais de `--strictPort` sur un port connu, et ne pas
-  arrêter le serveur d'un autre agent.
-- Le moteur est **WebGL uniquement**. L'occlusion de la visite passe par le tampon de
-  géométrie, que Babylon n'implémente pas en WebGPU : un moteur WebGPU rendrait la visite
-  plus plate sans rien signaler. Ne pas réintroduire de repli.
+- `public/projects/maison-atelier.json` is a **synthetic test template**, not the owner's
+  house; `studio-demo.json` is the public demonstration. Both may be edited.
+- `planArea` must match the polygon to within one square centimetre (`tests/model.test.ts`).
+- An L-shaped or rotated piece of furniture is not tested with its bounding box: it rejects
+  valid placements. Use the projected triangles.
+- Plan sets a horizontal section plane; the walk must reset it to `null`, otherwise walls stay
+  truncated.
+- Shadows are turned off when walls are lowered: a truncated façade must not cast the shadow
+  of its full volume.
+- The automatic cutaway is at 0.85 m, below the window sills (0.90 m): that is what makes them
+  disappear entirely. Bay windows and doors start at the floor and are sliced; their cut face is
+  solid (`plan-wall-cap-full`) and the joinery stops 18 mm lower. Raising the cut above 0.90 m
+  re-slices every window.
+- The e2e suite takes a free port: never `--strictPort` on a known port, and never stop another
+  agent's server.
+- The engine is **WebGL only**. Walk occlusion goes through the geometry buffer, which Babylon
+  does not implement in WebGPU: a WebGPU engine would render the walk flatter without reporting
+  anything. Do not reintroduce a fallback.

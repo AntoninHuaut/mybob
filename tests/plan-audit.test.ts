@@ -195,11 +195,11 @@ test('audit flags a partition floating outside the outline, not a straddling ext
   const issues = auditPlan(
     project({
       walls: [
-        // entièrement au-delà du contour : le mur fantôme de cage d'escalier
+        // entirely beyond the outline: the phantom stairwell wall
         { id: 'ghost', start: [2, 4.6], end: [4, 4.6], thickness: 0.12 },
-        // mur extérieur à cheval sur le contour : un arêtier d'étage en retrait
+        // exterior wall straddling the outline: a ridge of a recessed upper level
         { id: 'knee', start: [6.05, 0], end: [6.05, 4], thickness: 0.2, exterior: true },
-        // cloison moitié dedans moitié dehors : elle garde un contact de plancher
+        // partition half inside half outside: it keeps a floor contact
         { id: 'straddle', start: [0, 1], end: [0, 3], thickness: 0.1 },
       ],
     }),
@@ -251,11 +251,11 @@ test('audit flags a wall standing over a stairwell void, not one flanking it', (
     project({
       floorVoids: [stairwell],
       walls: [
-        // cloison inventée qui barre la trémie : elle flotte sur le vide
+        // invented partition blocking the floor opening: it floats over the void
         { id: 'over-the-void', start: [2.5, 0.6], end: [2.5, 3.2], thickness: 0.07 },
-        // garde-corps rendu en cloison dans la trémie, entre deux murs
+        // balustrade rendered as a partition in the floor opening, between two walls
         { id: 'railing-as-wall', start: [2.55, 1], end: [2.55, 2.5], thickness: 0.07 },
-        // mur légitime qui borde la face de la trémie : sa face affleure le bord
+        // legitimate wall bordering the opening's face: its face is flush with the edge
         { id: 'flank', start: [1.95, 1], end: [1.95, 2.5], thickness: 0.1 },
       ],
       rooms: [

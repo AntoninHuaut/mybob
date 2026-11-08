@@ -1,47 +1,46 @@
-"""Couche 0 ter : portes intérieures, lues sur les arcs de débattement du dessin.
+"""Layer 0 ter: interior doors, read on the drawing's swing arcs.
 
-Une porte intérieure n'est pas cotée : aucune chaîne ne la porte, aucun aplat ne
-la dessine. Elle est dessinée par **deux symboles** — une interruption dans le
-trait du mur et un **arc de débattement** — et c'est le second qui se mesure.
+An interior door is not dimensioned: no chain carries it, no fill draws it. It is
+drawn by **two symbols** — a break in the wall line and a **swing arc** — and the
+second is the one that gets measured.
 
-Le symbole est normalisé, donc il se lit sans interprétation :
+The symbol is standardised, so it is read without interpretation:
 
-- l'arc est un **quart de cercle** de rayon égal à la largeur du vantail ;
-- son **centre est la charnière** ;
-- le **vantail** est tracé en position ouverte, perpendiculaire au mur : c'est le
-  segment qui part de la charnière et rejoint une des deux extrémités de l'arc ;
-- l'autre extrémité donne la **position fermée**, donc l'ouverture dans le mur.
+- the arc is a **quarter circle** of radius equal to the leaf width;
+- its **centre is the hinge**;
+- the **leaf** is drawn in the open position, perpendicular to the wall: it is the
+  segment starting from the hinge and reaching one of the two ends of the arc;
+- the other end gives the **closed position**, hence the opening in the wall.
 
-Ce que le script mesure, et ce qu'il ne décide pas :
+What the script measures, and what it does not decide:
 
-- il **mesure** la charnière, la largeur et les deux directions ;
-- il **ne décide pas** de quel côté du mur se trouve la pièce, ni si le vantail
-  est bien celui-là : le sens de débattement reste une interprétation à
-  confirmer sur place, et le projet doit le dire.
+- it **measures** the hinge, the width and the two directions;
+- it **does not decide** which side of the wall the room is on, nor whether the
+  leaf really is that one: the swing direction stays an interpretation to
+  confirm on site, and the project must say so.
 
-Le piège de cette couche est le bruit : les hachures et les remplissages
-produisent eux aussi des amas de segments courts — 165 cellules denses de six
-segments ou plus sur le plan A. Ce n'est pas la densité qui les écarte, c'est
-l'ajustement : un amas de hachure ne se pose pas sur un cercle (résidu d'ajustement
-grand) et ne couvre pas 90° d'arc. Les trois conditions — tracé non rempli,
-résidu ≤ 0,15 pt, couverture 80–100° — sont nécessaires ensemble ; l'auto-test
-rejoue les quatre leurres pour que la règle ne se perde pas.
+The trap of this layer is noise: hatching and fills also produce clusters of
+short segments — 165 dense cells of six segments or more on plan A. Density is
+not what rules them out, the fit is: a cluster of hatching does not sit on a
+circle (large fit residual) and does not cover 90° of arc. The three conditions —
+unfilled path, residual ≤ 0.15 pt, coverage 80–100° — are needed together; the
+self-test replays the four decoys so that the rule does not get lost.
 
-Usage :
-  python scripts/extract_doors.py <pdf> <page> <sortie.json> \\
+Usage:
+  python scripts/extract_doors.py <pdf> <page> <output.json> \\
       --scale 37.8 --origin 297.6,159.4
-  python scripts/extract_doors.py <pdf> <page> <sortie.json> \\
-      --registry registre.json --pages 8
-  python scripts/extract_doors.py <pdf> <page> --compare projet.json --level rdc \\
+  python scripts/extract_doors.py <pdf> <page> <output.json> \\
+      --registry registry.json --pages 8
+  python scripts/extract_doors.py <pdf> <page> --compare project.json --level rdc \\
       --scale 37.8 --origin 297.6,159.4
   python scripts/extract_doors.py --self-test
 
-`--origin` est le coin nord-ouest du niveau en points d'affichage, `--scale` le
-nombre de points par mètre. `--registry` les déduit des chaînes de cotes
-refermées, comme `derive_outline.py` ; quand un axe n'a pas de chaîne refermée,
-le script le dit et refuse de deviner.
+`--origin` is the level's north-west corner in display points, `--scale` the
+number of points per metre. `--registry` deduces them from the closed dimension
+chains, like `derive_outline.py`; when an axis has no closed chain, the script
+says so and refuses to guess.
 
-Le résultat porte des données de plan réelles : l'écrire dans un dossier ignoré
+The result carries real plan data: write it into an ignored folder
 (`artifacts/plan-review/`).
 """
 import argparse
@@ -53,23 +52,23 @@ from pathlib import Path
 
 import pymupdf
 
-MIN_WIDTH = 0.40  # m, en dessous ce n'est pas un vantail
-MAX_WIDTH = 1.60  # m, au-dessus ce n'est pas un vantail
-MIN_POINTS = 6  # un arc est une polyligne, pas un triangle
-FIT_RESIDUAL = 0.15  # pt, écart maximal d'un point au cercle ajusté
-SPAN_MIN, SPAN_MAX = 80.0, 100.0  # degrés, un quart de cercle
-PARTIAL_MIN = 20.0  # degrés, en dessous ce n'est plus un morceau d'arc
-LEAF_TOL = 2.0  # pt, appariement charnière/extrémité d'un segment de vantail
-LEAF_COVER = 0.85  # fraction du rayon que le vantail doit couvrir
-DUPLICATE_TOL = 1.0  # pt, deux arcs au même centre sont le même symbole
-MATCH_ACROSS = 1.0  # m, écart perpendiculaire accepté pour apparier, en comparaison
-WALL_SHIFT = 0.10  # m, au-delà le mur du projet est décalé, pas la porte
+MIN_WIDTH = 0.40  # m, below this it is not a leaf
+MAX_WIDTH = 1.60  # m, above this it is not a leaf
+MIN_POINTS = 6  # an arc is a polyline, not a triangle
+FIT_RESIDUAL = 0.15  # pt, maximum gap from a point to the fitted circle
+SPAN_MIN, SPAN_MAX = 80.0, 100.0  # degrees, a quarter circle
+PARTIAL_MIN = 20.0  # degrees, below this it is no longer a piece of arc
+LEAF_TOL = 2.0  # pt, hinge/end pairing of a leaf segment
+LEAF_COVER = 0.85  # fraction of the radius the leaf must cover
+DUPLICATE_TOL = 1.0  # pt, two arcs at the same centre are the same symbol
+MATCH_ACROSS = 1.0  # m, perpendicular gap accepted for pairing, in comparison
+WALL_SHIFT = 0.10  # m, beyond this the project wall is shifted, not the door
 FIXTURE = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "plan-doors"
 AXIS_INDEX = {"x": 0, "z": 1}
 
 
 def display_transform(page):
-    """Coordonnées ramenées au repère affiché (cf. /Rotate)."""
+    """Coordinates brought back to the displayed frame (see /Rotate)."""
     box, rotation = page.mediabox, page.rotation
     if rotation == 90:
         return lambda x, y: (box.height - y, x)
@@ -79,10 +78,10 @@ def display_transform(page):
 
 
 def fit_circle(points):
-    """Cercle des moindres carrés (Kåsa) : centre, rayon, résidu maximal.
+    """Least-squares circle (Kåsa): centre, radius, maximum residual.
 
-    Le résidu est l'écart maximal d'un point au cercle, pas l'erreur moyenne :
-    c'est lui qui sépare un arc d'un amas de hachure, et une moyenne le noierait.
+    The residual is the maximum gap from a point to the circle, not the mean error:
+    it is what separates an arc from a cluster of hatching, and a mean would drown it.
     """
     count = len(points)
     if count < 3:
@@ -120,7 +119,7 @@ def fit_circle(points):
 
 
 def angular_span(points, cx, cy):
-    """Couverture angulaire de l'arc, en degrés, sans se laisser piéger par 0°."""
+    """Angular coverage of the arc, in degrees, without being trapped by 0°."""
     angles = sorted(math.atan2(p[1] - cy, p[0] - cx) for p in points)
     gaps = [
         (angles[(index + 1) % len(angles)] - angles[index]) % (2 * math.pi)
@@ -130,7 +129,7 @@ def angular_span(points, cx, cy):
 
 
 def arc_ends(points, cx, cy):
-    """Les deux extrémités de l'arc : les points qui bordent le plus grand vide."""
+    """The two ends of the arc: the points bordering the largest gap."""
     angles = [math.atan2(p[1] - cy, p[0] - cx) for p in points]
     order = sorted(range(len(points)), key=lambda index: angles[index])
     gaps = [
@@ -142,7 +141,7 @@ def arc_ends(points, cx, cy):
 
 
 def corners_of(item, to_point):
-    """Les quatre coins d'un rectangle ou d'un quadrilatère, en coordonnées affichées."""
+    """The four corners of a rectangle or a quadrilateral, in display coordinates."""
     if item[0] == "re":
         rect = item[1]
         return [
@@ -161,11 +160,11 @@ def corners_of(item, to_point):
 
 
 def segments_of(page, to_point):
-    """Tous les segments de la page, en coordonnées affichées.
+    """Every segment of the page, in display coordinates.
 
-    Un vantail est tracé de deux façons selon le CAO : deux traits parallèles et
-    un about, ou un quadrilatère fin. Les deux formes doivent être lues, sinon le
-    sens de débattement manque sur la moitié des portes.
+    A leaf is drawn in two ways depending on the CAD tool: two parallel strokes and
+    an end, or a thin quadrilateral. Both shapes must be read, otherwise the swing
+    direction is missing on half of the doors.
     """
     segments = []
     for drawing in page.get_drawings():
@@ -180,11 +179,11 @@ def segments_of(page, to_point):
 
 
 def leaf_length(segments, hinge, end):
-    """Longueur du plus long segment qui va de la charnière à une extrémité d'arc.
+    """Length of the longest segment going from the hinge to an arc end.
 
-    Le vantail est tracé ouvert, perpendiculaire au mur : c'est ce segment qui
-    distingue le sens de débattement de l'ouverture dans le mur. Sans lui, les
-    deux extrémités de l'arc sont interchangeables et le script ne tranche pas.
+    The leaf is drawn open, perpendicular to the wall: this segment is what tells
+    the swing direction apart from the opening in the wall. Without it, the two ends
+    of the arc are interchangeable and the script does not decide.
     """
     best = 0.0
     for start, stop in segments:
@@ -205,20 +204,20 @@ def unit(vector):
 
 
 def detect(page, scale):
-    """Arcs de débattement de la page, en points puis en mètres.
+    """Swing arcs of the page, in points then in metres.
 
-    Retourne (portes, arcs partiels, refus) : les refus sont comptés par motif et
-    les arcs partiels sont listés, pour que le script dise ce qu'il a écarté au
-    lieu de le taire. Un arc de 38° n'est pas un quart de cercle, mais c'est
-    quand même un morceau de porte : il se rapporte, il ne se compte pas.
+    Returns (doors, partial arcs, refusals): refusals are counted by reason and
+    partial arcs are listed, so that the script says what it discarded instead of
+    keeping quiet. A 38° arc is not a quarter circle, but it is still a piece of a
+    door: it is reported, it is not counted.
     """
     to_point = display_transform(page)
     segments = segments_of(page, to_point)
     doors, partials = [], []
-    refusals = {"rempli": 0, "trop court": 0, "rayon hors bornes": 0, "résidu": 0, "couverture": 0}
+    refusals = {"filled": 0, "too short": 0, "radius out of bounds": 0, "residual": 0, "coverage": 0}
     for index, drawing in enumerate(page.get_drawings()):
         if drawing.get("fill") is not None:
-            refusals["rempli"] += 1
+            refusals["filled"] += 1
             continue
         points = []
         for item in drawing["items"]:
@@ -226,18 +225,18 @@ def detect(page, scale):
                 points.append(to_point(item[1].x, item[1].y))
                 points.append(to_point(item[2].x, item[2].y))
         if len(points) < MIN_POINTS:
-            refusals["trop court"] += 1
+            refusals["too short"] += 1
             continue
         fitted = fit_circle(points)
         if fitted is None:
-            refusals["résidu"] += 1
+            refusals["residual"] += 1
             continue
         cx, cy, radius, residual = fitted
         if not MIN_WIDTH * scale <= radius <= MAX_WIDTH * scale:
-            refusals["rayon hors bornes"] += 1
+            refusals["radius out of bounds"] += 1
             continue
         if residual > FIT_RESIDUAL:
-            refusals["résidu"] += 1
+            refusals["residual"] += 1
             continue
         span = angular_span(points, cx, cy)
         if not SPAN_MIN <= span <= SPAN_MAX:
@@ -251,14 +250,14 @@ def detect(page, scale):
                         "residual": residual,
                     }
                 )
-            refusals["couverture"] += 1
+            refusals["coverage"] += 1
             continue
         ends = arc_ends(points, cx, cy)
         lengths = [leaf_length(segments, (cx, cy), end) for end in ends]
         if max(lengths) < LEAF_COVER * radius:
-            # Un quart de cercle sans vantail n'est pas une porte : rien ne dit
-            # de quel côté s'ouvre le battant, et le script ne devine pas.
-            refusals["couverture"] += 1
+            # A quarter circle without a leaf is not a door: nothing says
+            # which side the leaf opens to, and the script does not guess.
+            refusals["coverage"] += 1
             continue
         leaf = ends[lengths.index(max(lengths))]
         closed = ends[1 - lengths.index(max(lengths))]
@@ -277,7 +276,7 @@ def detect(page, scale):
 
 
 def dedupe(doors):
-    """Deux arcs au même centre et au même rayon sont le même symbole."""
+    """Two arcs at the same centre and radius are the same symbol."""
     kept = []
     for door in doors:
         twin = next(
@@ -296,7 +295,7 @@ def dedupe(doors):
 
 
 def to_metres(doors, origin, scale):
-    """Portes ramenées au repère du niveau, en mètres."""
+    """Doors brought back to the level frame, in metres."""
     result = []
     for door in doors:
         hinge = ((door["hinge"][0] - origin[0]) / scale, (door["hinge"][1] - origin[1]) / scale)
@@ -325,15 +324,15 @@ def to_metres(doors, origin, scale):
 
 
 def frame_from_registry(registry, pages):
-    """Origine et échelle du niveau, par les chaînes de cotes refermées.
+    """Origin and scale of the level, from the closed dimension chains.
 
-    Même règle que `derive_outline.py` : l'étendue est le plus grand total
-    refermé de l'axe, et l'origine se lit sur le premier segment de la première
-    chaîne ancrée. Un axe sans chaîne refermée n'est pas deviné.
+    Same rule as `derive_outline.py`: the extent is the axis's largest closed
+    total, and the origin is read on the first segment of the first anchored
+    chain. An axis without a closed chain is not guessed.
     """
     selected = [page for page in registry["pages"] if pages is None or page["index"] in pages]
     if not selected:
-        raise SystemExit("aucune page du registre ne correspond à --pages")
+        raise SystemExit("no registry page matches --pages")
     origins, scale, missing = {}, None, []
     for axis in ("x", "z"):
         chains = [
@@ -353,15 +352,15 @@ def frame_from_registry(registry, pages):
         origins[axis] = round(first["at"][AXIS_INDEX[axis]] - first["value"] / 2 * scale, 3)
     if missing:
         raise SystemExit(
-            "axe(s) "
+            "axis/axes "
             + ", ".join(missing)
-            + " sans chaîne de cotes refermée : donner --origin, le script ne devine pas"
+            + " without a closed dimension chain: pass --origin, the script does not guess"
         )
     return (origins["x"], origins["z"]), scale
 
 
 def wall_frame(wall):
-    """Axe, longueur et vecteur unitaire d'un mur du projet."""
+    """Axis, length and unit vector of a project wall."""
     start, end = wall["start"], wall["end"]
     length = math.hypot(end[0] - start[0], end[1] - start[1])
     if length == 0:
@@ -370,10 +369,10 @@ def wall_frame(wall):
 
 
 def project_openings(project, level_id):
-    """Ouvertures à vantail du niveau, avec leur intervalle le long du mur."""
+    """Leaf openings of the level, with their interval along the wall."""
     level = next((item for item in project["levels"] if item["id"] == level_id), None)
     if level is None:
-        raise SystemExit(f"niveau {level_id} absent du projet")
+        raise SystemExit(f"level {level_id} missing from the project")
     openings = []
     for wall in level["walls"]:
         frame = wall_frame(wall)
@@ -417,18 +416,18 @@ def across(point, origin, direction):
 
 
 def compare(doors, openings, tolerance):
-    """Apparie les portes lues aux portes écrites, et liste les écarts.
+    """Pairs the doors read with the doors written, and lists the gaps.
 
-    L'écart de position est mesuré **le long du mur** : c'est la seule
-    coordonnée qui décrit la porte. L'écart perpendiculaire est rapporté à part,
-    parce qu'il vaut la demi-épaisseur du mur — la charnière est dessinée sur le
-    nu, le projet la porte à l'axe — et le compter comme une erreur serait faux.
-    Au-delà de `WALL_SHIFT`, ce n'est plus la porte qui est décalée mais le mur
-    du projet, et le rapport le dit séparément.
+    The position gap is measured **along the wall**: it is the only coordinate
+    describing the door. The perpendicular gap is reported separately, because it
+    equals half the wall thickness — the hinge is drawn on the face, the project
+    carries it on the axis — and counting it as an error would be wrong. Beyond
+    `WALL_SHIFT`, it is no longer the door that is shifted but the project wall,
+    and the report says so separately.
 
-    L'appariement est **un pour un** : deux ouvertures écrites ne peuvent pas
-    désigner le même arc, sinon la seconde se compare au voisin et l'écart se
-    cache. Les couples sont pris du plus proche au plus loin.
+    Pairing is **one to one**: two written openings cannot designate the same arc,
+    otherwise the second is compared with the neighbour and the gap hides. Pairs are
+    taken from the closest to the farthest.
     """
     candidates = []
     for opening in openings:
@@ -489,11 +488,11 @@ def compare(doors, openings, tolerance):
 
 
 def self_test():
-    """Non-régression sur un dessin synthétique : une cloison, une interruption, un arc.
+    """Non-regression on a synthetic drawing: a partition, a break, an arc.
 
-    Le dessin est rendu à la volée depuis la fixture JSON : aucune donnée réelle
-    n'entre dans le dépôt, et les leurres — hachure, cercle complet, demi-arc —
-    sont rejoués pour que la règle de rejet ne se perde pas.
+    The drawing is rendered on the fly from the JSON fixture: no real data enters
+    the repository, and the decoys — hatching, full circle, half arc — are replayed
+    so that the rejection rule does not get lost.
     """
     fixture = json.loads((FIXTURE / "drawing.json").read_text(encoding="utf-8"))
     failures = []
@@ -503,45 +502,45 @@ def self_test():
     doors, partials, refusals = detect(page, fixture["scale"])
     expected = fixture["expected"]
     if len(doors) != expected["count"]:
-        failures.append(f"{len(doors)} porte(s) lue(s) au lieu de {expected['count']} : {refusals}")
+        failures.append(f"{len(doors)} door(s) read instead of {expected['count']}: {refusals}")
         return failures
     if len(partials) != expected["partialArcs"]:
         failures.append(
-            f"{len(partials)} arc(s) partiel(s) au lieu de {expected['partialArcs']} : {partials}"
+            f"{len(partials)} partial arc(s) instead of {expected['partialArcs']}: {partials}"
         )
     elif abs(partials[0]["span"] - fixture["decoys"]["truncatedArc"][3]) > 1.0:
-        failures.append(f"arc partiel de {partials[0]['span']:.1f}° au lieu de 45°")
+        failures.append(f"partial arc of {partials[0]['span']:.1f}° instead of 45°")
     door = doors[0]
     origin, scale = fixture["origin"], fixture["scale"]
     hinge = ((door["hinge"][0] - origin[0]) / scale, (door["hinge"][1] - origin[1]) / scale)
     if math.hypot(hinge[0] - expected["hinge"][0], hinge[1] - expected["hinge"][1]) > 0.01:
-        failures.append(f"charnière {hinge} au lieu de {expected['hinge']}")
+        failures.append(f"hinge {hinge} instead of {expected['hinge']}")
     if abs(door["radius"] / scale - expected["width"]) > 0.01:
-        failures.append(f"largeur {door['radius'] / scale:.3f} au lieu de {expected['width']}")
+        failures.append(f"width {door['radius'] / scale:.3f} instead of {expected['width']}")
     if abs(door["swing"][0] - expected["swing"][0]) > 0.01 or abs(
         door["swing"][1] - expected["swing"][1]
     ) > 0.01:
-        failures.append(f"débattement {door['swing']} au lieu de {expected['swing']}")
+        failures.append(f"swing {door['swing']} instead of {expected['swing']}")
     if abs(door["closed"][0] - expected["closed"][0]) > 0.01 or abs(
         door["closed"][1] - expected["closed"][1]
     ) > 0.01:
-        failures.append(f"ouverture {door['closed']} au lieu de {expected['closed']}")
-    if refusals["couverture"] < 2:
-        failures.append(f"les leurres de couverture n'ont pas été écartés : {refusals}")
-    if refusals["rempli"] < 1:
-        failures.append(f"le leurre rempli n'a pas été écarté : {refusals}")
+        failures.append(f"opening {door['closed']} instead of {expected['closed']}")
+    if refusals["coverage"] < 2:
+        failures.append(f"the coverage decoys were not ruled out: {refusals}")
+    if refusals["filled"] < 1:
+        failures.append(f"the filled decoy was not ruled out: {refusals}")
     failures += _self_test_frame()
     failures += _self_test_compare()
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print("portes intérieures : auto-test réussi")
+    print("interior doors: self-test passed")
     return 0
 
 
 def render_fixture(fixture):
-    """Rend la fixture en PDF : cloisons, vantail, arc et trois leurres."""
+    """Renders the fixture as a PDF: partitions, leaf, arc and three decoys."""
     scale, origin = fixture["scale"], fixture["origin"]
     document = pymupdf.open()
     page = document.new_page(width=595, height=842)
@@ -559,8 +558,8 @@ def render_fixture(fixture):
         hinge = door["hinge"]
         width = door["width"]
         closed, swing = door["closed"], door["swing"]
-        # Le vantail, tracé ouvert : un rectangle fin de la charnière au bout,
-        # épais dans l'axe du mur et long dans l'axe de débattement.
+        # The leaf, drawn open: a thin rectangle from the hinge to the end,
+        # thick along the wall axis and long along the swing axis.
         half = 0.02
         leaf = [
             point(hinge[0] + closed[0] * half, hinge[1] + closed[1] * half),
@@ -576,7 +575,7 @@ def render_fixture(fixture):
             point(hinge[0] + closed[0] * half, hinge[1] + closed[1] * half),
         ]
         page.draw_polyline(leaf, color=(0.0, 0.0, 0.0), width=0.48)
-        # L'arc, en polyligne de petits segments comme sur les vrais plans.
+        # The arc, as a polyline of small segments like on real plans.
         steps = 12
         arc = []
         for step in range(steps + 1):
@@ -584,7 +583,7 @@ def render_fixture(fixture):
             arc.append(point(hinge[0] + width * math.cos(angle), hinge[1] + width * math.sin(angle)))
         page.draw_polyline(arc, color=(0.0, 0.0, 0.0), width=0.48)
     decoys = fixture["decoys"]
-    # Leurre 1 : une hachure, faite de segments courts et denses.
+    # Decoy 1: hatching, made of short, dense segments.
     x0, z0, x1, z1 = decoys["hatch"]
     step = 0.06
     offset = 0.0
@@ -593,22 +592,22 @@ def render_fixture(fixture):
         stop = (x0, z0 + offset)
         page.draw_line(point(*start), point(*stop), color=(0.0, 0.0, 0.0), width=0.24)
         offset += step
-    # Leurre 2 : un cercle complet, de rayon plausible.
+    # Decoy 2: a full circle, with a plausible radius.
     cx, cz, radius = decoys["circle"]
     circle = [
         point(cx + radius * math.cos(2 * math.pi * step / 36), cz + radius * math.sin(2 * math.pi * step / 36))
         for step in range(37)
     ]
     page.draw_polyline(circle, color=(0.0, 0.0, 0.0), width=0.48)
-    # Leurre 3 : un demi-arc, de rayon plausible, sans vantail.
+    # Decoy 3: a half arc, with a plausible radius, without a leaf.
     hx, hz, half = decoys["halfArc"]
     half_arc = [
         point(hx + half * math.cos(math.pi * step / 24), hz + half * math.sin(math.pi * step / 24))
         for step in range(25)
     ]
     page.draw_polyline(half_arc, color=(0.0, 0.0, 0.0), width=0.48)
-    # Leurre 4 : un arc tronqué, comme le second vantail d'une porte-fenêtre :
-    # il se rapporte comme arc partiel, il ne se compte pas comme porte.
+    # Decoy 4: a truncated arc, like the second leaf of a French window:
+    # it is reported as a partial arc, it is not counted as a door.
     tx, tz, radius, degrees = decoys["truncatedArc"]
     truncated = [
         point(
@@ -624,7 +623,7 @@ def render_fixture(fixture):
 
 
 def _self_test_frame():
-    """Le cadre se déduit des chaînes refermées, et refuse de deviner."""
+    """The frame is deduced from closed chains, and refuses to guess."""
     failures = []
     registry = {
         "pages": [
@@ -651,19 +650,19 @@ def _self_test_frame():
     }
     origin, scale = frame_from_registry(registry, [1])
     if origin != (100.0, 100.0) or scale != 40.0:
-        failures.append(f"cadre {origin} × {scale} au lieu de (100.0, 100.0) × 40.0")
+        failures.append(f"frame {origin} × {scale} instead of (100.0, 100.0) × 40.0")
     registry["pages"][0]["chains"] = registry["pages"][0]["chains"][:1]
     try:
         frame_from_registry(registry, [1])
-        failures.append("un axe sans chaîne refermée a été deviné")
+        failures.append("an axis without a closed chain was guessed")
     except SystemExit as error:
-        if "ne devine pas" not in str(error):
-            failures.append(f"refus inattendu sur l'axe sans chaîne : {error}")
+        if "does not guess" not in str(error):
+            failures.append(f"unexpected refusal on the axis without a chain: {error}")
     return failures
 
 
 def _self_test_compare():
-    """La comparaison mesure le long du mur et rapporte l'écart perpendiculaire."""
+    """The comparison measures along the wall and reports the perpendicular gap."""
     failures = []
     project = {
         "levels": [
@@ -686,7 +685,7 @@ def _self_test_compare():
     }
     openings = project_openings(project, "rdc")
     if len(openings) != 1:
-        failures.append(f"{len(openings)} ouverture(s) à vantail au lieu d'une (le coulissant compte ?)")
+        failures.append(f"{len(openings)} leaf opening(s) instead of one (does the sliding door count?)")
         return failures
     doors = [
         {
@@ -710,13 +709,13 @@ def _self_test_compare():
     ]
     rows, extra = compare(doors, openings, 0.05)
     if rows[0]["matched"] != "d1":
-        failures.append(f"appariement {rows[0]['matched']} au lieu de d1 (le voisin à 2 m a été pris)")
+        failures.append(f"pairing {rows[0]['matched']} instead of d1 (the neighbour 2 m away was taken)")
     if abs(rows[0]["deltaCentre"]) > 0.001:
-        failures.append(f"écart de position {rows[0]['deltaCentre']} au lieu de 0")
+        failures.append(f"position gap {rows[0]['deltaCentre']} instead of 0")
     if abs(rows[0]["offsetAcross"] - 0.05) > 0.001:
-        failures.append(f"écart perpendiculaire {rows[0]['offsetAcross']} au lieu de 0,05")
+        failures.append(f"perpendicular gap {rows[0]['offsetAcross']} instead of 0.05")
     if extra != ["d2"]:
-        failures.append(f"porte non appariée {extra} au lieu de d2")
+        failures.append(f"unpaired door {extra} instead of d2")
     return failures
 
 
@@ -727,13 +726,13 @@ def main(argv):
     parser.add_argument("pdf")
     parser.add_argument("page", type=int)
     parser.add_argument("out", nargs="?")
-    parser.add_argument("--scale", type=float, default=None, help="points par mètre")
-    parser.add_argument("--origin", default=None, help="x0,y0 du coin nord-ouest du niveau, en points")
-    parser.add_argument("--registry", default=None, help="registre d'évidence, pour déduire le cadre")
-    parser.add_argument("--pages", default=None, help="pages du registre, ex. 8 ou 13,14")
-    parser.add_argument("--compare", default=None, help="projet JSON à confronter")
-    parser.add_argument("--level", default=None, help="niveau du projet à confronter")
-    parser.add_argument("--tolerance", type=float, default=0.05, help="écart de position accepté, m")
+    parser.add_argument("--scale", type=float, default=None, help="points per metre")
+    parser.add_argument("--origin", default=None, help="x0,y0 of the level's north-west corner, in points")
+    parser.add_argument("--registry", default=None, help="evidence registry, to deduce the frame")
+    parser.add_argument("--pages", default=None, help="registry pages, e.g. 8 or 13,14")
+    parser.add_argument("--compare", default=None, help="project JSON to compare against")
+    parser.add_argument("--level", default=None, help="project level to compare against")
+    parser.add_argument("--tolerance", type=float, default=0.05, help="accepted position gap, m")
     args = parser.parse_args(argv[1:])
     pages = [int(value) for value in args.pages.split(",")] if args.pages else None
     if args.registry:
@@ -741,7 +740,7 @@ def main(argv):
         origin, scale = frame_from_registry(registry, pages or [args.page])
     else:
         if args.scale is None or args.origin is None:
-            parser.error("indiquer --scale et --origin, ou --registry pour les déduire")
+            parser.error("pass --scale and --origin, or --registry to deduce them")
         origin = tuple(float(value) for value in args.origin.split(","))
         if len(origin) != 2:
             parser.error("--origin attend x0,y0")
@@ -770,26 +769,26 @@ def main(argv):
         "refusals": refusals,
     }
     print(
-        f"{len(metres)} porte(s) lue(s) sur la page {args.page} "
-        f"({refusals['rempli']} tracé(s) rempli(s), {refusals['résidu']} amas hors cercle, "
-        f"{refusals['couverture']} arc(s) hors couverture ou sans vantail écartés)"
+        f"{len(metres)} door(s) read on page {args.page} "
+        f"({refusals['filled']} filled path(s), {refusals['residual']} cluster(s) off the circle, "
+        f"{refusals['coverage']} arc(s) out of coverage or without a leaf discarded)"
     )
     for door in metres:
         print(
-            f"  {door['id']} charnière ({door['hinge'][0]:.3f}, {door['hinge'][1]:.3f}) "
-            f"largeur {door['width']:.3f} m, ouverture vers ({door['closed'][0]:+.0f}, "
-            f"{door['closed'][1]:+.0f}), débattement vers ({door['swing'][0]:+.0f}, "
+            f"  {door['id']} hinge ({door['hinge'][0]:.3f}, {door['hinge'][1]:.3f}) "
+            f"width {door['width']:.3f} m, opening towards ({door['closed'][0]:+.0f}, "
+            f"{door['closed'][1]:+.0f}), swing towards ({door['swing'][0]:+.0f}, "
             f"{door['swing'][1]:+.0f})"
         )
     for arc in payload["partialArcs"]:
         print(
-            f"  arc partiel ({arc['hinge'][0]:.3f}, {arc['hinge'][1]:.3f}) "
-            f"largeur {arc['width']:.3f} m, couverture {arc['span']:.1f}° — pas compté comme porte"
+            f"  partial arc ({arc['hinge'][0]:.3f}, {arc['hinge'][1]:.3f}) "
+            f"width {arc['width']:.3f} m, coverage {arc['span']:.1f}° — not counted as a door"
         )
     status = 0
     if args.compare:
         if not args.level:
-            parser.error("--compare demande --level")
+            parser.error("--compare requires --level")
         project = json.loads(Path(args.compare).read_text(encoding="utf-8"))
         openings = project_openings(project, args.level)
         rows, extra = compare(metres, openings, args.tolerance)
@@ -800,34 +799,34 @@ def main(argv):
             "rows": rows,
             "unmatchedDoors": extra,
         }
-        print(f"\ncomparaison au niveau {args.level} de {Path(args.compare).name} :")
+        print(f"\ncomparison with level {args.level} of {Path(args.compare).name}:")
         for row in rows:
             if row["matched"] is None:
-                print(f"  {row['opening']:22s} ({row['wall']})  AUCUN ARC LU")
+                print(f"  {row['opening']:22s} ({row['wall']})  NO ARC READ")
                 status = 1
                 continue
-            flag = "ok" if row["within"] else "ÉCART"
+            flag = "ok" if row["within"] else "GAP"
             notes = []
             if not row["hingeEndAgrees"]:
-                notes.append("charnière de l'autre côté")
+                notes.append("hinge on the other side")
             if row["wallShifted"]:
-                notes.append(f"mur du projet décalé de {row['offsetAcross']:.2f} m")
+                notes.append(f"project wall shifted by {row['offsetAcross']:.2f} m")
             print(
                 f"  {row['opening']:22s} ({row['wall']})  {row['matched']}  "
-                f"position {row['deltaCentre']:+.3f} m  largeur {row['deltaWidth']:+.3f} m  "
-                f"charnière à {row['hingeAt']:.3f} m  hors-nu {row['offsetAcross']:.3f} m  "
+                f"position {row['deltaCentre']:+.3f} m  width {row['deltaWidth']:+.3f} m  "
+                f"hinge at {row['hingeAt']:.3f} m  off-face {row['offsetAcross']:.3f} m  "
                 f"{flag}" + (f"  [{', '.join(notes)}]" if notes else "")
             )
         if extra:
-            print(f"  arc(s) sans porte écrite : {', '.join(extra)}")
+            print(f"  arc(s) without a written door: {', '.join(extra)}")
         matched = sum(1 for row in rows if row["matched"] is not None)
         within = sum(1 for row in rows if row.get("within"))
         shifted = sum(1 for row in rows if row.get("wallShifted"))
         flipped = sum(1 for row in rows if row.get("matched") and not row["hingeEndAgrees"])
         print(
-            f"  {matched}/{len(openings)} porte(s) écrite(s) appariée(s), "
-            f"{within} dans ±{args.tolerance * 100:.0f} cm le long du mur, "
-            f"{flipped} charnière(s) de l'autre côté, {shifted} mur(s) du projet décalé(s)"
+            f"  {matched}/{len(openings)} written door(s) paired, "
+            f"{within} within ±{args.tolerance * 100:.0f} cm along the wall, "
+            f"{flipped} hinge(s) on the other side, {shifted} project wall(s) shifted"
         )
         if matched != len(openings) or within != len(openings) or extra:
             status = 1

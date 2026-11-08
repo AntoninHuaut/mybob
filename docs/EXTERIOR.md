@@ -1,30 +1,30 @@
-# Extérieur V2
+# Exterior (V2)
 
-Le terrain est une donnée optionnelle `site` du projet importé. Le moteur ne contient ni coordonnées de parcelle, ni géométrie personnelle en dur. Le build public continue d’exclure le fichier personnel ; importer la maison reste une opération locale au navigateur.
+The terrain is an optional `site` field of the imported project. The engine contains neither plot coordinates nor hardcoded personal geometry. The public build still excludes the personal file; importing the house remains an operation local to the browser.
 
-## Sources et précision
+## Sources and precision
 
-Le terrain vient entièrement des données du projet : `boundary` décrit le contour de la parcelle, `declaredArea` conserve la surface annoncée par le document de référence, et `elevation` fixe la cote du terrain relative au sol du niveau. La surface calculée depuis `boundary` est affichée séparément de `declaredArea` ; un écart entre les deux signale une saisie approximative et n’est jamais corrigé en redimensionnant la parcelle. Ces coordonnées ne constituent pas un relevé de géomètre.
+The terrain comes entirely from the project data: `boundary` describes the plot outline, `declaredArea` keeps the area stated in the reference document, and `elevation` sets the terrain height relative to the level's floor. The area computed from `boundary` is shown separately from `declaredArea`; a gap between the two signals an approximate entry and is never corrected by resizing the plot. These coordinates are not a land survey.
 
-Le terrain est plat par défaut. Un projet peut déclarer des points plus bas près d’une limite ou d’une pièce abaissée : ces pentes, talus et rampes restent simplifiés. Les surfaces `gravel` et `path` reprennent l’intention du stationnement et du chemin piéton ; leurs raccords sont indicatifs.
+The terrain is flat by default. A project may declare lower points near a boundary or a lowered room: these slopes, banks and ramps stay simplified. The `gravel` and `path` surfaces express the intent of the parking area and the footpath; their joins are indicative.
 
-La toiture est décrite par `roofs` : sommets, faces planes et pignons. Le format accepte plusieurs pans, des raccords en croupe et des hauteurs d’égout et de faîtage quelconques ; leur projection doit couvrir l’enveloppe de toiture sans trou ni chevauchement. Une entrée en retrait est couverte. Les débords, gouttières, épaisseurs et charpente ne sont pas représentés. La pente déclarée n’est pas reproduite à l’identique : elle reste indicative et n’est pas présentée comme une cote vérifiée.
+The roof is described by `roofs`: vertices, planar faces and gables. The format accepts several slopes, hipped joins and any eaves and ridge heights; their projection must cover the roof envelope with no hole nor overlap. A recessed entrance is covered. Overhangs, gutters, thicknesses and framing are not represented. The declared pitch is not reproduced exactly: it stays indicative and is not presented as a verified dimension.
 
-Un pan peut porter des chiens-assis dans `dormers` : une emprise au sol, `wallId` vers le mur de fond, et une pente facultative. Le mur de fond reste le mur du niveau traversé (`exterior: true`, parallèle aux côtés de l’emprise) : il porte seul sa hauteur et sa fenêtre, comme toutes les autres menuiseries, et c’est le seul mur autorisé à dépasser la hauteur de plafond de son niveau — c’est lui qui perce la couverture. Le rendu découpe le pan sur l’emprise, du nu intérieur du mur jusqu’à son parement extérieur, puis construit les deux joues en enduit et le toit de la lucarne en couverture. Sans `slope`, ce toit rejoint le pan à l’arrière de l’emprise ; avec `slope` (montée par mètre de repli), il le rejoint à l’intérieur de l’emprise. La validation refuse ce que le moteur ne peut pas rendre : une emprise hors d’un pan unique non vertical, un pan qui s’incline le long de la lucarne, un mur de fond qui ne dépasse pas la couverture, une pente sans jonction possible. La pente du toit de la lucarne reste non cotée sur beaucoup de plans : l’absence de `slope` suit alors le dessin.
+A slope may carry dormers in `dormers`: a footprint, `wallId` pointing to the back wall, and an optional `slope`. The back wall stays a wall of the level it crosses (`exterior: true`, parallel to the sides of the footprint): it alone carries its height and its window, like all other joinery, and it is the only wall allowed to exceed its level's ceiling height — it is the one that pierces the covering. Rendering cuts the slope over the footprint, from the inner face of the wall to its outer face, then builds the two rendered cheeks and the dormer's roof in covering material. Without `slope`, that roof meets the main slope at the back of the footprint; with `slope` (rise per metre of setback), it meets it inside the footprint. Validation refuses what the engine cannot render: a footprint outside a single non-vertical slope, a slope that tilts along the dormer, a back wall that does not exceed the covering, a pitch with no possible junction. The dormer roof pitch is often undimensioned on plans: omitting `slope` then follows the drawing.
 
-Un pan peut aussi porter des fenêtres de toit dans `windows` : un centre en plan, une largeur horizontale et une hauteur mesurée le long du rampant. Une fenêtre de toit n'appartient à aucun mur : le rendu ouvre le versant et pose le châssis dans le plan du pan, à sa cote de la coupe. La largeur imprimée reste lue à l'horizontale, la hauteur le long du rampant ; la position en profondeur ne se lit pas sur le plan horizontal mais sur la coupe, et c'est elle qui distingue un velux d'une baie verticale collée à l'égout. Le cadre, le vitrage et le meneau suivent la toiture dans sa visibilité et ses ombres ; le vitrage recule de 6 mm sous la couverture et aucun sommet ne sort du pan, donc le rampant masque la baie partout où il masque la couverture. La validation refuse ce que le moteur ne peut pas poser : une baie hors d'un pan unique, un pan vertical ou horizontal, une baie qui déborde ou qui touche une arête du pan (5 mm de retrait), une baie plus petite que les profils du modèle (10 cm). Une fenêtre de toit reste une baie de couverture : ni tabatière, ni raccord d'étanchéité, ni débord de couverture ne sont représentés.
+A slope may also carry roof windows in `windows`: a centre in plan, a horizontal width and a height measured along the rafter. A roof window belongs to no wall: rendering opens the slope and sets the frame in the slope's plane, at its height from the section. The printed width is read horizontally, the height along the rafter; the depth position is not read on the horizontal plan but on the section, and that is what tells a skylight apart from a vertical bay set against the eaves. Frame, glazing and mullion follow the roof in visibility and shadows; the glazing sits 6 mm back under the covering and no vertex leaves the slope, so the rafter hides the window wherever it hides the covering. Validation refuses what the engine cannot place: a window outside a single slope, a vertical or horizontal slope, a window that overflows or touches an edge of the slope (5 mm inset), a window smaller than the model's profiles (10 cm). A roof window stays a covering opening: neither roof hatch, flashing nor covering overhang is represented.
 
-Les couleurs extérieures viennent de `facadeColor` et `roofColor`, sans valeur colorimétrique certifiée. Les faces intérieures restent blanches. Les menuiseries bicolores et les teintes de porte ne sont pas encore reproduites : les menuiseries existantes restent simplifiées.
+Exterior colours come from `facadeColor` and `roofColor`, with no certified colorimetric value. Interior faces stay white. Two-tone joinery and door colours are not reproduced yet: existing joinery stays simplified.
 
-Les documents de référence servent à vérifier les ouvertures et volumes intérieurs. Aucune clôture ni plantation n’est inventée : seules les surfaces déclarées sont rendues. Le gazon présente une texture de bruit fine, déterministe et générée localement, sans téléchargement d’images.
+Reference documents are used to check openings and interior volumes. No fence or planting is invented: only declared surfaces are rendered. The lawn has a fine noise texture, deterministic and generated locally, with no image download.
 
-## Format optionnel
+## Optional format
 
 ```ts
 site?: {
-  boundary: [number, number][]; // x/z, dans le repère du RDC
-  elevation: number;           // terrain plat, relatif au sol du RDC
-  declaredArea?: number;       // information du plan, distincte du calcul
+  boundary: [number, number][]; // x/z, in the ground-floor frame
+  elevation: number;           // flat terrain, relative to the ground floor
+  declaredArea?: number;       // plan information, distinct from the computation
   facadeColor?: string;        // #rrggbb
   roofColor?: string;
   surfaces?: {
@@ -34,45 +34,45 @@ site?: {
   }[];
   roofs?: {
     id: string;
-    vertices: [number, number, number][]; // x/y/z, y relatif au RDC
-    faces: number[][];                   // indices de polygones plans
-    gables?: number[][];                 // faces traitées avec l’enduit
+    vertices: [number, number, number][]; // x/y/z, y relative to the ground floor
+    faces: number[][];                   // indices of planar polygons
+    gables?: number[][];                 // faces rendered with render plaster
     dormers?: {
       id: string;
-      start: [number, number]; // coins opposés de l’emprise, en plan (x, z)
+      start: [number, number]; // opposite corners of the footprint, in plan (x, z)
       end: [number, number];
-      wallId: string;          // mur de fond du niveau traversé
-      slope?: number;          // montée du toit de lucarne par mètre de repli
+      wallId: string;          // back wall of the crossed level
+      slope?: number;          // dormer roof rise per metre of setback
     }[];
     windows?: {
       id: string;
-      center: [number, number]; // centre de la baie en plan (x, z)
-      width: number;            // largeur horizontale, en mètres
-      height: number;           // hauteur le long du rampant, en mètres
+      center: [number, number]; // window centre in plan (x, z)
+      width: number;            // horizontal width, in metres
+      height: number;           // height along the rafter, in metres
     }[];
   }[];
   notes: string[];
 }
 ```
 
-Ce format accepte une autre parcelle et une autre enveloppe de toiture sans réécrire le moteur. Les polygones doivent être simples, les accès restent dans la parcelle et l’emprise du RDC doit y tenir. Les faces de toiture doivent être planes, non dégénérées, sans croisement et ne référencer que des indices entiers valides. Les couleurs et nombres sont vérifiés à l’import. Le format de projet reste en version 1 : les projets sans `site` continuent de fonctionner.
+This format accepts another plot and another roof envelope without rewriting the engine. Polygons must be simple, accesses stay within the plot and the ground-floor footprint must fit inside it. Roof faces must be planar, non-degenerate, non-crossing and only reference valid integer indices. Colours and numbers are checked on import. The project format stays at version 1: projects without `site` keep working.
 
-`buildExterior(project, level, scene)` retourne un groupe indépendant et ses maillages : terrain et accès, façades identifiées par `metadata.wallId`, toiture/pignons initialement masqués, limites horizontales et hauteur maximale. Les pans percés par une lucarne ou par une fenêtre de toit sont triangulés avec leur jour ; les joues et le toit de la lucarne, comme le châssis de la fenêtre de toit, suivent la toiture dans sa visibilité et ses ombres. La vue contrôle la visibilité des faces extérieures en même temps que celle des murs en coupe. Le gazon est évidé sous la maison, y compris quand le mur touche la limite de parcelle ; il ne traverse donc pas une pièce abaissée.
+`buildExterior(project, level, scene)` returns an independent group and its meshes: terrain and accesses, façades identified by `metadata.wallId`, roof/gables initially hidden, horizontal bounds and maximum height. Slopes pierced by a dormer or a roof window are triangulated with their opening; the dormer's cheeks and roof, like the roof window's frame, follow the roof in visibility and shadows. The view controls the visibility of exterior faces together with that of cut walls. The lawn is hollowed out under the house, including where the wall touches the plot boundary; it therefore does not show through a lowered room.
 
-Les ouvertures des façades utilisent la même cote de sol adjacente que les murs intérieurs, quelle que soit la catégorie de pièce abaissée. En visite, le plafond visible participe aux ombres solaires, et la toiture reste affichée : le plafond la masque depuis l'intérieur, elle rend la maison entière depuis la pelouse. L'aperçu reste simplifié et ne simule pas la lumière indirecte, la météo ou les bâtiments voisins.
+Façade openings use the same adjacent floor height as interior walls, whatever the category of the lowered room. During the walk, the visible ceiling takes part in sun shadows, and the roof stays displayed: the ceiling hides it from inside, it renders the whole house from the lawn. The preview stays simplified and simulates neither indirect light, weather nor neighbouring buildings.
 
-## Cadrage de la vue extérieure
+## Framing the exterior view
 
-La vue extérieure cadre sur le **bâti**, pas sur la parcelle : l'union du contour du niveau bas
-et de l'emprise du toit (`src/scene/framing.ts`), plus un recul proportionnel de 10 % de la
-plus grande dimension du bâti. La parcelle donne l'échelle et le recul ; elle reste
-entièrement visible en fond — glissée puis dézoomée derrière le sujet si nécessaire — mais ne
-dicte plus le cadrage. L'azimut est lui aussi un choix de cadrage : parmi l'angle courant et
-les quatre points cardinaux, la vue garde celui où la maison occupe le plus de largeur à
-l'écran, ce qui garde la vue utilisable sur une parcelle étroite et longue au bâtiment
-décentré. Le cadrage se calcule toujours depuis le niveau bas : passer d'un niveau à l'autre ne
-le change pas, et le sol comme la pelouse ne sont jamais coupés par le bord de l'image.
+The exterior view frames the **building**, not the plot: the union of the lowest level's outline
+and the roof footprint (`src/scene/framing.ts`), plus a proportional setback of 10 % of the
+building's largest dimension. The plot gives scale and setback; it stays entirely visible in
+the background — panned then zoomed out behind the subject if needed — but no longer dictates
+the framing. The azimuth is also a framing choice: among the current angle and the four
+cardinal points, the view keeps the one where the house takes the most width on screen, which
+keeps the view usable on a long, narrow plot with an off-centre building. Framing is always
+computed from the lowest level: switching levels does not change it, and neither the floor nor
+the lawn is ever cut by the image edge.
 
-La visite sort de la maison. Sa limite est `boundary` : le visiteur marche sur le terrain plat, franchit une porte extérieure ouverte, et n'est ramené au départ que s'il quitte la parcelle, passe sous le sol ou au-dessus du plafond. Sans `site`, l'emprise du niveau reste la limite. Le sol sous le visiteur suit la pièce à l'intérieur et `elevation` à l'extérieur ; une pièce abaissée garde son propre plancher. Le terrain n'ajoute ni rampe, ni clôture, ni marche dessinée : quand `elevation` place le terrain sous le plancher, la différence reste une marche franchie par l'assistance de seuil, jusqu'à 20 cm. Au-delà, le visiteur ne rentre plus : c'est un signal que la cote de terrain est à revoir, pas un défaut de collision.
+The walk leaves the house. Its limit is `boundary`: the visitor walks on the flat terrain, goes through an open exterior door, and is only sent back to the start when leaving the plot, going under the floor or above the ceiling. Without `site`, the level footprint stays the limit. The floor under the visitor follows the room inside and `elevation` outside; a lowered room keeps its own floor. The terrain adds no ramp, fence nor drawn step: when `elevation` places the terrain under the floor, the difference stays a step climbed by the threshold assistance, up to 20 cm. Beyond that, the visitor can no longer get back in: it signals that the terrain height needs review, not a collision defect.
 
-Le départ d'une visite vérifie les triangles projetés du mobilier avec la marge du visiteur : le creux libre d'un canapé en L et les espaces autour d'un meuble tourné restent accessibles. Le test se déclenche au choix de la destination, pas à chaque image. Les collisions pendant le déplacement restent celles des maillages Babylon.
+Starting a walk checks the furniture's projected triangles with the visitor's margin: the free hollow of an L-shaped sofa and the spaces around a rotated piece stay reachable. The check runs when choosing the destination, not on every frame. Collisions while moving stay those of the Babylon meshes.

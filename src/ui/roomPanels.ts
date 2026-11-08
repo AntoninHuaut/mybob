@@ -2,7 +2,7 @@ import type { Level, Room } from '../model/types';
 import { polygonArea } from '../model/geometry';
 import { area, escapeHtml as esc, number } from './format';
 
-/** Rendu d'icône SVG du module `ui/icons` (taille facultative). */
+/** Renders an SVG icon from the `ui/icons` module (optional size). */
 export type PanelIcon = (name: string, size?: number) => string;
 
 export const roomIcon = (room: Room) =>
@@ -14,7 +14,7 @@ export const roomIcon = (room: Room) =>
         ? 'layers'
         : 'plan';
 
-/** Le contour reconstruit diffère de la surface annoncée au plan constructeur. */
+/** The reconstructed outline differs from the area stated on the builder's plan. */
 export const hasSurfaceDifference = (room: Room) =>
   room.planArea !== undefined && Math.abs(polygonArea(room.polygon) - room.planArea) > 0.1;
 
@@ -37,7 +37,7 @@ export function roomListNote(hasPlanAreas: boolean): string {
     : 'Surfaces calculées depuis le modèle';
 }
 
-/** Fiche « le projet en un regard » quand aucune pièce n'est sélectionnée. */
+/** "The project at a glance" card when no room is selected. */
 export function roomSummaryHtml(
   level: Level,
   options: { areasFromPlan: boolean; icon: PanelIcon },

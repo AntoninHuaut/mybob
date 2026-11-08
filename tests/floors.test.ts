@@ -251,7 +251,7 @@ test('the visitor climbs the parcel step back into the house', () => {
     lights: [],
     spawn: { position: [2, 2], yaw: 0 },
   };
-  // The terrain sits 20 cm under the finished floor, as the owner's plan de masse states.
+  // The terrain sits 20 cm under the finished floor, as the owner's site plan states.
   const site = {
     boundary: [
       [-5, -5],

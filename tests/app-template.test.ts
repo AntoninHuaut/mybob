@@ -18,7 +18,7 @@ function render() {
   return window.document;
 }
 
-test('les boutons d’outil restent dans la colonne flottante', () => {
+test('tool buttons stay in the floating column', () => {
   const document = render();
   const tools = document.querySelector('.floating-tools');
   assert.ok(tools, 'la colonne d’outils existe');
@@ -32,7 +32,7 @@ test('les boutons d’outil restent dans la colonne flottante', () => {
   );
 });
 
-test('la carte de démarrage vit dans la scène et l’aide reste joignable depuis la barre latérale', () => {
+test('the start card lives in the scene and help stays reachable from the sidebar', () => {
   const document = render();
   const card = document.querySelector('#start-card');
   assert.ok(card, 'la carte de démarrage existe');
@@ -45,7 +45,7 @@ test('la carte de démarrage vit dans la scène et l’aide reste joignable depu
   assert.ok(document.querySelector('#help'), 'l’aide de l’en-tête reste disponible');
 });
 
-test('le compteur de cadence vit dans le pied de la scène et attend sa première mesure', () => {
+test('the frame-rate counter lives in the scene footer and waits for its first measurement', () => {
   const document = render();
   const counter = document.querySelector('#frame-rate');
   assert.ok(counter, 'le compteur existe');

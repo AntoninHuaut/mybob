@@ -124,10 +124,10 @@ export function bounds(points: Point2[]) {
 }
 
 /**
- * Tolérance de contenance, en mètres. Elle doit absorber la quantification du pack du lien
- * de partage (`linkPacker`, millimètre) : un sommet posé exactement sur un bord peut reculer
- * de 0,71 mm au pire (0,5 mm par axe), et un lien valide se déballerait alors en projet
- * invalide. Un millimètre reste très en dessous de la précision de saisie.
+ * Containment tolerance, in metres. It must absorb the quantisation of the share link pack
+ * (`linkPacker`, millimetre): a vertex lying exactly on an edge may move back by
+ * 0.71 mm at worst (0.5 mm per axis), and a valid link would then unpack into an
+ * invalid project. One millimetre stays well below input precision.
  */
 const CONTAINMENT_TOLERANCE = 1e-3;
 const cross2 = (a: Point2, b: Point2) => a[0] * b[1] - a[1] * b[0];
@@ -255,12 +255,12 @@ export interface DormerFrame {
   /** Plane positions of the two joues, a few millimetres outside the wall body. */
   sideLow: number;
   sideHigh: number;
-  /** Across-coordinates of the piercing: join on the pan, front face of the mur de fond. */
+  /** Across-coordinates of the piercing: join on the roof face, front face of the back wall. */
   meet: number;
   front: number;
-  /** The across-axis is z (mur de fond running along x); false when the axes swap. */
+  /** The across-axis is z (back wall running along x); false when the axes swap. */
   acrossZ: boolean;
-  /** Height of the top of the mur de fond, above the ground level datum. */
+  /** Height of the top of the back wall, above the ground level datum. */
   frontTop: number;
 }
 
@@ -272,9 +272,9 @@ const DORMER_FRONT_TOLERANCE = 0.03;
 
 /**
  * Resolve the piercing frame of a dormer from the project data alone: the
- * emprise rectangle, the mur de fond carrying the front face, and the pan it
+ * footprint rectangle, the back wall carrying the front face, and the roof face it
  * pierces. Shared by the import validation and the exterior renderer, so a
- * lucarne accepted at import is one the renderer can build.
+ * dormer accepted at import is one the renderer can build.
  */
 export function resolveRoofDormer(
   project: HouseProject,
@@ -323,7 +323,7 @@ export function resolveRoofDormer(
     };
   const acrossStart = acrossZ ? z0 : x0,
     acrossEnd = acrossZ ? z1 : x1;
-  // The near edge of the emprise rests on the interior face of the mur de fond.
+  // The near edge of the footprint rests on the interior face of the back wall.
   const nearer =
     Math.abs(acrossStart - wallAcross) <= Math.abs(acrossEnd - wallAcross)
       ? acrossStart
@@ -333,7 +333,7 @@ export function resolveRoofDormer(
       error: `L'emprise de la lucarne ${dormer.id} doit s'appuyer sur le nu intérieur du mur de fond ${dormer.wallId}.`,
     };
   const back = nearer === acrossStart ? acrossEnd : acrossStart;
-  // The exterior side of the mur de fond is the side the emprise comes from.
+  // The exterior side of the back wall is the side the footprint comes from.
   const exteriorSign = nearer > back ? 1 : -1;
   const front = wallAcross + exteriorSign * (wall.thickness / 2);
   if (Math.abs(front - back) < 0.05)
@@ -348,7 +348,7 @@ export function resolveRoofDormer(
     return {
       error: `Le mur de fond ${dormer.wallId} ne couvre pas la largeur de la lucarne ${dormer.id}.`,
     };
-  // The pierced pan: the one face whose plan projection carries the whole piercing.
+  // The pierced roof face: the one face whose plan projection carries the whole piercing.
   const ring: Point2[] = [
     [x0, z0],
     [x1, z0],
@@ -372,8 +372,8 @@ export function resolveRoofDormer(
       unplaced = `La lucarne ${dormer.id} perce un pan vertical de la toiture.`;
       continue;
     }
-    // The pan may slope across the emprise — that is the versant — but not
-    // along the mur de fond: the joues and the dormer roof join horizontally.
+    // The roof face may slope across the footprint — that is the slope — but not
+    // along the back wall: the cheeks and the dormer roof join horizontally.
     for (const row of [acrossStart, acrossEnd, front]) {
       const low = acrossZ
         ? roofFaceHeightAt(vertices, face, sides[0], row)
@@ -393,8 +393,8 @@ export function resolveRoofDormer(
       return {
         error: `Le mur de fond ${dormer.wallId} ne dépasse pas la couverture : la lucarne ${dormer.id} resterait invisible.`,
       };
-    // Le toit de la lucarne rejoint le pan : à l'arrière de l'emprise sans
-    // pente déclarée, en un point de l'emprise quand la pente est donnée.
+    // The dormer roof meets the roof face: at the back of the footprint without a
+    // declared slope, at a point inside the footprint when the slope is given.
     const panAtBack = acrossZ
       ? roofFaceHeightAt(vertices, face, (x0 + x1) / 2, back)
       : roofFaceHeightAt(vertices, face, back, (z0 + z1) / 2);
@@ -435,15 +435,15 @@ export function resolveRoofDormer(
 export interface RoofWindowFrame {
   /** Index of the pierced face within the roof. */
   faceIndex: number;
-  /** The four corners of the baie, lying on the pan, in ring order. */
+  /** The four corners of the window, lying on the roof face, in ring order. */
   corners: [number, number, number][];
-  /** Centre of the baie, on the pan plane. */
+  /** Centre of the window, on the roof face plane. */
   center: [number, number, number];
-  /** Unit normal of the pan, pointing above the roofing (y positive). */
+  /** Unit normal of the roof face, pointing above the roofing (y positive). */
   normal: [number, number, number];
-  /** Unit direction up the versant, in the pan plane. */
+  /** Unit direction up the slope, in the roof face plane. */
   up: [number, number, number];
-  /** Unit direction across the versant, horizontal, in the pan plane. */
+  /** Unit direction across the slope, horizontal, in the roof face plane. */
   across: [number, number, number];
 }
 
@@ -451,15 +451,15 @@ export type RoofWindowResolution =
   { frame: RoofWindowFrame; error?: undefined } | { frame?: undefined; error: string };
 
 const ROOF_WINDOW_MIN_SIZE = 0.1;
-// A pan flatter than this is read as a wall: a baie would stand upright.
+// A roof face flatter than this is read as a wall: a window would stand upright.
 const ROOF_WINDOW_MIN_NORMAL_Y = 0.05;
-// The châssis keeps this clearance from the pan edges: a baie laid on the eave
+// The frame keeps this clearance from the roof face edges: a window laid on the eave
 // would hang over the gutter, and earcut cannot cut a ring on the boundary.
 const ROOF_WINDOW_EDGE_MARGIN = 0.005;
 
 /**
- * A point of the pan plane, `across` and `up` metres from the centre of the
- * baie, `depth` metres along the normal — negative sinks under the covering.
+ * A point of the roof face plane, `across` and `up` metres from the centre of the
+ * window, `depth` metres along the normal — negative sinks under the covering.
  * The renderer builds the frame, the glazing and the mullion from this alone,
  * so no second copy of the slope arithmetic can drift from the resolution.
  */
@@ -478,10 +478,10 @@ export function roofWindowPoint(
 
 /**
  * Resolve the piercing frame of a roof window from the roof data alone: the
- * plan centre, the width across the versant and the height measured along the
+ * plan centre, the width across the slope and the height measured along the
  * ramp. Shared by the import validation and the exterior renderer, like the
- * lucarnes: a fenêtre acceptée à l'import est une fenêtre que le rendu peut
- * poser dans le plan du rampant.
+ * dormers: a window accepted at import is a window the renderer can
+ * place in the plane of the roof slope.
  */
 export function resolveRoofWindow(
   vertices: [number, number, number][],
@@ -522,7 +522,7 @@ export function resolveRoofWindow(
       unplaced = unplaced ?? `La fenêtre de toit ${id} tombe sur un pan vertical de la toiture.`;
       continue;
     }
-    // Basis of the pan: `up` climbs the versant, `across` stays horizontal, so
+    // Basis of the roof face: `up` climbs the slope, `across` stays horizontal, so
     // the printed width is read across the slope and the height along it.
     const up: [number, number, number] = [
       (-upward[1] * upward[0]) / horizontal,

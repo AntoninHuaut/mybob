@@ -25,7 +25,7 @@ function setup() {
   return { document, bar, q };
 }
 
-test('la barre suit le mode, la prévisualisation et la confirmation', () => {
+test('the bar follows the mode, the preview and the confirmation', () => {
   const { bar, q } = setup();
   bar.setActive(true);
   assert.equal(q('#measure-instructions').hidden, false);
@@ -47,7 +47,7 @@ test('la barre suit le mode, la prévisualisation et la confirmation', () => {
   assert.equal(q('#measure-label').hidden, true);
 });
 
-test('le label suit l\u2019écran et les boutons passent par les callbacks', () => {
+test('the label follows the screen and buttons go through the callbacks', () => {
   const { bar, q } = setup();
   bar.moveTo({ x: 12.5, y: 40, visible: true });
   const label = q('#measure-label');

@@ -22,7 +22,7 @@ function run(
   return drawn;
 }
 
-test('une scène immobile finit son lissage puis cesse de se redessiner', () => {
+test('a still scene finishes its smoothing then stops redrawing', () => {
   const scheduler = new RenderScheduler();
   assert.equal(run(scheduler, RENDER_SETTLE_FRAMES), RENDER_SETTLE_FRAMES);
   assert.equal(scheduler.idle, true);
@@ -30,7 +30,7 @@ test('une scène immobile finit son lissage puis cesse de se redessiner', () => 
   assert.equal(run(scheduler, 30, RENDER_SETTLE_FRAMES * 16), 0);
 });
 
-test('au repos, une image par seconde rattrape un changement que personne n’a annoncé', () => {
+test('at rest, one frame per second catches up a change nobody announced', () => {
   const scheduler = new RenderScheduler();
   run(scheduler, RENDER_SETTLE_FRAMES);
   const frames = Math.ceil((3 * IDLE_REFRESH_MS) / 16);
@@ -38,7 +38,7 @@ test('au repos, une image par seconde rattrape un changement que personne n’a 
   assert.ok(drawn >= 2 && drawn <= 3, `${drawn} images en trois secondes de repos`);
 });
 
-test('une caméra qui bouge est redessinée à chaque image, puis le temps du lissage', () => {
+test('a moving camera is redrawn on every frame, then for the smoothing time', () => {
   const scheduler = new RenderScheduler();
   run(scheduler, RENDER_SETTLE_FRAMES);
   const moving = run(scheduler, 20, 1000, (frame) => `camera-${frame}`);
@@ -48,7 +48,7 @@ test('une caméra qui bouge est redessinée à chaque image, puis le temps du li
   assert.equal(after, RENDER_SETTLE_FRAMES - 1);
 });
 
-test('une demande explicite relance le dessin', () => {
+test('an explicit request restarts drawing', () => {
   const scheduler = new RenderScheduler();
   run(scheduler, RENDER_SETTLE_FRAMES);
   scheduler.request();
@@ -56,7 +56,7 @@ test('une demande explicite relance le dessin', () => {
   assert.equal(run(scheduler, RENDER_SETTLE_FRAMES + 5, 600), RENDER_SETTLE_FRAMES);
 });
 
-test('touche tenue, porte qui pivote ou shader en compilation : on continue de dessiner', () => {
+test('held key, swinging door or compiling shader: drawing continues', () => {
   const scheduler = new RenderScheduler();
   run(scheduler, RENDER_SETTLE_FRAMES);
   let busy = true;
@@ -69,7 +69,7 @@ test('touche tenue, porte qui pivote ou shader en compilation : on continue de d
   assert.ok(after <= RENDER_SETTLE_FRAMES, `${after} images après la fin de l’activité`);
 });
 
-test('l’état occupé n’est consulté qu’une fois la scène posée', () => {
+test('the busy state is only consulted once the scene is set', () => {
   const scheduler = new RenderScheduler();
   let asked = 0;
   run(scheduler, RENDER_SETTLE_FRAMES - 1, 0, undefined, () => {

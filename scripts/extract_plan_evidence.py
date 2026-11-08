@@ -1,16 +1,16 @@
-"""Couche 1 : registre d'évidence extrait d'un PDF de plans.
+"""Layer 1: evidence registry extracted from a plan PDF.
 
-Extraction déterministe, sans interprétation : pages, étiquettes classées
-(cotes, baies, allèges, surfaces, niveaux, pentes, niveaux nommés et côtés de
-parcelle des plans de masse), table des surfaces et chaînes de cotes avec leur
-résidu de fermeture et l'échelle déduite.
+Deterministic extraction, without interpretation: pages, classified labels
+(dimensions, openings, sills, areas, levels, slopes, named levels and plot sides
+of site plans), area table and dimension chains with their closure residual and
+the deduced scale.
 
-Usage :
-  uvx --from pymupdf python scripts/extract_plan_evidence.py <pdf> <sortie.json> [--pages 13,14] [--skip-vectors]
+Usage:
+  uvx --from pymupdf python scripts/extract_plan_evidence.py <pdf> <output.json> [--pages 13,14] [--skip-vectors]
 
-Le registre contient des données de plan réelles : l'écrire dans un dossier
-ignoré (`reference-documents/`, `artifacts/plan-review/`). Ce script ne décide
-d'aucune géométrie : il expose ce qui est imprimé, et ce qui ne se referme pas.
+The registry contains real plan data: write it into an ignored folder
+(`reference-documents/`, `artifacts/plan-review/`). This script decides no
+geometry: it exposes what is printed, and what does not close.
 """
 import hashlib
 import json
@@ -21,11 +21,11 @@ from pathlib import Path
 
 import pymupdf
 
-CHAIN_TOL = 2.5  # pt, écart perpendiculaire max entre étiquettes d'une même chaîne
-TOTAL_TOL = 30.0  # pt, écart perpendiculaire max entre une chaîne et sa cote totale
-CLOSE_TOL = 0.005  # m, résidu de fermeture accepté (arrondi au cm)
-PAIR_TOL = 3.0  # pt, appariement libellé/valeur dans une table de surfaces
-CONTIGUITY_TOL = 3.0  # pt, écart accepté entre centres de segments contigus
+CHAIN_TOL = 2.5  # pt, max perpendicular gap between labels of the same chain
+TOTAL_TOL = 30.0  # pt, max perpendicular gap between a chain and its overall dimension
+CLOSE_TOL = 0.005  # m, accepted closure residual (rounded to the cm)
+PAIR_TOL = 3.0  # pt, label/value pairing in an area table
+CONTIGUITY_TOL = 3.0  # pt, accepted gap between centres of contiguous segments
 
 LINEAR = re.compile(r"^(\d+[.,]\d{1,3})$")
 CENTIMETRES = re.compile(r"^(\d{1,3})$")
@@ -50,12 +50,12 @@ TOTAL_LINE = re.compile(r"^(TOTAL\s+.+?)\s+(\d+[.,]\d+)\s*m\s*[²2]$", re.I)
 
 
 def metres(token):
-    """Une cote sans séparateur décimal est imprimée en centimètres."""
+    """A dimension without a decimal separator is printed in centimetres."""
     return float(token.replace(",", ".")) if re.search(r"[.,]", token) else float(token) / 100
 
 
 def display_transform(page):
-    """Coordonnées et directions de texte ramenées au repère affiché (cf. /Rotate)."""
+    """Text coordinates and directions brought back to the displayed frame (see /Rotate)."""
     box, rot = page.mediabox, page.rotation
     if rot == 90:
         return (lambda x, y: (box.height - y, x)), (lambda dx, dy: (-dy, dx))
@@ -90,7 +90,7 @@ def iter_lines(page):
 
 
 def classify(line):
-    """Classe une ligne de texte. Retourne (genre, charge) ou None."""
+    """Classifies a line of text. Returns (kind, payload) or None."""
     text = line["text"]
     if match := LINEAR.match(text):
         return "linear", {"value": metres(match.group(1))}
@@ -113,9 +113,9 @@ def classify(line):
         return "drawingNumber", {"value": match.group(1)}
     if match := CENTIMETRES.match(text):
         return "centimetres", {"value": metres(match.group(1))}
-    # Libellés du plan de masse : niveaux nommés, côtés de parcelle, surface
-    # cadastrale et surfaces rectangulaires cotées dans une phrase. Lecture
-    # littérale : rien ici ne dit à quel objet s'applique la valeur.
+    # Site-plan labels: named levels, plot sides, cadastral area and
+    # rectangular areas dimensioned in a sentence. Literal reading:
+    # nothing here says which object the value applies to.
     if match := NAMED_LEVEL.match(text):
         return "namedLevel", {
             "name": match.group(1).strip(),
@@ -141,7 +141,7 @@ def segment_value(label):
 
 
 def cluster_labels(labels):
-    """Regroupe les cotes par axe et par ligne de cote (ordonnée perpendiculaire)."""
+    """Groups dimensions by axis and by dimension line (perpendicular ordinate)."""
     items = []
     for label in labels:
         if label["kind"] not in ("linear", "centimetres", "opening"):
@@ -161,11 +161,11 @@ def cluster_labels(labels):
 
 
 def contiguous_runs(segments, along, points_per_metre, tolerance=CONTIGUITY_TOL):
-    """Découpe une ligne de cotes en suites contiguës à l'échelle imprimée.
+    """Splits a dimension line into contiguous sequences at the printed scale.
 
-    Deux étiquettes voisines sont contiguës si l'écart de leurs centres vaut la
-    demi-somme de leurs longueurs. Une épaisseur de mur ou une cote isolée casse
-    la suite : elle n'appartient pas à la chaîne.
+    Two neighbouring labels are contiguous if the gap between their centres equals
+    half the sum of their lengths. A wall thickness or an isolated dimension breaks
+    the sequence: it does not belong to the chain.
     """
     runs, current = [], []
     for segment in segments:
@@ -183,7 +183,7 @@ def contiguous_runs(segments, along, points_per_metre, tolerance=CONTIGUITY_TOL)
 
 
 def build_chains(labels, page_index, printed_denominator):
-    """Chaînes de cotes contiguës, avec résidu de fermeture et échelle déduite."""
+    """Contiguous dimension chains, with closure residual and deduced scale."""
     printed = round(2834.6457 / printed_denominator, 2) if printed_denominator else None
     runs = []
     for cluster in cluster_labels(labels):
@@ -206,7 +206,7 @@ def build_chains(labels, page_index, printed_denominator):
         def perpendicular(label):
             return label["at"][1] if axis == "horizontal" else label["at"][0]
 
-        # Cote totale : étiquette isolée sur une ligne voisine, de valeur égale à la somme.
+        # Overall dimension: isolated label on a neighbouring line, whose value equals the sum.
         candidates = [
             label
             for label in labels
@@ -256,7 +256,7 @@ def build_chains(labels, page_index, printed_denominator):
 
 
 def parse_surface_tables(lines, page_index):
-    """Tables de surfaces : sections, lignes libellé/valeur, totaux."""
+    """Area tables: sections, label/value rows, totals."""
     ordered = sorted(lines, key=lambda line: (line["at"][1], line["at"][0]))
     headers = [line for line in ordered if SECTION.match(line["text"])]
     tables = []
@@ -343,12 +343,12 @@ def page_record(page, index, skip_vectors):
 
 
 def self_test():
-    """Non-régression sur un PDF synthétique : aucune donnée réelle."""
-    ppm = 2834.6457 / 50  # 1/50 à l'échelle 1:1
+    """Non-regression on a synthetic PDF: no real data."""
+    ppm = 2834.6457 / 50  # 1/50 at 1:1 scale
     document = pymupdf.open()
     page = document.new_page(width=842, height=595)
     baseline = 200.0
-    # Chaîne horizontale 4,00 + 6,00 = 10,00 m, et sa cote totale juste au-dessus.
+    # Horizontal chain 4.00 + 6.00 = 10.00 m, and its overall dimension just above.
     page.insert_text((100.0, baseline), "4.00", fontsize=8)
     page.insert_text((100.0 + 5.00 * ppm, baseline), "6.00", fontsize=8)
     page.insert_text((100.0 + 5.00 * ppm - 10, baseline + 14), "10.00", fontsize=8)
@@ -356,8 +356,8 @@ def self_test():
     page.insert_text((100.0, baseline + 80), "All : 1.10 m", fontsize=8)
     page.insert_text((100.0, baseline + 100), "90/2.15", fontsize=8)
     page.insert_text((100.0, baseline + 120), "Echelle : 1/50", fontsize=8)
-    # Plan de masse : niveaux nommés, côté de parcelle, surface cadastrale,
-    # surface rectangulaire cotée.
+    # Site plan: named levels, plot side, cadastral area,
+    # dimensioned rectangular area.
     page.insert_text((400.0, baseline), "RDC: +0.28", fontsize=8)
     page.insert_text((400.0, baseline + 14), "Egout: +3.01", fontsize=8)
     page.insert_text((400.0, baseline + 28), "- 32.03 m -", fontsize=8)
@@ -370,50 +370,50 @@ def self_test():
     failures = []
     chains = record["chains"]
     if len(chains) != 1:
-        failures.append(f"{len(chains)} chaîne(s) au lieu de 1")
+        failures.append(f"{len(chains)} chain(s) instead of 1")
     else:
         chain = chains[0]
         if abs(chain["sum"] - 10.0) > 0.01:
-            failures.append(f"somme de chaîne {chain['sum']} au lieu de 10.00")
+            failures.append(f"chain sum {chain['sum']} instead of 10.00")
         if not chain["closed"]:
-            failures.append("chaîne non refermée alors que la cote totale est imprimée")
+            failures.append("chain not closed although the overall dimension is printed")
         if abs(chain.get("impliedPointsPerMetre", 0) - ppm) > 0.5:
-            failures.append(f"échelle déduite {chain.get('impliedPointsPerMetre')} au lieu de {ppm:.2f}")
+            failures.append(f"deduced scale {chain.get('impliedPointsPerMetre')} instead of {ppm:.2f}")
     rooms = record["labels"]["rooms"]
     if len(rooms) != 1 or abs(rooms[0]["area"] - 12.0) > 0.01:
-        failures.append(f"étiquettes de surface {rooms}")
+        failures.append(f"area labels {rooms}")
     sills = record["labels"]["sills"]
     if len(sills) != 1 or abs(sills[0]["value"] - 1.1) > 0.01:
-        failures.append(f"allèges {sills}")
+        failures.append(f"sills {sills}")
     openings = record["labels"]["openings"]
     if len(openings) != 1 or abs(openings[0]["width"] - 0.9) > 0.01 or abs(openings[0]["height"] - 2.15) > 0.01:
         failures.append(f"baies {openings}")
     if record["cartouche"]["scale"] != "1/50":
-        failures.append(f"échelle du cartouche {record['cartouche']['scale']}")
+        failures.append(f"title-block scale {record['cartouche']['scale']}")
     named = {
         label["name"]: label["value"] for label in record["labels"]["namedLevels"]
     }
     for name, value in (("RDC", 0.28), ("Egout", 3.01), ("TN", -0.15)):
         if abs(named.get(name, 0.0) - value) > 0.001:
-            failures.append(f"niveau nommé {name} : {named.get(name)} au lieu de {value}")
+            failures.append(f"named level {name}: {named.get(name)} instead of {value}")
     sides = record["labels"]["parcelSides"]
     if len(sides) != 1 or abs(sides[0]["value"] - 32.03) > 0.001:
-        failures.append(f"libellés de côté de parcelle {sides}")
+        failures.append(f"plot side labels {sides}")
     areas = record["labels"]["parcelAreas"]
     if len(areas) != 1 or abs(areas[0]["area"] - 496.0) > 0.001:
-        failures.append(f"libellés de surface cadastrale {areas}")
+        failures.append(f"cadastral area labels {areas}")
     rects = record["labels"]["rectAreas"]
     if (
         len(rects) != 1
         or abs(rects[0]["width"] - 5.0) > 0.001
         or abs(rects[0]["depth"] - 5.0) > 0.001
     ):
-        failures.append(f"surfaces rectangulaires cotées {rects}")
+        failures.append(f"dimensioned rectangular areas {rects}")
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print("registre de cotes : auto-test réussi")
+    print("dimension registry: self-test passed")
     return 0
 
 
@@ -445,11 +445,11 @@ def main(argv):
     for page in registry["pages"]:
         closed = sum(1 for chain in page["chains"] if chain["closed"])
         print(
-            f"page {page['index']:>2} : {len(page['chains'])} chaînes ({closed} refermées), "
-            f"{len(page['labels']['rooms'])} étiquettes de surface, "
+            f"page {page['index']:>2}: {len(page['chains'])} chains ({closed} closed), "
+            f"{len(page['labels']['rooms'])} area labels, "
             f"{len(page['surfaceTables'])} table(s), "
-            f"{len(page['isolatedDimensions'])} cote(s) isolée(s), "
-            f"{len(page['unassignedCentimetres'])} étiquette(s) en cm hors chaîne"
+            f"{len(page['isolatedDimensions'])} isolated dimension(s), "
+            f"{len(page['unassignedCentimetres'])} cm label(s) outside a chain"
         )
     print(f"-> {out}")
     return 0

@@ -97,7 +97,7 @@ test('roof envelope covers the L footprint, keeps its measured heights, and star
 });
 
 test('a roof overhang closes the wall band up to the pan, not the drip edge', () => {
-  // The eave hangs 0.4 m past the walls: the pan sits at 2.99 m over the wall
+  // The eave hangs 0.4 m past the walls: the roof face sits at 2.99 m over the wall
   // plane while the drip edge stays at 2.70 m. A band cut at the drip edge
   // leaves a slit into the attic all around the house.
   const project: HouseProject = structuredClone(source);
@@ -110,8 +110,8 @@ test('a roof overhang closes the wall band up to the pan, not the drip edge', ()
   const { built, scene, engine } = exterior(project);
   const bands = built.roofMeshes.filter((m) => m.name.startsWith('roof-wall-band:'));
   assert.ok(bands.length > 0);
-  // Walls one pan covers end to end: their band must reach it. The walls at the
-  // junction of the two roofs only have to stay under the lowest pan.
+  // Walls one roof face covers end to end: their band must reach it. The walls at the
+  // junction of the two roofs only have to stay under the lowest roof face.
   const covered = new Set([
     'mur-sud-01',
     'mur-sud-02',
@@ -217,7 +217,7 @@ test('site remains optional and personal geometry is not a rendering prerequisit
 /**
  * A synthetic two-level house with a gable roof and one chien-assis: generic
  * coordinates, no personal plan. Ridge at z=4, eaves at z=0 and z=8, ridge
- * height 7, eaves 3: the south versant follows y = 11 − z.
+ * height 7, eaves 3: the south slope follows y = 11 − z.
  */
 function dormerProject(): HouseProject {
   const project: HouseProject = {
@@ -343,24 +343,24 @@ test('a dormer pierces the pan on its emprise, builds the joues and the dormer r
   const pans = built.roofMeshes.filter((mesh) => mesh.name.startsWith('roof:toiture:'));
   const pierced = pans.find((mesh) => mesh.name === 'roof:toiture:1')!;
   assert.ok(pierced, 'le versant sud existe');
-  // The emprise is opened from the back join (z 5.5) to the outer face of the
-  // mur de fond (axis 7.05 + thickness/2): 1.6 m deep.
+  // The footprint is opened from the back join (z 5.5) to the outer face of the
+  // back wall (axis 7.05 + thickness/2): 1.6 m deep.
   const hole = (1 + 2 * 0.003) * (7.1 - 5.5);
   near(
     meshPlanArea(pierced.getVerticesData('position')!, Array.from(pierced.getIndices()!)),
     10 * 4 - hole,
     0.001,
   );
-  // The untouched north pan keeps its plain quadrilateral.
+  // The untouched north roof face keeps its plain quadrilateral.
   const north = pans.find((mesh) => mesh.name === 'roof:toiture:0')!;
   near(
     meshPlanArea(north.getVerticesData('position')!, Array.from(north.getIndices()!)),
     10 * 4,
     0.001,
   );
-  // Two joues: a triangle from the pan at the mur de fond (y = 11 − 7.1 = 3.9)
-  // up to the top of the mur (combles floor 2.5 + height 2), rejoining the pan
-  // at the back of the emprise (y = 11 − 5.5 = 5.5).
+  // Two cheeks: a triangle from the roof face at the back wall (y = 11 − 7.1 = 3.9)
+  // up to the top of the mur (combles floor 2.5 + height 2), rejoining the roof face
+  // at the back of the footprint (y = 11 − 5.5 = 5.5).
   const joues = built.roofMeshes.filter((mesh) => mesh.name.startsWith('dormer-joue:'));
   assert.equal(joues.length, 2);
   for (const joue of joues) {
@@ -370,13 +370,13 @@ test('a dormer pierces the pan on its emprise, builds the joues and the dormer r
     near(ys[0], 3.9);
     near(ys[1], 4.5);
     near(ys[2], 5.5);
-    // The cheeks sit at the sides of the emprise, outside the wall body.
+    // The cheeks sit at the sides of the footprint, outside the wall body.
     const xs = Array.from(
       new Set(positions.filter((_, i) => i % 3 === 0).map((x) => Math.round(x * 1000) / 1000)),
     );
     assert.ok(xs.includes(3 - 0.003) || xs.includes(4 + 0.003));
   }
-  // The dormer roof runs from the top of the mur to the pan at the back.
+  // The dormer roof runs from the top of the mur to the roof face at the back.
   const toit = built.roofMeshes.filter((mesh) => mesh.name.startsWith('dormer-toit:'));
   assert.equal(toit.length, 2);
   for (const panel of toit) {
@@ -395,7 +395,7 @@ test('a declared dormer slope changes where the dormer roof meets the pan', () =
   project.site!.roofs![0].dormers![0].slope = 0.25;
   const p = validateProject(project);
   // Pan rising 1 m per metre of retreat; the dormer roof rises 0.25 per metre
-  // from the top of the mur (4.5) above the pan at the front (3.9):
+  // from the top of the mur (4.5) above the roof face at the front (3.9):
   // they join 0.8 m behind the mur, at y = 3.9 + 0.8 = 4.7.
   const { built, scene, engine } = exterior(p);
   const toit = built.roofMeshes.filter((mesh) => mesh.name.startsWith('dormer-toit:'));
@@ -434,7 +434,7 @@ test('dormers resolve from the project data alone, whatever the house', () => {
 
 test('two dormers on the same pan each open their own hole', () => {
   const twin = dormerProject();
-  // One mur de fond wide enough for two chiens-assis, and an outline carrying both.
+  // One back wall wide enough for two dormers, and an outline carrying both.
   const mur = twin.levels[1].walls.find((w) => w.id === 'h-d-fond')!;
   mur.start = [3, 7.05];
   mur.end = [6, 7.05];
@@ -499,11 +499,11 @@ test('dormer validation rejects misaligned emprises, hidden walls and runaway sl
   bad((p) => {
     p.levels[1].walls[2].exterior = false;
   });
-  // A mur de fond below the roofing stays rejected: the dormer would be invisible.
+  // A back wall below the roofing stays rejected: the dormer would be invisible.
   bad((p) => {
     p.levels[1].walls[2].height = 1.2;
   });
-  // Only a dormer mur de fond may exceed the ceiling height of its level.
+  // Only a dormer back wall may exceed the ceiling height of its level.
   const p = dormerProject();
   p.levels[1].walls[2].height = 2.2;
   validateProject(p);
@@ -533,9 +533,9 @@ test('facade skins reach the corner instead of uncovering the neighbour end cap'
 });
 
 /**
- * Le versant nord de la fixture synthétique va de l'égout (z = 0) au faîtage
- * (z = 4) à 45° : y = 3 + z. Une fenêtre de toit s'y lit par son centre en plan
- * et sa hauteur le long du rampant ; rien n'appartient à une maison réelle.
+ * The north slope of the synthetic fixture goes from the eaves (z = 0) to the ridge
+ * (z = 4) at 45°: y = 3 + z. A roof window is read there by its centre in plan
+ * and its height along the rafter; nothing belongs to a real house.
  */
 interface VeluxFixture {
   id: string;
@@ -548,7 +548,7 @@ function veluxProject(...windows: VeluxFixture[]): HouseProject {
   project.site!.roofs![0].windows = windows;
   return project;
 }
-/** Cote le long du rampant ramenée en plan : à 45°, z = d/√2. */
+/** Dimension along the rafter brought back to plan: at 45°, z = d/√2. */
 const slopeToPlan = (alongRamp: number) => alongRamp / Math.SQRT2;
 type ExteriorMesh = ReturnType<typeof buildExterior>['roofMeshes'][number];
 const verticesOf = (mesh: ExteriorMesh) => Array.from(mesh.getVerticesData('position')!);
@@ -558,9 +558,9 @@ const chasisOf = (built: ReturnType<typeof buildExterior>, part: string) =>
   built.roofMeshes.filter((mesh) => mesh.name.startsWith(`roof-window-${part}:`));
 const distance = (a: number[], b: number[]) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
-test('une fenêtre de toit perce le pan et pose son châssis dans le plan du rampant', () => {
-  // Bas de baie à 2,00 m du chéneau le long du rampant, hauteur 1 m : le centre
-  // tombe à 2,50 m, soit z = 2,50/√2 en plan.
+test('a roof window pierces the roof face and sets its frame in the rafter plane', () => {
+  // Window bottom 2.00 m from the gutter along the rafter, height 1 m: the centre
+  // falls at 2.50 m, i.e. z = 2.50/√2 in plan.
   const project = veluxProject({
     id: 'velux-palier',
     center: [5, slopeToPlan(2.5)],
@@ -570,7 +570,7 @@ test('une fenêtre de toit perce le pan et pose son châssis dans le plan du ram
   const p = validateProject(project);
   const { built, scene, engine } = exterior(p);
   const pan = built.roofMeshes.find((mesh) => mesh.name === 'roof:toiture:0')!;
-  // Le percement enlève la projection de la baie : largeur × hauteur × cos 45°.
+  // The piercing removes the window's projection: width × height × cos 45°.
   near(
     meshPlanArea(pan.getVerticesData('position')!, Array.from(pan.getIndices()!)),
     10 * 4 - 0.8 * Math.SQRT1_2,
@@ -580,9 +580,9 @@ test('une fenêtre de toit perce le pan et pose son châssis dans le plan du ram
   const [vitrage] = chasisOf(built, 'vitrage');
   const [meneau] = chasisOf(built, 'meneau');
   assert.ok(cadre && vitrage && meneau, 'cadre, vitrage et meneau');
-  // Chaque pièce est posée dans le plan du rampant y = 3 + z ; le vitrage seul
-  // recule de 6 mm sous la couverture. Aucun sommet ne sort du pan : le châssis
-  // ne traverse plus la couverture.
+  // Every part is set in the rafter plane y = 3 + z; only the glazing
+  // sits 6 mm back under the covering. No vertex leaves the roof face: the frame
+  // no longer crosses the covering.
   for (const [mesh, expected] of [
     [cadre, 0],
     [meneau, 0],
@@ -592,24 +592,24 @@ test('une fenêtre de toit perce le pan et pose son châssis dans le plan du ram
     for (let i = 0; i < positions.length; i += 3)
       near((positions[i + 1] - 3 - positions[i + 2]) / Math.SQRT2, expected, 1e-6);
   }
-  // La cote du chéneau se lit sur le bas du cadre : 2 m le long du rampant,
-  // jamais à l'aplomb de la gouttière.
+  // The gutter dimension is read on the bottom of the frame: 2 m along the rafter,
+  // never plumb with the gutter.
   near(Math.min(...axisOf(cadre, 2)) * Math.SQRT2, 2, 0.001);
   assert.ok(Math.min(...axisOf(cadre, 2)) > 1, 'aucun châssis à l’aplomb du chéneau');
-  // Largeur imprimée conservée à l'horizontale, hauteur le long du rampant.
+  // Printed width kept horizontal, height along the rafter.
   const xs = axisOf(cadre, 0);
   near(Math.max(...xs) - Math.min(...xs), 0.8, 0.001);
   const ring = verticesOf(cadre).slice(0, 12);
   near(distance(ring.slice(0, 3), ring.slice(3, 6)), 0.8, 0.001);
   near(distance(ring.slice(3, 6), ring.slice(6, 9)), 1, 0.001);
-  // Le châssis suit la toiture : masqué avec elle dans les vues intérieures.
+  // The frame follows the roof: hidden with it in interior views.
   assert.ok(built.roofMeshes.every((mesh) => !mesh.isEnabled()));
   built.dispose();
   scene.dispose();
   engine.dispose();
 });
 
-test('deux fenêtres de toit sur le même pan ouvrent chacune leur percement', () => {
+test('two roof windows on the same roof face each open their own piercing', () => {
   const project = veluxProject(
     { id: 'velux-a', center: [3, slopeToPlan(2.5)], width: 0.8, height: 1 },
     { id: 'velux-b', center: [7, slopeToPlan(2.5)], width: 1.2, height: 1 },
@@ -630,8 +630,8 @@ test('deux fenêtres de toit sur le même pan ouvrent chacune leur percement', (
   engine.dispose();
 });
 
-test('une fenêtre de toit se résout depuis la seule toiture, quel que soit le versant', () => {
-  // Un pan oblique dans les deux axes du plan : le versant suit y = 0,3x + 0,8z.
+test('a roof window is resolved from the roof alone, whatever the slope', () => {
+  // A roof face oblique on both plan axes: the slope follows y = 0.3x + 0.8z.
   const vertices: [number, number, number][] = [
     [0, 0, 0],
     [10, 3, 0],
@@ -648,7 +648,7 @@ test('une fenêtre de toit se résout depuis la seule toiture, quel que soit le 
   const { frame } = resolved;
   assert.equal(frame.faceIndex, 0);
   near(frame.center[1], 3.5, 0.001);
-  // Base du pan : `up` monte le versant dans le plan, `across` reste horizontal.
+  // Roof face basis: `up` climbs the slope in the plane, `across` stays horizontal.
   near(Math.hypot(...frame.up), 1, 1e-9);
   near(Math.hypot(...frame.across), 1, 1e-9);
   near(frame.across[1], 0, 1e-9);
@@ -657,8 +657,8 @@ test('une fenêtre de toit se résout depuis la seule toiture, quel que soit le 
     0,
     1e-9,
   );
-  // Les quatre coins sont sur le pan et forment la baie cotée : 1 m à
-  // l'horizontale, 1 m le long du rampant.
+  // The four corners are on the roof face and form the dimensioned window: 1 m
+  // horizontally, 1 m along the rafter.
   for (const [x, y, z] of frame.corners)
     assert.ok(Math.abs(y - (0.3 * x + 0.8 * z)) < 0.001, 'coin dans le plan du rampant');
   near(distance(frame.corners[0], frame.corners[1]), 1, 0.001);
@@ -673,7 +673,7 @@ test('une fenêtre de toit se résout depuis la seule toiture, quel que soit le 
   );
 });
 
-test('la validation refuse une fenêtre de toit que le rendu ne peut pas poser', () => {
+test('validation refuses a roof window the renderer cannot place', () => {
   const bad = (edit: (p: HouseProject) => void, pattern: RegExp) => {
     const p = veluxProject({
       id: 'velux-test',
@@ -684,32 +684,32 @@ test('la validation refuse une fenêtre de toit que le rendu ne peut pas poser',
     edit(p);
     assert.throws(() => validateProject(p), pattern);
   };
-  // Aucun pan ne porte la baie.
+  // No roof face carries the window.
   bad((p) => {
     p.site!.roofs![0].windows![0].center = [5, 9];
   }, /Aucun pan ne porte/);
-  // Trop petite pour les profils du modèle.
+  // Too small for the model's profiles.
   bad((p) => {
     p.site!.roofs![0].windows![0].width = 0.05;
   }, /au moins 10 cm/);
-  // Déborde du pan qui la porte.
+  // Overflows the roof face carrying it.
   bad((p) => {
     p.site!.roofs![0].windows![0].width = 12;
   }, /déborde du pan/);
-  // Posée sur l'arête du pan.
+  // Set on the edge of the roof face.
   bad((p) => {
     p.site!.roofs![0].windows![0].center = [0, slopeToPlan(2.5)];
   }, /déborde du pan/);
-  // Le défaut de l'issue : une baie collée à l'arête basse, à l'aplomb du chéneau.
+  // The issue's defect: a window stuck to the low edge, plumb with the gutter.
   bad((p) => {
     p.site!.roofs![0].windows![0].center = [5, slopeToPlan(0.5)];
   }, /déborde du pan/);
-  // Identifiant dupliqué.
+  // Duplicate identifier.
   bad((p) => {
     p.site!.roofs![0].windows![0].id = 'velux-autre';
     p.site!.roofs![0].windows![1] = { ...p.site!.roofs![0].windows![0] };
   }, /dupliqué/);
-  // Un pan vertical ne peut pas porter de châssis : la baie s'y tiendrait debout.
+  // A vertical roof face cannot carry a frame: the window would stand upright.
   const vertical = veluxProject({ id: 'velux-raide', center: [0, 2.5], width: 1, height: 1 });
   vertical.site!.roofs![0] = {
     id: 'toiture-raide',
@@ -723,7 +723,7 @@ test('la validation refuse une fenêtre de toit que le rendu ne peut pas poser',
     windows: [{ id: 'velux-raide', center: [0, 2.5], width: 1, height: 1 }],
   };
   assert.throws(() => validateProject(vertical), /pan vertical/);
-  // Un pan horizontal non plus : le versant n'a pas de direction de montée.
+  // A horizontal roof face neither: the slope has no rising direction.
   const flat = veluxProject({ id: 'velux-plat', center: [5, 2.5], width: 1, height: 1 });
   flat.site!.roofs![0] = {
     id: 'toiture-plate',

@@ -359,9 +359,9 @@ export class HouseViewer {
       shadow,
       above?.floorVoids ?? [],
     );
-    // L'extérieur est celui du bâtiment, pas du niveau affiché : les façades
-    // sont celles du niveau bas, et le toit couvre le reste. Construire depuis
-    // les combles ne montrait que le toit, et posait la pelouse à leur altitude.
+    // The exterior is the building's, not the displayed level's: the façades
+    // are those of the lowest level, and the roof covers the rest. Building from
+    // the attic only showed the roof, and put the lawn at its altitude.
     const ground = project.levels.reduce((low, candidate) =>
       candidate.elevation < low.elevation ? candidate : low,
     );
@@ -370,8 +370,8 @@ export class HouseViewer {
     if (project.site && exteriorScene) {
       const site = project.site;
       this.exteriorFrame = siteOverviewLevel(ground, site, exteriorScene.height);
-      // La parcelle reste un arrière-plan visible : le cadrage ne la suit pas, il
-      // l'englobe dans l'image entière sans lui donner le rôle de cadre.
+      // The plot stays a visible background: framing does not follow it, it
+      // fits it in the whole image without making it the frame.
       const yard = ground.elevation + site.elevation;
       this.parcelInView = site.boundary.map(([x, z]) => new Vector3(x, yard, z));
       this.exteriorSubject = builtOutline(ground, site).flatMap(([x, z]) => [
@@ -545,7 +545,7 @@ export class HouseViewer {
 
   /**
    * Chromium refuses a new capture for about a second after the pointer lock
-   * left through the keyboard (Échap): a request inside that window rejects.
+   * left through the keyboard (Escape): a request inside that window rejects.
    * Retry once at the end of the window, while the click's activation still
    * holds; only a second failure is reported to the user.
    */
@@ -608,13 +608,13 @@ export class HouseViewer {
   }
 
   /**
-   * Rotation d’aperçu : montre le geste de glisser sans changer la cible ni le cadrage.
-   * Toute interaction avec la scène l’interrompt.
+   * Preview rotation: shows the drag gesture without changing the target or the framing.
+   * Any interaction with the scene interrupts it.
    */
   tourOrbit(radians = Math.PI / 3, duration = 1800) {
     if (this.mode !== 'overview' || this.exteriorView || !this.orbit) return false;
     stopOrbit(this.orbit);
-    // Le mouvement est décoratif : sans animation, la rotation reste immédiate.
+    // The motion is decorative: without animation, the rotation stays immediate.
     if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
       this.orbit.alpha += radians;
       this.orbitTour = undefined;
@@ -760,7 +760,7 @@ export class HouseViewer {
     this.updateShadowPolicy();
     if (this.mode !== 'overview') return;
     if (this.exteriorView && this.exteriorFrame) {
-      // La vue extérieure est une composition : l'azimut est choisi avec le cadrage.
+      // The exterior view is a composition: the azimuth is chosen with the framing.
       exteriorOverview(
         this.orbit,
         this.exteriorFrame,
@@ -800,8 +800,8 @@ export class HouseViewer {
   }
 
   private fitOverview() {
-    // La parcelle n'entre dans le calcul qu'en vue extérieure : l'intérieur cadre
-    // sur le niveau, comme avant.
+    // The plot only enters the computation in exterior view: the interior frames
+    // on the level, as before.
     const frame = this.exteriorView && this.exteriorFrame ? this.exteriorFrame : this.level;
     fitOverview(
       this.orbit,
@@ -1101,10 +1101,10 @@ export class HouseViewer {
   }
 
   /**
-   * Bloom de l'orbite : la Vue 3D (façades en coupe) et l'Extérieur (soleil,
-   * toiture, ciel). Le plan partage la caméra en orthographique — un plan ne
-   * doit rien fleurer, le pipeline est coupé sans être détruit : le reconstruire
-   * à chaque bascule coûterait une recréation de chaîne de post-traitement.
+   * Orbit bloom: the 3D view (cut façades) and the Exterior (sun,
+   * roof, sky). Plan shares the camera in orthographic mode — a plan must
+   * bloom nothing, the pipeline is turned off without being destroyed: rebuilding it
+   * on every switch would cost recreating a post-processing chain.
    */
   private updateOrbitBloom() {
     if (!this.scene || !this.orbit) return;

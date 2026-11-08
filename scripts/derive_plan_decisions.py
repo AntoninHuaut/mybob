@@ -1,23 +1,23 @@
-"""Couche 2 : décisions dérivées d'un projet et d'un registre d'évidence.
+"""Layer 2: decisions derived from a project and an evidence registry.
 
-Chaque face de mur et chaque ouverture reçoit une décision. Une longueur n'est
-déclarée `printed` que si une suite contiguë de segments imprimés reproduit la
-distance entre les **faces finies** du mur *et* que les baies du mur désignent
-cette suite sans ambiguïté : une longueur seule ne prouve rien, deux murs de même
-longueur sur deux lignes de cote différentes donnent le même nombre. Une chaîne
-ouverte donne `printed-partial`. Un mur d'enveloppe en retrait d'une
-demi-épaisseur donne `derived`, avec son équation. Sinon la décision reste
-`unresolved` avec son motif : c'est au releveur de trancher, pas à ce script.
+Every wall face and every opening receives a decision. A length is only declared
+`printed` if a contiguous sequence of printed segments reproduces the distance
+between the wall's **finished faces** *and* the wall's openings designate that
+sequence unambiguously: a length alone proves nothing, two walls of the same
+length on two different dimension lines give the same number. An open chain
+gives `printed-partial`. An envelope wall set back by half a thickness gives
+`derived`, with its equation. Otherwise the decision stays `unresolved` with its
+reason: the surveyor decides, not this script.
 
-Les chaînes d'un niveau viennent de ses pages : passer `--pages` pour ne pas
-apparier un mur du rez-de-chaussée contre les cotes de l'étage.
+A level's chains come from its pages: pass `--pages` so as not to pair a
+ground-floor wall against the upper floor's dimensions.
 
-Le contour du niveau vient du projet, sauf si `--outline` désigne la sortie de
-`scripts/derive_outline.py` : le contour dérivé remplace alors celui qui est
-écrit à la main, et le repère des chaînes calées sur l'emprise devient le sien.
+The level outline comes from the project, unless `--outline` points to the output
+of `scripts/derive_outline.py`: the derived outline then replaces the hand-written
+one, and the frame of the chains fitted to the footprint becomes its frame.
 
-Usage :
-  uvx --from pymupdf python scripts/derive_plan_decisions.py <projet.json> <registre.json> <niveau> <sortie.json> [--pages 13] [--outline contour.json]
+Usage:
+  uvx --from pymupdf python scripts/derive_plan_decisions.py <project.json> <registry.json> <level> <output.json> [--pages 13] [--outline outline.json]
   python scripts/derive_plan_decisions.py --self-test
 """
 import json
@@ -28,8 +28,8 @@ from pathlib import Path
 
 from derive_outline import load_outline
 
-TOL = 0.01  # m, tolérance d'appariement
-TOUCH_TOL = 0.02  # m, un mur aboutit sur l'axe d'un autre
+TOL = 0.01  # m, pairing tolerance
+TOUCH_TOL = 0.02  # m, a wall ends on another wall's axis
 OPENING_TEXT = re.compile(r"^(\d+(?:[.,]\d+)?)/(\d+(?:[.,]\d+)?)$")
 FIXTURE = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "plan-reference"
 
@@ -49,7 +49,7 @@ def wall_length(wall):
 
 
 def oriented_span(wall):
-    """Extrémités du mur ordonnées le long de son axe, pour un repère unique."""
+    """Wall ends ordered along its axis, for a single frame."""
     axis = wall_axis(wall)
     along = 0 if axis == "horizontal" else 1
     if wall["start"][along] <= wall["end"][along]:
@@ -58,7 +58,7 @@ def oriented_span(wall):
 
 
 def distance_to_axis(point, wall):
-    """Distance d'un point au segment d'axe d'un mur."""
+    """Distance from a point to a wall's axis segment."""
     ax, az = wall["start"]
     bx, bz = wall["end"]
     dx, dz = bx - ax, bz - az
@@ -70,7 +70,7 @@ def distance_to_axis(point, wall):
 
 
 def touching_thicknesses(walls, point, exclude):
-    """Épaisseurs des murs dont l'axe passe par ce point : l'about mitoyen."""
+    """Thicknesses of the walls whose axis passes through this point: the adjoining end."""
     return {
         round(other["thickness"], 4)
         for other in walls
@@ -79,18 +79,18 @@ def touching_thicknesses(walls, point, exclude):
 
 
 def candidate_lengths(wall, walls):
-    """Longueurs possibles entre faces finies, et les décalages de chaque extrémité.
+    """Possible lengths between finished faces, and the offsets of each end.
 
-    Une cote de plan mesure d'une face finie à une autre. À chaque extrémité, la
-    cote peut s'arrêter sur l'axe (0), sur la face du mur lui-même ou sur celle
-    du mur mitoyen. On énumère ces conventions au lieu de supposer que la cote
-    vaut la longueur d'axe, qui n'est vraie que par accident.
+    A plan dimension measures from one finished face to another. At each end, the
+    dimension may stop on the axis (0), on the wall's own face or on that of the
+    adjoining wall. These conventions are enumerated instead of assuming the
+    dimension equals the axis length, which is only true by accident.
 
-    Deux conventions opposées donnent souvent **la même longueur** : un mur de
-    3,92 m entre deux murs de 0,34 m fait 4,09 m qu'on parte de sa face nord ou
-    de sa face sud. Trancher par un rang arbitraire écartait la bonne ; toutes
-    les conventions sont donc rendues, et c'est l'ancrage positionnel — les
-    baies du mur, ou une chaîne calée sur l'emprise — qui choisit.
+    Two opposite conventions often give **the same length**: a 3.92 m wall between
+    two 0.34 m walls is 4.09 m whether you start from its north face or its south
+    face. Deciding by an arbitrary rank discarded the right one; every convention is
+    therefore returned, and the positional anchor — the wall's openings, or a chain
+    fitted to the footprint — chooses.
     """
     _, _, low, high = oriented_span(wall)
     length = wall_length(wall)
@@ -115,7 +115,7 @@ def candidate_lengths(wall, walls):
 
 
 def contiguous_runs(chain):
-    """Toutes les suites contiguës de segments imprimés, avec leur somme."""
+    """Every contiguous sequence of printed segments, with its sum."""
     segments = chain["segments"]
     for start in range(len(segments)):
         total = 0.0
@@ -129,7 +129,7 @@ def chain_ref(chain):
 
 
 def outline_bounds(outline, axis):
-    """Bord bas et étendue du contour du niveau le long d'un axe."""
+    """Low edge and extent of the level outline along an axis."""
     along = 0 if axis == "horizontal" else 1
     values = [point[along] for point in outline]
     return round(min(values), 4), round(max(values) - min(values), 4)
@@ -143,7 +143,7 @@ def chain_cumulative(chain):
 
 
 def run_interval(chain, start, end, base, sign):
-    """Intervalle monde d'une suite, une fois la chaîne calée sur le contour."""
+    """World interval of a sequence, once the chain is fitted to the outline."""
     cumulative = chain_cumulative(chain)
     first = base + sign * cumulative[start]
     last = base + sign * cumulative[end + 1]
@@ -151,19 +151,19 @@ def run_interval(chain, start, end, base, sign):
 
 
 def face_span(wall, start_offset, end_offset):
-    """Étendue monde des faces finies d'un mur, le long de son axe."""
+    """World extent of a wall's finished faces, along its axis."""
     axis, along, low, high = oriented_span(wall)
     return (low[along] + start_offset, high[along] + end_offset)
 
 
 def opening_span(opening, wall):
-    """Étendue monde d'une baie, le long de l'axe de son mur."""
+    """World extent of an opening, along its wall's axis."""
     _, along, low, _ = oriented_span(wall)
     return (low[along] + opening["offset"], low[along] + opening["offset"] + opening["width"])
 
 
 def model_boundaries(walls, axis):
-    """Repères du modèle le long d'un axe : abouts de murs et tableaux de baies."""
+    """Model ticks along an axis: wall ends and opening reveals."""
     along = 0 if axis == "horizontal" else 1
     points = []
     for wall in walls:
@@ -177,13 +177,12 @@ def model_boundaries(walls, axis):
 
 
 def envelope_orientations(chains, outline, walls):
-    """Chaînes refermées qui portent l'emprise, calées sur le bord du contour.
+    """Closed chains carrying the footprint, fitted to the outline's edge.
 
-    Une chaîne dont la somme égale l'étendue du niveau le long de son axe couvre
-    exactement cette étendue : son origine est donc un bord du contour, et ses
-    segments deviennent des coordonnées absolues. Le sens de lecture n'est pas
-    connu : on garde celui qui retrouve le plus de repères du modèle, et une
-    égalité ne tranche pas — la chaîne est alors écartée.
+    A chain whose sum equals the level's extent along its axis covers exactly that
+    extent: its origin is therefore an edge of the outline, and its segments become
+    absolute coordinates. The reading direction is unknown: the one finding the most
+    model ticks is kept, and a tie decides nothing — the chain is then discarded.
     """
     found = []
     for axis in ("horizontal", "vertical"):
@@ -210,11 +209,11 @@ def envelope_orientations(chains, outline, walls):
 
 
 def envelope_frame(envelopes):
-    """Origines du repère de tracé, déduites des chaînes calées sur l'emprise.
+    """Origins of the drawing frame, deduced from the chains fitted to the footprint.
 
-    Une chaîne calée donne la position absolue de ses segments le long de son
-    axe ; la position de sa ligne de cote, elle, se lit dans le repère de l'autre
-    axe. Les deux axes se fournissent donc mutuellement leur origine.
+    A fitted chain gives the absolute position of its segments along its axis; the
+    position of its dimension line, however, is read in the other axis's frame. The
+    two axes therefore give each other their origin.
     """
     origins = {}
     for envelope in envelopes:
@@ -228,7 +227,7 @@ def envelope_frame(envelopes):
 
 
 def chain_side(chain, origins):
-    """Côté du contour que mesure une chaîne, ou None si sa ligne n'est pas plaçable."""
+    """Side of the outline a chain measures, or None if its line cannot be placed."""
     along = 0 if chain["axis"] == "horizontal" else 1
     origin = origins.get(1 - along)
     if origin is None:
@@ -238,7 +237,7 @@ def chain_side(chain, origins):
 
 
 def touches_side(wall, side, outline):
-    """Le mur porte-t-il la face du contour que la chaîne mesure ?"""
+    """Does the wall carry the outline face the chain measures?"""
     axis = wall_axis(wall)
     across = 1 if axis == "horizontal" else 0
     values = [point[across] for point in outline]
@@ -253,7 +252,7 @@ def touches_side(wall, side, outline):
 
 
 def positional_face_matches(wall, walls, envelopes, origins, outline):
-    """Suites d'une chaîne calée dont l'intervalle monde est celui des faces du mur."""
+    """Sequences of a fitted chain whose world interval is that of the wall's faces."""
     axis = wall_axis(wall)
     candidates = candidate_lengths(wall, walls)
     found = []
@@ -287,7 +286,7 @@ def positional_face_matches(wall, walls, envelopes, origins, outline):
 
 
 def positional_opening_matches(opening, wall, envelopes, origins, outline):
-    """Cotes de baie d'une chaîne calée dont l'intervalle monde est celui de la baie."""
+    """Opening dimensions of a fitted chain whose world interval is that of the opening."""
     axis = wall_axis(wall)
     span = opening_span(opening, wall)
     found = []
@@ -308,7 +307,7 @@ def positional_opening_matches(opening, wall, envelopes, origins, outline):
 
 
 def length_matches(chains, wall, walls):
-    """Suites imprimées qui reproduisent une longueur entre faces du mur."""
+    """Printed sequences reproducing a length between the wall's faces."""
     axis = wall_axis(wall)
     candidates = candidate_lengths(wall, walls)
     found = {}
@@ -343,12 +342,12 @@ def length_matches(chains, wall, walls):
 
 
 def opening_origin_options(wall, match):
-    """Origines possibles du mur, une liste par baie présente dans la suite.
+    """Possible wall origins, one list per opening present in the sequence.
 
-    Une baie imprimée à la position cumulée `c` dans la suite, pour un offset
-    `o` depuis le début du mur, implique une origine `c − o`. Plusieurs cotes
-    identiques dans la même suite donnent plusieurs origines possibles : c'est
-    leur intersection qui désigne le mur, pas la première rencontrée.
+    An opening printed at cumulative position `c` in the sequence, for an offset
+    `o` from the start of the wall, implies an origin `c − o`. Several identical
+    dimensions in the same sequence give several possible origins: their
+    intersection designates the wall, not the first one met.
     """
     chain, start, end = match["chain"], match["start"], match["end"]
     options = []
@@ -372,11 +371,11 @@ def opening_origin_options(wall, match):
 
 
 def anchored_origin(wall, match):
-    """Origine commune aux baies du mur, ou None si elle n'est pas unique.
+    """Origin common to the wall's openings, or None if it is not unique.
 
-    Une suite qui commence sur une baie donne toujours une origine cohérente
-    avec cette seule baie : le mur doit donc aussi tenir dans la suite, de sa
-    première face à sa dernière, sinon la suite ne le mesure pas.
+    A sequence starting on an opening always gives an origin consistent with that
+    single opening: the wall must therefore also fit within the sequence, from its
+    first face to its last, otherwise the sequence does not measure it.
     """
     options = opening_origin_options(wall, match)
     if not options:
@@ -397,11 +396,11 @@ def anchored_origin(wall, match):
 
 
 def envelope_match(wall, chains, outline):
-    """Suite imprimée qui porte l'emprise, pour un mur d'enveloppe en retrait.
+    """Printed sequence carrying the footprint, for a recessed envelope wall.
 
-    Le mur doit être en retrait d'une demi-épaisseur aux deux extrémités de
-    l'emprise, et une chaîne refermée doit porter cette emprise. La longueur
-    n'est alors pas mesurée : elle se déduit, et les décalages sont consignés.
+    The wall must be set back by half a thickness at both ends of the footprint,
+    and a closed chain must carry that footprint. The length is then not measured:
+    it is deduced, and the offsets are recorded.
     """
     axis, along, low, high = oriented_span(wall)
     values = [point[along] for point in outline]
@@ -478,46 +477,46 @@ def face_decision(wall, walls, chains, outline, envelopes, origins):
             "endOffset": match["endOffset"],
             "anchor": anchor,
             "note": (
-                f"cote imprimée {match['length']:.3f} m = segments {match['start']}..{match['end']} "
-                f"({match['total']:.3f} m) de la chaîne"
+                f"printed dimension {match['length']:.3f} m = segments {match['start']}..{match['end']} "
+                f"({match['total']:.3f} m) of the chain"
             ),
         }
         if anchor == "envelope":
-            evidence["note"] += " ; chaîne calée sur l'emprise du niveau"
+            evidence["note"] += "; chain fitted to the level footprint"
         if not exact:
             evidence["note"] += (
-                f" ; décalages {match['startOffset']:+.3f}/{match['endOffset']:+.3f} m "
-                f"d'épaisseurs déclarées → axe {axis_length:.3f} m"
+                f"; offsets {match['startOffset']:+.3f}/{match['endOffset']:+.3f} m "
+                f"from declared thicknesses → axis {axis_length:.3f} m"
             )
         if not chain["closed"]:
-            evidence["note"] += " ; chaîne ouverte, preuve partielle"
+            evidence["note"] += "; open chain, partial proof"
         if origin is not None:
             evidence["wallOrigin"] = round(
                 origin + sum(item["value"] for item in chain["segments"][: match["start"]]), 4
             )
-            evidence["note"] += f" ; origine du mur {evidence['wallOrigin']:.3f} m sur la chaîne"
+            evidence["note"] += f"; wall origin {evidence['wallOrigin']:.3f} m on the chain"
         return {"id": wall["id"], "wall": wall["id"], "evidence": evidence, "unresolved": False}
 
     if not matches:
-        reason = f"aucune suite imprimée ne reproduit {length:.3f} m entre faces"
+        reason = f"no printed sequence reproduces {length:.3f} m between faces"
     elif len(anchored) > 1:
-        reason = f"{len(anchored)} suites imprimées reproduisent {length:.3f} m et portent les baies"
+        reason = f"{len(anchored)} printed sequences reproduce {length:.3f} m and carry the openings"
     else:
         reason = (
-            f"{len(matches)} suites imprimées reproduisent {length:.3f} m, "
-            "aucune ne porte les baies du mur"
+            f"{len(matches)} printed sequences reproduce {length:.3f} m, "
+            "none carries the wall's openings"
         )
     return {
         "id": wall["id"],
         "wall": wall["id"],
-        "evidence": {"class": "scaled", "note": f"longueur mesurée {length:.3f} m, axe {axis}"},
+        "evidence": {"class": "scaled", "note": f"measured length {length:.3f} m, axis {axis}"},
         "unresolved": True,
         "reason": reason,
     }
 
 
 def opening_candidates(opening, wall, chains):
-    """Segments de baie imprimés qui concordent en largeur ou en hauteur."""
+    """Printed opening segments agreeing in width or in height."""
     axis = wall_axis(wall)
     found = []
     for chain in chains:
@@ -549,8 +548,8 @@ def opening_candidates(opening, wall, chains):
 
 def opening_decision(opening, wall, chains, face, envelopes, origins, outline):
     candidates = opening_candidates(opening, wall, chains)
-    # Une cote qui donne largeur et hauteur est une meilleure preuve qu'une cote
-    # qui n'en donne qu'une : la convention partielle ne sert qu'à défaut.
+    # A dimension giving width and height is a better proof than a dimension
+    # giving only one: the partial convention only serves as a fallback.
     exact = [candidate for candidate in candidates if candidate["convention"] == "both"]
     if exact:
         candidates = exact
@@ -559,7 +558,7 @@ def opening_decision(opening, wall, chains, face, envelopes, origins, outline):
     face_origin = face["evidence"].get("wallOrigin")
 
     def positioned(candidate):
-        """La baie tombe-t-elle à l'offset du projet depuis l'origine du mur ?"""
+        """Does the opening land at the project offset from the wall origin?"""
         if not face_chain or not face_span or face_origin is None:
             return None
         if candidate["chain"]["page"] != face_chain["page"]:
@@ -575,8 +574,8 @@ def opening_decision(opening, wall, chains, face, envelopes, origins, outline):
         )
         return cumulative if abs(cumulative - (face_origin + opening["offset"])) <= TOL else None
 
-    # Une chaîne calée sur l'emprise donne la position absolue de la baie : c'est
-    # une preuve plus forte que la seule concordance de largeur et de hauteur.
+    # A chain fitted to the footprint gives the absolute position of the opening: it is
+    # a stronger proof than mere width and height agreement.
     placed_by_envelope = positional_opening_matches(opening, wall, envelopes, origins, outline)
     if len(placed_by_envelope) == 1:
         candidate = placed_by_envelope[0]
@@ -600,8 +599,8 @@ def opening_decision(opening, wall, chains, face, envelopes, origins, outline):
                     "convention": "both" if width_ok and height_ok else ("width" if width_ok else "height"),
                     "anchor": "envelope",
                     "note": (
-                        f"cote imprimée {width:.2f}/{height:.2f} m, position absolue "
-                        "sur une chaîne calée sur l'emprise"
+                        f"printed dimension {width:.2f}/{height:.2f} m, absolute position "
+                        "on a chain fitted to the footprint"
                     ),
                 },
                 "unresolved": False,
@@ -626,28 +625,28 @@ def opening_decision(opening, wall, chains, face, envelopes, origins, outline):
             "convention": candidate["convention"],
             "anchor": "openings",
             "note": (
-                f"cote imprimée {candidate['width']:.2f}/{candidate['height']:.2f} m "
+                f"printed dimension {candidate['width']:.2f}/{candidate['height']:.2f} m "
                 f"(convention : {candidate['convention']})"
             ),
         }
         if face_chain and face_origin is not None and positioned(candidate) is not None:
             evidence["wallOrigin"] = face_origin
-            evidence["note"] += " ; position vérifiée sur la suite du mur"
+            evidence["note"] += "; position checked on the wall's sequence"
         return {"id": opening["id"], "wall": wall["id"], "evidence": evidence, "unresolved": False}
 
     if not candidates:
         reason = (
-            f"aucune cote de baie {opening['width']:.2f}/{opening['height']:.2f} m "
-            "sur l'axe du mur"
+            f"no opening dimension {opening['width']:.2f}/{opening['height']:.2f} m "
+            "on the wall axis"
         )
     else:
-        reason = f"{len(candidates)} cotes de baie concordent, aucune positionnée sur le mur"
+        reason = f"{len(candidates)} opening dimensions agree, none positioned on the wall"
     return {
         "id": opening["id"],
         "wall": wall["id"],
         "evidence": {
             "class": "scaled",
-            "note": f"largeur {opening['width']:.2f} m, hauteur {opening['height']:.2f} m",
+            "note": f"width {opening['width']:.2f} m, height {opening['height']:.2f} m",
         },
         "unresolved": True,
         "reason": reason,
@@ -657,14 +656,14 @@ def opening_decision(opening, wall, chains, face, envelopes, origins, outline):
 def build_decisions(project, registry, level_id, registry_path, pages=None, outline=None):
     level = next((candidate for candidate in project["levels"] if candidate["id"] == level_id), None)
     if level is None:
-        raise SystemExit(f"niveau {level_id} absent du projet")
-    # Le contour écrit à la main n'est qu'une opinion : quand la couche 3 en a
-    # dérivé un, c'est lui qui donne le repère, et les chaînes calées sur
-    # l'emprise deviennent des coordonnées absolues.
+        raise SystemExit(f"level {level_id} missing from the project")
+    # The hand-written outline is only an opinion: when layer 3 has derived
+    # one, it gives the frame, and the chains fitted to the
+    # footprint become absolute coordinates.
     outline = level["outline"] if outline is None else outline
     selected = [page for page in registry["pages"] if pages is None or page["index"] in pages]
     if not selected:
-        raise SystemExit(f"aucune page {pages} dans le registre")
+        raise SystemExit(f"no page {pages} in the registry")
     chains = [chain for page in selected for chain in page["chains"]]
     walls = level["walls"]
     envelopes = envelope_orientations(chains, outline, walls)
@@ -707,13 +706,13 @@ def summarise(decisions):
     )
     total = len(decisions["faces"]) + len(decisions["openings"])
     return (
-        f"{len(decisions['faces'])} faces, {len(decisions['openings'])} ouvertures : "
-        f"{proven} prouvées, {total - proven} à trancher"
+        f"{len(decisions['faces'])} faces, {len(decisions['openings'])} openings: "
+        f"{proven} proven, {total - proven} to decide"
     )
 
 
 def self_test():
-    """Non-régression de la couche décision sur le plan de référence synthétique."""
+    """Non-regression of the decision layer on the synthetic reference plan."""
     project = json.loads((FIXTURE / "project.json").read_text(encoding="utf-8"))
     registry = json.loads((FIXTURE / "registry.json").read_text(encoding="utf-8"))
     expected = json.loads((FIXTURE / "decisions.json").read_text(encoding="utf-8"))
@@ -724,15 +723,15 @@ def self_test():
         produced = {decision["id"]: decision for decision in decisions[kind]}
         wanted = {decision["id"]: decision for decision in expected[kind]}
         if set(produced) != set(wanted):
-            failures.append(f"{kind} : {sorted(set(produced) ^ set(wanted))} d'identifiants")
+            failures.append(f"{kind}: {sorted(set(produced) ^ set(wanted))} identifiers")
             continue
         for identifier, decision in wanted.items():
             if produced[identifier] != decision:
-                failures.append(f"{kind} {identifier} : décision différente du fichier de référence")
+                failures.append(f"{kind} {identifier}: decision differs from the reference file")
     if any(decision["unresolved"] for decision in decisions["faces"] + decisions["openings"]):
-        failures.append("le plan de référence doit être entièrement prouvé")
+        failures.append("the reference plan must be entirely proven")
 
-    # Un mur sans cote imprimée doit rester non résolu : la couche ne devine pas.
+    # A wall without a printed dimension must stay unresolved: the layer does not guess.
     extended = json.loads(json.dumps(project))
     extended["levels"][0]["walls"].append(
         {"id": "refend-bas", "start": [4.5, 0.2], "end": [4.5, 1.4], "thickness": 0.1}
@@ -742,19 +741,19 @@ def self_test():
         decision for decision in extended_decisions["faces"] if decision["id"] == "refend-bas"
     )
     if not added["unresolved"]:
-        failures.append("un mur sans cote imprimée a été déclaré prouvé")
+        failures.append("a wall without a printed dimension was declared proven")
 
-    # Une cote d'un autre niveau ne doit pas prouver un mur de celui-ci.
+    # A dimension from another level must not prove a wall of this one.
     other_page = build_decisions(project, registry, "rdc", registry_path, pages=[2])
     if any(not decision["unresolved"] for decision in other_page["faces"]):
-        failures.append("une page d'un autre niveau a prouvé une face")
+        failures.append("a page from another level proved a face")
 
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print(f"plan de référence : {summarise(decisions)}")
-    print("couche décision : auto-test réussi")
+    print(f"reference plan: {summarise(decisions)}")
+    print("decision layer: self-test passed")
     return 0
 
 

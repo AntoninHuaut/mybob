@@ -1,19 +1,19 @@
-"""Compare un projet à son plan source, en chiffres plutôt qu'à l'œil.
+"""Compares a project with its source plan, in numbers rather than by eye.
 
-Deux passes indépendantes :
+Two independent passes:
 
-- **modèle -> source** : pour chaque mur, on échantillonne son axe et on cherche
-  la bande sombre la plus proche perpendiculairement. On rapporte le décalage
-  médian, l'épaisseur lue et le taux de recouvrement. Un mur sans bande en face
-  est un mur inventé ; un décalage franc est un mur mal placé.
-- **source -> modèle** : on balaye le rendu, on relève les bandes de murs et on
-  cherche le mur du modèle qui les couvre. Une bande sans mur est un mur oublié.
+- **model -> source**: for each wall, its axis is sampled and the nearest dark
+  band is looked for perpendicularly. The median offset, the thickness read and
+  the coverage rate are reported. A wall with no band facing it is an invented
+  wall; a clear offset is a misplaced wall.
+- **source -> model**: the render is swept, wall bands are recorded and the model
+  wall covering them is looked for. A band with no wall is a forgotten wall.
 
-Usage :
-  python scripts/compare_plan.py <projet.json> <calibration.json> <sortie.json> [--step 0.5]
+Usage:
+  python scripts/compare_plan.py <project.json> <calibration.json> <output.json> [--step 0.5]
 
-La calibration est celle d'`overlay-plan.py` : `image`, `level`, `anchors`
-monde/pixel. Le rapport est un JSON ; rien n'est corrigé automatiquement.
+The calibration is that of `overlay-plan.py`: `image`, `level`, world/pixel
+`anchors`. The report is a JSON; nothing is corrected automatically.
 """
 import json
 import math
@@ -23,15 +23,15 @@ from pathlib import Path
 from PIL import Image
 
 THRESHOLD = 120
-SCAN_HALF = 0.6  # m, demi-fenêtre de recherche perpendiculaire
+SCAN_HALF = 0.6  # m, perpendicular search half-window
 SAMPLE_FRACTIONS = (0.15, 0.3, 0.45, 0.6, 0.75, 0.85)
-MIN_WALL_LENGTH = 0.3  # m, en dessous on ne peut pas échantillonner
-MERGE_GAP = 0.26  # m, deux traits plus proches appartiennent au même mur
+MIN_WALL_LENGTH = 0.3  # m, below this the wall cannot be sampled
+MERGE_GAP = 0.26  # m, two strokes closer than this belong to the same wall
 MIN_BAND, MAX_BAND = 0.05, 0.55
-MIN_WALL_PIXELS = 8  # en dessous, les deux faces d'une cloison se confondent
-FACE_TOLERANCE = 0.08  # m, écart accepté entre une face lue et sa position attendue
-OFFSET_TOLERANCE = 0.05  # m, décalage d'axe accepté
-THICKNESS_TOLERANCE = 0.06  # m, écart d'épaisseur accepté
+MIN_WALL_PIXELS = 8  # below this, the two faces of a partition merge
+FACE_TOLERANCE = 0.08  # m, accepted gap between a face read and its expected position
+OFFSET_TOLERANCE = 0.05  # m, accepted axis offset
+THICKNESS_TOLERANCE = 0.06  # m, accepted thickness gap
 
 
 def fit(pairs):
@@ -39,10 +39,10 @@ def fit(pairs):
     mean_y = sum(y for _, y in pairs) / len(pairs)
     denominator = sum((x - mean_x) ** 2 for x, _ in pairs)
     if denominator < 1e-12:
-        raise ValueError("La calibration doit couvrir les deux axes du monde")
+        raise ValueError("The calibration must cover both world axes")
     scale = sum((x - mean_x) * (y - mean_y) for x, y in pairs) / denominator
     if scale <= 0:
-        raise ValueError("Le plan doit être orienté x vers la droite et z vers le bas")
+        raise ValueError("The plan must be oriented x to the right and z downwards")
     return scale, mean_y - scale * mean_x
 
 
@@ -66,7 +66,7 @@ def is_dark(pixels, u, v):
 
 
 def dark_runs(pixels, u0, v0, du, dv, steps):
-    """Bandes sombres le long d'un segment, en fraction de pas."""
+    """Dark bands along a segment, as step fractions."""
     runs, start = [], None
     for step in range(steps):
         if is_dark(pixels, u0 + du * step, v0 + dv * step):
@@ -89,12 +89,12 @@ def wall_geometry(wall):
 
 
 def compare_wall(wall, pixels, calibration, scale):
-    """Vérifie que le plan montre bien les deux faces du mur déclaré.
+    """Checks that the plan does show both faces of the declared wall.
 
-    On ne cherche pas « une bande proche » : on cherche un trait sombre à
-    -épaisseur/2 et un autre à +épaisseur/2. Un mur dont une seule face existe
-    est un mur dont l'épaisseur ou la position est fausse ; un mur sans aucune
-    face est un mur inventé.
+    It does not look for "a nearby band": it looks for a dark stroke at
+    -thickness/2 and another at +thickness/2. A wall with only one face is a wall
+    whose thickness or position is wrong; a wall with no face at all is an
+    invented wall.
     """
     geometry = wall_geometry(wall)
     if geometry is None or geometry[4] < MIN_WALL_LENGTH:
@@ -107,8 +107,8 @@ def compare_wall(wall, pixels, calibration, scale):
     for fraction in SAMPLE_FRACTIONS:
         px, pz = x0 + ux * length * fraction, z0 + uz * length * fraction
         u, v = to_pixel(px, pz, calibration)
-        # Un pas = un pixel : la normale unitaire du monde donne directement la
-        # direction en pixels, l'échelle ne sert qu'à reconvertir en mètres.
+        # One step = one pixel: the world unit normal directly gives the
+        # direction in pixels, the scale only serves to convert back to metres.
         du, dv = nx, nz
         runs = dark_runs(pixels, u - du * steps / 2, v - dv * steps / 2, du, dv, steps)
         if not runs:
@@ -116,8 +116,8 @@ def compare_wall(wall, pixels, calibration, scale):
         centres = [((a + b) / 2 - steps / 2) / scale for a, b in runs]
         near_index = min(range(len(centres)), key=lambda i: abs(centres[i] + half))
         far_index = min(range(len(centres)), key=lambda i: abs(centres[i] - half))
-        # Une cloison plus fine que la résolution du rendu donne un seul trait :
-        # les deux faces se confondent et l'épaisseur n'est pas mesurable.
+        # A partition thinner than the render resolution gives a single stroke:
+        # the two faces merge and the thickness cannot be measured.
         if near_index == far_index:
             continue
         near, far = centres[near_index], centres[far_index]
@@ -134,7 +134,7 @@ def compare_wall(wall, pixels, calibration, scale):
             "offset": None,
             "width": None,
             "declaredThickness": wall["thickness"],
-            "verdict": "aucune contrepartie dans le plan",
+            "verdict": "no counterpart in the plan",
         }
     offsets.sort()
     thicknesses.sort()
@@ -142,13 +142,13 @@ def compare_wall(wall, pixels, calibration, scale):
     median_thickness = thicknesses[len(thicknesses) // 2]
     hit_rate = hits / len(SAMPLE_FRACTIONS)
     if hit_rate < 0.5:
-        verdict = "contrepartie partielle"
+        verdict = "partial counterpart"
     elif abs(median_offset) > OFFSET_TOLERANCE:
-        verdict = "décalé"
+        verdict = "shifted"
     elif abs(median_thickness - wall["thickness"]) > THICKNESS_TOLERANCE:
-        verdict = "épaisseur divergente"
+        verdict = "thickness mismatch"
     else:
-        verdict = "aligné"
+        verdict = "aligned"
     return {
         "id": wall["id"],
         "length": round(length, 3),
@@ -161,7 +161,7 @@ def compare_wall(wall, pixels, calibration, scale):
 
 
 def source_bands(pixels, calibration, level, step):
-    """Bandes de murs relevées sur le rendu, par ligne de balayage."""
+    """Wall bands recorded on the render, per sweep line."""
     scale_x, offset_x, scale_z, offset_z = calibration
     xs = [point[0] for point in level["outline"]]
     zs = [point[1] for point in level["outline"]]
@@ -198,19 +198,19 @@ def source_bands(pixels, calibration, level, step):
 
 
 def axis_distance(px, pz, geometry):
-    """Distance d'un point à l'axe d'un mur, about compris."""
+    """Distance from a point to a wall's axis, end included."""
     x0, z0, ux, uz, length = geometry
     t = max(0.0, min(length, (px - x0) * ux + (pz - z0) * uz))
     return math.hypot(px - (x0 + ux * t), pz - (z0 + uz * t))
 
 
 def covered(band, walls):
-    """Un mur du modèle couvre-t-il cette bande à cette altitude ?
+    """Does a model wall cover this band at this height?
 
-    Un mur parallèle au balayage coupe la ligne en z et couvre par son axe.
-    Un mur perpendiculaire ne la coupe pas : balayée en lignes z, une petite
-    bande est souvent la trace du mur lui-même (retour court), pas un mur en
-    face. Le mur couvre alors par son empreinte, about compris.
+    A wall parallel to the sweep crosses the z line and covers through its axis.
+    A perpendicular wall does not cross it: swept along z lines, a small band is
+    often the trace of the wall itself (short return), not a wall facing it. The
+    wall then covers through its footprint, end included.
     """
     centre = (band["x0"] + band["x1"]) / 2
     for wall in walls:
@@ -218,7 +218,7 @@ def covered(band, walls):
         if geometry is None:
             continue
         x0, z0, ux, uz, length = geometry
-        if abs(ux) > 0.7:  # mur plutôt horizontal : ne coupe pas une ligne en z
+        if abs(ux) > 0.7:  # rather horizontal wall: does not cross a z line
             if axis_distance(centre, band["z"], geometry) <= wall["thickness"] / 2 + 0.12:
                 return wall["id"]
             continue
@@ -232,11 +232,11 @@ def covered(band, walls):
 
 
 def self_test():
-    """Vérifie les quatre verdicts et un coin couvert par un retour perpendiculaire.
+    """Checks the four verdicts and a corner covered by a perpendicular return.
 
-    Le coin et son retour sont une vérification purement géométrique, sans
-    dépendre d'un PDF : le balayage en lignes z fait du retour horizontal la
-    bande elle-même, et c'est l'empreinte du mur qui doit la couvrir.
+    The corner and its return are a purely geometric check, independent of a
+    PDF: sweeping along z lines makes the horizontal return the band itself, and
+    the wall's footprint must cover it.
     """
     from PIL import ImageDraw
 
@@ -252,7 +252,7 @@ def self_test():
             width=2,
         )
 
-    # Un mur vertical à x=1,00 d'épaisseur 0,20 : deux faces à 0,90 et 1,10.
+    # A vertical wall at x=1.00, thickness 0.20: two faces at 0.90 and 1.10.
     stroke(0.9, 0.5, 0.9, 2.5)
     stroke(1.1, 0.5, 1.1, 2.5)
 
@@ -268,39 +268,39 @@ def self_test():
         }
 
     cases = [
-        ("bon", wall("bon", 1.0, 0.2), "aligné"),
-        ("invente", wall("invente", 2.0, 0.2), "aucune contrepartie dans le plan"),
-        ("epais", wall("epais", 1.0, 0.3), "épaisseur divergente"),
-        ("decale", wall("decale", 1.08, 0.2), "décalé"),
+        ("bon", wall("bon", 1.0, 0.2), "aligned"),
+        ("invente", wall("invente", 2.0, 0.2), "no counterpart in the plan"),
+        ("epais", wall("epais", 1.0, 0.3), "thickness mismatch"),
+        ("decale", wall("decale", 1.08, 0.2), "shifted"),
     ]
     failures = []
     for label, candidate, expected in cases:
         result = compare_wall(candidate, pixels, calibration, scale)
-        verdict = result["verdict"] if result else "écarté"
-        status = "ok" if verdict == expected else "ÉCHEC"
-        print(f"  {status:5} {label:8} attendu={expected:32} obtenu={verdict}")
+        verdict = result["verdict"] if result else "discarded"
+        status = "ok" if verdict == expected else "FAIL"
+        print(f"  {status:5} {label:8} expected={expected:32} got={verdict}")
         if verdict != expected:
             failures.append(label)
-    # Un coin : cloison verticale et retour horizontal court. Les deux bandes
-    # proviennent du retour lui-même ; le témoin du tronçon droit reste couvert
-    # par la cloison, et une bande isolée loin de tout reste sans mur.
-    cloison = {"id": "cloison", "start": [1.0, 0.6], "end": [1.0, 2.5], "thickness": 0.10}
-    retour = {"id": "retour", "start": [1.0, 2.5], "end": [1.4, 2.5], "thickness": 0.10}
+    # A corner: vertical partition and short horizontal return. Both bands
+    # come from the return itself; the straight run's witness stays covered
+    # by the partition, and an isolated band far from everything stays without a wall.
+    partition = {"id": "partition", "start": [1.0, 0.6], "end": [1.0, 2.5], "thickness": 0.10}
+    return_wall = {"id": "return", "start": [1.0, 2.5], "end": [1.4, 2.5], "thickness": 0.10}
     corner_cases = [
-        ({"z": 2.45, "x0": 0.95, "x1": 1.45}, "retour"),
-        ({"z": 2.55, "x0": 1.05, "x1": 1.45}, "retour"),
-        ({"z": 1.5, "x0": 0.95, "x1": 1.05}, "cloison"),
+        ({"z": 2.45, "x0": 0.95, "x1": 1.45}, "return"),
+        ({"z": 2.55, "x0": 1.05, "x1": 1.45}, "return"),
+        ({"z": 1.5, "x0": 0.95, "x1": 1.05}, "partition"),
         ({"z": 0.5, "x0": 2.5, "x1": 3.0}, None),
     ]
     for band, expected in corner_cases:
-        found = covered(band, [cloison, retour])
-        status = "ok" if found == expected else "ÉCHEC"
-        print(f"  {status:5} coin      z={band['z']} attendu={expected} obtenu={found}")
+        found = covered(band, [partition, return_wall])
+        status = "ok" if found == expected else "FAIL"
+        print(f"  {status:5} corner    z={band['z']} expected={expected} got={found}")
         if found != expected:
-            failures.append(f"coin z={band['z']}")
+            failures.append(f"corner z={band['z']}")
     if failures:
-        raise SystemExit(f"auto-test en échec : {', '.join(failures)}")
-    print("auto-test : 4 verdicts et 4 bandes du coin conformes")
+        raise SystemExit(f"self-test failed: {', '.join(failures)}")
+    print("self-test: 4 verdicts and 4 corner bands as expected")
     return 0
 
 
@@ -326,9 +326,9 @@ def main(argv):
     thinnest = min((wall["thickness"] for wall in level["walls"]), default=0.0)
     if thinnest * scale < MIN_WALL_PIXELS:
         print(
-            f"attention : la cloison la plus fine fait {thinnest * scale:.1f} px "
-            f"à cette résolution ({scale:.0f} px/m). Rendre le plan plus grand, "
-            f"sinon ses deux faces se confondent et le mur paraît absent."
+            f"warning: the thinnest partition is {thinnest * scale:.1f} px "
+            f"at this resolution ({scale:.0f} px/m). Render the plan larger, "
+            f"otherwise its two faces merge and the wall looks absent."
         )
 
     walls = [compare_wall(wall, pixels, calibration, scale) for wall in level["walls"]]
@@ -347,10 +347,10 @@ def main(argv):
         "unmodelledBands": unmodelled,
         "summary": {
             "walls": len(walls),
-            "aligned": sum(1 for wall in walls if wall["verdict"] == "aligné"),
-            "shifted": sum(1 for wall in walls if wall["verdict"] == "décalé"),
-            "partial": sum(1 for wall in walls if wall["verdict"] == "contrepartie partielle"),
-            "missing": sum(1 for wall in walls if wall["verdict"] == "aucune contrepartie dans le plan"),
+            "aligned": sum(1 for wall in walls if wall["verdict"] == "aligned"),
+            "shifted": sum(1 for wall in walls if wall["verdict"] == "shifted"),
+            "partial": sum(1 for wall in walls if wall["verdict"] == "partial counterpart"),
+            "missing": sum(1 for wall in walls if wall["verdict"] == "no counterpart in the plan"),
             "unmodelledBands": len(unmodelled),
         },
     }
@@ -358,17 +358,17 @@ def main(argv):
 
     print(f"{report['summary']}")
     if "--table" in argv:
-        print(f"  {'mur':22} {'verdict':32} {'décalage':>9} {'épaisseur lue':>14} {'déclarée':>9}")
+        print(f"  {'wall':22} {'verdict':32} {'offset':>9} {'thickness read':>14} {'declared':>9}")
         for wall in walls:
             print(
                 f"  {wall['id']:22} {wall['verdict']:32} {wall['offset']:9.3f} "
                 f"{wall['width']:14.3f} {wall['declaredThickness']:9.3f}"
             )
     for wall in walls:
-        if wall["verdict"] != "aligné":
-            print(f"  {wall['verdict']:32} {wall['id']:22} offset={wall['offset']} largeur={wall['width']}")
+        if wall["verdict"] != "aligned":
+            print(f"  {wall['verdict']:32} {wall['id']:22} offset={wall['offset']} width={wall['width']}")
     for band in unmodelled[:10]:
-        print(f"  bande sans mur                   z={band['z']} x={band['x0']}..{band['x1']}")
+        print(f"  band without a wall              z={band['z']} x={band['x0']}..{band['x1']}")
     return 0
 
 

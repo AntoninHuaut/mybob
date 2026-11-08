@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 
-// Chaque test part d'un stockage vide : la carte de démarrage est donc visible.
-test('la carte propose trois actions, reste ouverte pendant qu’on les essaie et ne revient pas', async ({
+// Every test starts from empty storage: the start card is therefore visible.
+test('the card offers three actions, stays open while they are tried and does not come back', async ({
   page,
 }) => {
   await page.goto('/');
@@ -17,7 +17,7 @@ test('la carte propose trois actions, reste ouverte pendant qu’on les essaie e
   await expect(page.locator('#start-card')).toBeHidden();
 });
 
-test('un clic dans la scène ne fait pas disparaître la carte', async ({ page }) => {
+test('a click in the scene does not dismiss the card', async ({ page }) => {
   await page.goto('/');
   const card = page.locator('#start-card');
   await expect(card).toBeVisible();
@@ -26,7 +26,7 @@ test('un clic dans la scène ne fait pas disparaître la carte', async ({ page }
   await expect(card).toBeVisible();
 });
 
-test('tourner autour de la maison ne lève aucune erreur', async ({ page }) => {
+test('orbiting around the house raises no error', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
@@ -38,7 +38,7 @@ test('tourner autour de la maison ne lève aucune erreur', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('la rotation d’aperçu reste immédiate quand le mouvement est réduit', async ({ page }) => {
+test('the preview rotation stays immediate when motion is reduced', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: 'reduce' });
@@ -51,7 +51,7 @@ test('la rotation d’aperçu reste immédiate quand le mouvement est réduit', 
   expect(errors).toEqual([]);
 });
 
-test('l’aide courte tient en trois gestes et mène au texte détaillé', async ({ page }) => {
+test('the short help fits in three gestures and leads to the detailed text', async ({ page }) => {
   await page.goto('/');
   await page.locator('#help').click();
   const dialog = page.getByRole('dialog');

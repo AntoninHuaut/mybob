@@ -19,7 +19,7 @@ export async function verifyPublicBuild(directory) {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const path = resolve(directory, entry.name);
       if (entry.isSymbolicLink())
-        throw new Error(`Lien symbolique non autorisé : ${relative(root, path)}`);
+        throw new Error(`Symbolic link not allowed: ${relative(root, path)}`);
       if (entry.isDirectory()) {
         await inspect(path);
         continue;
@@ -29,11 +29,11 @@ export async function verifyPublicBuild(directory) {
         ['index.html', 'favicon.svg', demoName].includes(name) ||
         /^assets\/[\w.-]+\.(?:js|css|woff2?)$/.test(name) ||
         /^assets\/bob-[\w-]+\.png$/.test(name);
-      if (!allowed) throw new Error(`Fichier non prévu pour la publication : ${name}`);
+      if (!allowed) throw new Error(`File not meant for publication: ${name}`);
       if (/\.(?:js|json|html|css|svg)$/.test(name)) {
         const source = await readFile(path, 'utf8');
         if (fingerprints.some((value) => source.includes(value)))
-          throw new Error(`Données de maison personnelle détectées : ${name}`);
+          throw new Error(`Personal house data detected: ${name}`);
       }
       files.push(name);
     }
@@ -41,10 +41,10 @@ export async function verifyPublicBuild(directory) {
 
   await inspect(root);
   if (!files.includes('index.html') || !files.includes(demoName))
-    throw new Error('Application publique ou démonstration absente.');
+    throw new Error('Public application or demonstration missing.');
   const demo = JSON.parse(await readFile(resolve(root, demoName), 'utf8'));
   if (demo.id !== 'studio-demo')
-    throw new Error('Le seul projet embarqué doit être la démonstration.');
+    throw new Error('The only bundled project must be the demonstration.');
   return files;
 }
 
@@ -52,7 +52,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   try {
     const files = await verifyPublicBuild(process.argv[2] ?? 'dist');
     console.log(
-      `Build public vérifié : ${files.length} fichiers, démonstration seule, sans plan personnel.`,
+      `Public build verified: ${files.length} files, demonstration only, no personal plan.`,
     );
   } catch (error) {
     console.error(error instanceof Error ? error.message : String(error));

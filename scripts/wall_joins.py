@@ -1,15 +1,15 @@
-"""Liste les abouts de murs qu'aucun autre mur ne couvre.
+"""Lists the wall ends no other wall covers.
 
-Un about de mur doit rejoindre un autre mur (ou un mur extérieur sur le
-contour) ; un about libre est un raccord manquant ou une cloison héritée
-qui flotte. C'est ce contrôle qui a révélé une cloison de cage d'escalier
-posée au-delà du plancher du niveau, invisible pour l'audit de l'époque.
+A wall end must join another wall (or an exterior wall on the outline); a free
+end is a missing junction or an inherited partition that floats. This check is
+what revealed a stairwell partition placed beyond the level's floor, invisible
+to the audit of the time.
 
-Seule la géométrie des murs est lue : ce n'est ni une preuve de fidélité au
-plan, ni un diagnostic de pièce.
+Only wall geometry is read: it is neither a proof of fidelity to the plan, nor
+a room diagnosis.
 
-Usage :
-  python scripts/wall_joins.py <projet.json> <niveau>
+Usage:
+  python scripts/wall_joins.py <project.json> <level>
   python scripts/wall_joins.py --self-test
 """
 
@@ -52,7 +52,7 @@ def inside(pts, x, z, eps=1e-9):
 
 
 def report(project, level_id):
-    """Imprime les abouts non couverts du niveau et renvoie leur nombre."""
+    """Prints the level's uncovered ends and returns their count."""
     level = next((lv for lv in project["levels"] if lv["id"] == level_id), None)
     if level is None:
         sys.exit(
@@ -67,14 +67,14 @@ def report(project, level_id):
             covered = [wid for wid, pts in rects if wid != wall["id"] and inside(pts, x, z)]
             if not covered:
                 bare += 1
-                print(f"{wall['id']}.{label} ({x:.3f}, {z:.3f}) non couvert")
+                print(f"{wall['id']}.{label} ({x:.3f}, {z:.3f}) not covered")
     if bare == 0:
-        print(f"{level_id} : tous les abouts de murs sont couverts")
+        print(f"{level_id}: every wall end is covered")
     return bare
 
 
 def self_test():
-    """Non-régression sur un projet synthétique : aucune donnée réelle."""
+    """Non-regression on a synthetic project: no real data."""
     open_loop = {
         "levels": [
             {
@@ -86,9 +86,9 @@ def self_test():
             }
         ]
     }
-    # Un angle ouvert laisse libres ses deux extrémités : c'est le cas normal.
+    # An open corner leaves both its ends free: that is the normal case.
     if report(open_loop, "l") != 2:
-        print("ECHEC un angle ouvert doit laisser deux abouts libres")
+        print("FAIL an open corner must leave two free ends")
         return 1
     closed = {
         "levels": [
@@ -104,7 +104,7 @@ def self_test():
         ]
     }
     if report(closed, "l") != 0:
-        print("ECHEC le contour fermé doit couvrir tous ses abouts")
+        print("FAIL the closed outline must cover all its ends")
         return 1
     floating = {
         "levels": [
@@ -118,9 +118,9 @@ def self_test():
         ]
     }
     if report(floating, "l") != 4:
-        print("ECHEC la cloison isolée doit laisser quatre abouts libres")
+        print("FAIL the isolated partition must leave four free ends")
         return 1
-    print("about de murs : auto-test réussi")
+    print("wall ends: self-test passed")
     return 0
 
 

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedBy": "tests/fixtures/plan-outline (synthétique)",
-  "note": "Encoche de coin : motif du plan A (page 8), transposé sur une emprise 10,00 x 8,00 à 40 pt/m. Deux chaînes par axe se recoupent, une troisième est écartée parce que son total décrit l'intérieur. Aucune donnée réelle.",
+  "generatedBy": "tests/fixtures/plan-outline (synthetic)",
+  "note": "Corner notch: plan A pattern (page 8), transposed onto a 10.00 x 8.00 footprint at 40 pt/m. Two chains per axis cross-check each other, a third is discarded because its total describes the interior. No real data.",
   "source": { "file": "synthetique", "sha256": "0", "pageCount": 1 },
   "pages": [
     {

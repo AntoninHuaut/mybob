@@ -16,16 +16,16 @@ import type { HouseProject, Level, Point2, Wall } from '../src/model/types';
 const EPS = 1e-9;
 const TOUCH = 0.02; // m, endpoints closer than this are considered joined
 const NEAR_GAP = 0.3; // m, endpoints this close but not joined are suspicious
-const GRID = 0.1; // m, connectivity grid, plafonnée par la cloison la plus fine
-const GRID_SAFETY = 2; // une cellule doit rester plus petite que la demi-épaisseur
-// Un chevauchement pièce/mur plus fin que ça est un arrondi d'ajustement de
-// surface, pas un défaut de plan : 1 cm sur 5 m fait 0,05 m².
+const GRID = 0.1; // m, connectivity grid, capped by the thinnest partition
+const GRID_SAFETY = 2; // a cell must stay smaller than the half-thickness
+// A room/wall overlap thinner than this is an area-fitting rounding,
+// not a plan defect: 1 cm over 5 m makes 0.05 m².
 const ROOM_WALL_TOLERANCE = 0.05;
-// Une cloison doit garder au moins ce contact de plancher avec le contour,
-// sinon elle flotte hors du niveau ; les murs extérieurs en sont exemptés.
+// A partition must keep at least this floor contact with the outline,
+// otherwise it floats outside the level; exterior walls are exempt.
 const OUTLINE_FLOOR_TOLERANCE = 0.01;
-// Un mur qui pénètre une trémie déclarée de plus que ce seuil flotte sur le
-// vide ; un mur qui en borde la face reste au-dessous.
+// A wall penetrating a declared floor opening by more than this threshold floats over the
+// void; a wall bordering its face stays below it.
 const VOID_OVERLAP_TOLERANCE = 0.01;
 const MAX_CELLS = 400_000;
 const cross = (a: Point2, b: Point2, c: Point2) =>
@@ -157,8 +157,8 @@ interface Grid {
 }
 
 function buildGrid(level: Level, solids: Point2[][], cell?: number): Grid {
-  // Une cellule plus large que la cloison la plus fine peut sauter par-dessus :
-  // son centre tombe de part et d'autre du mur et le remplissage passe au travers.
+  // A cell wider than the thinnest partition can jump over it:
+  // its centre falls on either side of the wall and the fill goes through.
   const thinnest = Math.min(...level.walls.map((wall) => wall.thickness));
   cell = Math.min(cell ?? GRID, thinnest / GRID_SAFETY);
   const xs = level.outline.map((p) => p[0]),

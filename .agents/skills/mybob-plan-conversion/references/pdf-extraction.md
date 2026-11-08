@@ -1,35 +1,35 @@
-# Extraction PDF (pymupdf) : pièges vérifiés
+# PDF extraction (pymupdf): verified traps
 
-Recettes pour les étapes de rendu et d'extraction de la compétence, telles qu'exécutées
-sur des plans d'architecte réels. Outils, à la racine du dépôt : `scripts/render_pages.py` (rendu des pages)
-et `scripts/extract_walls.py` (axes candidats).
+Recipes for the skill's rendering and extraction steps, as run on real architect plans. Tools,
+at the repository root: `scripts/render_pages.py` (page rendering) and
+`scripts/extract_walls.py` (candidate axes).
 
-## Rendu et lecture des pages
+## Rendering and reading pages
 
-Rendre chaque page en PNG puis lire ces PNG avec l'outil de lecture d'images :
-c'est le contrôle principal, plus fiable que l'interprétation des vecteurs au jugé.
-Assembler des planches-contact (4 pages par planche, étiquetées) pour repérer
-rapidement RDC, étages, coupes, plan de masse et notice dans un PDF de 15 pages.
+Render every page to PNG then read those PNGs with the image-reading tool: it is the main
+check, more reliable than interpreting vectors by eye. Assemble contact sheets (4 pages per
+sheet, labelled) to quickly spot ground floor, upper floors, sections, site plan and
+specification in a 15-page PDF.
 
-Zoom sur une zone avant une lecture détaillée des cotes :
+Zoom on an area before a detailed reading of the dimensions:
 
 ```python
 page.get_pixmap(matrix=pymupdf.Matrix(300/72, 300/72), clip=pymupdf.Rect(x0, y0, x1, y1))
 ```
 
-## Pages en `/Rotate 90`
+## Pages with `/Rotate 90`
 
-Les A3 paysage sont souvent des médiabox 842 × 1191 avec `/Rotate 90` (ou 270).
-`page.rect` est déjà orienté, mais `get_text("dict")` renvoie les coordonnées
-**non tournées** : les convertir avant tout calcul de position, sinon les
-positions M (étiquettes) et P (cotes) sont fausses de tout l'écran.
+Landscape A3 sheets are often 842 × 1191 mediaboxes with `/Rotate 90` (or 270). `page.rect`
+is already oriented, but `get_text("dict")` returns **unrotated** coordinates: convert them
+before any position computation, otherwise the M (labels) and P (dimensions) positions are off
+by the whole screen.
 
 ```python
 import pymupdf
 doc = pymupdf.open(pdf)
 page = doc[i]
 mb = page.mediabox
-if page.rotation == 90:      # paysage : x_aff = hauteur_médiabox − y_doc, y_aff = x_doc
+if page.rotation == 90:      # landscape: x_disp = mediabox_height − y_doc, y_disp = x_doc
     tx = lambda x, y: (mb.height - y, x)
 elif page.rotation == 270:
     tx = lambda x, y: (y, mb.width - x)
@@ -37,30 +37,27 @@ else:
     tx = lambda x, y: (x, y)
 ```
 
-`get_pixmap(clip=…)` attend, lui, les coordonnées d'affichage. Vérifier la
-conversion avec une étiquette connue (angle du cartouche) avant de conclure.
+`get_pixmap(clip=…)`, on the other hand, expects display coordinates. Check the conversion with
+a known label (title-block corner) before concluding.
 
-## Échelle et origine
+## Scale and origin
 
-Échelle déduite d'une cote totale connue, pas de la valeur du cartouche :
-`pts_par_m = durée_px(cote_totale) / longueur_lue`. Origine : la face
-extérieure du mur nord-ouest. Contrôler chaque chaîne en comparant ses
-repères de cote vectoriels à la somme cumulée des segments.
+Scale is deduced from a known overall dimension, not from the title-block value:
+`pts_per_m = span_px(overall_dimension) / read_length`. Origin: the outer face of the
+north-west wall. Check every chain by comparing its vector dimension ticks to the cumulative
+sum of the segments.
 
-## Chaînes de cotes et étiquettes
+## Dimension chains and labels
 
-Les étiquettes de cotes sont du texte pivoté (≈90°/270°) posé sur la ligne.
-Extraire par `get_text("dict")`, trier par angle de ligne puis par position :
-la chaîne se lit de gauche à droite (ou de haut en bas) et doit se refermer
-sur la cote totale ; retenir la valeur cumulée à chaque repère trouvé.
-Format `a/b` : largeur/hauteur ; `All : X m` est une allège.
+Dimension labels are rotated text (≈90°/270°) set on the line. Extract with
+`get_text("dict")`, sort by line angle then by position: the chain reads left to right (or top
+to bottom) and must close on the overall dimension; keep the cumulative value at each tick
+found. Format `a/b`: width/height; `All : X m` is a sill height (allège).
 
-Vérifier que chaque étiquette de pièce (`SH : … m²`) tombe dans la zone
-reconstituée ; une étiquette hors zone signale un mur mal placé plutôt qu'une
-convention d'étiquetage.
+Check that every room label (`SH : … m²`) falls inside the reconstructed area; a label outside
+its area signals a misplaced wall rather than a labelling convention.
 
-## Contrôle de validation
+## Validation check
 
-`node --import tsx scripts/audit-plan.ts …` et l'overlay calibré de la
-compétence restent les étapes de contrôle ; ces deux helpers ne font que
-préparer les entrées (rendus, axes candidats).
+`node --import tsx scripts/audit-plan.ts …` and the skill's calibrated overlay stay the check
+steps; these two helpers only prepare the inputs (renders, candidate axes).

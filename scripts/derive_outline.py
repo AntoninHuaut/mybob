@@ -1,64 +1,62 @@
-"""Couche 3 : contour du niveau déduit des chaînes de cotes fermées.
+"""Layer 3: level outline deduced from the closed dimension chains.
 
-Le contour du niveau est dérivé du registre d'évidence au lieu d'être écrit à
-la main, règle par règle — un script mesure, il ne décide pas :
+The level outline is derived from the evidence registry instead of being written
+by hand, rule by rule — a script measures, it does not decide:
 
-1. **Étendues** — par axe, total maximal des chaînes fermées, recoupé autant
-   que possible (plusieurs chaînes d'accord) ou confronté à l'enveloppe lue
-   par `extract_plan.py` (`--plan`). Une chaîne fermée dont le total ne vaut
-   pas l'étendue est ÉCARTÉE et rapportée : elle décrit l'intérieur du
-   bâtiment, pas son enveloppe (le 7,82 d'une profondeur intérieure ne
-   remplace pas les 8,50 d'une emprise).
-2. **Découpes** — positions cumulées intérieures des chaînes ancrées, dans
-   les deux sens de lecture (base sur le bord bas ou haut de l'étendue).
-3. **Encre** (si `--pdf`) — chaque découpe cherchée sur la page rendue : une
-   bande sombre, épaisse comme un mur extérieur et posée face au nu de la
-   façade, de chaque côté de la découpe. Une découpe où cette présence
-   **saute** est un épaulement du contour ; une découpe où elle ne saute pas
-   décrit l'intérieur (chambre, cloison, tableau de baie) et n'est pas
-   essayée. Le rectangle n'est retenu que si aucune découpe ne saute.
-4. **Fermeture** — chaque arête du contour doit être reproduite par une suite
-   contiguë d'une chaîne ancrée (tolérance 0,015 m) ou être une **profondeur
-   comblée** : épaisseur de mur lue en centimètres au même endroit, ou suite
-   imprimée qui la couvre. Une profondeur sans cote ni épaisseur est refusée.
-5. **Jugement** — les arêtes du contour retenu doivent exister à l'encre
-   (une face de mur, bande à l'appui), et une encoche de façade est confirmée
-   par un balayage perpendiculaire : la profondeur où l'enveloppe saute doit
-   confirmer la profondeur comblée, sinon le candidat est refusé.
+1. **Extents** — per axis, maximum total of the closed chains, cross-checked as
+   much as possible (several agreeing chains) or compared with the envelope read
+   by `extract_plan.py` (`--plan`). A closed chain whose total does not equal the
+   extent is DISCARDED and reported: it describes the building's interior, not its
+   envelope (the 7.82 of an interior depth does not replace the 8.50 of a
+   footprint).
+2. **Cuts** — inner cumulative positions of the anchored chains, in both reading
+   directions (base on the low or the high edge of the extent).
+3. **Ink** (with `--pdf`) — each cut is looked for on the rendered page: a dark
+   band, as thick as an exterior wall and set against the façade face, on each side
+   of the cut. A cut where that presence **jumps** is a shoulder of the outline; a
+   cut where it does not jump describes the interior (bedroom, partition, opening
+   reveal) and is not tried. The rectangle is only kept if no cut jumps.
+4. **Closure** — every outline edge must be reproduced by a contiguous sequence of
+   an anchored chain (tolerance 0.015 m) or be a **filled depth**: wall thickness
+   read in centimetres at the same place, or a printed sequence covering it. A
+   depth with neither dimension nor thickness is refused.
+5. **Judgement** — the edges of the kept outline must exist in ink (a wall face,
+   band as support), and a façade notch is confirmed by a perpendicular sweep: the
+   depth where the envelope jumps must confirm the filled depth, otherwise the
+   candidate is refused.
 
-Si plusieurs contours survivent, le script les liste au lieu de trancher :
-ce qui reste un jugement est dit, jamais deviné.
+If several outlines survive, the script lists them instead of deciding: what
+remains a judgement is said, never guessed.
 
-Usage :
-  python scripts/derive_outline.py <registre.json> <sortie.json> [--pages 13] \
+Usage:
+  python scripts/derive_outline.py <registry.json> <output.json> [--pages 13] \
       [--pdf plan.pdf] [--plan plan.json]
   python scripts/derive_outline.py --self-test
 
-Sans `--pdf`, les couches registre + fermeture s'exécutent seules : le
-rectangle et les quatre sens de lecture des encoches sont essayés, et le
-résultat — s'il n'est pas unique — est rapporté comme un jugement à prendre,
-jamais départagé par le script.
+Without `--pdf`, the registry + closure layers run alone: the rectangle and the four
+reading directions of the notches are tried, and the result — if it is not unique —
+is reported as a judgement to make, never settled by the script.
 """
 import argparse
 import json
 import sys
 from pathlib import Path
 
-TOL = 0.015  # m, appariement d'une suite imprimée à une arête
-EXTENT_TOL = 0.05  # m, recoupe avec l'enveloppe d'extract_plan.py
-SUPPORT_MIN = 0.4  # fraction d'une arête qui doit exister à l'encre
-PROBE_STEP = 0.5  # m, pas d'échantillonnage le long d'une arête
-PROBE_MARGIN = 0.15  # m, distance aux abouts avant de sonder une arête
-JUMP_OFFSETS = (0.15, 0.30, 0.45)  # m, distances de mesure autour d'une découpe
-INK_FLOOR = 0.15  # une arête doit tenir un peu de mur à l'encre, baies mises à part
-FACE_TOL_OUT, FACE_TOL_IN = 0.12, 0.08  # m, écart maximal de la face au nu
-WALL_BAND_MIN, WALL_BAND_MAX = 0.15, 0.75  # m, épaisseur d'une bande de mur
-OUT_MARGIN = 0.15  # m, la sonde part juste au-dehors du nu
-IN_MARGIN = 0.55  # m, et traverse l'épaisseur possible du mur
-DEPTH_MEASURE_TOL = 0.05  # m, écart accepté entre balayage et profondeur
-THICKNESS_MIN, THICKNESS_MAX = 0.12, 0.45  # m, cote en cm qu'une épaisseur porte
-SOLID_MIN = 0.45  # m, longueur minimale du trait qui porte une face de mur
-SOLID_WINDOW = 0.6  # m, demi-fenêtre de lecture du trait le long de la façade
+TOL = 0.015  # m, pairing of a printed sequence with an edge
+EXTENT_TOL = 0.05  # m, cross-check with the extract_plan.py envelope
+SUPPORT_MIN = 0.4  # fraction of an edge that must exist in ink
+PROBE_STEP = 0.5  # m, sampling step along an edge
+PROBE_MARGIN = 0.15  # m, distance from the ends before probing an edge
+JUMP_OFFSETS = (0.15, 0.30, 0.45)  # m, measuring distances around a cut
+INK_FLOOR = 0.15  # an edge must hold some wall in ink, openings aside
+FACE_TOL_OUT, FACE_TOL_IN = 0.12, 0.08  # m, maximum gap from the face to the façade line
+WALL_BAND_MIN, WALL_BAND_MAX = 0.15, 0.75  # m, thickness of a wall band
+OUT_MARGIN = 0.15  # m, the probe starts just outside the façade line
+IN_MARGIN = 0.55  # m, and crosses the possible wall thickness
+DEPTH_MEASURE_TOL = 0.05  # m, accepted gap between sweep and depth
+THICKNESS_MIN, THICKNESS_MAX = 0.12, 0.45  # m, cm dimension a thickness carries
+SOLID_MIN = 0.45  # m, minimum length of the stroke carrying a wall face
+SOLID_WINDOW = 0.6  # m, half-window for reading the stroke along the façade
 FIXTURE = Path(__file__).resolve().parent.parent / "tests" / "fixtures" / "plan-outline"
 
 AXIS_INDEX = {"x": 0, "z": 1}
@@ -91,7 +89,7 @@ def cumulative(chain, extent, backward):
 
 
 def runs_of(chain, extent, backward):
-    """Toutes les suites contiguës imprimées de la chaîne, une fois calée."""
+    """Every printed contiguous sequence of the chain, once fitted."""
     values = cumulative(chain, extent, backward)
     runs = []
     for start in range(len(values) - 1):
@@ -119,16 +117,16 @@ def interior_cuts(chain, extent):
 
 
 def build_axes(registry, pages, plan_envelope=None):
-    """Étendues par axe, chaînes ancrées, découpes, suites, chaînes écartées."""
+    """Extents per axis, anchored chains, cuts, sequences, discarded chains."""
     selected = [page for page in registry["pages"] if pages is None or page["index"] in pages]
     if not selected:
-        raise SystemExit(f"aucune page {pages} dans le registre")
+        raise SystemExit(f"no page {pages} in the registry")
     chains = [chain for page in selected for chain in page["chains"]]
     axes = {}
     for axis, name in (("x", "horizontal"), ("z", "vertical")):
         closed = [chain for chain in chains if chain["axis"] == name and chain["closed"]]
         if not closed:
-            raise SystemExit(f"axe {axis} : aucune chaîne fermée, contour non dérivable")
+            raise SystemExit(f"axis {axis}: no closed chain, outline cannot be derived")
         totals = {}
         for chain in closed:
             totals.setdefault(round(chain["sum"], 2), []).append(chain)
@@ -139,8 +137,8 @@ def build_axes(registry, pages, plan_envelope=None):
                 "chain": chain_ref(chain),
                 "sum": round(chain["sum"], 4),
                 "reason": (
-                    f"total {chain['sum']:.2f} m ne vaut pas l'étendue {extent:.2f} m : "
-                    "chaîne écartée (elle décrit l'intérieur, pas l'enveloppe)"
+                    f"total {chain['sum']:.2f} m does not equal the extent {extent:.2f} m: "
+                    "chain discarded (it describes the interior, not the envelope)"
                 ),
             }
             for value, group in sorted(totals.items())
@@ -153,18 +151,18 @@ def build_axes(registry, pages, plan_envelope=None):
             cross = {"envelope": expected, "ok": abs(expected - extent) <= EXTENT_TOL}
             if not cross["ok"]:
                 raise SystemExit(
-                    f"axe {axis} : étendue {extent:.2f} m contredite par l'enveloppe "
-                    f"extraite {expected:.2f} m"
+                    f"axis {axis}: extent {extent:.2f} m contradicted by the extracted "
+                    f"envelope {expected:.2f} m"
                 )
         if len(running) < 2 and not (cross and cross["ok"]):
             raise SystemExit(
-                f"axe {axis} : une seule chaîne porte {extent:.2f} m sans recoupement "
-                "(aucune seconde chaîne d'accord, aucun --plan) : étendue non prouvée"
+                f"axis {axis}: a single chain carries {extent:.2f} m without a cross-check "
+                "(no second agreeing chain, no --plan): extent not proven"
             )
         anchored = sorted(running, key=lambda chain: (chain["page"], chain["perpendicular"]))
         for chain in anchored:
             if chain_ppm(chain) is None:
-                raise SystemExit("chaîne ancrée sans échelle imprimée")
+                raise SystemExit("anchored chain without a printed scale")
         cuts, seen = [], set()
         for chain in anchored:
             for cut in interior_cuts(chain, extent):
@@ -190,7 +188,7 @@ def build_axes(registry, pages, plan_envelope=None):
 
 
 def frame_of(axes):
-    """Origines pt de chaque axe et échelle, par la première chaîne ancrée."""
+    """Point origins of each axis and scale, from the first anchored chain."""
     origins, ppm = {}, None
     for axis in ("x", "z"):
         chain = axes[axis]["anchored"][0]
@@ -208,7 +206,7 @@ def run_matching(axes, axis, low, high):
 
 
 def thickness_candidates(registry, pages, origins, ppm):
-    """Cotes en centimètres du registre, positionnées dans le repère du monde."""
+    """Centimetre dimensions of the registry, positioned in the world frame."""
     found = []
     for page in registry["pages"]:
         if pages is not None and page["index"] not in pages:
@@ -233,16 +231,16 @@ def thickness_candidates(registry, pages, origins, ppm):
 
 
 # ---------------------------------------------------------------------------
-# Candidats : rectangle, encoche de coin, encoche de façade
+# Candidates: rectangle, corner notch, façade notch
 # ---------------------------------------------------------------------------
 
 
 def edges_of(vertices, roles=None):
-    """Arêtes d'un polygone rectiligne fermé, avec leur normale rentrante.
+    """Edges of a closed rectilinear polygon, with their inward normal.
 
-    Les sommets sont dans l'ordre de parcours (nord puis est puis sud…) ; la
-    normale rentrante est (−dz, +dx) pour ce sens. `roles` marque les flancs
-    d'encoche, dont la profondeur sera comblée à la fermeture.
+    Vertices are in traversal order (north then east then south…); the inward
+    normal is (−dz, +dx) for that direction. `roles` marks the notch flanks, whose
+    depth will be filled at closure.
     """
     edges = []
     for index, start in enumerate(vertices):
@@ -280,7 +278,7 @@ def rectangle_candidate(axes):
 
 
 def corner_candidate(axes, x_cut, z_cut, dx_minus, dz_minus):
-    """Encoche de coin : le quadrant x≺x* et z≺z* est sorti du contour."""
+    """Corner notch: the quadrant x≺x* and z≺z* is taken out of the outline."""
     W, D = axes["x"]["extent"], axes["z"]["extent"]
     x, z = round(x_cut, 4), round(z_cut, 4)
     if not (TOL < x < W - TOL and TOL < z < D - TOL):
@@ -303,7 +301,7 @@ def corner_candidate(axes, x_cut, z_cut, dx_minus, dz_minus):
 
 
 def facade_candidate(axes, side, a, b, depth, source):
-    """Encoche de façade : [a, b] sorti du contour, profondeur vers l'intérieur."""
+    """Façade notch: [a, b] taken out of the outline, depth towards the inside."""
     W, D = axes["x"]["extent"], axes["z"]["extent"]
     a, b, depth = round(a, 4), round(b, 4), round(depth, 4)
     along_limit = W if side in ("north", "south") else D
@@ -347,36 +345,36 @@ def candidate_id(candidate):
 
 
 def outline_of(vertices):
-    """Sommet suivants, arrondis au centimètre du plan."""
+    """Following vertices, rounded to the plan's centimetre."""
     return [[round(point[0], 2), round(point[1], 2)] for point in vertices]
 
 
 def load_outline(path):
-    """Contour dérivé, lu depuis la sortie de ce script.
+    """Derived outline, read from this script's output.
 
-    Un contour ambigu n'est pas un contour : le fichier doit en porter un
-    seul, sinon la couche suivante refuse de construire sur un jugement que
-    le script n'a pas pris. C'est la règle du dépôt — un script mesure, il ne
-    décide pas — appliquée à la frontière entre la couche 3 et la couche 2.
+    An ambiguous outline is not an outline: the file must carry a single one,
+    otherwise the next layer refuses to build on a judgement the script did not
+    make. It is the repository rule — a script measures, it does not decide —
+    applied at the boundary between layer 3 and layer 2.
     """
     payload = json.loads(Path(path).read_text(encoding="utf-8"))
     outline = payload.get("outline")
     if not outline:
         pending = payload.get("candidates") or []
         raise SystemExit(
-            f"{path} : aucun contour unique — {len(pending)} candidat(s) restent à "
-            "trancher, la construction ne commence pas sur un contour deviné"
+            f"{path}: no unique outline — {len(pending)} candidate(s) remain to be "
+            "decided, construction does not start on a guessed outline"
         )
     return [[round(float(point[0]), 4), round(float(point[1]), 4)] for point in outline]
 
 
 # ---------------------------------------------------------------------------
-# Fermeture : suites imprimées ou profondeur comblée
+# Closure: printed sequences or filled depth
 # ---------------------------------------------------------------------------
 
 
 def run_depths(axes, side):
-    """Profondeurs imprimées : suites de l'axe de profondeur, calées au nu."""
+    """Printed depths: sequences of the depth axis, fitted to the façade line."""
     depth_axis = "z" if side in ("north", "south") else "x"
     extent = axes[depth_axis]["extent"]
     anchor = extent if side in ("south", "east") else 0.0
@@ -401,7 +399,7 @@ def run_depths(axes, side):
 
 
 def thickness_depths(axes, thicknesses, side, a, b):
-    """Épaisseurs lues en centimètres, proches de l'encoche et orientées comme elle."""
+    """Thicknesses read in centimetres, close to the notch and oriented like it."""
     depth_axis = "z" if side in ("north", "south") else "x"
     along_axis = "x" if side in ("north", "south") else "z"
     D, W = axes["z"]["extent"], axes["x"]["extent"]
@@ -421,7 +419,7 @@ def thickness_depths(axes, thicknesses, side, a, b):
 
 
 def close_candidate(candidate, axes, thicknesses):
-    """Fermeture : chaque arête imprimée ou profondeur comblée."""
+    """Closure: every edge printed or depth filled."""
     proof = []
     for item in candidate["edges"]:
         runs = run_matching(axes, item["axis"], item["low"], item["high"])
@@ -463,8 +461,8 @@ def close_candidate(candidate, axes, thicknesses):
                         "edge": f"{item['axis']}@{item['at']:.2f}[{item['low']:.2f},{item['high']:.2f}]",
                         "class": "derived",
                         "note": (
-                            f"profondeur comblée par l'épaisseur {source['value']:.2f} m "
-                            f"lue en centimètres (« {source['text']} »)"
+                            f"depth filled by the thickness {source['value']:.2f} m "
+                            f"read in centimetres (« {source['text']} »)"
                         ),
                         "length": candidate["depth"],
                     }
@@ -472,32 +470,31 @@ def close_candidate(candidate, axes, thicknesses):
                 continue
             return None, {
                 "reason": (
-                    f"arête {item['axis']}@{item['at']:.2f} [{item['low']:.2f},{item['high']:.2f}] : "
-                    "profondeur sans cote ni épaisseur"
+                    f"edge {item['axis']}@{item['at']:.2f} [{item['low']:.2f},{item['high']:.2f}]: "
+                    "depth with neither dimension nor thickness"
                 )
             }
         return None, {
             "reason": (
-                f"arête {item['axis']}@{item['at']:.2f} [{item['low']:.2f},{item['high']:.2f}] : "
-                "aucune suite imprimée ne la reproduit"
+                f"edge {item['axis']}@{item['at']:.2f} [{item['low']:.2f},{item['high']:.2f}]: "
+                "no printed sequence reproduces it"
             )
         }
     return {"edges": proof}, None
 
 
 # ---------------------------------------------------------------------------
-# Encre : bandes de murs de la page rendue
+# Ink: wall bands of the rendered page
 # ---------------------------------------------------------------------------
 
 
 class Ink:
-    """Bandes sombres de la page rendue, dans le repère du monde.
+    """Dark bands of the rendered page, in the world frame.
 
-    Un mur extérieur se dessine en traits de face plus du hachurage ; en
-    fusionnant les runs proches (0,26 m), il devient une bande de l'épaisseur
-    du mur, posée au nu de la façade et tournée vers l'intérieur du contour.
-    Un trait de cote, un seuil ou un vantail ne mesurent que quelques
-    centimètres : en dessous de 15 cm, une bande n'est pas un mur.
+    An exterior wall is drawn as face strokes plus hatching; by merging nearby runs
+    (0.26 m), it becomes a band as thick as the wall, set against the façade line
+    and facing the inside of the outline. A dimension stroke, a threshold or a leaf
+    only measure a few centimetres: below 15 cm, a band is not a wall.
     """
 
     def __init__(self, pdf, page_index, origins, ppm, zoom=4.0, threshold=140, merge=0.26):
@@ -525,7 +522,7 @@ class Ink:
         )
 
     def bands(self, ax, az, bx, bz, step_m=0.005, merge=None):
-        """Runs sombres fusionnés, en mètres depuis le début du segment."""
+        """Merged dark runs, in metres from the start of the segment."""
         dx, dz = bx - ax, bz - az
         length = (dx * dx + dz * dz) ** 0.5
         if length < 1e-9:
@@ -553,18 +550,17 @@ class Ink:
         return merged
 
     def solid(self, x, z, along):
-        """Longueur du trait continu qui passe par (x, z), le long de `along`.
+        """Length of the continuous stroke passing through (x, z), along `along`.
 
-        Une face de mur est un trait **plein**. Un trait mixte — limite de
-        hauteur, arête de plancher haut, débord de toiture — est dessiné en
-        tirets de quelques centimètres : le prendre pour une face pose une
-        façade là où le plan n'en porte pas. Sur le plan B, la façade sud est
-        tracée en tirets au droit de l'encoche d'entrée, et la sonde
-        perpendiculaire y lisait un mur continu.
+        A wall face is a **solid** stroke. A dash-dot line — height limit, upper
+        floor edge, roof overhang — is drawn in dashes of a few centimetres: taking
+        it for a face puts a façade where the plan carries none. On plan B, the
+        south façade is drawn dashed in line with the entrance notch, and the
+        perpendicular probe read a continuous wall there.
 
-        La sonde essaie le point exact puis deux écarts d'un pixel de chaque
-        côté : le trait d'une face tombe rarement pile sur la coordonnée
-        déduite des cotes.
+        The probe tries the exact point then two one-pixel offsets on each side: a
+        face stroke rarely falls exactly on the coordinate deduced from the
+        dimensions.
         """
         for offset in (0.0, 0.02, -0.02, 0.04, -0.04):
             if along == "x":
@@ -579,11 +575,11 @@ class Ink:
         return 0.0
 
     def wall_at(self, x, z, inward):
-        """Mur dont la face extérieure est posée au nu (x, z), vers l'intérieur.
+        """Wall whose outer face is set at the façade line (x, z), facing inwards.
 
-        Renvoie (écart de la face au nu, épaisseur lue) si un mur s'y
-        trouve, None sinon. Un mur n'est reconnu que comme une bande : face
-        au nu, **trait plein**, et épaisseur de mur à la fusion des traits.
+        Returns (gap from the face to the façade line, thickness read) if a wall is
+        there, None otherwise. A wall is only recognised as a band: face on the line,
+        **solid stroke**, and wall thickness once strokes are merged.
         """
         length = (inward[0] ** 2 + inward[1] ** 2) ** 0.5
         if length < 1e-9:
@@ -605,7 +601,7 @@ class Ink:
         return None
 
     def side_probe(self, side, q, nu, extent):
-        """Présence du mur au nu `nu`, côté `side`, à la position q."""
+        """Presence of the wall at façade line `nu`, side `side`, at position q."""
         if side in ("north", "south"):
             inward = (0.0, 1.0 if side == "north" else -1.0)
             return self.wall_at(q, nu, inward)
@@ -613,14 +609,14 @@ class Ink:
         return self.wall_at(nu, q, inward)
 
     def edge_support(self, item, credits=None):
-        """Fraction d'une arête où un mur a sa face au nu.
+        """Fraction of an edge where a wall has its face on the façade line.
 
-        Retourne (encre, baies) : la fraction de sondes où un mur tient
-        l'arête, et la fraction des sondes restantes qu'une baie imprimée
-        explique — une fenêtre ou une porte interrompt le trait de face, et
-        le plan le dit : segment de chaîne ouverte, ou cote de baie posée
-        contre le mur. L'arête doit tenir un peu de mur par elle-même : une
-        baie explique un manque, elle ne remplace pas un mur.
+        Returns (ink, openings): the fraction of probes where a wall holds the
+        edge, and the fraction of the remaining probes a printed opening explains —
+        a window or a door interrupts the face stroke, and the plan says so: an
+        open chain segment, or an opening dimension set against the wall. The edge
+        must hold some wall by itself: an opening explains a gap, it does not
+        replace a wall.
         """
         hits, credited, total, found = 0, 0, 0, []
         span = item["high"] - item["low"]
@@ -649,17 +645,16 @@ class Ink:
 
 
 def classify_cuts(axes, ink):
-    """Découpes classées par l'encre : épaulement là où la présence saute.
+    """Cuts classified by the ink: a shoulder where presence jumps.
 
-    Pour chaque découpe candidate et chaque façade la contenant, la présence
-    du mur est mesurée de part et d'autre, à trois distances : une ligne de
-    sonde tombe parfois entre deux hachures d'un même mur, et une lecture
-    unique ferait d'une absence de lecture une absence de mur — le vote de
-    majorité par suite de sondes est ce qui distingue les deux. Une découpe
-    n'est retenue que si la présence saute : c'est un épaulement du
-    contour, et la direction de la saute prescrit le quadrant de l'encoche
-    ou son encoche de façade — le sens de lecture de la chaîne n'est plus
-    une inconnue.
+    For each candidate cut and each façade containing it, the wall's presence is
+    measured on either side, at three distances: a probe line sometimes falls
+    between two hatch strokes of the same wall, and a single reading would turn an
+    absence of reading into an absence of wall — the majority vote per series of
+    probes is what tells the two apart. A cut is only kept if presence jumps: it is
+    a shoulder of the outline, and the direction of the jump prescribes the
+    notch's quadrant or its façade notch — the chain's reading direction is no
+    longer an unknown.
     """
     refusals = []
     jumps = {side: [] for side in SIDES}
@@ -691,8 +686,8 @@ def classify_cuts(axes, ink):
             if not before and not after:
                 refusals.append(
                     {
-                        "candidate": f"découpe {value:.2f} sur {side}",
-                        "reason": "aucun mur de part et d'autre : ni épaulement ni façade",
+                        "candidate": f"cut {value:.2f} on {side}",
+                        "reason": "no wall on either side: neither shoulder nor façade",
                     }
                 )
                 continue
@@ -706,12 +701,11 @@ def classify_cuts(axes, ink):
 
 
 def merged_jumps(jumps, tolerance=0.06):
-    """Épaulements proches fusionnés : plusieurs chaînes mesurent le même.
+    """Nearby shoulders merged: several chains measure the same one.
 
-    Deux chaînes lisent souvent le même épaulement à quelques centimètres
-    près, dans des sens de lecture opposés ; leurs découpe restent des
-    valeurs distinctes du registre. Une saute de présence par côté et par
-    direction est gardée une seule, à la médiane des valeurs qui la portent.
+    Two chains often read the same shoulder a few centimetres apart, in opposite
+    reading directions; their cuts stay distinct registry values. One presence jump
+    per side and per direction is kept, at the median of the values carrying it.
     """
     merged = {}
     for side, entries in jumps.items():
@@ -736,14 +730,13 @@ def merged_jumps(jumps, tolerance=0.06):
 
 
 def corner_from_jumps(x_jump, z_jump):
-    """Quadrant d'encoche prescrit par deux sautes cohérentes.
+    """Notch quadrant prescribed by two consistent jumps.
 
-    La saute x dit de quel côté l'absence s'étend (« after » : le mur vit
-    au-delà de la découpe, l'absence est en-deçà) ; la saute z, pareil. Un
-    coin n'existe que si les deux sautes se répondent : l'absence basée à
-    la façade sud coupe celle-ci, et la saute doit donc s'y être fait voir
-    — une saute z mesurée côté est, cachée derrière une fenêtre, ne dit
-    rien du coin sud-ouest.
+    The x jump says which side the absence extends to (« after »: the wall lives
+    beyond the cut, the absence is before it); the z jump, likewise. A corner only
+    exists if the two jumps answer each other: the absence based on the south
+    façade cuts it, so the jump must have shown there — a z jump measured on the
+    east side, hidden behind a window, says nothing about the south-west corner.
     """
     if x_jump["presence"] == "after":
         absent_x, side_x = "min", "min"
@@ -753,21 +746,21 @@ def corner_from_jumps(x_jump, z_jump):
         absent_z, side_z = "min", "min"
     else:
         absent_z, side_z = "max", "max"
-    # l'absence de la saute x doit joindre la façade mesurée par la saute z
+    # the x jump's absence must join the façade measured by the z jump
     if side_z == "max" and not (absent_z == "max"):
         pass
     return absent_x, absent_z, side_x, side_z
 
 
 QUADRANT_KEYS = {
-    # (absent_x, absent_z) -> drapeaux (dx_minus, dz_minus) du constructeur
+    # (absent_x, absent_z) -> builder flags (dx_minus, dz_minus)
     ("min", "min"): (False, False),
     ("max", "min"): (False, True),
     ("min", "max"): (True, False),
     ("max", "max"): (True, True),
 }
 JUMP_SIDES = {
-    # (absent_z, absent_x) -> la façade où chaque saute doit s'être montrée
+    # (absent_z, absent_x) -> the façade where each jump must have shown
     ("max", "min"): ("south", "west"),
     ("min", "min"): ("north", "west"),
     ("max", "max"): ("south", "east"),
@@ -776,14 +769,13 @@ JUMP_SIDES = {
 
 
 def enumerate_from_jumps(axes, jumps, thicknesses):
-    """Contours prescrits par les épaulements validés.
+    """Outlines prescribed by the validated shoulders.
 
-    Une encoche de coin vient d'une saute x et d'une saute z **répondantes** :
-    l'absence qu'elles mesurent doit joindre la façade où l'autre saute s'est
-    montrée — le coin (x<x*, z>z*) coupe les façades sud et ouest, et rien
-    d'autre. Une encoche de façade vient de deux sautes d'une même façade
-    avec l'absence entre elles. Le rectangle n'est retenu que si aucune
-    saute n'existe nulle part.
+    A corner notch comes from an x jump and a z jump that **answer** each other:
+    the absence they measure must join the façade where the other jump showed —
+    the corner (x<x*, z>z*) cuts the south and west façades, and nothing else. A
+    façade notch comes from two jumps on the same façade with the absence between
+    them. The rectangle is only kept if no jump exists anywhere.
     """
     jumps = merged_jumps(jumps)
     candidates = []
@@ -815,7 +807,7 @@ def enumerate_from_jumps(axes, jumps, thicknesses):
         ordered = sorted(jumps[side], key=lambda item: item["at"])
         for index in range(len(ordered) - 1):
             first, second = ordered[index], ordered[index + 1]
-            # l'absence doit être entre les deux épaulements
+            # the absence must lie between the two shoulders
             if first["presence"] != "before" or second["presence"] != "after":
                 continue
             a, b = first["at"], second["at"]
@@ -836,7 +828,7 @@ def enumerate_from_jumps(axes, jumps, thicknesses):
 
 
 def enumerate_all(axes, thicknesses):
-    """Sans page rendue : rectangle, quatre quadrants et profondeurs comblées."""
+    """Without a rendered page: rectangle, four quadrants and filled depths."""
     candidates = [rectangle_candidate(axes)]
     for x_cut in axes["x"]["cuts"]:
         for z_cut in axes["z"]["cuts"]:
@@ -868,12 +860,12 @@ def enumerate_all(axes, thicknesses):
 
 
 def measured_depth(ink, candidate):
-    """Balayage perpendiculaire au milieu de l'encoche : où l'enveloppe saute.
+    """Perpendicular sweep at the middle of the notch: where the envelope jumps.
 
-    La sonde part juste au-dehors du nu de façade et traverse vers
-    l'intérieur sur 75 cm. La première bande épaisse comme un mur est
-    l'enveloppe : la distance de sa face au nu est la profondeur réelle de
-    l'encoche. Seuils et traits de cote, trop fins, ne l'interrompent pas.
+    The probe starts just outside the façade line and crosses inwards over 75 cm.
+    The first band as thick as a wall is the envelope: the distance from its face
+    to the façade line is the notch's real depth. Thresholds and dimension strokes,
+    too thin, do not interrupt it.
     """
     notch = candidate["notch"]
     side = candidate["side"]
@@ -909,12 +901,12 @@ def measured_depth(ink, candidate):
 
 
 def opening_credits(axes, registry, pages, origins, ppm):
-    """Baies imprimées, par axe : chaînes ouvertes et cotes de baie.
+    """Printed openings, per axis: open chains and opening dimensions.
 
-    Le plan interrompt le trait de face d'une façade à chaque baie, et il
-    l'imprime : segment de chaîne « 1.40/1.05 », cote isolée « 0.90/2.15 »
-    posée contre le mur. Ces intervalles créditent l'absence de trait à
-    l'encre — sans eux, une fenêblinde une façade la briserait.
+    The plan interrupts a façade's face stroke at every opening, and it prints it:
+    a chain segment « 1.40/1.05 », an isolated dimension « 0.90/2.15 » set against
+    the wall. These intervals credit the absence of stroke in ink — without them, a
+    window would break a façade.
     """
     credits = {"x": [], "z": []}
     for axis in ("x", "z"):
@@ -949,7 +941,7 @@ def opening_credits(axes, registry, pages, origins, ppm):
 
 
 # ---------------------------------------------------------------------------
-# Déroulement
+# Run
 # ---------------------------------------------------------------------------
 
 
@@ -999,9 +991,9 @@ def derive(registry, pages, plan_envelope=None, pdf=None):
                         {
                             "candidate": candidate_id(entry["candidate"]),
                             "reason": (
-                                f"arête {item['axis']}@{item['at']:.2f} "
-                                f"[{item['low']:.2f},{item['high']:.2f}] sans mur à l'encre "
-                                f"(mur {fractions['ink']:.0%}, baies {fractions['openings']:.0%})"
+                                f"edge {item['axis']}@{item['at']:.2f} "
+                                f"[{item['low']:.2f},{item['high']:.2f}] without a wall in ink "
+                                f"(wall {fractions['ink']:.0%}, openings {fractions['openings']:.0%})"
                             ),
                         }
                     )
@@ -1018,11 +1010,11 @@ def derive(registry, pages, plan_envelope=None, pdf=None):
                         {
                             "candidate": candidate_id(entry["candidate"]),
                             "reason": (
-                                "balayage d'encre sans enveloppe sous l'encoche"
+                                "ink sweep without an envelope under the notch"
                                 if measure is None
                                 else (
-                                    f"profondeur {entry['candidate']['depth']:.2f} m contredite "
-                                    f"par le balayage d'encre ({measure:.2f} m)"
+                                    f"depth {entry['candidate']['depth']:.2f} m contradicted "
+                                    f"by the ink sweep ({measure:.2f} m)"
                                 )
                             ),
                         }
@@ -1042,13 +1034,12 @@ def derive(registry, pages, plan_envelope=None, pdf=None):
 
 
 def self_test():
-    """Non-régression des cinq couches sur des fixtures synthétiques.
+    """Non-regression of the five layers on synthetic fixtures.
 
-    Les fixtures rejouent deux motifs relevés sur de vrais plans — l'encoche
-    de coin du plan A et l'encoche de façade du plan B — sur une emprise
-    synthétique : aucune donnée réelle n'entre dans le dépôt. Le PDF de la
-    couche encre est dessiné à la volée, pour que le test couvre aussi le
-    rejet d'un trait mixte.
+    The fixtures replay two patterns found on real plans — plan A's corner notch
+    and plan B's façade notch — on a synthetic footprint: no real data enters the
+    repository. The ink layer's PDF is drawn on the fly, so that the test also
+    covers the rejection of a dash-dot line.
     """
     failures = []
     failures += _self_test_corner()
@@ -1057,9 +1048,9 @@ def self_test():
     failures += _self_test_ink()
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print("contour dérivé : auto-test réussi")
+    print("derived outline: self-test passed")
     return 0
 
 
@@ -1068,29 +1059,29 @@ def _fixture(name):
 
 
 def _self_test_corner():
-    """Encoche de coin : étendues recoupées, chaîne écartée, contour ambigu."""
+    """Corner notch: cross-checked extents, discarded chain, ambiguous outline."""
     failures = []
     registry = _fixture("registry-corner.json")
     result = derive(registry, [1])
     axes = result["axes"]
     if not close(axes["x"]["extent"], 10.0) or not close(axes["z"]["extent"], 8.0):
         failures.append(
-            f"étendues {axes['x']['extent']:.2f} x {axes['z']['extent']:.2f} au lieu de 10.00 x 8.00"
+            f"extents {axes['x']['extent']:.2f} x {axes['z']['extent']:.2f} instead of 10.00 x 8.00"
         )
     discarded = axes["x"]["discarded"] + axes["z"]["discarded"]
     if len(discarded) != 1 or not close(discarded[0]["sum"], 7.6):
-        failures.append(f"chaîne écartée {discarded} au lieu de la seule chaîne à 7,60 m")
+        failures.append(f"discarded chain {discarded} instead of the single 7.60 m chain")
     if not result["ambiguous"]:
-        failures.append("sans page rendue, quatre quadrants restent possibles : le script a tranché")
+        failures.append("without a rendered page, four quadrants stay possible: the script decided")
     wanted = [[0.0, 0.0], [10.0, 0.0], [10.0, 8.0], [4.0, 8.0], [4.0, 5.0], [0.0, 5.0]]
     outlines = [outline_of(entry["candidate"]["vertices"]) for entry in result["candidates"]]
     if wanted not in outlines:
-        failures.append(f"le quadrant (x<4, z>5) manque aux {len(outlines)} contour(s) fermé(s)")
+        failures.append(f"the quadrant (x<4, z>5) is missing from the {len(outlines)} closed outline(s)")
     return failures
 
 
 def _self_test_facade():
-    """Encoche de façade : profondeur déduite d'une cote en centimètres."""
+    """Façade notch: depth deduced from a dimension in centimetres."""
     failures = []
     registry = _fixture("registry-facade.json")
     result = derive(registry, [1])
@@ -1102,44 +1093,44 @@ def _self_test_facade():
     ]
     if not found:
         failures.append(
-            f"l'encoche de façade 3,00..5,00 profonde de 0,35 m manque aux "
-            f"{len(result['candidates'])} contour(s) fermé(s)"
+            f"the 3.00..5.00 façade notch 0.35 m deep is missing from the "
+            f"{len(result['candidates'])} closed outline(s)"
         )
         return failures
     entry = found[0]
     if entry["candidate"]["depthSource"] != "thickness":
-        failures.append(f"profondeur attribuée à {entry['candidate']['depthSource']}")
+        failures.append(f"depth attributed to {entry['candidate']['depthSource']}")
     depth_edges = [item for item in entry["proof"]["edges"] if item["class"] == "derived"]
     if len(depth_edges) != 2:
         failures.append(
-            f"{len(depth_edges)} arête(s) dérivée(s) au lieu des deux flancs de l'encoche"
+            f"{len(depth_edges)} derived edge(s) instead of the notch's two flanks"
         )
     if any(item["class"] == "printed" for item in entry["proof"]["edges"] if "profondeur" in item.get("note", "")):
-        failures.append("une profondeur non cotée a été déclarée imprimée")
+        failures.append("an undimensioned depth was declared printed")
     return failures
 
 
 def _self_test_refusals():
-    """Une étendue non recoupée, ou contredite par l'enveloppe, ne se dérive pas."""
+    """An extent that is not cross-checked, or contradicted by the envelope, is not derived."""
     failures = []
     registry = _fixture("registry-unproven.json")
     try:
         derive(registry, [1])
-        failures.append("une étendue portée par une seule chaîne a été acceptée")
+        failures.append("an extent carried by a single chain was accepted")
     except SystemExit as error:
-        if "non prouvée" not in str(error):
-            failures.append(f"refus inattendu sur l'étendue non recoupée : {error}")
+        if "not proven" not in str(error):
+            failures.append(f"unexpected refusal on the non-cross-checked extent: {error}")
     try:
         derive(_fixture("registry-corner.json"), [1], plan_envelope=[10.0, 9.0])
-        failures.append("une étendue contredite par l'enveloppe extraite a été acceptée")
+        failures.append("an extent contradicted by the extracted envelope was accepted")
     except SystemExit as error:
-        if "contredite" not in str(error):
-            failures.append(f"refus inattendu sur l'étendue contredite : {error}")
+        if "contradicted" not in str(error):
+            failures.append(f"unexpected refusal on the contradicted extent: {error}")
     return failures
 
 
 def _self_test_ink():
-    """Couche encre : le contour se dérive du dessin, un trait mixte ne fait pas un mur."""
+    """Ink layer: the outline is derived from the drawing, a dash-dot line does not make a wall."""
     import tempfile
 
     import pymupdf
@@ -1168,9 +1159,9 @@ def _self_test_ink():
             point(start[0] + ux * thickness, start[1] + uz * thickness),
         ]
         page.draw_polyline(corners + [corners[0]], color=None, fill=(0.0, 0.0, 0.0), width=0)
-    # Un trait mixte au nu de la façade sud, là où le contour n'a pas de mur,
-    # doublé d'un trait plein juste derrière : sans le rejet du mixte, la sonde
-    # perpendiculaire y lirait un mur de 20 cm.
+    # A dash-dot line on the south façade line, where the outline has no wall,
+    # doubled by a solid stroke just behind: without rejecting the dash-dot, the
+    # perpendicular probe would read a 20 cm wall there.
     for step in range(0, 40):
         low = 0.0 + step * 0.10
         page.draw_line(point(low, 8.0), point(low + 0.06, 8.0), color=(0.0, 0.0, 0.0), width=1)
@@ -1181,17 +1172,17 @@ def _self_test_ink():
     result = derive(_fixture("registry-corner.json"), [1], None, path)
     if result["ambiguous"]:
         failures.append(
-            f"{len(result['candidates'])} contour(s) retenu(s) avec la page rendue au lieu d'un seul"
+            f"{len(result['candidates'])} outline(s) kept with the rendered page instead of one"
         )
         return failures
     produced = outline_of(result["candidates"][0]["candidate"]["vertices"])
     if produced != outline:
-        failures.append(f"contour dérivé {produced} au lieu de {outline}")
+        failures.append(f"derived outline {produced} instead of {outline}")
     ink = Ink(path, 1, result["origins"], 40.0)
     if ink.wall_at(2.0, 8.0, (0.0, -1.0)) is not None:
-        failures.append("un trait mixte au nu de la façade a été lu comme un mur")
+        failures.append("a dash-dot line on the façade line was read as a wall")
     if ink.wall_at(2.0, 5.0, (0.0, -1.0)) is None:
-        failures.append("le mur de l'encoche, dessiné plein, n'a pas été lu")
+        failures.append("the notch wall, drawn solid, was not read")
     return failures
 
 
@@ -1201,10 +1192,10 @@ def main(argv):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("registry")
     parser.add_argument("out")
-    parser.add_argument("--pages", default=None, help="pages du registre, ex. 8 ou 13,14")
-    parser.add_argument("--pdf", default=None, help="page rendue pour le classifieur d'encre")
+    parser.add_argument("--pages", default=None, help="registry pages, e.g. 8 or 13,14")
+    parser.add_argument("--pdf", default=None, help="rendered page for the ink classifier")
     parser.add_argument(
-        "--plan", default=None, help="sortie d'extract_plan.py, pour recouper les étendues"
+        "--plan", default=None, help="output of extract_plan.py, to cross-check the extents"
     )
     args = parser.parse_args(argv[1:])
     pages = [int(value) for value in args.pages.split(",")] if args.pages else None
@@ -1242,29 +1233,29 @@ def main(argv):
     for axis in ("x", "z"):
         extent = axes[axis]["extent"]
         print(
-            f"axe {axis} : étendue {extent:.2f} m, "
-            f"{len(axes[axis]['anchored'])} chaîne(s) ancrée(s), "
-            f"{len(axes[axis]['cuts'])} découpe(s), {len(axes[axis]['runs'])} suite(s)"
+            f"axis {axis}: extent {extent:.2f} m, "
+            f"{len(axes[axis]['anchored'])} anchored chain(s), "
+            f"{len(axes[axis]['cuts'])} cut(s), {len(axes[axis]['runs'])} sequence(s)"
         )
         for item in axes[axis]["discarded"]:
-            print(f"  écartée : {item['reason']}")
+            print(f"  discarded: {item['reason']}")
     if unique:
         outline = payload["outline"]
-        print("contour dérivé : " + " ".join(f"[{x},{z}]" for x, z in outline))
+        print("derived outline: " + " ".join(f"[{x},{z}]" for x, z in outline))
         entry = result["candidates"][0]
         notch = entry["candidate"].get("notch")
         if notch and notch["kind"] == "facade":
             derived = next((item for item in payload["edges"] if item["class"] == "derived"), None)
-            claim = "DÉDUITE d'une épaisseur imprimée, pas lue" if derived else "imprimée"
+            claim = "DEDUCED from a printed thickness, not read" if derived else "printed"
             print(
-                f"  encoche {notch['a']:.2f}..{notch['b']:.2f} sur {notch['side']}, "
-                f"profondeur {entry['candidate']['depth']:.2f} m {claim}"
+                f"  notch {notch['a']:.2f}..{notch['b']:.2f} on {notch['side']}, "
+                f"depth {entry['candidate']['depth']:.2f} m {claim}"
             )
     else:
-        print(f"{len(result['candidates'])} contour(s) fermé(s) — reste à trancher :")
+        print(f"{len(result['candidates'])} closed outline(s) — still to decide:")
         for identifier in payload["candidates"]:
             print(f"  {identifier}")
-    print(f"{len(result['refusals'])} candidat(s) refusé(s) -> {args.out}")
+    print(f"{len(result['refusals'])} refused candidate(s) -> {args.out}")
     return 0 if unique else 1
 
 

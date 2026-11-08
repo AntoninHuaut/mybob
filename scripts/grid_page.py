@@ -1,14 +1,14 @@
-"""Rend une page d'un PDF de plans avec une grille en mètres.
+"""Renders a plan PDF page with a grid in metres.
 
-Pour lire une cote ou une épaisseur contre le modèle : le rendu porte des
-lignes verticales rouges chaque `pas` mètres en x, horizontales bleues en z,
-étiquetées par leur valeur. Le repère `(ox, oy, échelle)` donne le point
-affiché de la page tournée : point affiché = (ox + échelle * x, oy + échelle * z).
-Il se déduit des chaînes de cotes de la page — voir le skill mybob-plan-conversion.
+To read a dimension or a thickness against the model: the render carries red
+vertical lines every `step` metres in x, blue horizontal ones in z, labelled
+with their value. The frame `(ox, oy, scale)` gives the displayed point of the
+rotated page: displayed point = (ox + scale * x, oy + scale * z).
+It is deduced from the page's dimension chains — see the mybob-plan-conversion skill.
 
-Usage :
-  python scripts/grid_page.py <pdf> <page> <ox> <oy> <echelle> <sortie.png> <x0,z0,x1,z1> [pas] [dpi]
-  <page> : comptée à partir de 1, comme les autres scripts du dépôt.
+Usage:
+  python scripts/grid_page.py <pdf> <page> <ox> <oy> <scale> <output.png> <x0,z0,x1,z1> [step] [dpi]
+  <page>: counted from 1, like the other repository scripts.
   python scripts/grid_page.py --self-test
 """
 
@@ -22,7 +22,7 @@ BLUE = (0, 0, 255, 70)
 
 
 def page_identity(page):
-    """Premiers mots et titres en capitales — la page se repère par son texte."""
+    """First words and capitalised titles — a page is located by its text."""
     words = page.get_text().split()
     head = " ".join(words[:6])
     caps = [w for w in words if len(w) > 2 and w.isupper()][:6]
@@ -35,17 +35,17 @@ def render(pdf_path, page_number, ox, oy, scale, out, box, step, dpi):
     doc = pymupdf.open(pdf_path)
     index = int(page_number) - 1
     if not 0 <= index < doc.page_count:
-        sys.exit(f"page {page_number} inexistante : le document en a {doc.page_count}")
+        sys.exit(f"page {page_number} does not exist: the document has {doc.page_count}")
     page = doc[index]
-    print(f"page {page_number} : {page_identity(page)}")
+    print(f"page {page_number}: {page_identity(page)}")
 
     zoom = dpi / 72
     rect = pymupdf.Rect(
         ox + scale * x0, oy + scale * z0, ox + scale * x1, oy + scale * z1
     )
     pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), clip=rect)
-    # Base en RGB : un Draw(img, "RGBA") sur une base RGBA écraserait les
-    # pixels au lieu de blonder, et les alphas ne serviraient à rien.
+    # RGB base: a Draw(img, "RGBA") on an RGBA base would overwrite the
+    # pixels instead of blending, and the alphas would serve no purpose.
     img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
     draw = ImageDraw.Draw(img, "RGBA")
 
@@ -72,7 +72,7 @@ def render(pdf_path, page_number, ox, oy, scale, out, box, step, dpi):
 
 
 def self_test():
-    """Non-régression sur un PDF synthétique : aucune donnée réelle."""
+    """Non-regression on a synthetic PDF: no real data."""
     from pathlib import Path
     from tempfile import mkdtemp
 
@@ -87,19 +87,19 @@ def self_test():
     failures = []
     if abs(img.width - int(3 * 56.69 * 2)) > 1 or abs(img.height - int(2 * 56.69 * 2)) > 1:
         failures.append(f"taille {img.size}")
-    # Les lignes de grille translucides sur une page blanche rendent ces composés,
-    # dans la marge près d'un point : (255,0,0,70) et (0,0,255,70) sur du blanc.
+    # Translucent grid lines on a white page render these composites,
+    # in the margin near a point: (255,0,0,70) and (0,0,255,70) on white.
     red_line = any(r > 240 and 160 < g < 210 and 160 < b < 210 for r, g, b in colours)
     blue_line = any(160 < r < 210 and 160 < g < 210 and b > 240 for r, g, b in colours)
     if not red_line:
-        failures.append("aucune ligne de grille verticale (rouge)")
+        failures.append("no vertical grid line (red)")
     if not blue_line:
-        failures.append("aucune ligne de grille horizontale (bleue)")
+        failures.append("no horizontal grid line (blue)")
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print("grille de page : auto-test réussi")
+    print("page grid: self-test passed")
     return 0
 
 

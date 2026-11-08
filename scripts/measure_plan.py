@@ -1,20 +1,20 @@
-"""Mesure les bandes de murs d'un plan rendu, dans le repère du plan.
+"""Measures the wall bands of a rendered plan, in the plan's frame.
 
-Sert à confronter un modèle au plan source sans passer par la géométrie du
-modèle : on balaye le rendu et on lit les murs réels. Les deux traits d'une
-cloison hachurée sont fusionnés, et les traits fins (cotes, lignes de pente)
-sont écartés par un seuil d'épaisseur.
+Used to compare a model with the source plan without going through the model's
+geometry: the render is swept and the real walls are read. The two strokes of a
+hatched partition are merged, and thin strokes (dimensions, slope lines) are
+discarded by a thickness threshold.
 
-Usage :
-  python scripts/measure_plan.py <image> <origine_x_px> <origine_z_px> <px_par_metre> \
+Usage:
+  python scripts/measure_plan.py <image> <origin_x_px> <origin_z_px> <px_per_metre> \
       --z 1.0,2.0,3.0 --x 2.5,6.0 [--merge 0.26] [--min 0.05] [--max 0.55]
 
-L'origine est le coin nord-ouest extérieur du plan dans l'image. `--z` balaye
-des lignes horizontales (murs verticaux), `--x` des lignes verticales (murs
-horizontaux). Tout est rendu en mètres.
+The origin is the outer north-west corner of the plan in the image. `--z` sweeps
+horizontal lines (vertical walls), `--x` vertical lines (horizontal walls).
+Everything is returned in metres.
 
-Attention : une fenêtre interrompt le mur et fait apparaître le cadre à la place
-de la face. Mesurer à plusieurs endroits avant de conclure sur une épaisseur.
+Beware: a window interrupts the wall and shows its frame in place of the face.
+Measure in several places before concluding on a thickness.
 """
 import argparse
 import sys
@@ -55,14 +55,14 @@ def main(argv):
     parser.add_argument("image")
     parser.add_argument("origin_x", type=float)
     parser.add_argument("origin_z", type=float)
-    parser.add_argument("scale", type=float, help="pixels par mètre")
-    parser.add_argument("--z", default="", help="altitudes à balayer horizontalement")
-    parser.add_argument("--x", default="", help="abscisses à balayer verticalement")
+    parser.add_argument("scale", type=float, help="pixels per metre")
+    parser.add_argument("--z", default="", help="z values to sweep horizontally")
+    parser.add_argument("--x", default="", help="x values to sweep vertically")
     parser.add_argument("--merge", type=float, default=0.26)
     parser.add_argument("--min", type=float, default=0.05)
     parser.add_argument("--max", type=float, default=0.55)
-    parser.add_argument("--span", type=float, default=12.6, help="largeur balayée, en mètres")
-    parser.add_argument("--depth", type=float, default=8.7, help="hauteur balayée, en mètres")
+    parser.add_argument("--span", type=float, default=12.6, help="swept width, in metres")
+    parser.add_argument("--depth", type=float, default=8.7, help="swept height, in metres")
     args = parser.parse_args(argv[1:])
 
     pixels = Image.open(args.image).convert("L").load()

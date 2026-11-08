@@ -39,26 +39,26 @@ test('public build rejects the personal project even when it is not referenced b
       new URL('../public/projects/maison-atelier.json', import.meta.url),
       join(root, 'projects/maison-atelier.json'),
     );
-    await assert.rejects(verifyPublicBuild(root), /Fichier non prévu/);
+    await assert.rejects(verifyPublicBuild(root), /File not meant for publication/);
   }));
 
 test('public build rejects personal geometry embedded inside a JavaScript asset', () =>
   fixture(async (root) => {
     await writeFile(join(root, 'assets/app.js'), 'const walls = ["mur-ouest-garage"]');
-    await assert.rejects(verifyPublicBuild(root), /Données de maison personnelle/);
+    await assert.rejects(verifyPublicBuild(root), /Personal house data/);
   }));
 
 test('public build rejects original documents and missing demonstrations', () =>
   fixture(async (root) => {
     await writeFile(join(root, 'plans.pdf'), '%PDF-private');
-    await assert.rejects(verifyPublicBuild(root), /Fichier non prévu/);
+    await assert.rejects(verifyPublicBuild(root), /File not meant for publication/);
     await rm(join(root, 'plans.pdf'));
     await rm(join(root, 'projects/studio-demo.json'));
-    await assert.rejects(verifyPublicBuild(root), /démonstration absente/);
+    await assert.rejects(verifyPublicBuild(root), /demonstration missing/);
   }));
 
 test('public build rejects unapproved image assets', () =>
   fixture(async (root) => {
     await writeFile(join(root, 'assets/personal-photo.png'), 'image');
-    await assert.rejects(verifyPublicBuild(root), /Fichier non prévu/);
+    await assert.rejects(verifyPublicBuild(root), /File not meant for publication/);
   }));

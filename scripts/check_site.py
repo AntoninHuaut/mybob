@@ -1,52 +1,52 @@
-"""Contrôle du site : terrain et toiture contre le plan de masse.
+"""Site check: terrain and roof against the site plan.
 
-Les pièces ont leur porte (`check_plan_surfaces.py`) ; le terrain et le toit
-n'avaient rien. Un `site` écrit sans retour au document peut porter une
-parcelle fausse, un toit 28 cm trop haut ou une maison au mauvais endroit sans
-qu'aucune commande ne le dise.
+Rooms have their gate (`check_plan_surfaces.py`); terrain and roof had nothing. A
+`site` written without going back to the document may carry a wrong plot, a roof
+28 cm too high or a house in the wrong place without any command saying so.
 
-Cinq points de contrôle, chacun suppose le précédent :
+Five checkpoints, each assuming the previous one:
 
-1. **La parcelle.** Longueurs au lacet des côtés et surface du polygone,
-   comparées aux cotes de côté et au « Surface : » imprimés. Une cote peut
-   scinder un côté en morceaux : des libellés collinéaires somment.
-2. **L'implantation.** Distance de chaque côté au contour du niveau, et chaînes
-   de cotes dont la somme vaut un côté : chaque segment de chaîne doit retomber
-   sur le morcellement calculé du côté (recul, emprise, recul). C'est ce qui
-   attrape une parcelle bien dimensionnée mais mal placée : les longueurs
-   peuvent tomber juste avec la maison au mauvais endroit.
-3. **Les niveaux.** Égout et Faîtage moins RDC, comparés aux `y` des sommets de
-   toiture — tout est ramené au repère du niveau, pas à la référence du
-   cartouche : `Egout +3.01` moins `RDC +0.28` vaut 2.73, pas 3.01.
-4. **La topologie du toit.** Pignons et égouts retrouvés par façade depuis
-   `gables` et `faces`, avec leur débord. Un pignon flottant, ou une façade qui
-   porte à la fois pignon et égout, se voit ici.
-5. **Les surfaces de terrain.** Une seule est cotée : celle qui se rapporte à
-   une surface rectangulaire imprimée. Les autres sont signalées, pour qu'elles
-   restent déclarées dans `site.notes` et ne passent pas pour des cotes.
+1. **The plot.** Shoelace side lengths and polygon area, compared with the printed
+   side dimensions and « Surface : ». A dimension may split a side into pieces:
+   collinear labels add up.
+2. **The siting.** Distance from each side to the level outline, and dimension
+   chains whose sum equals a side: every chain segment must land on the computed
+   split of the side (setback, footprint, setback). That is what catches a plot
+   that is well dimensioned but misplaced: lengths may land right with the house
+   in the wrong place.
+3. **The levels.** Egout (eaves) and Faitage (ridge) minus RDC, compared with the
+   `y` of the roof vertices — everything is brought back to the level's frame, not
+   to the title block's reference: `Egout +3.01` minus `RDC +0.28` is 2.73, not
+   3.01.
+4. **The roof topology.** Gables and eaves found per façade from `gables` and
+   `faces`, with their overhang. A floating gable, or a façade carrying both a
+   gable and eaves, shows here.
+5. **The terrain surfaces.** Only one is dimensioned: the one matching a printed
+   rectangular area. The others are flagged, so that they stay declared in
+   `site.notes` and do not pass for dimensions.
 
-REFUSER : site absent, parcelle non fermée, cote de côté sans côté au modèle,
-égout ou faîtage au-delà de la tolérance, côté dont la chaîne de cotes ne
-retombe pas sur le morcellement calculé, contour du niveau qui sort de la
-parcelle, réserve de topologie.
+REFUSE: missing site, unclosed plot, side dimension without a side in the model,
+eaves or ridge beyond the tolerance, side whose dimension chain does not land on
+the computed split, level outline leaving the plot, topology issue.
 
-SIGNALER : côtés sans cote imprimée, reculs non cotés (ils se déduisent),
-surfaces de terrain non cotées, niveaux non imprimés, façades sans toiture.
+FLAG: sides without a printed dimension, undimensioned setbacks (they are
+deduced), undimensioned terrain surfaces, unprinted levels, façades without a roof.
 
-Pièges portés par le script :
+Traps carried by the script:
 
-- **L'égout du dessin n'est pas l'égout coté.** Le trait du dessin est le
-  dessus de la gouttière, la cote est la ligne d'eau : 15 à 20 cm d'écart à
-  cet endroit viennent du dessin, pas du modèle. Ne pas « corriger » le toit
-  pour le faire tomber sur le dessin : la comparaison se fait sur les cotes,
-  et l'écart dessin/cote est nommé quand il apparaît.
-- **Les reculs non cotés se déduisent** : le script les rend, sans les juger.
-- **Le repère du projet n'est pas celui du dessin** : seules des distances et
-  des longueurs sont comparées, jamais des coordonnées.
+- **The drawing's eaves are not the dimensioned eaves.** The drawing's line is the
+  top of the gutter, the dimension is the water line: a 15 to 20 cm gap at that
+  spot comes from the drawing, not from the model. Do not « correct » the roof to
+  make it land on the drawing: the comparison is made on the dimensions, and the
+  drawing/dimension gap is named when it appears.
+- **Undimensioned setbacks are deduced**: the script returns them, without
+  judging them.
+- **The project's frame is not the drawing's**: only distances and lengths are
+  compared, never coordinates.
 
-Usage :
-  python scripts/check_site.py <registre.json> <projet.json> [--page 6] \
-      [--level rdc] [--tolerance 0.05] [--area-tolerance 0.5] [--json sortie.json]
+Usage:
+  python scripts/check_site.py <registry.json> <project.json> [--page 6] \
+      [--level rdc] [--tolerance 0.05] [--area-tolerance 0.5] [--json output.json]
 """
 import argparse
 import json
@@ -56,13 +56,13 @@ import unicodedata
 from itertools import combinations
 from pathlib import Path
 
-DEFAULT_TOLERANCE = 0.05  # m, écart accepté entre cote imprimée et valeur calculée
-DEFAULT_AREA_TOLERANCE = 0.5  # m², la surface imprimée est arrondie au m²
-DEGENERATE = 0.005  # m, en dessous, un côté, un recul ou un débord est nul
-COLLINEAR_TOL = 5.0  # pt, écart entre centres d'étiquettes d'une même ligne
-ON_EDGE_TOL = 0.01  # m, un sommet affleurant une limite reste dans la parcelle
-TRACE_TOLERANCE = 0.5  # m, écart de tracé accepté pour apparier une surface cotée
-EAVE_DRAW_WINDOW = 0.20  # m, écart dessin/cote typique au niveau de la gouttière
+DEFAULT_TOLERANCE = 0.05  # m, accepted gap between printed dimension and computed value
+DEFAULT_AREA_TOLERANCE = 0.5  # m², the printed area is rounded to the m²
+DEGENERATE = 0.005  # m, below this, a side, a setback or an overhang is zero
+COLLINEAR_TOL = 5.0  # pt, gap between label centres on the same line
+ON_EDGE_TOL = 0.01  # m, a vertex flush with a boundary stays within the plot
+TRACE_TOLERANCE = 0.5  # m, drawing gap accepted to pair a dimensioned surface
+EAVE_DRAW_WINDOW = 0.20  # m, typical drawing/dimension gap at the gutter
 
 
 def load(path):
@@ -84,7 +84,7 @@ def formatted(value):
 
 
 # --------------------------------------------------------------------------
-# géométrie : longueurs, aires, distances — aucune interprétation
+# geometry: lengths, areas, distances — no interpretation
 # --------------------------------------------------------------------------
 
 
@@ -107,7 +107,7 @@ def point_segment_distance(point, start, end):
 
 
 def segments_distance(a, b, c, d):
-    """Distance minimale entre deux segments : chaque extrémité sur l'autre."""
+    """Minimum distance between two segments: each end against the other."""
     return min(
         point_segment_distance(a, c, d),
         point_segment_distance(b, c, d),
@@ -143,9 +143,9 @@ def on_boundary(boundary, point, tolerance):
 
 
 def segments_cross(p1, p2, p3, p4):
-    """Franchissement franc uniquement : un sommet affleurant une limite n'est
-    pas un croisement, sinon toute façade posée sur la limite serait signalée.
-    Un tour nul (sommet ou segment sur la limite) exclut le franchissement."""
+    """Clear crossing only: a vertex flush with a boundary is not a crossing,
+    otherwise every façade set on the boundary would be flagged. A zero turn
+    (vertex or segment on the boundary) rules out crossing."""
 
     def turn(a, b, c):
         return (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])
@@ -160,8 +160,8 @@ def segments_cross(p1, p2, p3, p4):
 
 
 def polygon_inside(boundary, outline):
-    """Le niveau tient dans la parcelle : sommets dedans ou affleurants,
-    aucune arête qui franchit une limite."""
+    """The level fits in the plot: vertices inside or flush, no edge crossing a
+    boundary."""
     for point in outline:
         if not contains_point(boundary, point[0], point[1]) and not on_boundary(
             boundary, point, ON_EDGE_TOL
@@ -178,7 +178,7 @@ def polygon_inside(boundary, outline):
 
 
 # --------------------------------------------------------------------------
-# registre : lecture des cotes imprimées
+# registry: reading the printed dimensions
 # --------------------------------------------------------------------------
 
 
@@ -187,15 +187,15 @@ def find_page(registry, page_index):
     if page_index is None:
         if len(pages) == 1:
             return pages[0]
-        raise ValueError("le registre couvre plusieurs pages : préciser --page")
+        raise ValueError("the registry covers several pages: pass --page")
     for page in pages:
         if page.get("index") == page_index:
             return page
-    raise ValueError(f"page {page_index} absente du registre")
+    raise ValueError(f"page {page_index} missing from the registry")
 
 
 def named_levels(labels, key):
-    """Valeurs imprimées d'un libellé nommé (rdc, egout, faitage…)."""
+    """Printed values of a named label (rdc, egout, faitage…)."""
     return [
         label["value"]
         for label in labels.get("namedLevels") or []
@@ -230,11 +230,11 @@ def printed_side_text(labels):
     if len(labels) == 1:
         return f"{labels[0]['value']:.2f}"
     total = " + ".join(f"{label['value']:.2f}" for label in labels)
-    return f"{total} (scindée)"
+    return f"{total} (split)"
 
 
 # --------------------------------------------------------------------------
-# point 1 : côtés de parcelle et surface
+# checkpoint 1: plot sides and area
 # --------------------------------------------------------------------------
 
 
@@ -248,8 +248,8 @@ def model_boundary_sides(boundary):
 
 
 def match_printed_sides(printed, sides, tolerance):
-    """Associe les cotes de côté aux côtés du modèle : valeur seule d'abord,
-    puis somme de cotes scindées collinéaires. Chaque cote sert une fois."""
+    """Pairs side dimensions with the model's sides: single value first, then the
+    sum of collinear split dimensions. Each dimension is used once."""
     available = [dict(label, used=False) for label in printed]
     for side in sides:
         candidates = [
@@ -262,7 +262,7 @@ def match_printed_sides(printed, sides, tolerance):
             best["used"] = True
             side["printed"] = [best]
             continue
-        # cote scindée : somme de libellés collinéaires restants
+        # split dimension: sum of the remaining collinear labels
         pool = [label for label in available if not label["used"]]
         chosen = None
         for size in (2, 3):
@@ -287,35 +287,35 @@ def match_printed_sides(printed, sides, tolerance):
             delta = side["length"] - total
             rows.append(
                 {
-                    "label": f"côté {side['index'] + 1}",
+                    "label": f"side {side['index'] + 1}",
                     "printed": round(total, 3),
                     "printedText": printed_side_text(side["printed"]),
                     "computed": round(side["length"], 3),
                     "delta": round(delta, 4),
-                    "verdict": "exact" if abs(delta) <= tolerance else "écart",
+                    "verdict": "exact" if abs(delta) <= tolerance else "gap",
                     "detail": None,
                 }
             )
         else:
             rows.append(
                 {
-                    "label": f"côté {side['index'] + 1}",
+                    "label": f"side {side['index'] + 1}",
                     "printed": None,
                     "printedText": None,
                     "computed": round(side["length"], 3),
                     "delta": None,
-                    "verdict": "sans cote imprimée — se déduit des autres",
+                    "verdict": "no printed dimension — deduced from the others",
                     "detail": None,
                 }
             )
     rows.extend(
         {
-            "label": "cote sans côté",
+            "label": "dimension without a side",
             "printed": round(label["value"], 3),
             "printedText": label["text"],
             "computed": None,
             "delta": None,
-            "verdict": "cote sans côté au modèle",
+            "verdict": "dimension without a side in the model",
             "detail": None,
         }
         for label in available
@@ -337,7 +337,7 @@ def parcel_rows(page, site, tolerance, area_tolerance):
                 "printedText": f"{len(boundary)} sommet(s)",
                 "computed": None,
                 "delta": None,
-                "verdict": "parcelle non fermée",
+                "verdict": "plot not closed",
                 "detail": None,
             }
         )
@@ -348,10 +348,10 @@ def parcel_rows(page, site, tolerance, area_tolerance):
             {
                 "label": "parcelle",
                 "printed": None,
-                "printedText": "côté de longueur nulle",
+                "printedText": "zero-length side",
                 "computed": None,
                 "delta": None,
-                "verdict": "parcelle non fermée",
+                "verdict": "plot not closed",
                 "detail": None,
             }
         )
@@ -363,7 +363,7 @@ def parcel_rows(page, site, tolerance, area_tolerance):
         printed_area = printed_areas[0]["area"]
         rows.append(
             {
-                "label": "surface parcelle",
+                "label": "plot area",
                 "printed": printed_area,
                 "printedText": printed_areas[0]["text"],
                 "computed": round(computed_area, 2),
@@ -371,7 +371,7 @@ def parcel_rows(page, site, tolerance, area_tolerance):
                 "verdict": (
                     "exact"
                     if abs(computed_area - printed_area) <= area_tolerance
-                    else "écart"
+                    else "gap"
                 ),
                 "detail": None,
             }
@@ -380,24 +380,24 @@ def parcel_rows(page, site, tolerance, area_tolerance):
             delta = site["declaredArea"] - printed_area
             rows.append(
                 {
-                    "label": "declaredArea du site",
+                    "label": "site declaredArea",
                     "printed": printed_area,
                     "printedText": None,
                     "computed": site["declaredArea"],
                     "delta": round(delta, 2),
-                    "verdict": "exact" if abs(delta) <= area_tolerance else "écart",
+                    "verdict": "exact" if abs(delta) <= area_tolerance else "gap",
                     "detail": None,
                 }
             )
     else:
         rows.append(
             {
-                "label": "surface parcelle",
+                "label": "plot area",
                 "printed": None,
                 "printedText": None,
                 "computed": round(computed_area, 2),
                 "delta": None,
-                "verdict": "sans « Surface » imprimée",
+                "verdict": "no « Surface » printed",
                 "detail": None,
             }
         )
@@ -405,16 +405,16 @@ def parcel_rows(page, site, tolerance, area_tolerance):
 
 
 # --------------------------------------------------------------------------
-# point 2 : implantation — morcellement des côtés et reculs
+# checkpoint 2: siting — split of the sides and setbacks
 # --------------------------------------------------------------------------
 
 
 def side_layout(side, outline):
-    """Morcellement d'un côté par le contour du niveau, projeté dessus.
+    """Split of a side by the level outline, projected onto it.
 
-    Rend la suite de morceaux depuis le premier sommet du côté : recul,
-    emprise, recul. Une distance se compare, jamais une coordonnée : c'est la
-    longueur de chaque morceau qui se lit, dans cet ordre.
+    Returns the sequence of pieces from the side's first vertex: setback,
+    footprint, setback. A distance is compared, never a coordinate: it is the length
+    of each piece that is read, in that order.
     """
     start = side["start"]
     length = side["length"]
@@ -430,20 +430,19 @@ def side_layout(side, outline):
     high = min(length, max(positions))
     pieces = []
     if low > DEGENERATE:
-        pieces.append(("recul", low))
+        pieces.append(("setback", low))
     if high - low > DEGENERATE:
-        pieces.append(("emprise", high - low))
+        pieces.append(("footprint", high - low))
     if length - high > DEGENERATE:
-        pieces.append(("recul", length - high))
+        pieces.append(("setback", length - high))
     return pieces
 
 
 def chain_fits(pieces, values, tolerance):
-    """Chaque morceau retombe sur une somme de segments consécutifs de la
-    chaîne. La chaîne peut être plus fine que le morcellement (elle scinde un
-    recul en tronçons), jamais plus grossière : un segment ne franchit pas un
-    changement de morceau. L'ordre compte ; le sens de lecture du dessin est
-    inconnu, donc la chaîne est essayée dans les deux sens.
+    """Every piece lands on a sum of consecutive segments of the chain. The chain
+    may be finer than the split (it splits a setback into runs), never coarser: a
+    segment does not cross a change of piece. Order matters; the drawing's reading
+    direction is unknown, so the chain is tried both ways.
     """
 
     def consume(piece_index, value_index, chain):
@@ -478,12 +477,12 @@ def implantation_rows(page, sides, outline, boundary, tolerance):
         if not candidates:
             rows.append(
                 {
-                    "label": "chaîne hors parcelle",
+                    "label": "chain outside the plot",
                     "printed": round(total, 3),
                     "printedText": chain_text(chain),
                     "computed": None,
                     "delta": None,
-                    "verdict": "somme sans côté de parcelle — non vérifiée",
+                    "verdict": "sum without a plot side — not checked",
                     "detail": None,
                 }
             )
@@ -493,16 +492,16 @@ def implantation_rows(page, sides, outline, boundary, tolerance):
         for side in candidates:
             pieces = side_layout(side, outline)
             if chain_fits(pieces, values, tolerance):
-                if any(kind == "emprise" for kind, _ in pieces):
+                if any(kind == "footprint" for kind, _ in pieces):
                     strong = side
                     break
                 weak = (side, pieces)
         if strong:
             pieces = side_layout(strong, outline)
-            verified_gaps.extend(length for kind, length in pieces if kind == "recul")
+            verified_gaps.extend(length for kind, length in pieces if kind == "setback")
             rows.append(
                 {
-                    "label": f"chaîne — côté {strong['index'] + 1}",
+                    "label": f"chain — side {strong['index'] + 1}",
                     "printed": round(total, 3),
                     "printedText": chain_text(chain),
                     "computed": round(strong["length"], 3),
@@ -514,36 +513,36 @@ def implantation_rows(page, sides, outline, boundary, tolerance):
             )
         elif weak:
             side, pieces = weak
-            verified_gaps.extend(length for kind, length in pieces if kind == "recul")
+            verified_gaps.extend(length for kind, length in pieces if kind == "setback")
             rows.append(
                 {
-                    "label": f"chaîne — côté {side['index'] + 1}",
+                    "label": f"chain — side {side['index'] + 1}",
                     "printed": round(total, 3),
                     "printedText": chain_text(chain),
                     "computed": None,
                     "delta": None,
-                    "verdict": "vérifiée en longueur — niveau non adjacent à ce côté",
+                    "verdict": "checked in length — level not adjacent to this side",
                     "detail": None,
                 }
             )
         else:
             names = ", ".join(
-                f"côté {side['index'] + 1} ({side['length']:.2f} m)" for side in candidates
+                f"side {side['index'] + 1} ({side['length']:.2f} m)" for side in candidates
             )
             computed_pieces = side_layout(candidates[0], outline)
             rows.append(
                 {
-                    "label": f"chaîne — {names}",
+                    "label": f"chain — {names}",
                     "printed": round(total, 3),
                     "printedText": chain_text(chain),
                     "computed": None,
                     "delta": None,
-                    "verdict": "recul coté qui ne tombe pas",
-                    "detail": "morcellement calculé : "
+                    "verdict": "dimensioned setback that does not land",
+                    "detail": "computed split: "
                     + ", ".join(f"{kind} {length:.2f}" for kind, length in computed_pieces),
                 }
             )
-    # recul de chaque côté au contour du niveau
+    # setback from each side to the level outline
     outline_edges = list(zip(outline, list(outline[1:]) + [outline[0]]))
     for side in sides:
         recul = min(
@@ -556,13 +555,13 @@ def implantation_rows(page, sides, outline, boundary, tolerance):
         else:
             matches = [gap for gap in verified_gaps if abs(recul - gap) <= DEGENERATE]
             if matches:
-                verdict = "coté par chaîne"
+                verdict = "dimensioned by a chain"
                 printed = round(min(matches), 3)
             else:
-                verdict = "non coté — se déduit"
+                verdict = "not dimensioned — deduced"
         rows.append(
             {
-                "label": f"recul côté {side['index'] + 1} ({side['length']:.2f} m)",
+                "label": f"setback side {side['index'] + 1} ({side['length']:.2f} m)",
                 "printed": printed,
                 "printedText": None,
                 "computed": round(recul, 3),
@@ -574,12 +573,12 @@ def implantation_rows(page, sides, outline, boundary, tolerance):
     if outline and not polygon_inside(boundary, outline):
         rows.append(
             {
-                "label": "niveau dans la parcelle",
+                "label": "level within the plot",
                 "printed": None,
                 "printedText": None,
                 "computed": None,
                 "delta": None,
-                "verdict": "le contour du niveau sort de la parcelle",
+                "verdict": "the level outline leaves the plot",
                 "detail": None,
             }
         )
@@ -587,7 +586,7 @@ def implantation_rows(page, sides, outline, boundary, tolerance):
 
 
 # --------------------------------------------------------------------------
-# point 3 : niveaux — égout et faîtage ramenés au repère du niveau
+# checkpoint 3: levels — eaves and ridge brought back to the level frame
 # --------------------------------------------------------------------------
 
 
@@ -608,17 +607,17 @@ def level_rows(page, site, tolerance):
     if reference:
         rows.append(
             {
-                "label": "RDC (repère)",
+                "label": "RDC (frame)",
                 "printed": reference[0],
                 "printedText": None,
                 "computed": None,
                 "delta": None,
-                "verdict": "repère : cotes ramenées au sol fini du RDC",
+                "verdict": "frame: dimensions brought back to the RDC finished floor",
                 "detail": None,
             }
         )
     lowest, highest = roof_extents(site)
-    for key, kind, computed in (("egout", "égout", lowest), ("faitage", "faîtage", highest)):
+    for key, kind, computed in (("egout", "eaves", lowest), ("faitage", "ridge", highest)):
         printed = named_levels(labels, key)
         if not printed:
             rows.append(
@@ -628,7 +627,7 @@ def level_rows(page, site, tolerance):
                     "printedText": None,
                     "computed": None if computed is None else round(computed, 3),
                     "delta": None,
-                    "verdict": "non imprimé",
+                    "verdict": "not printed",
                     "detail": None,
                 }
             )
@@ -641,7 +640,7 @@ def level_rows(page, site, tolerance):
                     "printedText": None,
                     "computed": None,
                     "delta": None,
-                    "verdict": "aucune toiture dans le site",
+                    "verdict": "no roof in the site",
                     "detail": None,
                 }
             )
@@ -654,7 +653,7 @@ def level_rows(page, site, tolerance):
                     "printedText": None,
                     "computed": round(computed, 3),
                     "delta": None,
-                    "verdict": "RDC non imprimé — repère du niveau inconnu",
+                    "verdict": "RDC not printed — level frame unknown",
                     "detail": None,
                 }
             )
@@ -664,9 +663,9 @@ def level_rows(page, site, tolerance):
         detail = None
         if key == "egout" and tolerance < abs(delta) <= EAVE_DRAW_WINDOW:
             detail = (
-                "écart compatible avec l'égout du dessin (dessus de gouttière) : "
-                "la cote est la ligne d'eau — ne pas « corriger » le toit pour le "
-                "faire tomber sur le dessin, décider sur la cote."
+                "gap consistent with the drawing's eaves (top of the gutter): "
+                "the dimension is the water line — do not « correct » the roof to make it "
+                "land on the drawing, decide on the dimension."
             )
         rows.append(
             {
@@ -675,7 +674,7 @@ def level_rows(page, site, tolerance):
                 "printedText": f"{printed[0]:.2f} − RDC {reference[0]:.2f}",
                 "computed": round(computed, 3),
                 "delta": round(delta, 3),
-                "verdict": "exact" if abs(delta) <= tolerance else "écart",
+                "verdict": "exact" if abs(delta) <= tolerance else "gap",
                 "detail": detail,
             }
         )
@@ -683,7 +682,7 @@ def level_rows(page, site, tolerance):
 
 
 # --------------------------------------------------------------------------
-# point 4 : topologie de toiture — pignons et égouts par façade
+# checkpoint 4: roof topology — gables and eaves per façade
 # --------------------------------------------------------------------------
 
 
@@ -745,7 +744,7 @@ def analyze_topology(outline, roofs, tolerance):
                 )
             ]
             if not holders:
-                reserves.append(f"{roof['id']} : pignon {gable} posé sur aucune façade")
+                reserves.append(f"{roof['id']}: gable {gable} set on no façade")
                 continue
             best = max(holders, key=lambda edge: sum(
                 min(
@@ -757,7 +756,7 @@ def analyze_topology(outline, roofs, tolerance):
             per_edge[best["index"]]["pignons"] += 1
             if len(holders) > 1:
                 per_edge[best["index"]]["notes"].append(
-                    f"pignon {gable} aligné sur plusieurs façades"
+                    f"gable {gable} aligned with several façades"
                 )
         for face in roof.get("faces") or []:
             if len(face) < 3 or any(i >= len(vertices) for i in face):
@@ -769,14 +768,14 @@ def analyze_topology(outline, roofs, tolerance):
             end = (vertices[b][0], vertices[b][2])
             span = distance(start, end)
             if span <= DEGENERATE:
-                continue  # sommet de croupe : pas d'égout de façade
+                continue  # hip apex: no façade eaves
             unit = ((end[0] - start[0]) / span, (end[1] - start[1]) / span)
             candidates = []
             for edge in edges:
                 if edge["length"] <= 0:
                     continue
                 if abs(unit[0] * edge["unit"][1] - unit[1] * edge["unit"][0]) > 0.01:
-                    continue  # pas parallèle : croupe, noue…
+                    continue  # not parallel: hip, valley…
                 offset = (line_offset(start, edge["start"], edge["unit"]) + line_offset(end, edge["start"], edge["unit"])) / 2
                 lo = min(
                     along_line(start, edge["start"], edge["unit"]),
@@ -799,14 +798,14 @@ def analyze_topology(outline, roofs, tolerance):
     for edge in edges:
         entry = per_edge[edge["index"]]
         if entry["pignons"] and entry["egouts"]:
-            verdict = "réserve : pignon et égout sur la même façade"
+            verdict = "issue: gable and eaves on the same façade"
         elif entry["pignons"]:
-            verdict = f"{entry['pignons']} pignon(s)"
+            verdict = f"{entry['pignons']} gable(s)"
         elif entry["egouts"]:
             debords = sorted({f"{value:.2f}" for value in entry["egouts"]})
-            verdict = "égout (débord " + ", ".join(debords) + " m)"
+            verdict = "eaves (overhang " + ", ".join(debords) + " m)"
         else:
-            verdict = "sans toiture"
+            verdict = "no roof"
         if entry["notes"]:
             verdict += " — " + "; ".join(entry["notes"])
         rows.append(
@@ -822,12 +821,12 @@ def analyze_topology(outline, roofs, tolerance):
         )
     rows.extend(
         {
-            "label": "toiture",
+            "label": "roof",
             "printed": None,
             "printedText": None,
             "computed": None,
             "delta": None,
-            "verdict": f"réserve : {reserve}",
+            "verdict": f"issue: {reserve}",
             "detail": None,
         }
         for reserve in reserves
@@ -836,7 +835,7 @@ def analyze_topology(outline, roofs, tolerance):
 
 
 # --------------------------------------------------------------------------
-# point 5 : surfaces de terrain cotées ou non
+# checkpoint 5: terrain surfaces, dimensioned or not
 # --------------------------------------------------------------------------
 
 
@@ -873,8 +872,8 @@ def surface_rows(page, site, tolerance):
                     "printedText": rect["text"],
                     "computed": f"{width:.2f} x {depth:.2f}",
                     "delta": round(error, 3),
-                    "verdict": "cotée" if error <= DEGENERATE else "cotée — écart de tracé",
-                    "detail": "signalement seulement : la cote ne se reporte pas au polygone",
+                    "verdict": "dimensioned" if error <= DEGENERATE else "dimensioned — drawing gap",
+                    "detail": "flag only: the dimension is not carried over to the polygon",
                 }
             )
         else:
@@ -886,7 +885,7 @@ def surface_rows(page, site, tolerance):
                     "printedText": None,
                     "computed": f"{width:.2f} x {depth:.2f}",
                     "delta": None,
-                    "verdict": "non cotée — décision à garder dans site.notes",
+                    "verdict": "not dimensioned — decision to keep in site.notes",
                     "detail": None,
                 }
             )
@@ -898,8 +897,8 @@ def surface_rows(page, site, tolerance):
                 "printedText": None,
                 "computed": None,
                 "delta": None,
-                "verdict": f"{uncoted} surface(s) non cotée(s) et aucune note : "
-                "les déclarer dans site.notes",
+                "verdict": f"{uncoted} undimensioned surface(s) and no note: "
+                "declare them in site.notes",
                 "detail": None,
             }
         )
@@ -912,31 +911,31 @@ def surface_rows(page, site, tolerance):
 
 
 FAILURE_VERDICTS = (
-    "écart",
-    "cote sans côté au modèle",
-    "recul coté qui ne tombe pas",
-    "parcelle non fermée",
-    "le contour du niveau sort de la parcelle",
+    "gap",
+    "dimension without a side in the model",
+    "dimensioned setback that does not land",
+    "plot not closed",
+    "the level outline leaves the plot",
 )
 
 SIGNAL_PREFIXES = (
-    "sans cote imprimée",
-    "non coté",
-    "cotée — écart de tracé",
-    "sans toiture",
-    "non imprimé",
-    "sans « Surface »",
-    "somme sans côté",
-    "surface(s) non cotée",
-    "RDC non imprimé",
-    "aucune toiture",
-    "vérifiée en longueur",
+    "no printed dimension",
+    "not dimensioned",
+    "dimensioned — drawing gap",
+    "no roof",
+    "not printed",
+    "no « Surface »",
+    "sum without a plot side",
+    "undimensioned surface(s)",
+    "RDC not printed",
+    "no roof in the site",
+    "checked in length",
 )
 
 
 def verdict_class(verdict):
-    """off : refus ; signal : à garder dans site.notes ; info : rendu sans juge."""
-    if verdict in FAILURE_VERDICTS or verdict.startswith("réserve"):
+    """off: refusal; signal: to keep in site.notes; info: shown without judgement."""
+    if verdict in FAILURE_VERDICTS or verdict.startswith("issue"):
         return "off"
     if verdict.startswith(SIGNAL_PREFIXES):
         return "signal"
@@ -946,7 +945,7 @@ def verdict_class(verdict):
 def build(registry, project, level_id, page_index, tolerance, area_tolerance):
     site = project.get("site")
     if not site:
-        raise ValueError("site absent du projet — terrain et toiture invérifiables")
+        raise ValueError("site missing from the project — terrain and roof cannot be checked")
     page = find_page(registry, page_index)
     level = None
     for candidate in project.get("levels") or []:
@@ -954,7 +953,7 @@ def build(registry, project, level_id, page_index, tolerance, area_tolerance):
             level = candidate
             break
     if level is None:
-        raise ValueError(f"niveau {level_id} absent du projet")
+        raise ValueError(f"level {level_id} missing from the project")
     outline = level.get("outline") or []
     boundary = site.get("boundary") or []
     rows_parcel = parcel_rows(page, site, tolerance, area_tolerance)
@@ -966,11 +965,11 @@ def build(registry, project, level_id, page_index, tolerance, area_tolerance):
     rows_topology = analyze_topology(outline, site.get("roofs") or [], tolerance)
     rows_surfaces = surface_rows(page, site, tolerance)
     sections = [
-        ("1. parcelle — côtés et surface", rows_parcel),
-        ("2. implantation — chaînes de côté et reculs", rows_implantation),
-        ("3. niveaux — égout et faîtage ramenés au RDC", rows_levels),
-        ("4. topologie de toiture — pignons et égouts par façade", rows_topology),
-        ("5. surfaces de terrain — cotées ou signalées", rows_surfaces),
+        ("1. plot — sides and area", rows_parcel),
+        ("2. siting — side chains and setbacks", rows_implantation),
+        ("3. levels — eaves and ridge brought back to the RDC", rows_levels),
+        ("4. roof topology — gables and eaves per façade", rows_topology),
+        ("5. terrain surfaces — dimensioned or flagged", rows_surfaces),
     ]
     all_rows = [row for _, rows in sections for row in rows]
     failure_rows = [row for row in all_rows if verdict_class(row["verdict"]) == "off"]
@@ -993,14 +992,14 @@ def build(registry, project, level_id, page_index, tolerance, area_tolerance):
 
 def print_report(result):
     print(
-        f"site : projet {result['project']}, niveau {result['level']}, "
-        f"page {result['page']} du registre"
+        f"site: project {result['project']}, level {result['level']}, "
+        f"registry page {result['page']}"
     )
     for section in result["sections"]:
         print()
         print(section["title"])
         width = max([len(row["label"]) for row in section["rows"]] + [12])
-        print(f"{'':{width}s}  {'imprimé':>16s} {'calculé':>16s} {'écart':>7s}  verdict")
+        print(f"{'':{width}s}  {'printed':>16s} {'computed':>16s} {'gap':>7s}  verdict")
         for row in section["rows"]:
             printed = "—" if row["printed"] is None else formatted(row["printed"])
             computed = "—" if row["computed"] is None else formatted(row["computed"])
@@ -1009,41 +1008,41 @@ def print_report(result):
                 f"{row['label']:{width}s}  {printed:>16s} {computed:>16s} {delta:>7s}  {row['verdict']}"
             )
             if row.get("printedText"):
-                print(f"{'':{width}s}  imprimé : {row['printedText']}")
+                print(f"{'':{width}s}  printed: {row['printedText']}")
             if row.get("detail"):
                 print(f"{'':{width}s}  {row['detail']}")
     summary = result["summary"]
     print()
     if summary["off"]:
         print(
-            f"{summary['off']} écart(s) au-delà de la tolérance "
-            f"({result['tolerance']:.2f} m, {result['areaTolerance']:.2f} m²) :"
+            f"{summary['off']} gap(s) beyond the tolerance "
+            f"({result['tolerance']:.2f} m, {result['areaTolerance']:.2f} m²):"
         )
         for section in result["sections"]:
             for row in section["rows"]:
                 if verdict_class(row["verdict"]) == "off":
                     detail = (
-                        f" — écart {row['delta']:+.2f}"
+                        f" — gap {row['delta']:+.2f}"
                         if row.get("delta") is not None
                         else ""
                     )
-                    print(f"  {row['label']}{detail} : {row['verdict']}")
+                    print(f"  {row['label']}{detail}: {row['verdict']}")
         return 1
-    print(f"aucun écart au-delà de la tolérance ({result['tolerance']:.2f} m)")
+    print(f"no gap beyond the tolerance ({result['tolerance']:.2f} m)")
     if summary["signals"]:
-        print(f"{summary['signals']} signalement(s) — non cotés, à déclarer dans site.notes ou à décider :")
+        print(f"{summary['signals']} flag(s) — undimensioned, to declare in site.notes or to decide:")
         for section in result["sections"]:
             for row in section["rows"]:
                 if verdict_class(row["verdict"]) == "signal":
                     computed = (
                         f" {row['computed']}" if row.get("computed") is not None else ""
                     )
-                    print(f"  {row['label']}{computed} : {row['verdict']}")
+                    print(f"  {row['label']}{computed}: {row['verdict']}")
     return 0
 
 
 # --------------------------------------------------------------------------
-# auto-test : registre et projet synthétiques, aucune donnée réelle
+# self-test: synthetic registry and project, no real data
 # --------------------------------------------------------------------------
 
 
@@ -1105,8 +1104,8 @@ def synthetic_project(shift=0.0, faitage=6.00, egout=3.00):
             "elevation": 0,
             "declaredArea": 600,
             "notes": [
-                "reculs est et ouest non cotés, ils se déduisent ; "
-                "accès est une surface indicative non cotée"
+                "east and west setbacks undimensioned, they are deduced; "
+                "east access is an indicative, undimensioned surface"
             ],
             "surfaces": [
                 {"id": "entree-test", "kind": "gravel", "polygon": [[0, 20], [5, 20], [5, 15], [0, 15]]},
@@ -1146,69 +1145,69 @@ def verdict_of(result, label):
 
 
 def self_test():
-    """Non-régression sur un registre et un projet synthétiques : aucune donnée réelle."""
+    """Non-regression on a synthetic registry and project: no real data."""
     failures = []
     registry = synthetic_registry()
     result = build(
         registry, synthetic_project(), "rdc", 3, DEFAULT_TOLERANCE, DEFAULT_AREA_TOLERANCE
     )
     if result["summary"]["off"] != 0:
-        failures.append(f"le projet exact devrait passer : {result['summary']}")
-    écarts = [
+        failures.append(f"the exact project should pass: {result['summary']}")
+    gaps = [
         row
         for section in result["sections"]
         for row in section["rows"]
         if verdict_class(row["verdict"]) == "off"
     ]
-    if écarts:
-        failures.append(f"écarts inattendus sur le projet exact : {écarts}")
+    if gaps:
+        failures.append(f"unexpected gaps on the exact project: {gaps}")
     sides = [
         row
-        for row in rows_of(result, "côté")
-        if row["verdict"] not in ("sans cote imprimée — se déduit des autres",)
+        for row in rows_of(result, "side")
+        if row["verdict"] not in ("no printed dimension — deduced from the others",)
     ]
     if len(sides) != 4 or any(row["verdict"] != "exact" for row in sides):
-        failures.append(f"quatre côtés attendus exacts : {sides}")
-    surface_row = verdict_of(result, "surface parcelle")
+        failures.append(f"four sides expected exact: {sides}")
+    surface_row = verdict_of(result, "plot area")
     if not surface_row or surface_row["verdict"] != "exact":
-        failures.append(f"surface de parcelle : {surface_row}")
-    egout = verdict_of(result, "égout")
+        failures.append(f"plot area: {surface_row}")
+    egout = verdict_of(result, "eaves")
     if not egout or abs(egout["printed"] - 3.00) > 0.001 or egout["verdict"] != "exact":
-        failures.append(f"égout mal ramené au RDC : {egout}")
-    faitage = verdict_of(result, "faîtage")
+        failures.append(f"eaves badly brought back to the RDC: {egout}")
+    faitage = verdict_of(result, "ridge")
     if not faitage or faitage["verdict"] != "exact" or abs(faitage["delta"]) > 0.001:
-        failures.append(f"faîtage : {faitage}")
+        failures.append(f"ridge: {faitage}")
     topology = [
         row
         for section in result["sections"]
         if section["title"].startswith("4.")
         for row in section["rows"]
     ]
-    pignons = [row for row in topology if row["verdict"] == "1 pignon(s)"]
-    egouts = [row for row in topology if row["verdict"].startswith("égout")]
+    pignons = [row for row in topology if row["verdict"] == "1 gable(s)"]
+    egouts = [row for row in topology if row["verdict"].startswith("eaves")]
     if len(pignons) != 2 or len(egouts) != 2:
-        failures.append(f"topologie attendue : 2 pignons et 2 égouts — {topology}")
+        failures.append(f"expected topology: 2 gables and 2 eaves — {topology}")
     entree = verdict_of(result, "entree-test")
-    if not entree or entree["verdict"] not in ("cotée", "cotée — écart de tracé"):
-        failures.append(f"entrée cotée : {entree}")
+    if not entree or entree["verdict"] not in ("dimensioned", "dimensioned — drawing gap"):
+        failures.append(f"dimensioned entrance: {entree}")
     acces = verdict_of(result, "acces-est")
-    if not acces or acces["verdict"] != "non cotée — décision à garder dans site.notes":
-        failures.append(f"accès non coté : {acces}")
-    reculs = rows_of(result, "recul côté")
-    cotés = [row for row in reculs if row["verdict"] == "coté par chaîne"]
-    if len(cotés) != 3:
-        failures.append(f"trois reculs cotés attendus (est, nord, ouest) : {reculs}")
+    if not acces or acces["verdict"] != "not dimensioned — decision to keep in site.notes":
+        failures.append(f"undimensioned access: {acces}")
+    reculs = rows_of(result, "setback side")
+    dimensioned = [row for row in reculs if row["verdict"] == "dimensioned by a chain"]
+    if len(dimensioned) != 3:
+        failures.append(f"three dimensioned setbacks expected (east, north, west): {reculs}")
     affleurant = [row for row in reculs if row["verdict"] == "affleurant"]
     if len(affleurant) != 0:
-        failures.append(f"aucun côté affleurant attendu dans la fixture : {reculs}")
+        failures.append(f"no flush side expected in the fixture: {reculs}")
     chain_row = next(
-        (row for row in rows_of(result, "chaîne —") if "côté 1" in row["label"]), None
+        (row for row in rows_of(result, "chain —") if "side 1" in row["label"]), None
     )
     if not chain_row or chain_row["verdict"] != "exact":
-        failures.append(f"la chaîne du côté 1 devrait retomber exactement : {chain_row}")
+        failures.append(f"the side 1 chain should land exactly: {chain_row}")
 
-    # un site décalé d'un mètre le long du côté coté : la chaîne ne retombe pas,
-    # et le script nomme le côté fautif
+    # a site shifted by one metre along the dimensioned side: the chain does not land,
+    # and the script names the faulty side
     shifted = build(
         registry, synthetic_project(shift=1.0), "rdc", 3, DEFAULT_TOLERANCE, DEFAULT_AREA_TOLERANCE
     )
@@ -1218,26 +1217,26 @@ def self_test():
         for row in section["rows"]
         if verdict_class(row["verdict"]) == "off"
     ]
-    if not any("côté" in row["label"] and "côté 1" in row["label"] for row in refus):
-        failures.append(f"le site décalé devrait nommer le côté 1 : {[r['label'] for r in refus]}")
+    if not any("side" in row["label"] and "side 1" in row["label"] for row in refus):
+        failures.append(f"the shifted site should name side 1: {[r['label'] for r in refus]}")
 
-    # un faîtage 20 cm trop haut : refusé
+    # a ridge 20 cm too high: refused
     wrong = build(
         registry, synthetic_project(faitage=6.20), "rdc", 3, DEFAULT_TOLERANCE, DEFAULT_AREA_TOLERANCE
     )
-    faîtage_row = verdict_of(wrong, "faîtage")
-    if not faîtage_row or faîtage_row["verdict"] != "écart" or abs(faîtage_row["delta"] - 0.20) > 0.005:
-        failures.append(f"faîtage faux : {faîtage_row}")
+    ridge_row = verdict_of(wrong, "ridge")
+    if not ridge_row or ridge_row["verdict"] != "gap" or abs(ridge_row["delta"] - 0.20) > 0.005:
+        failures.append(f"wrong ridge: {ridge_row}")
 
-    # l'égout du dessin (gouttière), 10 cm sous la cote : refusé, piège nommé
+    # the drawing's eaves (gutter), 10 cm under the dimension: refused, trap named
     drawn = build(
         registry, synthetic_project(egout=2.90), "rdc", 3, DEFAULT_TOLERANCE, DEFAULT_AREA_TOLERANCE
     )
-    egout_row = verdict_of(drawn, "égout")
-    if not egout_row or egout_row["verdict"] != "écart" or "gouttière" not in (egout_row.get("detail") or ""):
-        failures.append(f"égout du dessin : {egout_row}")
+    egout_row = verdict_of(drawn, "eaves")
+    if not egout_row or egout_row["verdict"] != "gap" or "gutter" not in (egout_row.get("detail") or ""):
+        failures.append(f"drawing eaves: {egout_row}")
 
-    # un pignon flottant : réserve nommée
+    # a floating gable: issue named
     floated = synthetic_project()
     floated["site"]["roofs"][0]["gables"] = [[0, 4, 1], [1, 2, 5]]
     floated = build(registry, floated, "rdc", 3, DEFAULT_TOLERANCE, DEFAULT_AREA_TOLERANCE)
@@ -1245,20 +1244,20 @@ def self_test():
         row["verdict"]
         for section in floated["sections"]
         for row in section["rows"]
-        if row["verdict"].startswith("réserve")
+        if row["verdict"].startswith("issue")
     ]
     if not reserves:
-        failures.append("un pignon flottant devrait produire une réserve")
+        failures.append("a floating gable should produce an issue")
 
-    # site absent : refus immédiat
+    # missing site: immediate refusal
     try:
         build(registry, {"id": "vide", "levels": []}, "rdc", 3, DEFAULT_TOLERANCE, DEFAULT_AREA_TOLERANCE)
-        failures.append("un projet sans site devrait être refusé")
+        failures.append("a project without a site should be refused")
     except ValueError as error:
-        if "site absent" not in str(error):
-            failures.append(f"message inattendu : {error}")
+        if "site missing" not in str(error):
+            failures.append(f"unexpected message: {error}")
     except (TypeError, KeyError) as error:
-        failures.append(f"un projet sans site doit produire un refus propre : {error!r}")
+        failures.append(f"a project without a site must produce a clean refusal: {error!r}")
 
     # parcelle ouverte : refus
     opened = synthetic_registry()
@@ -1270,12 +1269,12 @@ def self_test():
         row["verdict"]
         for section in opened_result["sections"]
         for row in section["rows"]
-        if row["verdict"] == "parcelle non fermée"
+        if row["verdict"] == "plot not closed"
     ]
     if not parcel_verdicts:
-        failures.append("une parcelle de deux sommets devrait être refusée")
+        failures.append("a two-vertex plot should be refused")
 
-    # cote scindée : deux libellés collinéaires somment à un côté
+    # split dimension: two collinear labels add up to a side
     split = synthetic_registry()
     split["pages"][0]["labels"]["parcelSides"] = [
         {"kind": "parcelSide", "text": "- 30.00 m -", "value": 30.00, "at": [110.0, 30.0], "horizontal": True},
@@ -1285,18 +1284,18 @@ def self_test():
         {"kind": "parcelSide", "text": "- 8.00 m -", "value": 8.00, "at": [202.0, 160.0], "horizontal": False},
     ]
     split_result = build(split, synthetic_project(), "rdc", 3, DEFAULT_TOLERANCE, DEFAULT_AREA_TOLERANCE)
-    split_sides = rows_of(split_result, "côté")
-    sans_cote = [row for row in split_sides if row["verdict"] == "sans cote imprimée — se déduit des autres"]
-    if sans_cote:
-        failures.append(f"cotes scindées non appariées : {sans_cote}")
-    if not any("scindée" in (row.get("printedText") or "") for row in split_sides):
-        failures.append(f"le côté 4 devrait porter la cote scindée : {split_sides}")
+    split_sides = rows_of(split_result, "side")
+    undimensioned = [row for row in split_sides if row["verdict"] == "no printed dimension — deduced from the others"]
+    if undimensioned:
+        failures.append(f"split dimensions not paired: {undimensioned}")
+    if not any("split" in (row.get("printedText") or "") for row in split_sides):
+        failures.append(f"side 4 should carry the split dimension: {split_sides}")
 
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print("contrôle du site : auto-test réussi")
+    print("site check: self-test passed")
     return 0
 
 
@@ -1314,7 +1313,7 @@ def main(argv):
         return self_test()
     args = parser.parse_args(argv)
     if not args.registry or not args.project:
-        parser.error("registre et projet sont requis")
+        parser.error("registry and project are required")
     try:
         result = build(
             load(args.registry),
@@ -1325,10 +1324,10 @@ def main(argv):
             args.area_tolerance,
         )
     except ValueError as error:
-        print(f"ECHEC {error}")
+        print(f"FAIL {error}")
         return 1
     except OSError as error:
-        print(f"ECHEC fichier illisible : {error}")
+        print(f"FAIL unreadable file: {error}")
         return 1
     code = print_report(result)
     if args.json:

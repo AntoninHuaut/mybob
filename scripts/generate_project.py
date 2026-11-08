@@ -1,27 +1,26 @@
-"""Couche 3 : assembler un projet à partir de la géométrie lue sur le plan.
+"""Layer 3: assembling a project from the geometry read on the plan.
 
-Entrées :
-- le plan extrait (`extract_plan.py`) : les cloisons, avec leur épaisseur ;
-- le registre d'évidence : les chaînes de cotes refermées, qui donnent la
-  position exacte des baies le long de chaque façade ;
-- un projet modèle : le contour du niveau, les pièces, les éclairages et le
-  point de départ, qui ne se déduisent pas du dessin.
+Inputs:
+- the extracted plan (`extract_plan.py`): the partitions, with their thickness;
+- the evidence registry: the closed dimension chains, which give the exact
+  position of the openings along each façade;
+- a model project: the level outline, rooms, lights and the starting point,
+  which cannot be deduced from the drawing.
 
-Sortie : un projet complet, où les murs et les baies viennent du plan.
+Output: a complete project, where walls and openings come from the plan.
 
-Les murs extérieurs suivent le contour : chaque arête donne un mur dont la face
-extérieure est l'arête, l'axe étant en retrait d'une demi-épaisseur. Les baies
-d'une façade sont placées depuis la chaîne de cotes qui mesure ce côté, jamais
-depuis le symbole dessiné.
+Exterior walls follow the outline: each edge gives a wall whose outer face is the
+edge, the axis being set back by half a thickness. A façade's openings are placed
+from the dimension chain measuring that side, never from the drawn symbol.
 
-Le contour du niveau vient du modèle, sauf si `--outline` désigne la sortie de
-`scripts/derive_outline.py` : le contour dérivé remplace alors celui qui est
-écrit à la main, et c'est lui qui porte les arêtes des murs extérieurs.
+The level outline comes from the model, unless `--outline` points to the output of
+`scripts/derive_outline.py`: the derived outline then replaces the hand-written
+one, and it is the one carrying the exterior wall edges.
 
-Usage :
-  uvx --from pymupdf python scripts/generate_project.py <plan.json> <registre.json> \
-      <modele.json> <niveau> <sortie.json> [--pages 8] [--thickness 0.34] \
-      [--outline contour.json]
+Usage:
+  uvx --from pymupdf python scripts/generate_project.py <plan.json> <registry.json> \
+      <model.json> <level> <output.json> [--pages 8] [--thickness 0.34] \
+      [--outline outline.json]
 """
 import argparse
 import json
@@ -32,18 +31,18 @@ from pathlib import Path
 from derive_outline import load_outline
 
 TOL = 0.01  # m
-DEFAULT_THICKNESS = 0.34  # m, épaisseur d'un mur extérieur sans cote
-MIN_THICKNESS = 0.06  # m, en dessous ce n'est pas une épaisseur de mur
-MAX_THICKNESS = 0.45  # m, au-dessus non plus
-DOOR_HEIGHT = 1.6  # m, en dessous une ouverture ne peut pas être une porte
-BAY_WIDTH = 1.6  # m, au-dessus une ouverture de hauteur de porte est une baie
-GARAGE_WIDTH = 2.0  # m, au-dessus une ouverture pleine hauteur sur un garage en est la porte
-SILL_RADIUS = 130.0  # pt, rayon d'appariement d'une étiquette « All : … m »
-MAX_HOST_DISTANCE = 0.6  # m, au-delà la baie n'appartient pas à ce mur
+DEFAULT_THICKNESS = 0.34  # m, thickness of an exterior wall without a dimension
+MIN_THICKNESS = 0.06  # m, below this it is not a wall thickness
+MAX_THICKNESS = 0.45  # m, above this neither
+DOOR_HEIGHT = 1.6  # m, below this an opening cannot be a door
+BAY_WIDTH = 1.6  # m, above this a door-height opening is a bay
+GARAGE_WIDTH = 2.0  # m, above this a full-height opening onto a garage is its door
+SILL_RADIUS = 130.0  # pt, pairing radius of an « All : … m » label
+MAX_HOST_DISTANCE = 0.6  # m, beyond this the opening does not belong to this wall
 
 
 def outline_edges(outline):
-    """Arêtes du contour, avec leur normale rentrante."""
+    """Outline edges, with their inward normal."""
     edges = []
     for index, start in enumerate(outline):
         end = outline[(index + 1) % len(outline)]
@@ -51,7 +50,7 @@ def outline_edges(outline):
         length = math.hypot(dx, dz)
         if length < TOL:
             continue
-        # Normale candidate, orientée vers l'intérieur du polygone.
+        # Candidate normal, oriented towards the inside of the polygon.
         nx, nz = -dz / length, dx / length
         middle = ((start[0] + end[0]) / 2, (start[1] + end[1]) / 2)
         probe = (middle[0] + nx * 0.05, middle[1] + nz * 0.05)
@@ -83,7 +82,7 @@ def inside(point, polygon):
 
 
 def envelope_frame(chains, outline):
-    """Origine du repère de tracé par axe, déduite des chaînes qui portent l'emprise."""
+    """Origin of the drawing frame per axis, deduced from the chains carrying the footprint."""
     origins = {}
     for axis in ("horizontal", "vertical"):
         along = 0 if axis == "horizontal" else 1
@@ -103,7 +102,7 @@ def envelope_frame(chains, outline):
 
 
 def chain_side(chain, origins):
-    """Côté du contour que mesure une chaîne, en mètres, ou None."""
+    """Side of the outline a chain measures, in metres, or None."""
     along = 0 if chain["axis"] == "horizontal" else 1
     origin = origins.get(1 - along)
     if origin is None:
@@ -112,17 +111,17 @@ def chain_side(chain, origins):
 
 
 def edge_for_interval(edges, axis, side, low, high):
-    """Arête du contour qui contient un intervalle monde, du côté mesuré.
+    """Outline edge containing a world interval, on the measured side.
 
-    Une chaîne de façade peut mesurer plusieurs arêtes à la fois : au sud du
-    plan B, le séjour, l'entrée en renfoncement et le garage sont trois
-    arêtes distinctes, et une seule chaîne les couvre toutes. Chercher l'arête
-    par le côté seul posait toutes les baies sur la première et perdait les
-    autres — l'entrée et le séjour n'avaient plus une seule ouverture.
+    A façade chain may measure several edges at once: on the south of plan B, the
+    living room, the recessed entrance and the garage are three distinct edges, and a
+    single chain covers them all. Looking for the edge by side alone put every opening
+    on the first one and lost the others — the entrance and the living room no longer
+    had a single opening.
 
-    On retient donc les arêtes dont l'intervalle le long de l'axe contient la
-    baie, puis la plus proche du côté mesuré. Le renfoncement d'entrée est à
-    0,35 m du nu de façade : la distance tranche, une tolérance ne le ferait pas.
+    The edges whose interval along the axis contains the opening are therefore kept,
+    then the one closest to the measured side. The entrance recess is 0.35 m from the
+    façade face: distance decides, a tolerance would not.
     """
     along = 0 if axis == "horizontal" else 1
     best = None
@@ -141,7 +140,7 @@ def edge_for_interval(edges, axis, side, low, high):
 
 
 def chain_start(chain, origins):
-    """Position monde du début d'une chaîne, en mètres."""
+    """World position of the start of a chain, in metres."""
     along = 0 if chain["axis"] == "horizontal" else 1
     origin = origins.get(along)
     if origin is None:
@@ -152,17 +151,17 @@ def chain_start(chain, origins):
 
 
 def parse_measure(text):
-    """Une cote de baie : « 1.80 » en mètres, « 95 » en centimètres."""
+    """An opening dimension: « 1.80 » in metres, « 95 » in centimetres."""
     text = text.strip().replace(",", ".")
     return float(text) if "." in text else float(text) / 100
 
 
 def opening_kind(width, height):
-    """Fenêtre, porte ou baie, d'après la seule géométrie imprimée.
+    """Window, door or bay, from the printed geometry alone.
 
-    Une ouverture plus basse qu'une porte est une fenêtre. Une ouverture de
-    hauteur de porte et large de plus de 1,60 m n'est pas un vantail : c'est une
-    baie. Le plan ne dit pas « porte » ou « fenêtre » ; il donne deux nombres.
+    An opening lower than a door is a window. A door-height opening wider than
+    1.60 m is not a leaf: it is a bay. The plan does not say "door" or "window"; it
+    gives two numbers.
     """
     if height < DOOR_HEIGHT:
         return "window"
@@ -170,12 +169,11 @@ def opening_kind(width, height):
 
 
 def sill_for(at, sills, fallback):
-    """Allège de l'étiquette la plus proche, ou repli signalé.
+    """Sill of the nearest label, or a flagged fallback.
 
-    Le plan porte plusieurs allèges sur la même page — 1,10 m au nord, 1,20 m au
-    sud. Prendre la plus fréquente pour tout le niveau posait 1,20 sous les
-    fenêtres du nord. L'étiquette est écrite à côté de sa baie : c'est la
-    distance qui l'apparie, pas un vote.
+    The plan carries several sills on the same page — 1.10 m north, 1.20 m south.
+    Taking the most frequent for the whole level put 1.20 under the north windows.
+    The label is written next to its opening: distance pairs it, not a vote.
     """
     if not sills:
         return (fallback if fallback is not None else 0.0), fallback is not None
@@ -187,7 +185,7 @@ def sill_for(at, sills, fallback):
 
 
 def point_in_polygon(point, polygon):
-    """Appartenance d'un point à un polygone, par parité de croisements."""
+    """Point-in-polygon test, by crossing parity."""
     x, z = point
     inside = False
     for index, start in enumerate(polygon):
@@ -200,12 +198,12 @@ def point_in_polygon(point, polygon):
 
 
 def garage_opening(opening, wall, rooms):
-    """Vrai si la baie est une porte de garage.
+    """True if the opening is a garage door.
 
-    Le plan ne nomme pas les baies : il donne une largeur et une hauteur. Une
-    ouverture pleine hauteur de plus de deux mètres qui donne sur une pièce de
-    type garage est une porte de garage — la seule chose qui la distingue d'une
-    baie vitrée est la pièce qu'elle dessert, et le modèle la connaît.
+    The plan does not name openings: it gives a width and a height. A full-height
+    opening over two metres giving onto a room of type garage is a garage door — the
+    only thing telling it apart from a glazed bay is the room it serves, and the
+    model knows it.
     """
     if opening["height"] < DOOR_HEIGHT or opening["width"] < GARAGE_WIDTH:
         return False
@@ -223,12 +221,12 @@ def garage_opening(opening, wall, rooms):
 
 
 def chain_openings(chain, origins, sills=None, fallback_sill=None):
-    """Baies d'une chaîne, en intervalles monde le long de son axe.
+    """Openings of a chain, as world intervals along its axis.
 
-    Les segments d'une chaîne sont ordonnés par abscisse croissante : leur
-    intervalle monde se lit directement. La hauteur vient du texte de la cote
-    (« 1.80/1.05 »), l'allège de l'étiquette la plus proche. Une baie de hauteur
-    de porte n'a pas d'allège : elle part du sol.
+    A chain's segments are ordered by increasing abscissa: their world interval is
+    read directly. The height comes from the dimension text (« 1.80/1.05 »), the
+    sill from the nearest label. A door-height opening has no sill: it starts at
+    the floor.
     """
     start_world = chain_start(chain, origins)
     if start_world is None:
@@ -262,9 +260,9 @@ def chain_openings(chain, origins, sills=None, fallback_sill=None):
 
 
 def place_opening(opening, wall):
-    """Ramène une baie monde sur l'offset du mur qui la porte.
+    """Brings a world opening back to the offset of the wall carrying it.
 
-    L'offset se compte depuis le début du mur, qui peut aller dans l'autre sens.
+    The offset counts from the start of the wall, which may run the other way.
     """
     along = 0 if abs(wall["start"][1] - wall["end"][1]) < 1e-9 else 1
     wall_start = wall["start"][along]
@@ -283,7 +281,7 @@ def place_opening(opening, wall):
 
 
 def wall_faces(walls):
-    """Abscisses et ordonnées des faces de murs, pour recaler les pièces."""
+    """Abscissas and ordinates of the wall faces, to re-snap the rooms."""
     xs, zs = set(), set()
     for wall in walls:
         half = wall["thickness"] / 2
@@ -295,7 +293,7 @@ def wall_faces(walls):
 
 
 def snap(value, candidates, tolerance):
-    """Valeur la plus proche dans une liste, si elle est à portée."""
+    """Closest value in a list, if it is within reach."""
     if not candidates:
         return value
     nearest = min(candidates, key=lambda candidate: abs(candidate - value))
@@ -303,11 +301,11 @@ def snap(value, candidates, tolerance):
 
 
 def snap_rooms(rooms, walls, outline=None, tolerance=0.30):
-    """Recale les pièces sur les faces des murs : une pièce s'arrête à la face finie.
+    """Re-snaps rooms onto the wall faces: a room stops at the finished face.
 
-    Le recalage est un **déplacement**, pas une mesure : il est rapporté pour que
-    personne ne le confonde avec une lecture du plan. Un sommet déplacé de plus
-    de quelques centimètres signale un polygone qui n'était pas sur les faces.
+    Re-snapping is a **displacement**, not a measurement: it is reported so that
+    nobody confuses it with a reading of the plan. A vertex moved by more than a
+    few centimetres signals a polygon that was not on the faces.
     """
     xs, zs = wall_faces(walls)
     moves = []
@@ -316,8 +314,8 @@ def snap_rooms(rooms, walls, outline=None, tolerance=0.30):
         for point in room["polygon"]:
             x = round(snap(point[0], xs, tolerance), 4)
             z = round(snap(point[1], zs, tolerance), 4)
-            # Un recalage ne doit pas sortir la pièce du niveau : sur un contour
-            # en L, la face d'un mur peut être dehors. On garde alors l'original.
+            # A re-snap must not take the room out of the level: on an L-shaped
+            # outline, a wall face may lie outside. The original is then kept.
             if outline and not inside((x, z), outline):
                 x, z = point[0], point[1]
             if abs(x - point[0]) > 1e-6 or abs(z - point[1]) > 1e-6:
@@ -331,17 +329,17 @@ def snap_rooms(rooms, walls, outline=None, tolerance=0.30):
                 )
             snapped.append([x, z])
         room["polygon"] = snapped
-        # Le repère et le point de visite restent où ils sont : les recaler les
-        # poserait sur la face d'un mur, donc sur le bord du polygone.
+        # The label point and the walk point stay where they are: re-snapping them
+        # would put them on a wall face, hence on the polygon's edge.
     return moves
 
 
 def apply_overrides(walls, overrides):
-    """Applique les retouches saisies après la génération.
+    """Applies the retouches entered after generation.
 
-    Une retouche porte sur un mur précis : le décaler perpendiculairement, ou
-    changer son épaisseur. Elle survit à une régénération, donc corriger trois
-    murs ne demande pas de refaire les vingt autres.
+    A retouch targets a specific wall: shift it perpendicularly, or change its
+    thickness. It survives a regeneration, so fixing three walls does not require
+    redoing the twenty others.
     """
     patches = overrides.get("walls", {})
     for wall in walls:
@@ -367,19 +365,19 @@ def apply_overrides(walls, overrides):
 
 
 def close_walls(walls, tolerance=0.45):
-    """Prolonge un about de mur jusqu'à la face du mur qu'il vise.
+    """Extends a wall end up to the face of the wall it aims at.
 
-    Un plan dessine souvent une cloison qui s'arrête à une poutre ou à un trait,
-    pas à la face du mur. Le vide laisse passer le remplissage et la pièce
-    n'existe plus : sur le plan B, trois cloisons s'arrêtaient 34 cm avant le
-    mur sud et tout le niveau ne formait qu'une région.
+    A plan often draws a partition that stops at a beam or at a line, not at the
+    wall face. The gap lets the fill through and the room no longer exists: on plan
+    B, three partitions stopped 34 cm before the south wall and the whole level
+    formed a single region.
 
-    On prolonge l'about jusqu'à la face la plus proche, dans l'axe du mur, et on
-    rapporte chaque prolongement : c'est un déplacement, pas une lecture.
+    The end is extended up to the nearest face, along the wall axis, and every
+    extension is reported: it is a displacement, not a reading.
     """
     moves = []
     for wall in walls:
-        # Un mur extérieur s'arrête au contour : le prolonger le ferait sortir.
+        # An exterior wall stops at the outline: extending it would take it outside.
         if wall.get("exterior"):
             continue
         along_x = abs(wall["start"][0] - wall["end"][0]) >= abs(
@@ -403,8 +401,8 @@ def close_walls(walls, tolerance=0.45):
                     gap = (face - point[along]) * direction
                     if gap <= 1e-6 or gap > tolerance:
                         continue
-                    # L'autre mur est perpendiculaire : son étendue se lit sur
-                    # l'axe `across` du mur courant.
+                    # The other wall is perpendicular: its extent is read on
+                    # the current wall's `across` axis.
                     low, high = sorted((other["start"][across], other["end"][across]))
                     if not (low - 1e-6 <= point[across] <= high + 1e-6):
                         continue
@@ -426,16 +424,15 @@ def close_walls(walls, tolerance=0.45):
 
 
 def merge_collinear(walls, tolerance=0.02, max_gap=1.5):
-    """Recolle les cloisons qu'un dessin coupe à chaque porte.
+    """Rejoins the partitions a drawing cuts at every door.
 
-    Un plan dessine une cloison en morceaux : le trait s'arrête au tableau de la
-    porte et reprend après. Pour le remplissage, ces morceaux sont des murs
-    séparés, le vide laisse passer et les pièces fusionnent — sur le plan A en
-    mode généré, tout le niveau ne formait qu'une région de 107,93 m².
+    A plan draws a partition in pieces: the line stops at the door reveal and
+    resumes afterwards. For the fill, these pieces are separate walls, the gap lets
+    it through and rooms merge — on plan A in generated mode, the whole level formed
+    a single 107.93 m² region.
 
-    On recolle les morceaux alignés et l'écart devient une baie. La hauteur de
-    cette baie n'est pas lue : elle est posée à la hauteur de porte usuelle et
-    rapportée comme telle.
+    Aligned pieces are rejoined and the gap becomes an opening. The height of that
+    opening is not read: it is set at the usual door height and reported as such.
     """
     exterior = [wall for wall in walls if wall.get("exterior")]
     partitions = [wall for wall in walls if not wall.get("exterior")]
@@ -514,15 +511,15 @@ def along_of(wall):
 
 
 def split_exterior(walls, registry, pages, frame, outline, tolerance=0.15):
-    """Découpe un mur extérieur là où une cloison le rencontre.
+    """Splits an exterior wall where a partition meets it.
 
-    Une façade n'a pas une épaisseur : sur le plan A le nord fait 22 cm côté
-    garage et 34 cm côté chambres. Prendre une seule cote pour toute l'arête
-    fait grandir les pièces — 0,65 m² sur chambre-3. On coupe aux jonctions, puis
-    chaque tronçon reprend la cote qui le longe.
+    A façade does not have one thickness: on plan A the north is 22 cm on the garage
+    side and 34 cm on the bedroom side. Taking a single dimension for the whole edge
+    grows the rooms — 0.65 m² on chambre-3. It is split at the junctions, then each
+    run takes the dimension running along it.
 
-    Les baies suivent : chacune est reportée sur le tronçon qui la contient, par
-    son intervalle monde, jamais par un offset recopié.
+    Openings follow: each is carried over to the run containing it, by its world
+    interval, never by a copied offset.
     """
     exterior = [wall for wall in walls if wall.get("exterior")]
     others = [wall for wall in walls if not wall.get("exterior")]
@@ -534,8 +531,8 @@ def split_exterior(walls, registry, pages, frame, outline, tolerance=0.15):
         along, across = (0, 1) if along_x else (1, 0)
         axis = wall["start"][across]
         low, high = sorted((wall["start"][along], wall["end"][along]))
-        # La face extérieure est celle qui tombe sur le contour : c'est elle qui
-        # reste fixe quand l'épaisseur change, pas l'axe.
+        # The outer face is the one lying on the outline: it is the one that
+        # stays fixed when the thickness changes, not the axis.
         outline_values = {round(point[across], 4) for point in outline}
         half = wall["thickness"] / 2
         if round(axis - half, 4) in outline_values:
@@ -558,8 +555,8 @@ def split_exterior(walls, registry, pages, frame, outline, tolerance=0.15):
             start, end = ordered[index], ordered[index + 1]
             if end - start < 0.05:
                 continue
-            # Le premier tronçon garde l'identifiant du mur : une surcharge qui
-            # visait ce mur continue de le viser.
+            # The first run keeps the wall's identifier: an override that
+            # targeted this wall keeps targeting it.
             segment = {
                 "id": wall["id"] if index == 0 else f"{wall['id']}-{index + 1}",
                 "start": [0.0, 0.0],
@@ -567,8 +564,8 @@ def split_exterior(walls, registry, pages, frame, outline, tolerance=0.15):
                 "exterior": True,
                 "openings": [],
             }
-            # Le sens du mur d'origine est conservé : les offsets de baies et le
-            # sens d'ouverture des portes en dépendent.
+            # The original wall's direction is kept: opening offsets and the
+            # opening direction of doors depend on it.
             if forward:
                 segment["start"][along], segment["end"][along] = start, end
             else:
@@ -609,18 +606,18 @@ def split_exterior(walls, registry, pages, frame, outline, tolerance=0.15):
 
 
 def merge_partitions(model_walls, partitions, tolerance=0.15, thickness_gap=0.03):
-    """Remplace les cloisons du modèle par celles lues sur le dessin.
+    """Replaces the model's partitions with those read on the drawing.
 
-    Les murs hachurés ne sont pas extractibles : ils restent ceux du modèle, avec
-    leurs baies. Seules les cloisons — les rectangles remplis — sont reprises du
-    dessin, parce que c'est là qu'elles sont exactes. Une cloison sans
-    contrepartie dans le modèle est ajoutée.
+    Hatched walls cannot be extracted: they stay the model's, with their openings.
+    Only partitions — the filled rectangles — are taken from the drawing, because
+    that is where they are exact. A partition with no counterpart in the model is
+    added.
 
-    L'épaisseur n'est reprise que si elle concorde. L'aplat du dessin est le mur
-    **brut** ; le modèle porte le mur **fini**, doublage compris. Remplacer l'un
-    par l'autre rétrécit la pièce : sur le plan A, la cloison garage/WC fait
-    10,2 cm à l'aplat et 15 cm finie, et la surface imprimée du WC (1,62 m²)
-    tranche pour 15 cm. L'écart est rapporté, pas absorbé.
+    The thickness is only taken if it agrees. The drawing's fill is the **raw**
+    wall; the model carries the **finished** wall, lining included. Replacing one
+    with the other shrinks the room: on plan A, the garage/WC partition is 10.2 cm
+    in the fill and 15 cm finished, and the printed WC area (1.62 m²) decides for
+    15 cm. The gap is reported, not absorbed.
     """
     merged = [json.loads(json.dumps(wall)) for wall in model_walls]
     added = 0
@@ -660,9 +657,9 @@ def merge_partitions(model_walls, partitions, tolerance=0.15, thickness_gap=0.03
             )
             added += 1
             continue
-        # On garde l'identifiant, l'emprise et les baies du modèle : une cloison
-        # lue s'arrête au tableau d'une porte, le mur du modèle la traverse. Seuls
-        # la position et la épaisseur viennent du dessin.
+        # The model's identifier, extent and openings are kept: a partition
+        # read stops at a door reveal, the model wall crosses it. Only
+        # the position and the thickness come from the drawing.
         if abs(best["thickness"] - partition["thickness"]) <= thickness_gap:
             best["start"][across] = best["end"][across] = round(centre, 4)
             best["thickness"] = partition["thickness"]
@@ -678,7 +675,7 @@ def merge_partitions(model_walls, partitions, tolerance=0.15, thickness_gap=0.03
 
 
 def world_frame(chains, outline):
-    """Repère points -> mètres, depuis les chaînes qui portent l'emprise."""
+    """Points -> metres frame, from the chains carrying the footprint."""
     origins = envelope_frame(chains, outline)
     ppm = None
     for chain in chains:
@@ -691,12 +688,12 @@ def world_frame(chains, outline):
 
 
 def printed_thickness(registry, pages, edge, frame, tolerance=0.6):
-    """Épaisseur lue sur une cote en centimètres posée contre le mur.
+    """Thickness read on a dimension in centimetres set against the wall.
 
-    Une cote de 22, 34 ou 15 contre une façade donne son épaisseur. On ne
-    retient que les cotes perpendiculaires au mur et dont le libellé tombe dans
-    son emprise : c'est une lecture, pas une déduction. Sans cote trouvée, le
-    mur garde l'épaisseur de repli et le script le dit.
+    A dimension of 22, 34 or 15 against a façade gives its thickness. Only
+    dimensions perpendicular to the wall whose label falls within its extent are
+    kept: it is a reading, not a deduction. Without a dimension found, the wall
+    keeps the fallback thickness and the script says so.
     """
     if frame is None:
         return None
@@ -731,7 +728,7 @@ def printed_thickness(registry, pages, edge, frame, tolerance=0.6):
 
 
 def printed_sills(registry, pages):
-    """Toutes les allèges imprimées, avec leur position sur la page."""
+    """Every printed sill, with its position on the page."""
     found = []
     for page in registry.get("pages") or []:
         if pages is not None and page.get("index") not in pages:
@@ -743,7 +740,7 @@ def printed_sills(registry, pages):
 
 
 def printed_sill(registry, pages):
-    """Allège imprimée la plus fréquente, ou None si le plan n'en donne pas."""
+    """Most frequent printed sill, or None if the plan gives none."""
     counts = {}
     for page in registry.get("pages") or []:
         if pages is not None and page.get("index") not in pages:
@@ -758,12 +755,12 @@ def printed_sill(registry, pages):
 
 
 def stamp_exterior_openings(walls):
-    """Marque chaque baie d'un mur extérieur comme extérieure.
+    """Marks every opening of an exterior wall as exterior.
 
-    C'est un fait du mur, pas une décision : le mur porte déjà
-    ``exterior``. Sans le drapeau, le rendu coulisse un panneau plein au
-    lieu du vitrage et une porte de garage démarre ouverte — c'est ce
-    qu'un retour propriétaire a coûté sur un plan complet.
+    It is a fact of the wall, not a decision: the wall already carries
+    ``exterior``. Without the flag, the renderer slides a solid panel instead of
+    the glazing and a garage door starts open — that is what an owner review cost
+    on a complete plan.
     """
     stamped = 0
     for wall in walls:
@@ -777,22 +774,22 @@ def stamp_exterior_openings(walls):
 
 
 def merge_openings(model_walls, generated_walls, tolerance=0.12):
-    """Reporte sur le modèle les baies que les chaînes prouvent et qu'il n'a pas.
+    """Carries over to the model the openings the chains prove and it lacks.
 
-    La fusion garde les murs du modèle, qui portent les murs hachurés et les
-    portes intérieures. Elle ne doit pas jeter pour autant les baies lues sur
-    les chaînes : une baie prouvée par une cote et absente du modèle est un
-    manque, pas un choix.
+    The merge keeps the model's walls, which carry the hatched walls and the
+    interior doors. It must not, for all that, throw away the openings read on the
+    chains: an opening proven by a dimension and absent from the model is a gap,
+    not a choice.
 
-    Une baie est reportée par son intervalle **monde**, pas par son offset : deux
-    murs voisins peuvent être à six centimètres l'un de l'autre, et un offset
-    recopié d'un mur à l'autre poserait la baie hors du mur. La baie doit tenir
-    dans l'emprise du mur d'accueil, sinon elle n'est pas reportée.
+    An opening is carried over by its **world** interval, not by its offset: two
+    neighbouring walls may be six centimetres apart, and an offset copied from one
+    wall to another would put the opening outside the wall. The opening must fit
+    within the host wall's extent, otherwise it is not carried over.
 
-    Le mur d'accueil est celui dont l'emprise contient la baie et dont l'axe est
-    le plus proche, pas le premier sous une tolérance : le mur d'entrée du modèle
-    est à 0,33 m de l'arête du contour, et une tolérance fixe y perdait les trois
-    baies de l'entrée.
+    The host wall is the one whose extent contains the opening and whose axis is
+    the closest, not the first under a tolerance: the model's entrance wall is
+    0.33 m from the outline edge, and a fixed tolerance lost the three entrance
+    openings there.
     """
     added = []
     for generated in generated_walls:
@@ -848,12 +845,11 @@ def merge_openings(model_walls, generated_walls, tolerance=0.12):
 
 
 def compare_thickness(model_walls, generated_walls, tolerance=0.12, gap=0.02):
-    """Écarts d'épaisseur entre les murs du modèle et les cotes du plan.
+    """Thickness gaps between the model's walls and the plan's dimensions.
 
-    La fusion garde les murs du modèle, mais elle ne doit pas taire ce que le
-    plan dit d'autre : un mur dont l'épaisseur déclarée s'écarte de la cote
-    imprimée est signalé, et c'est une surcharge qui le corrige, pas une
-    régénération.
+    The merge keeps the model's walls, but it must not hide what else the plan
+    says: a wall whose declared thickness departs from the printed dimension is
+    flagged, and an override fixes it, not a regeneration.
     """
     rows = []
     for generated in generated_walls:
@@ -904,8 +900,8 @@ def build(
     outline=None,
 ):
     level = next(candidate for candidate in template["levels"] if candidate["id"] == level_id)
-    # Le contour écrit à la main n'est qu'une opinion : quand la couche 3 en a
-    # dérivé un, c'est lui qui porte les arêtes des murs extérieurs.
+    # The hand-written outline is only an opinion: when layer 3 has
+    # derived one, it is the one carrying the exterior wall edges.
     outline = level["outline"] if outline is None else outline
     chains = [
         chain
@@ -986,13 +982,13 @@ def build(
     closed = []
     rejoined = []
     if openings_only:
-        # Les murs du modèle sont gardés tels quels : seules les baies lues sur
-        # les chaînes sont reportées. C'est le cas d'une maison dont les murs
-        # sont déjà justes et à qui il ne manque que les ouvertures.
+        # The model's walls are kept as they are: only the openings read on
+        # the chains are carried over. It is the case of a house whose walls
+        # are already right and which only lacks the openings.
         walls = json.loads(json.dumps(level["walls"]))
         added = merge_openings(walls, generated)
     elif merge:
-        # Les murs hachurés du modèle sont conservés : seules les cloisons changent.
+        # The model's hatched walls are kept: only the partitions change.
         walls, _, partition_gaps = merge_partitions(level["walls"], plan["walls"])
         added = merge_openings(walls, generated)
         thickness_gaps = compare_thickness(walls, generated)
@@ -1025,8 +1021,8 @@ def build(
     stamped = stamp_exterior_openings(walls)
     target["walls"] = walls
     target["outline"] = outline
-    # En mode « baies seules », les pièces du modèle sont déjà justes : les
-    # recaler sur les faces les déplacerait pour rien et casserait les surfaces.
+    # In "openings only" mode, the model's rooms are already right:
+    # re-snapping them onto the faces would move them for nothing and break the areas.
     moves = [] if openings_only else snap_rooms(target["rooms"], walls, outline)
     if report is not None:
         report["thickness"] = read
@@ -1044,7 +1040,7 @@ def build(
 
 
 def self_test():
-    """Non-régression sur un cas synthétique : aucune donnée réelle."""
+    """Non-regression on a synthetic case: no real data."""
     outline = [[0, 0], [6, 0], [6, 4], [0, 4]]
     template = {
         "schemaVersion": 1,
@@ -1089,7 +1085,7 @@ def self_test():
             }
         ]
     }
-    # Une chaîne refermée sur la façade sud, avec une porte de 0,90 m.
+    # A closed chain on the south façade, with a 0.90 m door.
     ppm = 2834.6457 / 75
     segments = [
         {"text": "2.00", "kind": "linear", "value": 2.0, "at": [100 + 1.0 * ppm, 400]},
@@ -1130,24 +1126,24 @@ def self_test():
             }
         ],
     }
-    # Mode remplacement : tout vient du dessin et du contour.
+    # Replace mode: everything comes from the drawing and the outline.
     result = build(plan, registry, template, "rdc", [1], 0.34, merge=False)
     level = result["levels"][0]
     failures = []
     if len(level["walls"]) != 5:
-        failures.append(f"{len(level['walls'])} murs au lieu de 4 murs extérieurs + 1 cloison")
+        failures.append(f"{len(level['walls'])} walls instead of 4 exterior walls + 1 partition")
     exterior = [wall for wall in level["walls"] if wall.get("exterior")]
     if len(exterior) != 4:
-        failures.append(f"{len(exterior)} murs extérieurs au lieu de 4")
+        failures.append(f"{len(exterior)} exterior walls instead of 4")
     openings = [opening for wall in level["walls"] for opening in wall.get("openings", [])]
     if len(openings) != 1:
-        failures.append(f"{len(openings)} baies au lieu de 1")
-    # L'arête sud va de x=6 vers x=0 : la porte à x 2,00..2,90 est à 3,10 du début.
+        failures.append(f"{len(openings)} openings instead of 1")
+    # The south edge runs from x=6 to x=0: the door at x 2.00..2.90 is 3.10 from the start.
     elif abs(openings[0]["width"] - 0.9) > 0.01 or abs(openings[0]["offset"] - 3.1) > 0.01:
-        failures.append(f"baie mal placée : {openings[0]}")
+        failures.append(f"opening misplaced: {openings[0]}")
     elif not openings[0].get("exterior"):
-        failures.append("une baie de mur extérieur n'est pas marquée extérieure")
-    # La fusion garde les murs du modèle que le dessin ne donne pas.
+        failures.append("an exterior-wall opening is not marked exterior")
+    # The merge keeps the model walls the drawing does not give.
     with_model = json.loads(json.dumps(template))
     with_model["levels"][0]["walls"] = [
         {
@@ -1164,15 +1160,15 @@ def self_test():
     merged_walls = merged["levels"][0]["walls"]
     kept = next((wall for wall in merged_walls if wall["id"] == "hachure"), None)
     if kept is None:
-        failures.append("la fusion a supprimé un mur hachuré du modèle")
+        failures.append("the merge removed a hatched wall of the model")
     elif len(kept.get("openings", [])) != 1:
-        failures.append("la fusion a perdu une baie du modèle")
-    # La fusion ne garde que les murs du modèle et les cloisons lues : le mur
-    # hachuré et la cloison, pas de murs extérieurs régénérés.
+        failures.append("the merge lost an opening of the model")
+    # The merge only keeps the model walls and the partitions read: the hatched
+    # wall and the partition, no regenerated exterior walls.
     if len(merged_walls) != 2:
-        failures.append(f"{len(merged_walls)} murs après fusion au lieu de 2")
+        failures.append(f"{len(merged_walls)} walls after merge instead of 2")
 
-    # Une retouche survit à la régénération et ne touche que le mur visé.
+    # A retouch survives regeneration and only touches the targeted wall.
     patched = build(
         plan,
         registry,
@@ -1187,13 +1183,13 @@ def self_test():
     target = next(wall for wall in patched_walls if wall["id"] == "ext-3")
     untouched = next(wall for wall in patched_walls if wall["id"] == "ext-1")
     if abs(target["thickness"] - 0.30) > 1e-9:
-        failures.append(f"retouche d'épaisseur non appliquée : {target['thickness']}")
+        failures.append(f"thickness retouch not applied: {target['thickness']}")
     if abs(untouched["thickness"] - 0.34) > 1e-9:
-        failures.append(f"retouche appliquée au mauvais mur : {untouched['thickness']}")
+        failures.append(f"retouch applied to the wrong wall: {untouched['thickness']}")
 
-    # Une chaîne de façade peut couvrir plusieurs arêtes : au sud, un renfoncement
-    # d'entrée sépare deux tronçons. Chaque baie doit atterrir sur l'arête qui la
-    # contient, sinon celles des autres arêtes sont perdues.
+    # A façade chain may cover several edges: on the south, an entrance recess
+    # separates two runs. Each opening must land on the edge containing it,
+    # otherwise those of the other edges are lost.
     notched = [[0, 0], [6, 0], [6, 4], [4, 4], [4, 3.6], [2, 3.6], [2, 4], [0, 4]]
     notched_template = json.loads(json.dumps(template))
     notched_template["levels"][0]["outline"] = notched
@@ -1217,18 +1213,18 @@ def self_test():
     ]
     if len(notched_openings) != 2:
         failures.append(
-            f"{len(notched_openings)} baies sur un contour en renfoncement au lieu de 2"
+            f"{len(notched_openings)} openings on a recessed outline instead of 2"
         )
     else:
         widths = sorted(round(opening["width"], 2) for opening in notched_openings)
         if widths != [0.9, 1.0]:
-            failures.append(f"baies du renfoncement mal réparties : {widths}")
+            failures.append(f"recess openings badly distributed: {widths}")
 
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print("génération de projet : auto-test réussi")
+    print("project generation: self-test passed")
     return 0
 
 
@@ -1244,22 +1240,22 @@ def main(argv):
     parser.add_argument(
         "--replace",
         action="store_true",
-        help="remplacer tous les murs par ceux du dessin, au lieu de fusionner",
+        help="replace every wall with those of the drawing, instead of merging",
     )
     parser.add_argument(
         "--openings-only",
         action="store_true",
-        help="garder les murs du modèle et n'ajouter que les baies lues sur les chaînes",
+        help="keep the model's walls and only add the openings read on the chains",
     )
     parser.add_argument(
         "--overrides",
         default=None,
-        help="fichier de retouches appliquées après génération (murs et baies)",
+        help="file of retouches applied after generation (walls and openings)",
     )
     parser.add_argument(
         "--outline",
         default=None,
-        help="contour dérivé par derive_outline.py, au lieu de celui du modèle",
+        help="outline derived by derive_outline.py, instead of the model's",
     )
     if "--self-test" in argv:
         return self_test()
@@ -1289,52 +1285,52 @@ def main(argv):
     Path(args.out).write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     level = next(candidate for candidate in result["levels"] if candidate["id"] == args.level)
     openings = sum(len(wall.get("openings", [])) for wall in level["walls"])
-    print(f"{len(level['walls'])} murs, {openings} baies -> {args.out}")
+    print(f"{len(level['walls'])} walls, {openings} openings -> {args.out}")
     read = report.get("thickness") or []
     printed = sum(1 for item in read if item["printed"])
-    print(f"épaisseurs lues sur le plan : {printed}/{len(read)}")
+    print(f"thicknesses read on the plan: {printed}/{len(read)}")
     fallback = [item["wall"] for item in read if not item["printed"]]
     if fallback:
-        print(f"  sans cote, épaisseur de repli : {', '.join(fallback)}")
+        print(f"  no dimension, fallback thickness: {', '.join(fallback)}")
     if report.get("sill") is None:
-        print("  allège : aucune cote imprimée, baies de fenêtre posées à 0")
+        print("  sill: no printed dimension, window openings set at 0")
     else:
-        print(f"  allège imprimée la plus fréquente : {report['sill']} m")
+        print(f"  most frequent printed sill: {report['sill']} m")
     for item in report.get("sillGuessed") or []:
-        print(f"  allège non appariée, repli appliqué : {item['opening']} ({item['wall']})")
+        print(f"  sill not paired, fallback applied: {item['opening']} ({item['wall']})")
     for item in report.get("openingsDropped") or []:
         print(
-            f"  baie sans arête d'accueil : {item['axis']} "
+            f"  opening without a host edge: {item['axis']} "
             f"{item['low']:.2f}..{item['high']:.2f} ({item['width']:.2f} m)"
         )
     if report.get("openingsAdded"):
-        print(f"  baies ajoutées depuis les chaînes : {len(report['openingsAdded'])}")
+        print(f"  openings added from the chains: {len(report['openingsAdded'])}")
     moves = report.get("roomMoves") or []
     if moves:
         worst = max(moves, key=lambda move: move["distance"])
         print(
-            f"  pièces recalées sur les faces : {len(moves)} sommet(s), "
-            f"le plus grand de {worst['distance']:.3f} m ({worst['room']})"
+            f"  rooms re-snapped onto the faces: {len(moves)} vertex/vertices, "
+            f"the largest by {worst['distance']:.3f} m ({worst['room']})"
         )
     if report.get("rejoined"):
         print(
-            f"  cloisons recollées : {len(report['rejoined'])} porte(s) "
-            f"refermée(s) en baie"
+            f"  partitions rejoined: {len(report['rejoined'])} door(s) "
+            f"closed into an opening"
         )
     for move in report.get("closed") or []:
         print(
-            f"  {move['wall']} : about prolongé de {move['gap']} m "
+            f"  {move['wall']}: end extended by {move['gap']} m "
             f"({move['from']} -> {move['to']})"
         )
     for gap in report.get("partitionGaps") or []:
         print(
-            f"  {gap['wall']} : cloison du modèle {gap['model']} m, "
-            f"aplat du dessin {gap['drawn']} m — épaisseur du modèle conservée"
+            f"  {gap['wall']}: model partition {gap['model']} m, "
+            f"drawing fill {gap['drawn']} m — model thickness kept"
         )
     for gap in report.get("thicknessGaps") or []:
         print(
-            f"  {gap['wall']} : épaisseur du modèle {gap['model']} m, "
-            f"cote imprimée {gap['printed']} m"
+            f"  {gap['wall']}: model thickness {gap['model']} m, "
+            f"printed dimension {gap['printed']} m"
         )
     return 0
 

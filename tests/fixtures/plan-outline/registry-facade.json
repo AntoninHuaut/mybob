@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedBy": "tests/fixtures/plan-outline (synthétique)",
-  "note": "Encoche de façade : motif du plan B (page 13), transposé sur une emprise 10,00 x 8,00 à 40 pt/m. Les deux bords de l'encoche sont imprimés (3,00 et 5,00) ; sa profondeur, 0,35 m, ne l'est nulle part et vient d'une cote en centimètres posée contre la façade sud. Aucune donnée réelle.",
+  "generatedBy": "tests/fixtures/plan-outline (synthetic)",
+  "note": "Façade notch: plan B pattern (page 13), transposed onto a 10.00 x 8.00 footprint at 40 pt/m. Both edges of the notch are printed (3.00 and 5.00); its depth, 0.35 m, is printed nowhere and comes from a dimension in centimetres set against the south façade. No real data.",
   "source": { "file": "synthetique", "sha256": "0", "pageCount": 1 },
   "pages": [
     {

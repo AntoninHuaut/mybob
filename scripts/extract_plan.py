@@ -1,24 +1,24 @@
-"""Couche 0 : géométrie d'un plan vectoriel, lue sur le dessin.
+"""Layer 0: geometry of a vector plan, read on the drawing.
 
-Le plan est dessiné à l'échelle : les coordonnées du PDF sont exactes au
-millimètre. On lit donc les murs **sur le dessin**, et les cotes imprimées
-servent d'arbitre, pas de source.
+The plan is drawn to scale: the PDF coordinates are exact to the millimetre.
+Walls are therefore read **on the drawing**, and the printed dimensions act as
+the arbiter, not the source.
 
-Un plan de ce constructeur dessine les murs de deux façons :
+A plan from this builder draws walls in two ways:
 
-- les **cloisons** sont des rectangles remplis d'une couleur d'aplat propre au
-  CAO. C'est un marqueur sémantique : le rectangle donne l'épaisseur et les
-  abouts exacts, sans ambiguïté avec les lignes de cote ;
-- les **murs extérieurs** sont des bandes hachurées entre deux faces, non
-  remplies. Leur position vient des chaînes de cotes refermées, qui la donnent
-  au millimètre.
+- **partitions** are rectangles filled with a fill colour specific to the CAD
+  tool. It is a semantic marker: the rectangle gives the exact thickness and
+  ends, with no ambiguity with dimension lines;
+- **exterior walls** are hatched bands between two faces, unfilled. Their
+  position comes from the closed dimension chains, which give it to the
+  millimetre.
 
-La couleur d'aplat des cloisons n'est pas codée en dur : c'est le remplissage
-non blanc et non noir le plus fréquent de la page. Un autre constructeur aura
-une autre couleur, la règle tient.
+The partitions' fill colour is not hardcoded: it is the most frequent
+non-white, non-black fill of the page. Another builder will have another
+colour, the rule holds.
 
-Usage :
-  uvx --from pymupdf python scripts/extract_plan.py <pdf> <page> <sortie.json> \
+Usage:
+  uvx --from pymupdf python scripts/extract_plan.py <pdf> <page> <output.json> \
       [--denominator 75] [--scale 37.7953]
 """
 import argparse
@@ -30,15 +30,15 @@ from pathlib import Path
 
 import pymupdf
 
-MIN_THICKNESS = 0.04  # m, en dessous ce n'est pas un mur
-MAX_THICKNESS = 0.45  # m, au-dessus ce n'est pas un mur
-MIN_LENGTH = 0.40  # m, en dessous ce n'est pas un mur
-WHITE = 0.95  # luminance au-dessus de laquelle un aplat est un fond
-BLACK = 0.05  # luminance en dessous de laquelle un aplat est un trait
+MIN_THICKNESS = 0.04  # m, below this it is not a wall
+MAX_THICKNESS = 0.45  # m, above this it is not a wall
+MIN_LENGTH = 0.40  # m, below this it is not a wall
+WHITE = 0.95  # luminance above which a fill is a background
+BLACK = 0.05  # luminance below which a fill is a stroke
 
 
 def display_transform(page):
-    """Coordonnées ramenées au repère affiché (cf. /Rotate)."""
+    """Coordinates brought back to the displayed frame (see /Rotate)."""
     box, rotation = page.mediabox, page.rotation
     if rotation == 90:
         return lambda x, y: (box.height - y, x)
@@ -52,7 +52,7 @@ def luminance(colour):
 
 
 def filled_shapes(page):
-    """Rectangles remplis de la page : couleur, largeur, hauteur, coin, en points."""
+    """Filled rectangles of the page: colour, width, height, corner, in points."""
     to_point = display_transform(page)
     shapes = []
     for drawing in page.get_drawings():
@@ -88,7 +88,7 @@ def filled_shapes(page):
 
 
 def wall_colour(shapes):
-    """Aplat des cloisons : le remplissage ni blanc ni noir le plus fréquent."""
+    """Partition fill: the most frequent fill that is neither white nor black."""
     counts = collections.Counter(
         shape["fill"] for shape in shapes if BLACK < shape["luminance"] < WHITE
     )
@@ -98,10 +98,10 @@ def wall_colour(shapes):
 
 
 def partitions(shapes, colour, scale, envelope):
-    """Cloisons : rectangles fins remplis de la couleur de mur, dans l'emprise.
+    """Partitions: thin rectangles filled with the wall colour, inside the envelope.
 
-    Le cartouche et la légende utilisent parfois le même aplat que les murs :
-    l'emprise du niveau, donnée par les cotes refermées, les écarte.
+    The title block and the legend sometimes use the same fill as the walls:
+    the level envelope, given by the closed dimensions, rules them out.
     """
     x0, y0, x1, y1 = envelope
     found = []
@@ -143,7 +143,7 @@ def build(pdf, page_index, scale, envelope):
     colour = wall_colour(shapes)
     walls = partitions(shapes, colour, scale, envelope) if colour else []
     for wall in walls:
-        # Le long de l'axe d'un mur horizontal c'est x, pour un vertical c'est z.
+        # Along the axis of a horizontal wall it is x, for a vertical one it is z.
         along, across = (0, 1) if wall["axis"] == "horizontal" else (1, 0)
         wall["from"] = round((wall["from"] - envelope[along]) / scale, 4)
         wall["to"] = round((wall["to"] - envelope[along]) / scale, 4)
@@ -164,13 +164,13 @@ def build(pdf, page_index, scale, envelope):
 
 
 def self_test():
-    """Non-régression sur un PDF synthétique : aucune donnée réelle."""
+    """Non-regression on a synthetic PDF: no real data."""
     scale = 2834.6457 / 75
     document = pymupdf.open()
     page = document.new_page(width=842, height=595)
     wall = (0.609, 0.555, 0.555)
     origin = (100.0, 100.0)
-    # Une cloison horizontale de 4 m x 0,10 m et une verticale de 2 m x 0,07 m.
+    # A horizontal 4 m x 0.10 m partition and a vertical 2 m x 0.07 m one.
     page.draw_rect(
         pymupdf.Rect(origin[0], origin[1], origin[0] + 4 * scale, origin[1] + 0.10 * scale),
         color=None,
@@ -186,7 +186,7 @@ def self_test():
         color=None,
         fill=wall,
     )
-    # Un aplat de cartouche, hors emprise, avec la même couleur.
+    # A title-block fill, outside the envelope, with the same colour.
     page.draw_rect(
         pymupdf.Rect(600, 20, 600 + 2 * scale, 20 + 0.10 * scale), color=None, fill=wall
     )
@@ -196,9 +196,9 @@ def self_test():
     result = build(path, 1, scale, envelope)
     failures = []
     if result["wallFill"] != [round(channel, 3) for channel in wall]:
-        failures.append(f"aplat de mur {result['wallFill']}")
+        failures.append(f"wall fill {result['wallFill']}")
     if len(result["walls"]) != 2:
-        failures.append(f"{len(result['walls'])} cloisons au lieu de 2 (cartouche non écarté ?)")
+        failures.append(f"{len(result['walls'])} partitions instead of 2 (title block not ruled out?)")
     else:
         horizontal, vertical = result["walls"]
         if horizontal["axis"] != "horizontal" or abs(horizontal["thickness"] - 0.10) > 0.01:
@@ -211,9 +211,9 @@ def self_test():
             failures.append(f"emprise verticale {vertical['from']}..{vertical['to']}")
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print("extraction de plan : auto-test réussi")
+    print("plan extraction: self-test passed")
     return 0
 
 
@@ -227,7 +227,7 @@ def main(argv):
     parser.add_argument(
         "--envelope",
         required=True,
-        help="x0,y0,x1,y1 en points : coin nord-ouest et coin sud-est du niveau",
+        help="x0,y0,x1,y1 in points: north-west corner and south-east corner of the level",
     )
     if "--self-test" in argv:
         return self_test()
@@ -236,14 +236,14 @@ def main(argv):
     if scale is None:
         if args.denominator is None:
             parser.error(
-                "indiquer --scale (points par mètre, déduit des chaînes de cotes) "
-                "ou --denominator (ratio du cartouche, à vérifier)"
+                "pass --scale (points per metre, deduced from the dimension chains) "
+                "or --denominator (title-block ratio, to be checked)"
             )
         scale = 2834.6457 / args.denominator
         print(
-            "attention : --denominator est le ratio du cartouche, une affirmation "
-            "sur la feuille imprimée d'origine. Préférer --scale, déduit des chaînes "
-            "de cotes, et vérifier avec check_plan_surfaces.py.",
+            "warning: --denominator is the title-block ratio, a claim "
+            "about the original printed sheet. Prefer --scale, deduced from the dimension "
+            "chains, and check with check_plan_surfaces.py.",
             file=sys.stderr,
         )
     envelope = tuple(float(value) for value in args.envelope.split(","))
@@ -252,7 +252,7 @@ def main(argv):
     result = build(args.pdf, args.page, scale, envelope)
     with open(args.out, "w", encoding="utf-8") as handle:
         json.dump(result, handle, ensure_ascii=False, indent=2)
-    print(f"aplat de mur {result['wallFill']} : {len(result['walls'])} cloisons -> {args.out}")
+    print(f"wall fill {result['wallFill']}: {len(result['walls'])} partitions -> {args.out}")
     return 0
 
 
