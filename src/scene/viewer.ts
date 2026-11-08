@@ -43,6 +43,7 @@ import { builtOutline, exteriorOverview, fitOverview, fitPlan, siteOverviewLevel
 import { panOrbitWithKeys } from './orbitNavigation';
 import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
 import { ShadowRefresh } from './shadowRefresh';
+import { RenderScheduler, WAKE_EVENTS } from './renderScheduler';
 import {
   AUTO_CUT_HEIGHT,
   buildWallCutaway,
@@ -161,6 +162,9 @@ export class HouseViewer {
   private wallCutaway?: WallCutaway;
   private cutawaySelection = '';
   private shadowRefresh?: ShadowRefresh;
+  private readonly renderScheduler = new RenderScheduler();
+  /** Any input anywhere in the page may change what the scene shows. */
+  private wake = () => this.renderScheduler.request();
   private sectionHeight?: number;
   private planOpenings?: PlanOpenings;
   private dimensions: LinesMesh[] = [];
@@ -227,13 +231,22 @@ export class HouseViewer {
     canvas.addEventListener('blur', this.clearKeys);
     canvas.addEventListener('wheel', this.planWheel, { passive: false });
     canvas.addEventListener('pointerdown', this.orbitPointerDown, true);
+    for (const type of WAKE_EVENTS)
+      window.addEventListener(type, this.wake, { capture: true, passive: true });
     this.engine.runRenderLoop(() => {
       this.stepOrbitTour();
-      if (this.scene) this.scene.render();
+      if (!this.scene) return;
+      if (
+        this.renderScheduler.shouldRender(performance.now(), this.cameraSignature(), () =>
+          this.busy(),
+        )
+      )
+        this.scene.render();
     });
   }
 
   load(project: HouseProject, levelId?: string) {
+    this.requestRender();
     this.orbitTour = undefined;
     this.wallCutaway?.dispose();
     this.wallCutaway = undefined;
@@ -441,6 +454,7 @@ export class HouseViewer {
   }
 
   setMode(mode: ViewMode) {
+    this.requestRender();
     if (!this.scene) return;
     this.orbitTour = undefined;
     if (mode === 'walk') {
@@ -729,6 +743,7 @@ export class HouseViewer {
   }
 
   setExteriorView(enabled: boolean) {
+    this.requestRender();
     this.exteriorView = enabled && !!this.exteriorFrame && this.mode === 'overview';
     this.updateRoofVisibility();
     this.setMeasureMode(false);
@@ -795,12 +810,14 @@ export class HouseViewer {
   }
 
   setWallDisplay(mode: WallDisplay) {
+    this.requestRender();
     this.wallDisplay = mode;
     this.updateCutaway();
     this.updateShadowPolicy();
   }
 
   setSectionHeight(height: number | undefined) {
+    this.requestRender();
     this.sectionHeight = height;
     this.updateSection();
     this.updateCutaway();
@@ -808,6 +825,7 @@ export class HouseViewer {
   }
 
   setSolar(position?: SolarPosition) {
+    this.requestRender();
     this.captureSunPreset();
     this.solarPosition = position;
     this.updateLighting();
@@ -1098,7 +1116,69 @@ export class HouseViewer {
     );
   }
 
+  /** Asks for images until the scene is still again; the loop skips them otherwise. */
+  requestRender() {
+    // Optional: scene tests build a viewer from its prototype, without the constructor.
+    this.renderScheduler?.request();
+  }
+
+  /** True while the loop only redraws once a second because nothing moves. */
+  get renderingIdle(): boolean {
+    return this.renderScheduler?.idle ?? false;
+  }
+
+  /** Everything about the active camera that changes the image, rounded under visibility. */
+  private cameraSignature(): string {
+    const camera = this.scene.activeCamera;
+    if (!camera) return '';
+    const values = [
+      camera.position.x,
+      camera.position.y,
+      camera.position.z,
+      camera.fov,
+      camera.mode,
+      camera.orthoLeft ?? 0,
+      camera.orthoRight ?? 0,
+      camera.orthoTop ?? 0,
+      camera.orthoBottom ?? 0,
+      this.engine.getRenderWidth(),
+      this.engine.getRenderHeight(),
+    ];
+    if (camera === this.orbit) {
+      const o = this.orbit;
+      values.push(o.alpha, o.beta, o.radius, o.target.x, o.target.y, o.target.z);
+      // Inertia still to spend moves the camera on the next images.
+      values.push(
+        o.inertialAlphaOffset,
+        o.inertialBetaOffset,
+        o.inertialRadiusOffset,
+        o.inertialPanningX,
+        o.inertialPanningY,
+      );
+    } else if (camera === this.walk) {
+      const w = this.walk;
+      values.push(w.rotation.x, w.rotation.y, w.rotation.z);
+      values.push(w.cameraDirection.x, w.cameraDirection.y, w.cameraDirection.z);
+      values.push(w.cameraRotation.x, w.cameraRotation.y);
+    }
+    return values.map((value) => value.toFixed(4)).join(',');
+  }
+
+  /** Changes on screen that no event announces: held keys, swinging doors, compiling shaders. */
+  private busy(): boolean {
+    return (
+      this.keyState.size > 0 ||
+      this.orbitTour !== undefined ||
+      this.capturing ||
+      !!this.house?.doors.some((door) => Math.abs(door.progress - door.target) > 0.001) ||
+      (this.shadowRefresh !== undefined && !this.shadowRefresh.settled) ||
+      !this.engine.areAllEffectsReady() ||
+      this.scene.getWaitingItemsCount() > 0
+    );
+  }
+
   private resize() {
+    this.requestRender();
     this.engine.resize();
     if (this.mode === 'plan' && this.level) this.setOrthoSize();
     else if (this.mode === 'overview' && this.level && this.orbit) this.fitOverview();
@@ -1386,5 +1466,6 @@ export class HouseViewer {
     this.engine.dispose();
     this.canvas.removeEventListener('wheel', this.planWheel);
     this.canvas.removeEventListener('pointerdown', this.orbitPointerDown, true);
+    for (const type of WAKE_EVENTS) window.removeEventListener(type, this.wake, true);
   }
 }

@@ -82,6 +82,12 @@ test('le rapport nomme l’extérieur et l’occlusion indisponible', () => {
   assert.match(lines[3], /extérieur · occlusion indisponible \(WebGL\) · environnement inactif/);
 });
 
+test('au repos, le rapport dit que l’image est figée au lieu d’une cadence trompeuse', () => {
+  const lines = diagnosticLines(collectDiagnostics(engine(), scene(), { ...view, idle: true }));
+  assert.match(lines[2], /au repos, image figée · bougez la vue pendant la mesure/);
+  assert.doesNotMatch(lines[2], /fps/);
+});
+
 test('un instantané complet reste formattable sans navigateur', () => {
   const snapshot: DiagnosticSnapshot = {
     engine: 'WebGL 2',
