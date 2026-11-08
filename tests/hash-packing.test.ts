@@ -367,3 +367,83 @@ test('maison-atelier à deux niveaux et 60 meubles : le lien le plus chargé tie
     initial.filter((item) => item.kind === 'sofa').length,
   );
 });
+
+test('#116 : vitrage, vantaux, lucarnes et fenêtres de toit survivent à l’aller-retour', async () => {
+  const project = readPlan(PLANS[0]);
+  const wall = project.levels[0].walls.find((candidate) => (candidate.openings ?? []).length)!;
+  const door = wall.openings!.find((opening) => opening.kind === 'door') ?? wall.openings![0];
+  door.kind = 'door';
+  door.glazed = true;
+  door.leaves = 2;
+  const wallIndex = project.levels[0].walls.indexOf(wall);
+  project.site = {
+    boundary: [
+      [0, 0],
+      [10, 0],
+      [10, 10],
+    ],
+    elevation: 0,
+    notes: [],
+    roofs: [
+      {
+        id: 'toit-x',
+        vertices: [
+          [0, 0, 0],
+          [4, 0, 0],
+          [4, 2, 3],
+        ],
+        faces: [[0, 1, 2]],
+        dormers: [
+          { id: 'l-a', start: [1, 1], end: [2.5, 1.8], wallId: wall.id, slope: 0.35 },
+          { id: 'l-b', start: [3, 1], end: [3.5, 1.8], wallId: wall.id },
+        ],
+        windows: [{ id: 'f-a', center: [1.5, 2.25], width: 0.78, height: 1.18 }],
+      },
+    ],
+  } as HouseProject['site'];
+  const decoded = unpackShareDocument(packShareDocument(project as ShareDocument));
+  const openings = decoded.levels[0].walls[wallIndex].openings!;
+  const back = openings[wall.openings!.indexOf(door)];
+  assert.equal(back.glazed, true);
+  assert.equal(back.leaves, 2);
+  const roof = decoded.site!.roofs![0];
+  const newWallId = `mur-0-${wallIndex}`;
+  assert.deepEqual(
+    roof.dormers!.map(({ start, end, wallId, slope }) => ({ start, end, wallId, slope })),
+    [
+      { start: [1, 1], end: [2.5, 1.8], wallId: newWallId, slope: 0.35 },
+      { start: [3, 1], end: [3.5, 1.8], wallId: newWallId, slope: undefined },
+    ],
+  );
+  assert.deepEqual(
+    roof.windows!.map(({ center, width, height }) => ({ center, width, height })),
+    [{ center: [1.5, 2.25], width: 0.78, height: 1.18 }],
+  );
+  // Un lien qui ne diffère que par une lucarne n'est pas jugé identique.
+  const other = structuredClone(project);
+  other.site!.roofs![0].dormers!.pop();
+  assert.ok(
+    !samePackedState(
+      packShareDocument(project as ShareDocument),
+      packShareDocument(other as ShareDocument),
+    ),
+  );
+});
+
+test('#116 non-régression : un lien de révision 1 déjà partagé se lit toujours', async () => {
+  // Généré par le packer d'avant la révision 2 (maison-atelier) : ces octets sont figés.
+  const oldHash = readFileSync('tests/fixtures/share-link-v1-maison-atelier.txt', 'utf8').trim();
+  const decoded = await decodeShareLinkHash(oldHash);
+  const original = readPlan(PLANS[0]);
+  validateProject(decoded.document);
+  assert.equal(decoded.document.levels.length, original.levels.length);
+  assert.equal(decoded.document.name, original.name);
+  for (const level of decoded.document.levels)
+    for (const wall of level.walls)
+      for (const opening of wall.openings ?? []) {
+        assert.equal(opening.glazed, undefined);
+        assert.equal(opening.leaves, undefined);
+      }
+  // Comparé à l'état local identique : pas de fausse divergence entre révisions.
+  assert.ok(samePackedState(decoded.packed, packShareDocument(original as ShareDocument)));
+});

@@ -40,7 +40,9 @@ export async function decodeShareLinkHash(hash: string): Promise<DecodedShareLin
     throw new ShareLinkError('Ce lien est tronqué ou illisible.');
   }
   try {
-    return { document: unpackShareDocument(packed), packed };
+    const document = unpackShareDocument(packed);
+    // Repacké à la révision courante : un ancien lien (révision 1) se compare ainsi à l'état local.
+    return { document, packed: packShareDocument(document) };
   } catch (error) {
     if (error instanceof LinkPackError)
       throw new ShareLinkError('Ce lien est tronqué ou illisible.');
