@@ -8,7 +8,12 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { buildExterior } from '../src/scene/buildExterior';
 import { resolveRoofDormer } from '../src/model/geometry';
 import { validateProject } from '../src/model/validate';
-import { polygonArea } from '../src/model/geometry';
+import {
+  pointInOrOnPolygon,
+  polygonArea,
+  roofFaceHeightAt,
+  roofFacePlanOutline,
+} from '../src/model/geometry';
 import type { HouseProject } from '../src/model/types';
 
 const source: HouseProject = JSON.parse(
@@ -92,6 +97,53 @@ test('roof envelope covers the L footprint, keeps its measured heights, and star
   built.dispose();
   assert.equal(scene.meshes.length, 0);
   assert.equal(scene.transformNodes.length, 0);
+  scene.dispose();
+  engine.dispose();
+});
+
+test('a roof overhang closes the wall band up to the pan, not the drip edge', () => {
+  // The eave hangs 0.4 m past the walls: the pan sits at 2.99 m over the wall
+  // plane while the drip edge stays at 2.70 m. A band cut at the drip edge
+  // leaves a slit into the attic all around the house.
+  const project: HouseProject = structuredClone(source);
+  const roof = project.site!.roofs![0];
+  roof.vertices = roof.vertices.map(([x, y, z]) => [
+    x === 0 ? -0.4 : x === 12 ? 12.4 : x,
+    y,
+    z === 0 ? -0.4 : z === 6 ? 6.4 : z,
+  ]);
+  const { built, scene, engine } = exterior(project);
+  const bands = built.roofMeshes.filter((m) => m.name.startsWith('roof-wall-band:'));
+  assert.ok(bands.length > 0);
+  // Walls one pan covers end to end: their band must reach it. The walls at the
+  // junction of the two roofs only have to stay under the lowest pan.
+  const covered = new Set([
+    'mur-sud-01',
+    'mur-sud-02',
+    'mur-est-01',
+    'mur-ouest-01',
+    'mur-ouest-garage',
+  ]);
+  for (const band of bands) {
+    const id = band.name.slice('roof-wall-band:'.length);
+    const box = band.getBoundingInfo().boundingBox;
+    const top = box.maximumWorld.y;
+    let lowest = Number.POSITIVE_INFINITY;
+    for (let i = 0; i <= 20; i++)
+      for (let j = 0; j <= 20; j++) {
+        const x = box.minimumWorld.x + ((box.maximumWorld.x - box.minimumWorld.x) * i) / 20;
+        const z = box.minimumWorld.z + ((box.maximumWorld.z - box.minimumWorld.z) * j) / 20;
+        for (const roof of project.site!.roofs!)
+          for (const face of roof.faces) {
+            if (!pointInOrOnPolygon([x, z], roofFacePlanOutline(roof.vertices, face))) continue;
+            lowest = Math.min(lowest, roofFaceHeightAt(roof.vertices, face, x, z));
+          }
+      }
+    assert.ok(top <= lowest + 0.01, `${id} pokes through the pan (${top} > ${lowest})`);
+    if (covered.has(id))
+      assert.ok(top >= lowest - 0.01, `${id} stops below the pan (${top} < ${lowest})`);
+  }
+  built.dispose();
   scene.dispose();
   engine.dispose();
 });

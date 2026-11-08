@@ -9,13 +9,15 @@ import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import earcut from 'earcut';
-import type { HouseProject, Level, Point2 } from '../model/types';
+import type { HouseProject, Level, Point2, SiteRoof, Wall } from '../model/types';
 import {
   alongWall,
   bounds,
+  pointInOrOnPolygon,
   pointInPolygon,
   resolveRoofDormer,
   roofFaceHeightAt,
+  roofFacePlanOutline,
   wallLength,
   wallSections,
 } from '../model/geometry';
@@ -73,6 +75,28 @@ function faceMesh(
   const mesh = new Mesh(name, scene);
   data.applyToMesh(mesh);
   return mesh;
+}
+
+/**
+ * Height of the roof over a wall strip: the lowest point of the pans that cover
+ * it. A band cut at the drip edge leaves a slit into the attic wherever the roof
+ * overhangs, because the eave sits lower than the roof at the wall plane.
+ */
+function roofOverStrip(roofs: SiteRoof[], wall: Wall, length: number): number {
+  let lowest = Number.POSITIVE_INFINITY;
+  const steps = Math.max(2, Math.ceil(length / 0.1));
+  for (let i = 0; i <= steps; i++) {
+    for (const side of [-1, 0, 1]) {
+      const [x, z] = alongWall(wall, (i / steps) * length, (side * wall.thickness) / 2);
+      for (const roof of roofs)
+        for (const face of roof.faces) {
+          if (!pointInOrOnPolygon([x, z], roofFacePlanOutline(roof.vertices, face))) continue;
+          const y = roofFaceHeightAt(roof.vertices, face, x, z);
+          if (Number.isFinite(y) && y < lowest) lowest = y;
+        }
+    }
+  }
+  return lowest;
 }
 
 /** All geometry comes from the imported project: no personal land data in the bundle. */
@@ -218,14 +242,16 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       facadeMeshes.push(mesh);
     }
     const eaveHeight = Math.min(...(site.roofs ?? []).flatMap((r) => r.vertices.map((v) => v[1])));
-    if (Number.isFinite(eaveHeight) && eaveHeight > height) {
+    const roofHeight = roofOverStrip(site.roofs ?? [], wall, length);
+    const bandTop = Number.isFinite(roofHeight) ? roofHeight : eaveHeight;
+    if (Number.isFinite(bandTop) && bandTop > height) {
       const [x, z] = alongWall(wall, length / 2);
       const band = add(
         MeshBuilder.CreateBox(
           `roof-wall-band:${wall.id}`,
           {
             width: length,
-            height: eaveHeight - height,
+            height: bandTop - height,
             depth: wall.thickness,
           },
           scene,
@@ -233,7 +259,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
         plaster,
         'roof',
       );
-      band.position.set(x, (height + eaveHeight) / 2, z);
+      band.position.set(x, (height + bandTop) / 2, z);
       band.rotation.y = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0]);
       roofMeshes.push(band);
     }
