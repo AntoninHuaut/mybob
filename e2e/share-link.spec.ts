@@ -139,6 +139,7 @@ test('le propriétaire qui recharge son propre lien ne voit aucun dialogue', asy
 
 test('un lien plus ancien que l’état local propose de garder les deux', async ({ page }) => {
   await importLinkProject(page);
+  const before = await page.locator('#project-select option').count();
   const older = await sharedHash(page);
   // Une modification après l'émission rend le lien divergent.
   await furnishings(page);
@@ -159,9 +160,12 @@ test('un lien plus ancien que l’état local propose de garder les deux', async
   await expect(divergence).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: 'Garder les deux' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
-  const count = await page.locator('#project-select option').count();
+  // L'adoption est asynchrone : compter avant qu'elle n'ait installé la copie ferait
+  // croire que le rechargement ajoute un projet.
+  await expect(page.locator('#toast')).toContainText('vos projets');
+  await expect(page.locator('#project-select option')).toHaveCount(before + 1);
   await page.reload();
-  await expect(page.locator('#project-select option')).toHaveCount(count);
+  await expect(page.locator('#project-select option')).toHaveCount(before + 1);
   await expect(page.locator('#received-banner')).toBeHidden();
 });
 
