@@ -15,8 +15,8 @@
     "test:e2e": "npm run build && npm run check:public && playwright test",
     "test:e2e:built": "playwright test",
     "test:e2e:report": "playwright show-report",
-    "format": "prettier --write src tests e2e public/projects docs scripts .github .agents AGENTS.md README.md package.json tsconfig.json vite.config.ts playwright.config.ts index.html .prettierrc.json",
-    "format:check": "prettier --check src tests e2e public/projects docs scripts .github .agents AGENTS.md README.md package.json tsconfig.json vite.config.ts playwright.config.ts index.html .prettierrc.json",
+    "format": "prettier --write src tests e2e public/projects docs scripts .github .agents .claude AGENTS.md CLAUDE.md README.md package.json tsconfig.json vite.config.ts playwright.config.ts index.html .prettierrc.json",
+    "format:check": "prettier --check src tests e2e public/projects docs scripts .github .agents .claude AGENTS.md CLAUDE.md README.md package.json tsconfig.json vite.config.ts playwright.config.ts index.html .prettierrc.json",
     "backup:private": "node scripts/backup-private.mjs"
   },
   "dependencies": {
