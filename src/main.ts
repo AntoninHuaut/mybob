@@ -334,6 +334,18 @@ function openTableChairs() {
   });
 }
 
+/** Room labels by id, looked up again only once the label left the page. */
+const roomLabels = new Map<string, HTMLElement>();
+function roomLabelElement(id: string): HTMLElement | undefined {
+  const cached = roomLabels.get(id);
+  if (cached?.isConnected) return cached;
+  const found =
+    document.querySelector<HTMLElement>(`[data-label="${CSS.escape(id)}"]`) ?? undefined;
+  if (found) roomLabels.set(id, found);
+  else roomLabels.delete(id);
+  return found;
+}
+
 function updateFurnitureContext() {
   const toolbar = el('#furniture-context-toolbar');
   const item = furnitureContextItem;
@@ -1858,11 +1870,9 @@ async function start() {
       const labelsVisible = mode !== 'walk' && showLabels && !viewer.measureMode;
       el('#orientation-arrow').style.transform =
         `rotate(${frame.planUpDegrees + (solarPanel.settings?.northAngleDeg ?? 0)}deg)`;
-      const labelBoxes: LabelBox[] = [];
+      const planLabels: { id: string; label: HTMLElement; x: number; y: number }[] = [];
       for (const room of viewer.level.rooms) {
-        const label = document.querySelector<HTMLButtonElement>(
-          `[data-label="${CSS.escape(room.id)}"]`,
-        );
+        const label = roomLabelElement(room.id);
         if (!label) continue;
         if (labelsVisible) {
           const p = viewer.project(room.label, (room.floorOffset ?? 0) + 0.04);
@@ -1874,16 +1884,19 @@ async function start() {
           label.style.left = `${p.x}px`;
           label.style.top = `${p.y}px`;
           if (mode === 'plan' && !label.hidden)
-            labelBoxes.push({
-              id: room.id,
-              x: p.x,
-              y: p.y,
-              width: label.offsetWidth,
-              height: label.offsetHeight,
-              priority: selectedRoom?.id === room.id ? 10 : 0,
-            });
+            planLabels.push({ id: room.id, label, x: p.x, y: p.y });
         }
       }
+      // Sizes are read only once every label is written: one layout for the whole
+      // frame, where a read after each write forced one layout per room.
+      const labelBoxes: LabelBox[] = planLabels.map(({ id, label, x, y }) => ({
+        id,
+        x,
+        y,
+        width: label.offsetWidth,
+        height: label.offsetHeight,
+        priority: selectedRoom?.id === id ? 10 : 0,
+      }));
       if (mode === 'plan' && labelBoxes.length) {
         const viewport = el('#viewport');
         const origin = viewport.getBoundingClientRect();
@@ -1912,9 +1925,7 @@ async function start() {
           width: viewport.clientWidth,
           height: viewport.clientHeight,
         })) {
-          const label = document.querySelector<HTMLElement>(
-            `[data-label="${CSS.escape(placed.id)}"]`,
-          )!;
+          const label = roomLabelElement(placed.id)!;
           label.hidden = !placed.visible;
           label.style.left = `${placed.x}px`;
           label.style.top = `${placed.y}px`;
@@ -1985,6 +1996,7 @@ async function start() {
         exterior: exteriorView,
         environment: viewer.ambience.environment,
         occlusion: viewer.ambience.occlusion,
+        idle: viewer.renderingIdle,
       }),
     );
     wireEvents();

@@ -1,7 +1,4 @@
-/**
- * The visit drops ambient occlusion below this frame rate. The counter marks the
- * reading so the fallback is observable instead of mysterious.
- */
+/** Below this frame rate the counter is marked low, so a slow machine is visible at a glance. */
 export const FRAME_RATE_FLOOR = 24;
 
 /** A diagnostic, not an animation: four DOM writes a second is already generous. */

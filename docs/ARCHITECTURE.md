@@ -41,6 +41,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Caméra de visite       | `src/scene/walkCamera.ts`               | Hauteur du regard, rayon visiteur, vitesse, pas                     |
 | Coupe des murs         | `src/scene/wallCutaway.ts`              | `auto` / `full` / `low`, plans de découpe par matériau              |
 | Carte d'ombres         | `src/scene/shadowRefresh.ts`            | Carte du soleil redessinée seulement sur un changement d'ombre      |
+| Rendu au repos         | `src/scene/renderScheduler.ts`          | Image dessinée seulement quand la scène change                      |
 | Ouvertures en plan     | `src/scene/planOpenings.ts`             | Baies et portes dessinées dans la vue Plan, faces de coupe          |
 | Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, TAA, occlusion, bloom (visite, Vue 3D et Extérieur)     |
 | Diagnostic             | `src/scene/diagnostics.ts`              | `mybob.diag()` : moteur, GPU, cadence, résolution, scène            |
@@ -223,6 +224,15 @@ rebattement de 500 ms garanti au dernier appel, et relu au démarrage.
   Enregistrer, Annuler jette l'ensemble.
 - La réactivité ne remplace pas un contrôle natif pendant la saisie.
 - Visite et extérieur gardent les volumes complets ; une coupe explicite garde la priorité.
+- Au repos, la scène n'est plus redessinée (`renderScheduler.ts`) : une image par seconde
+  seulement, après 32 images de lissage. Une interaction dans la page (pointeur, clavier,
+  saisie), un mouvement de caméra, une porte qui pivote ou un shader qui compile relancent le
+  dessin. Un changement de scène qui ne vient d'aucun de ces signaux (minuterie, chargement,
+  animation pilotée par `requestAnimationFrame`) appelle `viewer.requestRender()`, sinon il
+  n'apparaît qu'à l'image de la seconde suivante.
+- La carte d'ombres du soleil n'est redessinée que sur un changement de ses porteurs
+  (`shadowRefresh.ts`) : mode, coupe, toiture, soleil, porte animée. Un nouveau porteur
+  d'ombre qui bouge appelle `invalidate()`.
 - Le build public ne contient que la démonstration : `vite.config.ts` et
   `scripts/check-public-build.mjs` portent l'allowlist.
 - Aucune donnée personnelle dans le dépôt : les plans privés sont des

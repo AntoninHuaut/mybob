@@ -31,6 +31,8 @@ export interface DiagnosticView {
   exterior: boolean;
   environment: boolean;
   occlusion: OcclusionState;
+  /** The loop skips images while nothing moves: the cadence then measures nothing. */
+  idle?: boolean;
 }
 
 export interface DiagnosticSnapshot {
@@ -109,7 +111,9 @@ export function diagnosticLines(snapshot: DiagnosticSnapshot): string[] {
   return [
     '[diag] MyBob — rapport de performance',
     `  moteur      ${snapshot.engine} · ${snapshot.gpu}`,
-    `  cadence     ${Math.round(snapshot.frameRate)} fps · ${decimal(snapshot.frameTimeMs)} ms par image`,
+    view.idle
+      ? '  cadence     au repos, image figée · bougez la vue pendant la mesure'
+      : `  cadence     ${Math.round(snapshot.frameRate)} fps · ${decimal(snapshot.frameTimeMs)} ms par image`,
     `  vue         ${mode} · occlusion ${OCCLUSION_LABELS[view.occlusion]} · environnement ${view.environment ? 'actif' : 'inactif'}`,
     `  rendu       ${snapshot.renderWidth} × ${snapshot.renderHeight} px · facteur ${decimal(snapshot.scaling)} · dpr ${decimal(snapshot.pixelRatio)}`,
     `  scène       ${snapshot.meshes} maillages, ${snapshot.activeMeshes} actifs, ${snapshot.materials} matériaux, ${snapshot.lights} lumières`,
