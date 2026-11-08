@@ -123,7 +123,13 @@ export function bounds(points: Point2[]) {
   };
 }
 
-const CONTAINMENT_TOLERANCE = 1e-7;
+/**
+ * Tolérance de contenance, en mètres. Elle doit absorber la quantification du pack du lien
+ * de partage (`linkPacker`, millimètre) : un sommet posé exactement sur un bord peut reculer
+ * de 0,71 mm au pire (0,5 mm par axe), et un lien valide se déballerait alors en projet
+ * invalide. Un millimètre reste très en dessous de la précision de saisie.
+ */
+const CONTAINMENT_TOLERANCE = 1e-3;
 const cross2 = (a: Point2, b: Point2) => a[0] * b[1] - a[1] * b[0];
 
 function pointOnSegment(point: Point2, a: Point2, b: Point2): boolean {
