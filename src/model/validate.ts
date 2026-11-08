@@ -4,6 +4,7 @@ import {
   polygonArea,
   polygonInsidePolygon,
   resolveRoofDormer,
+  resolveRoofWindow,
   wallLength,
 } from './geometry';
 import { validateSolarSettings } from './solarSettings';
@@ -375,6 +376,20 @@ export function validateProject(input: unknown): HouseProject {
             )
               fail(`Lucarne invalide : ${dormer.id}`);
             const resolved = resolveRoofDormer(p, roof.vertices, roof.faces, dormer);
+            if (resolved.error) fail(resolved.error);
+          }
+        }
+        if (roof.windows !== undefined) {
+          if (!Array.isArray(roof.windows) || roof.windows.length > 60)
+            fail(`Fenêtres de toit invalides : ${roof.id}`);
+          for (const window of roof.windows) {
+            if (!record(window)) fail('Une fenêtre de toit doit être un objet.');
+            id(window.id);
+            if (!point(window.center) || !positive(window.width) || !positive(window.height))
+              fail(`Fenêtre de toit invalide : ${window.id}`);
+            // La taille minimale, le pan porteur et le débordement se résolvent
+            // avec la même fonction que le rendu : une seule règle.
+            const resolved = resolveRoofWindow(roof.vertices, roof.faces, window);
             if (resolved.error) fail(resolved.error);
           }
         }

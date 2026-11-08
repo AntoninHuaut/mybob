@@ -58,6 +58,15 @@ import {
   unlinkFurniture,
 } from './furniture/groups';
 import type { WallDisplay } from './scene/wallCutaway';
+import {
+  decodeShareLinkHash,
+  encodeShareLinkHash,
+  isShareLink,
+  samePackedState,
+  type DecodedShareLink,
+} from './model/shareLink';
+import { packShareDocument, type ShareDocument } from './model/linkPacker';
+import { confirmLinkDivergence } from './ui/confirmLinkDivergence';
 
 const STORAGE = 'maison-atelier:projects:v1';
 const el = <T extends HTMLElement = HTMLElement>(selector: string) =>
@@ -97,6 +106,19 @@ let draggingFurniture = false;
 let overlays: FurnitureOverlays = { distances: true, clearances: false, openings: false };
 let syncingViewerMode = false;
 let onboarding: OnboardingState = parseOnboarding(null);
+// Lien de partage : un projet reçu par #p1: vit en mémoire uniquement, lecture seule
+// jusqu'à « Ajouter à mes projets ». Le hash est réécrit (debounce) pour tout projet
+// possédé, jamais pour un projet reçu — son lien reste celui qui a été partagé.
+let readOnlyLink = false;
+let receivedShare: DecodedShareLink | undefined;
+let linkHashTimer: ReturnType<typeof setTimeout>;
+let desiredLinkHash: string | undefined;
+let linkHashPending = false;
+let linkHashWriteScheduled = false;
+const LINK_HASH_DEBOUNCE = 500;
+const READ_ONLY_TOAST =
+  'Ce projet a été reçu par lien : il est en lecture seule. « Ajouter à mes projets » pour le modifier.';
+const LINK_HASH_MEMORY = 'maison-atelier:last-link-hash';
 
 el('#app').innerHTML = appTemplate();
 
@@ -163,6 +185,7 @@ function persistFurniture() {
   try {
     layoutSession.save(current.id, viewer.level.id, furnitureHistory.items);
     refreshLayoutStatus();
+    scheduleLinkHashUpdate();
   } catch (error) {
     setLayoutStatus('Aménagement non sauvegardé · exportez le projet', true);
     toast(error instanceof Error ? error.message : 'Sauvegarde indisponible.');
@@ -196,6 +219,13 @@ function syncFurniture(save = true) {
 }
 
 function commitFurniture(items: FurnitureItem[]): boolean {
+  if (readOnlyLink) {
+    previewFurniture = undefined;
+    furnitureLayer?.setItems(furnitureHistory.items);
+    furniturePanel?.render();
+    toast(READ_ONLY_TOAST);
+    return false;
+  }
   try {
     // An unreadable saved book must be restored by import before editing an empty fallback.
     layoutSession.active(current.id);
@@ -308,6 +338,7 @@ function updateFurnitureContext() {
   const toolbar = el('#furniture-context-toolbar');
   const item = furnitureContextItem;
   if (
+    readOnlyLink ||
     !selectedFurnitureId ||
     !item ||
     mode === 'walk' ||
@@ -348,6 +379,10 @@ function selectFurniture(id: string | undefined) {
 }
 
 function openFurnitureEditor(id: string) {
+  if (readOnlyLink) {
+    toast(READ_ONLY_TOAST);
+    return;
+  }
   selectFurniture(id);
   furniturePanel?.openEdit(id);
 }
@@ -500,6 +535,10 @@ function mountFurniture() {
 }
 
 function changeVariant(action: () => void, remount: boolean) {
+  if (readOnlyLink) {
+    toast(READ_ONLY_TOAST);
+    return;
+  }
   const before = JSON.stringify(layoutSession.book(current.id));
   try {
     action();
@@ -514,6 +553,7 @@ function changeVariant(action: () => void, remount: boolean) {
       mountFurniture();
       syncDisplayControls();
     }
+    scheduleLinkHashUpdate();
   }
   refreshLayoutStatus();
 }
@@ -564,7 +604,7 @@ function syncDisplayControls() {
     mode === 'walk' || exteriorView || !showLabels || measuring || viewer.goToMode;
   el<HTMLButtonElement>('#go-to').disabled = mode === 'walk';
   furnitureLayer?.setMode(
-    mode === 'walk' || exteriorView || measuring || viewer.goToMode ? 'walk' : mode,
+    readOnlyLink || mode === 'walk' || exteriorView || measuring || viewer.goToMode ? 'walk' : mode,
   );
   measureBar.setActive(measuring);
   activeButton('#tool-measure', measuring);
@@ -600,9 +640,11 @@ function renderProjectOptions() {
     .join('');
 }
 
-function loadProject(id: string, levelId?: string) {
-  const p = projects.find((p) => p.id === id) ?? projects[0];
+function loadProject(id: string, levelId?: string, override?: HouseProject) {
+  const p = override ?? projects.find((p) => p.id === id) ?? projects[0];
   if (!p) return;
+  readOnlyLink = Boolean(override);
+  if (!override) receivedShare = undefined;
   furnitureLayer?.dispose();
   furnitureLayer = undefined;
   current = p;
@@ -629,10 +671,24 @@ function loadProject(id: string, levelId?: string) {
       ? Number(el<HTMLInputElement>('#section-height').value)
       : undefined,
   );
-  el<HTMLSelectElement>('#project-select').value = p.id;
+  const projectSelect = el<HTMLSelectElement>('#project-select');
+  if (override) {
+    // Le projet reçu n'est pas dans la liste : une entrée dédiée, retirée au prochain
+    // chargement normal par renderProjectOptions.
+    if (!projectSelect.querySelector(`option[value="${CSS.escape(p.id)}"]`)) {
+      const option = document.createElement('option');
+      option.value = p.id;
+      option.textContent = `${p.name} — reçu`;
+      projectSelect.append(option);
+    }
+  } else {
+    renderProjectOptions();
+  }
+  projectSelect.value = p.id;
   el('#header-project').textContent = p.name;
   el('#project-description').textContent = p.description;
   el('#demo-notice').hidden = p.id !== 'studio-demo';
+  el('#received-banner').hidden = !override;
   applyNavigationPreferences();
   el<HTMLSelectElement>('#level-select').innerHTML = p.levels
     .map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`)
@@ -651,10 +707,13 @@ function loadProject(id: string, levelId?: string) {
   renderRoomDetail();
   setMode('overview');
   syncSelection();
-  try {
-    localStorage.setItem('maison-atelier:last-project', p.id);
-  } catch {
-    /* browser storage may be unavailable */
+  if (!override) {
+    try {
+      localStorage.setItem('maison-atelier:last-project', p.id);
+    } catch {
+      /* browser storage may be unavailable */
+    }
+    scheduleLinkHashUpdate();
   }
 }
 
@@ -813,33 +872,64 @@ function openFirstSteps() {
   });
 }
 
-function downloadProject() {
-  let levels: Record<string, FurnitureItem[]>;
-  let variants: VariantBook;
+/**
+ * Le document d'état courant, dans la forme d'un export complet : projet, aménagement
+ * effectif de chaque niveau et toutes les variantes. C'est ce que porte le lien et
+ * ce que télécharge « Exporter » — jamais la caméra ni les préférences de navigation.
+ */
+function currentDocument(): ShareDocument {
+  return {
+    ...current,
+    solar: solarPanel.settings,
+    furnishing: {
+      version: 1,
+      levels: Object.fromEntries(
+        current.levels.map((level) => [
+          level.id,
+          level.id === viewer.level.id
+            ? furnitureHistory.items
+            : layoutSession.load(current.id, level.id),
+        ]),
+      ),
+      variants: layoutSession.book(current.id),
+    },
+  };
+}
+
+/** L'état enregistré d'un projet possédé, sans passer par la vue : base de la comparaison au démarrage. */
+function storedDocumentFor(project: HouseProject): ShareDocument {
   try {
-    levels = Object.fromEntries(
-      current.levels.map((level) => [
-        level.id,
-        level.id === viewer.level.id
-          ? furnitureHistory.items
-          : layoutSession.load(current.id, level.id),
-      ]),
+    layoutSession.register(
+      project.id,
+      project.levels.map((level) => level.id),
     );
-    variants = layoutSession.book(current.id);
+    return {
+      ...project,
+      solar: solarPanel.settingsFor(project),
+      furnishing: {
+        version: 1,
+        levels: Object.fromEntries(
+          project.levels.map((level) => [level.id, layoutSession.load(project.id, level.id)]),
+        ),
+        variants: layoutSession.book(project.id),
+      },
+    };
+  } catch {
+    // Aménagement illisible : la comparaison se fera sur le projet seul, le lien
+    // sera déclaré divergent plutôt qu'accepté silencieusement.
+    return { ...project, solar: solarPanel.settingsFor(project) };
+  }
+}
+
+function downloadProject() {
+  let snapshot: ShareDocument;
+  try {
+    snapshot = currentDocument();
   } catch (error) {
     toast(error instanceof Error ? error.message : 'Export indisponible.');
     return;
   }
-  const blob = new Blob(
-    [
-      JSON.stringify(
-        { ...current, solar: solarPanel.settings, furnishing: { version: 1, levels, variants } },
-        null,
-        2,
-      ),
-    ],
-    { type: 'application/json' },
-  );
+  const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
@@ -849,96 +939,319 @@ function downloadProject() {
   toast('Les données de votre maison ont été exportées.');
 }
 
+/* ---------------------------------------------------------------------------------------------- */
+/* Écriture du hash : l'URL est une photographie de l'état, mise à jour après chaque modification  */
+/* ---------------------------------------------------------------------------------------------- */
+
+function scheduleLinkHashUpdate() {
+  clearTimeout(linkHashTimer);
+  linkHashWriteScheduled = true;
+  linkHashTimer = setTimeout(() => void writeLinkHash(), LINK_HASH_DEBOUNCE);
+}
+
+/**
+ * Écrit l'état courant dans le hash via `history.replaceState` — jamais `location.hash`,
+ * qui empilerait l'historique de navigation à chaque déplacement de meuble. Un échec
+ * silencieux de replaceState (quota, sandbox) est réessayé au prochain pointerup.
+ */
+async function writeLinkHash() {
+  clearTimeout(linkHashTimer);
+  linkHashWriteScheduled = false;
+  if (readOnlyLink || !current) return;
+  let hash: string;
+  try {
+    hash = await encodeShareLinkHash(currentDocument());
+  } catch {
+    return; // État incorruptible : l'export JSON reste la sortie de secours.
+  }
+  desiredLinkHash = hash;
+  try {
+    sessionStorage.setItem(LINK_HASH_MEMORY, hash);
+  } catch {
+    /* Sans ce souvenir, un hash périmé pourrait être pris pour un vieux lien. */
+  }
+  try {
+    history.replaceState(null, '', hash);
+    linkHashPending = false;
+  } catch {
+    linkHashPending = true;
+  }
+}
+
+/**
+ * En quittant la page, une écriture du hash en attente ne partira jamais (le deflate est
+ * asynchrone) : l'URL restée sur place décrirait un état périmé, et un rechargement la
+ * prendrait pour un vieux lien. Le hash est retiré synchronement — l'état d'un projet
+ * possédé vit dans le stockage local, et la prochaine modification réécrira le hash.
+ */
+function wireLinkHashFlush() {
+  const dropStaleHash = () => {
+    if (readOnlyLink || !current || !linkHashWriteScheduled) return;
+    linkHashWriteScheduled = false;
+    desiredLinkHash = undefined;
+    try {
+      history.replaceState(null, '', location.pathname + location.search);
+    } catch {
+      /* Le hash périmé reste : sans suite, il n'est jamais relu qu'au chargement. */
+    }
+  };
+  window.addEventListener('pagehide', dropStaleHash);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') dropStaleHash();
+  });
+  window.addEventListener('pointerup', () => {
+    if (!current || readOnlyLink) return;
+    if (!linkHashPending && desiredLinkHash === location.hash) return;
+    void writeLinkHash();
+  });
+}
+
+async function copyShareLink() {
+  clearTimeout(linkHashTimer);
+  const message = 'Lien copié : il contient une photographie de l’état actuel du projet.';
+  try {
+    await writeLinkHash();
+    await navigator.clipboard.writeText(location.href);
+    toast(message);
+  } catch {
+    try {
+      const area = document.createElement('textarea');
+      area.value = location.href;
+      area.setAttribute('readonly', '');
+      area.style.position = 'fixed';
+      area.style.opacity = '0';
+      document.body.append(area);
+      area.select();
+      document.execCommand('copy');
+      area.remove();
+      toast(message);
+    } catch {
+      toast('Copie impossible : copiez l’adresse depuis la barre d’adresse du navigateur.');
+    }
+  }
+}
+
+type ProjectDocument = {
+  project: HouseProject;
+  staged: [string, FurnitureItem[]][];
+  variants: unknown;
+};
+
+/**
+ * Valide un projet d'export complet (fichier ou lien) et sépare l'aménagement en attente
+ * d'installation. Ne modifie pas l'objet reçu : le document d'un lien reste intact pour
+ * une adoption ultérieure.
+ */
+function readProjectDocument(input: unknown): ProjectDocument {
+  const project = validateProject(structuredClone(input)) as HouseProject & {
+    furnishing?: { version: number; levels: Record<string, unknown>; variants?: unknown };
+  };
+  const furnishing = project.furnishing;
+  const staged: [string, FurnitureItem[]][] = [];
+  if (furnishing !== undefined) {
+    if (
+      !furnishing ||
+      furnishing.version !== 1 ||
+      !furnishing.levels ||
+      typeof furnishing.levels !== 'object' ||
+      Array.isArray(furnishing.levels)
+    )
+      throw new Error('Aménagement exporté invalide.');
+    for (const level of project.levels)
+      if (Object.hasOwn(furnishing.levels, level.id))
+        staged.push([level.id, validateFurnitureList(furnishing.levels[level.id])]);
+  }
+  const variants = furnishing?.variants;
+  delete project.furnishing;
+  return { project, staged, variants };
+}
+
+/**
+ * Installe un projet validé dans ce navigateur : sauvegarde locale, variantes, puis
+ * chargement. `confirmed` court-circuite la demande de remplacement (choix déjà posé
+ * par le dialogue de divergence ou l'adoption d'un projet reçu). Repli sur l'état
+ * précédent si l'affichage échoue.
+ */
+async function installProjectDocument(
+  incoming: ProjectDocument,
+  options: { confirmed?: boolean } = {},
+): Promise<boolean> {
+  const { project, staged, variants } = incoming;
+  const existing = projects.find((candidate) => candidate.id === project.id);
+  if (existing)
+    layoutSession.register(
+      existing.id,
+      existing.levels.map((level) => level.id),
+    );
+  const previousVariantEntry = layoutSession.capture(project.id);
+  const nextVariants = layoutSession.prepareImport(
+    project.id,
+    project.levels.map((level) => level.id),
+    staged,
+    variants,
+  );
+  if (
+    existing &&
+    !(options.confirmed
+      ? true
+      : await confirmImportReplacement(
+          existing.name,
+          (open) => {
+            if (open && document.pointerLockElement) document.exitPointerLock();
+            viewer.setPaused(open);
+          },
+          current.id === existing.id ? downloadProject : undefined,
+        ))
+  )
+    return false;
+  const previous = imported;
+  const previousProjectId = current.id;
+  const previousLevelId = viewer.level.id;
+  const next = [...imported.filter((p) => p.id !== project.id), project];
+  if (next.length > 10) throw new Error('Vous pouvez conserver jusqu’à 10 projets importés.');
+  const backups = [
+    [variantsStorageKey(project.id), localStorage.getItem(variantsStorageKey(project.id))],
+  ] as const;
+  try {
+    localStorage.setItem(variantsStorageKey(project.id), JSON.stringify(nextVariants));
+    localStorage.setItem(STORAGE, JSON.stringify(next));
+  } catch {
+    for (const [key, value] of backups) {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    }
+    throw new Error(
+      'La mémoire locale est indisponible ou pleine. Exportez vos projets avant de libérer de la place.',
+    );
+  }
+  imported = next;
+  layoutSession.install(project.id, nextVariants);
+  clearProjectHistories(project.id);
+  try {
+    renderProjectOptions();
+    loadProject(project.id);
+  } catch (error) {
+    imported = previous;
+    layoutSession.restore(project.id, previousVariantEntry);
+    for (const [key, value] of backups) {
+      if (value === null) localStorage.removeItem(key);
+      else localStorage.setItem(key, value);
+    }
+    localStorage.setItem(STORAGE, JSON.stringify(previous));
+    renderProjectOptions();
+    loadProject(previousProjectId, previousLevelId);
+    throw error;
+  }
+  return true;
+}
+
 async function importProject(file: File) {
   try {
     if (file.size > 32 * 1024 * 1024) throw new Error('Le projet doit peser moins de 32 Mo.');
-    const project = validateProject(JSON.parse(await file.text()));
-    const furnishing = (
-      project as HouseProject & {
-        furnishing?: { version: number; levels: Record<string, unknown>; variants?: unknown };
-      }
-    ).furnishing;
-    const staged: [string, FurnitureItem[]][] = [];
-    if (furnishing !== undefined) {
-      if (
-        !furnishing ||
-        furnishing.version !== 1 ||
-        !furnishing.levels ||
-        typeof furnishing.levels !== 'object' ||
-        Array.isArray(furnishing.levels)
-      )
-        throw new Error('Aménagement exporté invalide.');
-      for (const level of project.levels)
-        if (Object.hasOwn(furnishing.levels, level.id))
-          staged.push([level.id, validateFurnitureList(furnishing.levels[level.id])]);
+    const parsed = readProjectDocument(JSON.parse(await file.text()));
+    if (await installProjectDocument(parsed))
+      toast('Maison importée et conservée dans ce navigateur.');
+  } catch (error) {
+    toast(error instanceof Error ? error.message : 'Impossible de lire ce projet.');
+  }
+}
+
+/* ---------------------------------------------------------------------------------------------- */
+/* Lecture d'un lien de partage : propriétaire (comparaison) ou destinataire (lecture seule)       */
+/* ---------------------------------------------------------------------------------------------- */
+
+/**
+ * Un lien #p1: ouvert au démarrage. Pour le propriétaire du projet : identique = silence,
+ * différent = trois issues (remplacer, garder les deux, ignorer) — jamais de perte
+ * silencieuse. Pour un visiteur : le projet vit en mémoire seule, en lecture seule,
+ * jusqu'à « Ajouter à mes projets ».
+ */
+async function openSharedLink(fallbackId: string) {
+  // Reprise d'onglet : une écriture du hash interrompue par un rechargement laisse dans
+  // l'URL un hash périmé. S'il est le dernier écrit par cet onglet, ce n'est pas un lien
+  // partageable : l'état local (plus récent) est chargé sans dialogue.
+  let ownLastHash: string | null = null;
+  try {
+    ownLastHash = sessionStorage.getItem(LINK_HASH_MEMORY);
+  } catch {
+    /* Sans mémoire, le dialogue jugera normalement. */
+  }
+  if (ownLastHash !== null && ownLastHash === location.hash) {
+    try {
+      history.replaceState(null, '', location.pathname + location.search);
+    } catch {
+      /* Sans conséquence : rechargé, le hash sera reconnu de nouveau. */
     }
-    const existing = projects.find((candidate) => candidate.id === project.id);
-    if (existing)
-      layoutSession.register(
-        existing.id,
-        existing.levels.map((level) => level.id),
-      );
-    const previousVariantEntry = layoutSession.capture(project.id);
+    loadProject(fallbackId);
+    return;
+  }
+  let link: DecodedShareLink;
+  try {
+    link = await decodeShareLinkHash(location.hash);
+  } catch {
+    loadProject(fallbackId);
+    toast('Lien illisible : le projet enregistré sur cet ordinateur est chargé.');
+    return;
+  }
+  const existing = projects.find((candidate) => candidate.id === link.document.id);
+  if (!existing) {
+    openReceivedShare(link, fallbackId);
+    return;
+  }
+  const identical = samePackedState(packShareDocument(storedDocumentFor(existing)), link.packed);
+  loadProject(existing.id);
+  if (identical) return;
+  const choice = await confirmLinkDivergence(existing.name, (open) => {
+    if (open && document.pointerLockElement) document.exitPointerLock();
+    viewer.setPaused(open);
+  });
+  if (choice === 'replace') {
+    if (await installProjectDocument(readProjectDocument(link.document), { confirmed: true }))
+      toast('Projet remplacé par la version du lien.');
+  } else if (choice === 'copy') {
+    await adoptReceived(link.document);
+  }
+  // 'ignore' : le projet local reste affiché ; le hash reprendra l'état courant.
+}
+
+/** Le projet du lien n'existe pas ici : ouverture en mémoire seule, sans toucher au localStorage. */
+function openReceivedShare(link: DecodedShareLink, fallbackId: string) {
+  try {
+    const { project, staged, variants } = readProjectDocument(link.document);
+    layoutSession.register(
+      project.id,
+      project.levels.map((level) => level.id),
+    );
     const nextVariants = layoutSession.prepareImport(
       project.id,
       project.levels.map((level) => level.id),
       staged,
-      furnishing?.variants,
+      variants,
     );
-    if (
-      existing &&
-      !(await confirmImportReplacement(
-        existing.name,
-        (open) => {
-          if (open && document.pointerLockElement) document.exitPointerLock();
-          viewer.setPaused(open);
-        },
-        current.id === existing.id ? downloadProject : undefined,
-      ))
-    )
-      return;
-    delete (project as HouseProject & { furnishing?: unknown }).furnishing;
-    const previous = imported;
-    const previousProjectId = current.id;
-    const previousLevelId = viewer.level.id;
-    const next = [...imported.filter((p) => p.id !== project.id), project];
-    if (next.length > 10) throw new Error('Vous pouvez conserver jusqu’à 10 projets importés.');
-    const backups = [
-      [variantsStorageKey(project.id), localStorage.getItem(variantsStorageKey(project.id))],
-    ] as const;
-    try {
-      localStorage.setItem(variantsStorageKey(project.id), JSON.stringify(nextVariants));
-      localStorage.setItem(STORAGE, JSON.stringify(next));
-    } catch {
-      for (const [key, value] of backups) {
-        if (value === null) localStorage.removeItem(key);
-        else localStorage.setItem(key, value);
-      }
-      throw new Error(
-        'La mémoire locale est indisponible ou pleine. Exportez vos projets avant de libérer de la place.',
-      );
-    }
-    imported = next;
     layoutSession.install(project.id, nextVariants);
-    clearProjectHistories(project.id);
-    try {
-      renderProjectOptions();
-      loadProject(project.id);
-    } catch (error) {
-      imported = previous;
-      layoutSession.restore(project.id, previousVariantEntry);
-      for (const [key, value] of backups) {
-        if (value === null) localStorage.removeItem(key);
-        else localStorage.setItem(key, value);
-      }
-      localStorage.setItem(STORAGE, JSON.stringify(previous));
-      renderProjectOptions();
-      loadProject(previousProjectId, previousLevelId);
-      throw error;
-    }
-    toast('Maison importée et conservée dans ce navigateur.');
+    receivedShare = link;
+    loadProject(project.id, undefined, project);
   } catch (error) {
-    toast(error instanceof Error ? error.message : 'Impossible de lire ce projet.');
+    loadProject(fallbackId);
+    toast(
+      error instanceof Error
+        ? error.message
+        : 'Lien illisible : le projet enregistré sur cet ordinateur est chargé.',
+    );
+  }
+}
+
+/** « Ajouter à mes projets » : copie du projet reçu sous un nouvel identifiant, puis installation normale. */
+async function adoptReceived(source: ShareDocument) {
+  const fork: ShareDocument = {
+    ...source,
+    id: `${source.id}-${crypto.randomUUID().slice(0, 8)}`,
+  };
+  if (await installProjectDocument(readProjectDocument(fork))) {
+    // Le lien partagé ne doit plus survivre à un rechargement : il est retiré tout de
+    // suite, l'écriture différée réinscrira l'état du projet possédé.
+    history.replaceState(null, '', location.pathname + location.search);
+    toast('Projet ajouté à vos projets : il est maintenant modifiable.');
   }
 }
 
@@ -987,6 +1300,7 @@ function wireEvents() {
   wireKeyboardShortcuts();
   wireProjectControls();
   wireViewportControls();
+  wireLinkHashFlush();
 }
 
 function wireFurnitureToolbar() {
@@ -1266,6 +1580,10 @@ function wireProjectControls() {
     loadProject(current.id, (event.target as HTMLSelectElement).value),
   );
   el('#export-project').addEventListener('click', downloadProject);
+  el('#copy-link').addEventListener('click', () => void copyShareLink());
+  el('#adopt-received-project').addEventListener('click', () => {
+    if (receivedShare) void adoptReceived(receivedShare.document);
+  });
   el('#export-image').addEventListener('click', () => {
     openDialog(
       'EXPORTER UNE IMAGE',
@@ -1526,7 +1844,6 @@ async function start() {
       toast(
         'Capture indisponible : cliquez dans la vue, puis glissez pour regarder autour de vous.',
       );
-      el('#resume-walk').hidden = true;
       el<HTMLCanvasElement>('#scene').focus();
     };
     viewer.onMeasure = (measurement) => measureBar.sync(measurement);
@@ -1651,7 +1968,8 @@ async function start() {
     } catch {
       /* optional persistence */
     }
-    loadProject(initial);
+    if (isShareLink(location.hash)) await openSharedLink(initial);
+    else loadProject(initial);
     // Development-only bench: the dynamic import behind `DEV` is what keeps the
     // whole module out of a production build.
     if (import.meta.env.DEV) {

@@ -12,8 +12,12 @@ demi-épaisseur donne `derived`, avec son équation. Sinon la décision reste
 Les chaînes d'un niveau viennent de ses pages : passer `--pages` pour ne pas
 apparier un mur du rez-de-chaussée contre les cotes de l'étage.
 
+Le contour du niveau vient du projet, sauf si `--outline` désigne la sortie de
+`scripts/derive_outline.py` : le contour dérivé remplace alors celui qui est
+écrit à la main, et le repère des chaînes calées sur l'emprise devient le sien.
+
 Usage :
-  uvx --from pymupdf python scripts/derive_plan_decisions.py <projet.json> <registre.json> <niveau> <sortie.json> [--pages 13]
+  uvx --from pymupdf python scripts/derive_plan_decisions.py <projet.json> <registre.json> <niveau> <sortie.json> [--pages 13] [--outline contour.json]
   python scripts/derive_plan_decisions.py --self-test
 """
 import json
@@ -21,6 +25,8 @@ import math
 import re
 import sys
 from pathlib import Path
+
+from derive_outline import load_outline
 
 TOL = 0.01  # m, tolérance d'appariement
 TOUCH_TOL = 0.02  # m, un mur aboutit sur l'axe d'un autre
@@ -73,12 +79,18 @@ def touching_thicknesses(walls, point, exclude):
 
 
 def candidate_lengths(wall, walls):
-    """Longueurs possibles entre faces finies, et le décalage de chaque extrémité.
+    """Longueurs possibles entre faces finies, et les décalages de chaque extrémité.
 
     Une cote de plan mesure d'une face finie à une autre. À chaque extrémité, la
     cote peut s'arrêter sur l'axe (0), sur la face du mur lui-même ou sur celle
     du mur mitoyen. On énumère ces conventions au lieu de supposer que la cote
     vaut la longueur d'axe, qui n'est vraie que par accident.
+
+    Deux conventions opposées donnent souvent **la même longueur** : un mur de
+    3,92 m entre deux murs de 0,34 m fait 4,09 m qu'on parte de sa face nord ou
+    de sa face sud. Trancher par un rang arbitraire écartait la bonne ; toutes
+    les conventions sont donc rendues, et c'est l'ancrage positionnel — les
+    baies du mur, ou une chaîne calée sur l'emprise — qui choisit.
     """
     _, _, low, high = oriented_span(wall)
     length = wall_length(wall)
@@ -93,10 +105,13 @@ def candidate_lengths(wall, walls):
                     start_offset = round(sign_start * first / 2, 4)
                     end_offset = round(sign_end * last / 2, 4)
                     value = round(length + end_offset - start_offset, 4)
-                    rank = abs(start_offset) + abs(end_offset)
-                    if value not in candidates or rank < candidates[value][2]:
-                        candidates[value] = (start_offset, end_offset, rank)
-    return {value: (offsets[0], offsets[1]) for value, offsets in candidates.items()}
+                    candidates.setdefault(value, [])
+                    if (start_offset, end_offset) not in candidates[value]:
+                        candidates[value].append((start_offset, end_offset))
+    return {
+        value: sorted(offsets, key=lambda pair: abs(pair[0]) + abs(pair[1]))
+        for value, offsets in candidates.items()
+    }
 
 
 def contiguous_runs(chain):
@@ -250,23 +265,24 @@ def positional_face_matches(wall, walls, envelopes, origins, outline):
         if side is None or not touches_side(wall, side, outline):
             continue
         for start, end, total in contiguous_runs(chain):
-            for value, (start_offset, end_offset) in candidates.items():
+            for value, conventions in candidates.items():
                 if abs(total - value) > TOL:
                     continue
-                span = face_span(wall, start_offset, end_offset)
                 interval = run_interval(chain, start, end, envelope["base"], envelope["sign"])
-                if abs(interval[0] - span[0]) <= TOL and abs(interval[1] - span[1]) <= TOL:
-                    found.append(
-                        {
-                            "chain": chain,
-                            "start": start,
-                            "end": end,
-                            "total": total,
-                            "length": value,
-                            "startOffset": start_offset,
-                            "endOffset": end_offset,
-                        }
-                    )
+                for start_offset, end_offset in conventions:
+                    span = face_span(wall, start_offset, end_offset)
+                    if abs(interval[0] - span[0]) <= TOL and abs(interval[1] - span[1]) <= TOL:
+                        found.append(
+                            {
+                                "chain": chain,
+                                "start": start,
+                                "end": end,
+                                "total": total,
+                                "length": value,
+                                "startOffset": start_offset,
+                                "endOffset": end_offset,
+                            }
+                        )
     return found
 
 
@@ -300,21 +316,29 @@ def length_matches(chains, wall, walls):
         if chain["axis"] != axis:
             continue
         for start, end, total in contiguous_runs(chain):
-            for value, (start_offset, end_offset) in candidates.items():
+            for value, conventions in candidates.items():
                 if abs(total - value) > TOL:
                     continue
-                key = (chain["page"], chain["perpendicular"], start, end)
-                previous = found.get(key)
-                if previous is None or abs(total - value) < abs(total - previous["length"]):
-                    found[key] = {
-                        "chain": chain,
-                        "start": start,
-                        "end": end,
-                        "total": total,
-                        "length": value,
-                        "startOffset": start_offset,
-                        "endOffset": end_offset,
-                    }
+                for start_offset, end_offset in conventions:
+                    key = (
+                        chain["page"],
+                        chain["perpendicular"],
+                        start,
+                        end,
+                        start_offset,
+                        end_offset,
+                    )
+                    previous = found.get(key)
+                    if previous is None or abs(total - value) < abs(total - previous["length"]):
+                        found[key] = {
+                            "chain": chain,
+                            "start": start,
+                            "end": end,
+                            "total": total,
+                            "length": value,
+                            "startOffset": start_offset,
+                            "endOffset": end_offset,
+                        }
     return list(found.values())
 
 
@@ -630,24 +654,28 @@ def opening_decision(opening, wall, chains, face, envelopes, origins, outline):
     }
 
 
-def build_decisions(project, registry, level_id, registry_path, pages=None):
+def build_decisions(project, registry, level_id, registry_path, pages=None, outline=None):
     level = next((candidate for candidate in project["levels"] if candidate["id"] == level_id), None)
     if level is None:
         raise SystemExit(f"niveau {level_id} absent du projet")
+    # Le contour écrit à la main n'est qu'une opinion : quand la couche 3 en a
+    # dérivé un, c'est lui qui donne le repère, et les chaînes calées sur
+    # l'emprise deviennent des coordonnées absolues.
+    outline = level["outline"] if outline is None else outline
     selected = [page for page in registry["pages"] if pages is None or page["index"] in pages]
     if not selected:
         raise SystemExit(f"aucune page {pages} dans le registre")
     chains = [chain for page in selected for chain in page["chains"]]
     walls = level["walls"]
-    envelopes = envelope_orientations(chains, level["outline"], walls)
+    envelopes = envelope_orientations(chains, outline, walls)
     origins = envelope_frame(envelopes)
     faces = [
-        face_decision(wall, walls, chains, level["outline"], envelopes, origins)
+        face_decision(wall, walls, chains, outline, envelopes, origins)
         for wall in walls
     ]
     by_wall = {decision["wall"]: decision for decision in faces}
     openings = [
-        opening_decision(opening, wall, chains, by_wall[wall["id"]], envelopes, origins, level["outline"])
+        opening_decision(opening, wall, chains, by_wall[wall["id"]], envelopes, origins, outline)
         for wall in walls
         for opening in wall.get("openings", [])
     ]
@@ -657,6 +685,7 @@ def build_decisions(project, registry, level_id, registry_path, pages=None):
         "level": level_id,
         "registry": registry_path.replace("\\", "/"),
         "pages": sorted(page["index"] for page in selected),
+        "outline": outline,
         "envelopes": [
             {
                 "page": envelope["chain"]["page"],
@@ -739,9 +768,12 @@ def main(argv):
     pages = None
     if "--pages" in argv:
         pages = [int(value) for value in argv[argv.index("--pages") + 1].split(",")]
+    outline = None
+    if "--outline" in argv:
+        outline = load_outline(argv[argv.index("--outline") + 1])
     project = json.loads(Path(project_path).read_text(encoding="utf-8"))
     registry = json.loads(Path(registry_path).read_text(encoding="utf-8"))
-    decisions = build_decisions(project, registry, level_id, registry_path, pages)
+    decisions = build_decisions(project, registry, level_id, registry_path, pages, outline)
     Path(out).write_text(json.dumps(decisions, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(summarise(decisions))
     print(f"-> {out}")

@@ -381,3 +381,25 @@ test('MyBob accueille et présente les commandes sans masquer le projet', async 
   await dialog.getByRole('button', { name: 'Fermer' }).click();
   await expect(dialog).not.toBeVisible();
 });
+
+test('la visite recapture le pointeur après sa libération, clic dans la vue compris', async ({
+  page,
+}) => {
+  const locked = () => page.evaluate(() => document.pointerLockElement !== null);
+  // Le Chromium headless ignore la sortie au clavier de la capture : le test
+  // libère le pointeur par l'API DOM que déclenche aussi Échap, et l'app
+  // doit rebinder dans les deux chemins de reprise.
+  await page.getByRole('button', { name: 'Entrer dans la visite' }).click();
+  await page.locator('#capture-mouse').click();
+  await expect.poll(locked).toBe(true);
+  await page.evaluate(() => document.exitPointerLock());
+  await expect.poll(locked).toBe(false);
+  // Un clic dans la vue reprend la capture — rien ne se passait auparavant.
+  await page.locator('#scene').click({ position: { x: 640, y: 360 } });
+  await expect.poll(locked, { timeout: 5_000 }).toBe(true);
+  // Le bouton « Reprendre la visite » rebinde aussi un second aller-retour.
+  await page.evaluate(() => document.exitPointerLock());
+  await expect.poll(locked).toBe(false);
+  await page.locator('#resume-walk').click();
+  await expect.poll(locked, { timeout: 5_000 }).toBe(true);
+});
