@@ -85,9 +85,14 @@ async function importLinkProject(page: Page, options: { upperLevel?: boolean } =
   await expect(page.locator('#project-select option:checked')).toHaveText('Maison du lien');
 }
 
-/** Le hash reprend l'état au plus 500 ms après la dernière modification. */
+/**
+ * Copie le lien de l'état courant. Le hash contient déjà `#p1:` avant l'import — celui de la
+ * démonstration — donc sa seule présence ne prouve rien : `copyShareLink` écrit le hash puis
+ * affiche son toast, et c'est ce toast qui garantit que `page.url()` décrit bien l'état attendu.
+ */
 async function sharedHash(page: Page) {
   await page.locator('#copy-link').click();
+  await expect(page.locator('#toast')).toContainText(/copi/i);
   await expect.poll(() => new URL(page.url()).hash).toContain('#p1:');
   return page.url();
 }
@@ -217,6 +222,8 @@ test('un lien plus ancien que l’état local propose de garder les deux', async
 test('à 10 projets, « Garder les deux » propose de remplacer un projet, sans écran fatal', async ({
   page,
 }) => {
+  // Trois ouvertures du lien, chacune avec sa session WebGL : laisse de la marge au runner.
+  test.slow();
   // Neuf projets déjà conservés, le dixième est celui du lien.
   const demo = JSON.parse(await readFile('public/projects/studio-demo.json', 'utf8'));
   await page.evaluate((base) => {
