@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { Window } from 'happy-dom';
-import { quarantinedEntries, restoreProjects } from '../src/projectStorage';
+import { quarantineExport, quarantinedEntries, restoreProjects } from '../src/projectStorage';
 import type { HouseProject } from '../src/model/types';
 
 const KEY = 'maison-atelier:projects:v1';
@@ -57,4 +57,16 @@ test('les entrées en quarantaine ne comptent pas dans la limite de 10', () => {
   const restored = restoreProjects(storage, KEY, validate);
   assert.equal(restored.projects.length, 0);
   assert.equal(restored.quarantined, 10);
+});
+
+test('le fichier de secours rend les entrées lisibles en JSON et le reste en texte brut', () => {
+  const storage = new Window().localStorage as unknown as Storage;
+  storage.setItem(
+    KEY + ':quarantine',
+    JSON.stringify(['{"id":"futur","schemaVersion":2}', '[{"id":"b"']),
+  );
+  assert.deepEqual(JSON.parse(quarantineExport(storage, KEY)), [
+    { id: 'futur', schemaVersion: 2 },
+    '[{"id":"b"',
+  ]);
 });

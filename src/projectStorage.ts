@@ -73,3 +73,15 @@ export function restoreProjects(
   }
   return { projects, quarantined: merged.length, unreadable: rejected.length };
 }
+
+/** Contenu du fichier de secours : les entrées lisibles en JSON, les autres en texte brut. */
+export function quarantineExport(storage: Storage, key: string): string {
+  const entries = readQuarantine(storage, key).map((entry) => {
+    try {
+      return JSON.parse(entry) as unknown;
+    } catch {
+      return entry;
+    }
+  });
+  return JSON.stringify(entries, null, 2);
+}
