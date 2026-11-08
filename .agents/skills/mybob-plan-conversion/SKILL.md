@@ -206,6 +206,12 @@ notes de modèle ne remplacent pas la source. Si une source essentielle manque,
 continuer le travail d'audit indépendant et réclamer cette source ; ne pas
 déclarer vérifié un ancien JSON régénéré.
 
+Nommer chaque maison par sa commune, jamais par un nom de personne ni par un
+sigle de dossier : `plans-emieville.pdf`, `plan-sannerville.pdf`, et les projets
+`maison-emieville`, `maison-sannerville`. La commune se lit dans le cartouche du
+PDF, pas dans le nom du fichier reçu. `pnpm run backup:private` nomme les copies
+d'après `project.id` : renommer un projet, c'est renommer sa sauvegarde.
+
 Une maison a souvent plusieurs PDF, et le nom évident n'est pas le bon. Un
 `plans-emieville-scan.pdf` s'est révélé être un scan de 15 pages d'une édition
 antérieure alors que l'original vectoriel dormait à côté sous
