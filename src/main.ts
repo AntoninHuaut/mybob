@@ -1076,15 +1076,19 @@ async function writeLinkHash() {
   }
   desiredLinkHash = hash;
   try {
+    history.replaceState(null, '', hash);
+  } catch {
+    linkHashPending = true;
+    return;
+  }
+  linkHashPending = false;
+  // Mémoire écrite seulement une fois l'URL publiée : si replaceState échoue ou si l'onglet
+  // disparaît entre-temps, l'URL garde un hash ancien et la mémoire ne doit pas le devancer,
+  // sinon un rechargement prendrait son propre hash périmé pour un lien étranger.
+  try {
     sessionStorage.setItem(LINK_HASH_MEMORY, hash);
   } catch {
     /* Sans ce souvenir, un hash périmé pourrait être pris pour un vieux lien. */
-  }
-  try {
-    history.replaceState(null, '', hash);
-    linkHashPending = false;
-  } catch {
-    linkHashPending = true;
   }
 }
 
