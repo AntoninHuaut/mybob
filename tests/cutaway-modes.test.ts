@@ -357,3 +357,58 @@ test('solar previews drive the directional light, preserve neutral plan and rest
   scene.dispose();
   engine.dispose();
 });
+
+test('a short return of a recessed entrance lowers with the facade it extends', () => {
+  const recessed: Level = {
+    id: 'level',
+    name: 'Test',
+    elevation: 0,
+    ceilingHeight: 2.5,
+    outline: [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [5, 6],
+      [5, 5.6],
+      [3, 5.6],
+      [3, 6],
+      [0, 6],
+    ],
+    rooms: [],
+    lights: [],
+    spawn: { position: [1, 1], yaw: 0 },
+    walls: [
+      { id: 'sud-ouest', start: [0, 5.83], end: [3, 5.83], thickness: 0.34, exterior: true },
+      { id: 'sud-est', start: [5, 5.83], end: [8, 5.83], thickness: 0.34, exterior: true },
+      { id: 'retour-g', start: [3, 5.77], end: [3, 6], thickness: 0.34, exterior: true },
+      { id: 'retour-d', start: [5, 5.77], end: [5, 6], thickness: 0.34, exterior: true },
+      { id: 'fond', start: [3, 5.77], end: [5, 5.77], thickness: 0.34, exterior: true },
+      { id: 'nord', start: [0, 0.17], end: [8, 0.17], thickness: 0.34, exterior: true },
+      { id: 'ouest', start: [0.17, 0], end: [0.17, 6], thickness: 0.34, exterior: true },
+      { id: 'est', start: [7.83, 0], end: [7.83, 6], thickness: 0.34, exterior: true },
+    ],
+  };
+  const engine = new NullEngine(),
+    scene = new Scene(engine);
+  const material = new StandardMaterial('shared-plaster', scene);
+  const materials = Object.fromEntries(
+    ['plaster', 'wood', 'concrete', 'frame', 'glass', 'metal', 'slab', 'glow', 'selection'].map(
+      (key) => [key, material],
+    ),
+  ) as unknown as Materials;
+  buildHouse(recessed, scene, materials);
+  const cutaway = buildWallCutaway(scene, recessed);
+  // Seen from the front-left, the west return is edge-on: it must still lower.
+  const side = cutaway.apply('auto', [-4, 14]);
+  assert.ok(side.has('retour-g'), 'the edge-on return lowers with its facade');
+  assert.ok(side.has('retour-d'));
+  assert.ok(side.has('sud-ouest') && side.has('sud-est') && side.has('fond'));
+  assert.ok(!side.has('nord'), 'the back wall stays up');
+  // Seen from the front, the long side walls frame the view and stay up.
+  const front = cutaway.apply('auto', [4, 14]);
+  assert.ok(front.has('retour-g') && front.has('retour-d'));
+  assert.ok(!front.has('ouest') && !front.has('est'), 'long side walls keep their height');
+  cutaway.dispose();
+  scene.dispose();
+  engine.dispose();
+});
