@@ -20,11 +20,11 @@ personnel qui doit vivre sous `public/projects/` suit la convention
 l'autorité sur ce qui peut être publié. Ne jamais ajouter de donnée personnelle à
 la liste blanche des ressources publiques.
 
-Les cas de référence de ce document sont anonymisés : **plan A** (RDC, page 8,
-1/75) et **plan B** (RDC page 13, combles page 14, 1/50) — pages comptées à
-partir de 1, comme les options `--pages` des scripts du dépôt. Aucun nom de
-commune,
-de constructeur ni de fichier d'origine n'est écrit ici — le dépôt est public.
+Les cas de référence de ce document s'appellent **plan A** (RDC, page 8, 1/75)
+et **plan B** (RDC page 13, combles page 14, 1/50) — pages comptées à partir de
+1, comme les options `--pages` des scripts du dépôt. Aucun nom de personne, de
+constructeur ni de dossier n'est écrit ici — le dépôt est public ; la commune,
+elle, est autorisée par le propriétaire (voir plus bas le nommage des maisons).
 Les plans eux-mêmes vivent dans `reference-documents/`, ignoré par git.
 
 ## La règle : un script mesure, l'IA décide
