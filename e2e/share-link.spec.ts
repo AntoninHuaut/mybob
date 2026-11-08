@@ -19,7 +19,7 @@ async function furnishings(page: Page) {
   await page.getByRole('tab', { name: /Meubles/ }).click();
 }
 
-async function importLinkProject(page: Page) {
+async function importLinkProject(page: Page, options: { upperLevel?: boolean } = {}) {
   const demo = JSON.parse(await readFile('public/projects/studio-demo.json', 'utf8'));
   const level = {
     id: 'lien-niveau',
@@ -51,6 +51,15 @@ async function importLinkProject(page: Page) {
     lights: [],
     spawn: { position: [4, 3], yaw: 0 },
   };
+  // Second niveau du même contour : les identifiants sont uniques à travers tous les niveaux.
+  const upper = {
+    ...structuredClone(level),
+    id: 'lien-etage',
+    name: 'Étage du lien',
+    elevation: 2.7,
+    walls: level.walls.map((wall) => ({ ...wall, id: `${wall.id}-etage` })),
+    rooms: level.rooms.map((room) => ({ ...room, id: `${room.id}-etage` })),
+  };
   const sofa = createFurniture({
     id: 'lien-canape',
     kind: 'sofa',
@@ -63,7 +72,7 @@ async function importLinkProject(page: Page) {
     ...demo,
     id: 'lien-partage-demo',
     name: 'Maison du lien',
-    levels: [level],
+    levels: options.upperLevel ? [level, upper] : [level],
     furnishing: { version: 1, levels: { [level.id]: [sofa] } },
   };
   const menu = page.locator('#toggle-sidebar');
@@ -126,6 +135,42 @@ test('un lien partagé s’ouvre en lecture seule, puis modifiable après l’aj
   }
 });
 
+test('changer de niveau garde le projet reçu, sans repasser par la démonstration', async ({
+  page,
+  browser,
+}, testInfo) => {
+  test.slow();
+  await importLinkProject(page, { upperLevel: true });
+  const shared = await sharedHash(page);
+  await page.close();
+
+  const context = await browser.newContext(testInfo.project.use);
+  try {
+    const received = await context.newPage();
+    await received.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
+    await received.goto(shared);
+    const banner = received.locator('#received-banner');
+    await expect(banner).toBeVisible({ timeout: 20_000 });
+    await expect(received.locator('#project-select option:checked')).toHaveText(
+      'Maison du lien — reçu',
+    );
+
+    // Le pack renumérote les identifiants de niveau : le libellé, lui, est conservé.
+    await received.locator('#level-select').selectOption({ label: 'Étage du lien' });
+
+    // Le projet reçu ne figure pas dans la liste des projets : le recharger par son
+    // identifiant retombait sur la démonstration.
+    await expect(received.locator('#header-level')).toHaveText('Étage du lien');
+    await expect(received.locator('#project-select option:checked')).toHaveText(
+      'Maison du lien — reçu',
+    );
+    await expect(banner).toBeVisible();
+    await expect(received.locator('#demo-notice')).toBeHidden();
+  } finally {
+    await context.close();
+  }
+});
+
 test('le propriétaire qui recharge son propre lien ne voit aucun dialogue', async ({ page }) => {
   await importLinkProject(page);
   const shared = await sharedHash(page);
@@ -170,6 +215,10 @@ test('un lien plus ancien que l’état local propose de garder les deux', async
 });
 
 test('un lien au hash corrompu charge le projet local avec un avertissement', async ({ page }) => {
+  // L'application réécrit le hash de l'état courant 500 ms après le chargement. Sans attendre
+  // cette écriture, elle écrase `#p1:abc` avant le rechargement et aucun avertissement
+  // n'apparaît : le test ne tenait qu'à la vitesse de la machine.
+  await expect.poll(() => new URL(page.url()).hash).toContain('#p1:');
   await page.goto('/#p1:abc');
   await page.reload();
   await expect(page.locator('#toast')).toContainText('lien', {

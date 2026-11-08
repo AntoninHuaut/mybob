@@ -641,10 +641,14 @@ function renderProjectOptions() {
 }
 
 function loadProject(id: string, levelId?: string, override?: HouseProject) {
-  const p = override ?? projects.find((p) => p.id === id) ?? projects[0];
+  // Un projet reçu par lien ne figure pas dans `projects` : le recharger par son identifiant
+  // (changement de niveau) doit garder son document et sa lecture seule, au lieu de retomber
+  // sur la démonstration.
+  const received = override ?? (readOnlyLink && current?.id === id ? current : undefined);
+  const p = received ?? projects.find((p) => p.id === id) ?? projects[0];
   if (!p) return;
-  readOnlyLink = Boolean(override);
-  if (!override) receivedShare = undefined;
+  readOnlyLink = Boolean(received);
+  if (!received) receivedShare = undefined;
   furnitureLayer?.dispose();
   furnitureLayer = undefined;
   current = p;
@@ -672,7 +676,7 @@ function loadProject(id: string, levelId?: string, override?: HouseProject) {
       : undefined,
   );
   const projectSelect = el<HTMLSelectElement>('#project-select');
-  if (override) {
+  if (received) {
     // Le projet reçu n'est pas dans la liste : une entrée dédiée, retirée au prochain
     // chargement normal par renderProjectOptions.
     if (!projectSelect.querySelector(`option[value="${CSS.escape(p.id)}"]`)) {
@@ -688,7 +692,7 @@ function loadProject(id: string, levelId?: string, override?: HouseProject) {
   el('#header-project').textContent = p.name;
   el('#project-description').textContent = p.description;
   el('#demo-notice').hidden = p.id !== 'studio-demo';
-  el('#received-banner').hidden = !override;
+  el('#received-banner').hidden = !received;
   applyNavigationPreferences();
   el<HTMLSelectElement>('#level-select').innerHTML = p.levels
     .map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`)
@@ -707,7 +711,7 @@ function loadProject(id: string, levelId?: string, override?: HouseProject) {
   renderRoomDetail();
   setMode('overview');
   syncSelection();
-  if (!override) {
+  if (!received) {
     try {
       localStorage.setItem('maison-atelier:last-project', p.id);
     } catch {
