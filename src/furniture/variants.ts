@@ -61,8 +61,30 @@ export function validateVariantBook(input: unknown, levelIds: string[]): Variant
 }
 
 /** One atomic document per project; old single-layout keys remain untouched as a backup. */
+export const STALE_MESSAGE =
+  'Ce projet a été modifié dans un autre onglet : rechargez la page avant de continuer, rien n’a été écrasé.';
+
 export class VariantSession {
   private entries = new Map<string, Entry>();
+  /** Texte stocké tel que cet onglet l'a lu ou écrit en dernier, pour repérer un autre onglet. */
+  private raw = new Map<string, string | null>();
+  private stale = new Set<string>();
+  onStale?: (projectId: string) => void;
+  isStale(projectId: string) {
+    return this.stale.has(projectId);
+  }
+  markStale(projectId: string) {
+    if (this.stale.has(projectId)) return;
+    this.stale.add(projectId);
+    this.onStale?.(projectId);
+  }
+  private sync(projectId: string) {
+    try {
+      this.raw.set(projectId, localStorage.getItem(variantsStorageKey(projectId)));
+    } catch {
+      this.raw.delete(projectId);
+    }
+  }
   private levels = new Map<string, string[]>();
   get hasUnsaved() {
     return [...this.entries.values()].some((entry) => entry.dirty);
@@ -91,6 +113,7 @@ export class VariantSession {
         };
     const entry = { book, dirty: false };
     this.entries.set(projectId, entry);
+    this.raw.set(projectId, text);
     return entry;
   }
   book(projectId: string): VariantBook {
@@ -107,8 +130,16 @@ export class VariantSession {
   private persist(projectId: string) {
     const entry = this.ensure(projectId);
     entry.dirty = true;
+    const key = variantsStorageKey(projectId);
+    if (this.stale.has(projectId)) throw new Error(STALE_MESSAGE);
+    if (this.raw.has(projectId) && localStorage.getItem(key) !== this.raw.get(projectId)) {
+      this.markStale(projectId);
+      throw new Error(STALE_MESSAGE);
+    }
     try {
-      localStorage.setItem(variantsStorageKey(projectId), JSON.stringify(entry.book));
+      const text = JSON.stringify(entry.book);
+      localStorage.setItem(key, text);
+      this.raw.set(projectId, text);
     } catch {
       throw new Error(
         'Variante conservée dans cette session mais non sauvegardée : exportez le projet avant de fermer.',
@@ -172,13 +203,17 @@ export class VariantSession {
   restore(projectId: string, entry: Entry | undefined) {
     if (entry) this.entries.set(projectId, structuredClone(entry));
     else this.entries.delete(projectId);
+    this.sync(projectId);
   }
   install(projectId: string, book: VariantBook) {
     this.entries.set(projectId, { book: structuredClone(book), dirty: false });
+    this.sync(projectId);
   }
   forgetProject(projectId: string) {
     this.entries.delete(projectId);
     this.levels.delete(projectId);
+    this.raw.delete(projectId);
+    this.stale.delete(projectId);
   }
   prepareImport(
     projectId: string,
