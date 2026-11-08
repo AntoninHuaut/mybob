@@ -215,6 +215,10 @@ test('un lien plus ancien que l’état local propose de garder les deux', async
 });
 
 test('un lien au hash corrompu charge le projet local avec un avertissement', async ({ page }) => {
+  // L'application réécrit le hash de l'état courant 500 ms après le chargement. Sans attendre
+  // cette écriture, elle écrase `#p1:abc` avant le rechargement et aucun avertissement
+  // n'apparaît : le test ne tenait qu'à la vitesse de la machine.
+  await expect.poll(() => new URL(page.url()).hash).toContain('#p1:');
   await page.goto('/#p1:abc');
   await page.reload();
   await expect(page.locator('#toast')).toContainText('lien', {
