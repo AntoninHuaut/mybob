@@ -90,18 +90,26 @@ export class SolarPanel {
     this.callbacks.onApply(this.settings, instant);
     this.timeline?.update(this.settings, instant);
   }
-  load(project: HouseProject) {
-    this.project = project;
-    this.value = project.solar;
+  /**
+   * Réglages effectifs d'un projet : la préférence locale prime, sinon ceux du projet.
+   * Sert au lien d'état avant même que le projet ne soit chargé dans le panneau.
+   */
+  settingsFor(project: HouseProject): SolarSettings | undefined {
+    let value: SolarSettings | undefined = project.solar;
     try {
       const saved = localStorage.getItem(key(project.id));
       if (saved) {
         const parsed: unknown = JSON.parse(saved);
-        this.value = parsed === null ? undefined : validateSolarSettings(parsed);
+        value = parsed === null ? undefined : validateSolarSettings(parsed);
       }
     } catch {
       /* A malformed preference must not stop loading a house. */
     }
+    return value;
+  }
+  load(project: HouseProject) {
+    this.project = project;
+    this.value = this.settingsFor(project);
     this.instant = this.value?.instant ? new Date(this.value.instant) : new Date();
     this.callbacks.onApply(this.settings, this.instant);
     this.timeline?.update(this.settings, this.instant);

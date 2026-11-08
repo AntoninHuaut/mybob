@@ -198,6 +198,46 @@
 .viewport.walking .start-card {
   display: none;
 }
+/* Bandeau d'un projet reçu par lien : présent sans gêner la visite, retiré à l'adoption. */
+.received-banner {
+  position: absolute;
+  z-index: 7;
+  top: 14px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: min(600px, calc(100% - 44px));
+  padding: 10px 12px 10px 16px;
+  border: 1px solid #d0dec6;
+  border-radius: 10px;
+  background: #fafdf4f2;
+  box-shadow: 0 10px 30px #2a45201f;
+  backdrop-filter: blur(10px);
+}
+.received-banner[hidden] {
+  display: none;
+}
+.received-banner p {
+  margin: 0;
+  color: #45643b;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.received-banner .primary-button {
+  flex-shrink: 0;
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 13px;
+}
+@media (max-width: 760px) {
+  .received-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
 .start-card-heading {
   display: flex;
   align-items: flex-start;
