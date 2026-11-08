@@ -66,7 +66,7 @@ export const STALE_MESSAGE =
 
 export class VariantSession {
   private entries = new Map<string, Entry>();
-  /** Texte stocké tel que cet onglet l'a lu ou écrit en dernier, pour repérer un autre onglet. */
+  /** Text stored as this tab last read or wrote it, to detect another tab. */
   private raw = new Map<string, string | null>();
   private stale = new Set<string>();
   onStale?: (projectId: string) => void;

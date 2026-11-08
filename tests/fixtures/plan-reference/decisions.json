@@ -46,7 +46,7 @@
         "startOffset": 0.0,
         "endOffset": 0.0,
         "anchor": "openings",
-        "note": "cote imprimée 6.000 m = segments 0..4 (6.000 m) de la chaîne ; origine du mur 0.000 m sur la chaîne",
+        "note": "printed dimension 6.000 m = segments 0..4 (6.000 m) of the chain; wall origin 0.000 m on the chain",
         "wallOrigin": 0.0
       },
       "unresolved": false
@@ -69,7 +69,7 @@
         "startOffset": 0.0,
         "endOffset": 0.0,
         "anchor": "openings",
-        "note": "cote imprimée 6.000 m = segments 0..3 (6.000 m) de la chaîne ; origine du mur 0.000 m sur la chaîne",
+        "note": "printed dimension 6.000 m = segments 0..3 (6.000 m) of the chain; wall origin 0.000 m on the chain",
         "wallOrigin": 0.0
       },
       "unresolved": false
@@ -92,7 +92,7 @@
         "startOffset": -0.1,
         "endOffset": 0.1,
         "anchor": "openings",
-        "note": "cote imprimée 4.000 m = segments 0..2 (4.000 m) de la chaîne ; décalages -0.100/+0.100 m d'épaisseurs déclarées → axe 3.800 m ; origine du mur 0.100 m sur la chaîne",
+        "note": "printed dimension 4.000 m = segments 0..2 (4.000 m) of the chain; offsets -0.100/+0.100 m from declared thicknesses → axis 3.800 m; wall origin 0.100 m on the chain",
         "wallOrigin": 0.1
       },
       "unresolved": false
@@ -115,7 +115,7 @@
         "startOffset": -0.1,
         "endOffset": 0.1,
         "anchor": "envelope",
-        "note": "cote imprimée 4.000 m = segments 0..2 (4.000 m) de la chaîne ; chaîne calée sur l'emprise du niveau ; décalages -0.100/+0.100 m d'épaisseurs déclarées → axe 3.800 m"
+        "note": "printed dimension 4.000 m = segments 0..2 (4.000 m) of the chain; chain fitted to the level footprint; offsets -0.100/+0.100 m from declared thicknesses → axis 3.800 m"
       },
       "unresolved": false
     },
@@ -137,7 +137,7 @@
         "startOffset": 0.0,
         "endOffset": 0.0,
         "anchor": "openings",
-        "note": "cote imprimée 3.600 m = segments 0..3 (3.600 m) de la chaîne ; chaîne ouverte, preuve partielle ; origine du mur 0.000 m sur la chaîne",
+        "note": "printed dimension 3.600 m = segments 0..3 (3.600 m) of the chain; open chain, partial proof; wall origin 0.000 m on the chain",
         "wallOrigin": 0.0
       },
       "unresolved": false
@@ -160,7 +160,7 @@
         "printedHeight": 2.1,
         "convention": "both",
         "anchor": "envelope",
-        "note": "cote imprimée 1.20/2.10 m, position absolue sur une chaîne calée sur l'emprise"
+        "note": "printed dimension 1.20/2.10 m, absolute position on a chain fitted to the footprint"
       },
       "unresolved": false
     },
@@ -180,7 +180,7 @@
         "printedHeight": 1.0,
         "convention": "both",
         "anchor": "envelope",
-        "note": "cote imprimée 0.80/1.00 m, position absolue sur une chaîne calée sur l'emprise"
+        "note": "printed dimension 0.80/1.00 m, absolute position on a chain fitted to the footprint"
       },
       "unresolved": false
     },
@@ -200,7 +200,7 @@
         "printedHeight": 2.1,
         "convention": "both",
         "anchor": "envelope",
-        "note": "cote imprimée 0.90/2.10 m, position absolue sur une chaîne calée sur l'emprise"
+        "note": "printed dimension 0.90/2.10 m, absolute position on a chain fitted to the footprint"
       },
       "unresolved": false
     },
@@ -220,7 +220,7 @@
         "printedHeight": 1.0,
         "convention": "both",
         "anchor": "envelope",
-        "note": "cote imprimée 1.00/1.00 m, position absolue sur une chaîne calée sur l'emprise"
+        "note": "printed dimension 1.00/1.00 m, absolute position on a chain fitted to the footprint"
       },
       "unresolved": false
     },
@@ -240,7 +240,7 @@
         "printedHeight": 2.1,
         "convention": "both",
         "anchor": "openings",
-        "note": "cote imprimée 0.80/2.10 m (convention : both) ; position vérifiée sur la suite du mur",
+        "note": "printed dimension 0.80/2.10 m (convention : both); position checked on the wall's sequence",
         "wallOrigin": 0.0
       },
       "unresolved": false

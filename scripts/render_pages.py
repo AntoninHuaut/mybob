@@ -1,7 +1,7 @@
-"""Rend les pages d'un PDF de plans en PNG individuels + planches-contact.
+"""Renders the pages of a plan PDF as individual PNGs + contact sheets.
 
-Usage : uvx --from pymupdf python render_pages.py <pdf> <dossier-sortie> [dpi]
-Produit : <dossier>-NN.png par page et <dossier>-plate-N.png (4 pages par planche).
+Usage: uvx --from pymupdf python render_pages.py <pdf> <output-dir> [dpi]
+Produces: <dir>-NN.png per page and <dir>-plate-N.png (4 pages per sheet).
 """
 import sys, glob
 import pymupdf
@@ -18,7 +18,7 @@ for i, page in enumerate(doc):
     pix.save(f"{outdir}/{prefix}-{i+1:02d}.png")
     print(f"{outdir}/{prefix}-{i+1:02d}.png", pix.width, "x", pix.height)
 
-# planches-contact (4 pages par planche, étiquettes rouges)
+# contact sheets (4 pages per sheet, red labels)
 from PIL import Image, ImageDraw
 files = sorted(glob.glob(f"{outdir}/{prefix}-*.png"))
 W = 900

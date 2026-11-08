@@ -15,20 +15,20 @@ function move(resolution: AdaptiveResolution, count: number, frameMs: number, st
   return scale;
 }
 
-test('une machine qui tient 60 fps reste toujours en pleine résolution', () => {
+test('a machine holding 60 fps always stays at full resolution', () => {
   const resolution = new AdaptiveResolution();
   assert.equal(move(resolution, FRAME_SAMPLES * 20, 16.7), 1);
   assert.equal(resolution.motionScale, 1);
 });
 
-test('une machine lente baisse la résolution en mouvement, un cran par série d’images', () => {
+test('a slow machine lowers resolution while moving, one step per series of frames', () => {
   const resolution = new AdaptiveResolution();
   assert.equal(move(resolution, FRAME_SAMPLES - 1, 45), 1);
   assert.equal(move(resolution, 1, 45, 1000), MOTION_SCALES[1]);
   assert.equal(move(resolution, FRAME_SAMPLES * 10, 45, 2000), MOTION_SCALES.at(-1));
 });
 
-test('à l’arrêt, l’image revient en pleine résolution, et le palier appris reste pour la suite', () => {
+test('when still, the image returns to full resolution, and the learnt step stays for later', () => {
   const resolution = new AdaptiveResolution();
   move(resolution, FRAME_SAMPLES * 2, 45);
   const learnt = resolution.motionScale;
@@ -40,12 +40,12 @@ test('à l’arrêt, l’image revient en pleine résolution, et le palier appri
   assert.equal(resolution.update(stop + 5000, true, undefined), learnt);
 });
 
-test('une machine très lente saute un cran', () => {
+test('a very slow machine skips a step', () => {
   const resolution = new AdaptiveResolution();
   assert.equal(move(resolution, FRAME_SAMPLES, 150), MOTION_SCALES[2]);
 });
 
-test('une image lente isolée ne fait pas baisser la résolution', () => {
+test('a single slow frame does not lower the resolution', () => {
   const resolution = new AdaptiveResolution();
   let scale = 1;
   for (let frame = 0; frame < FRAME_SAMPLES * 5; frame++)
@@ -53,7 +53,7 @@ test('une image lente isolée ne fait pas baisser la résolution', () => {
   assert.equal(scale, 1);
 });
 
-test('avec de la marge, la résolution remonte d’un cran', () => {
+test('with headroom, resolution goes back up one step', () => {
   const resolution = new AdaptiveResolution();
   move(resolution, FRAME_SAMPLES * 2, 45);
   const reduced = resolution.motionScale;

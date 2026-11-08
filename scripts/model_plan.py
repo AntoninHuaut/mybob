@@ -1,12 +1,12 @@
-"""Rend un niveau du projet en vue de dessus, depuis le JSON seul.
+"""Renders a project level as a top view, from the JSON alone.
 
-Pour lire ce que le modèle dit sans le dessin : les pièces en beige, les murs
-en gris plein, les baies franchissables découpées, les fenêtres en bleu. Le
-rendu est exact et ne dépend d'aucune calibration — c'est le pendant de
-`overlay_page.py`, qui superpose le modèle à la planche du plan.
+To read what the model says without the drawing: rooms in beige, walls in
+solid grey, crossable openings cut out, windows in blue. The rendering is
+exact and depends on no calibration — it is the counterpart of
+`overlay_page.py`, which overlays the model on the plan sheet.
 
-Usage :
-  python scripts/model_plan.py <projet.json> <niveau> <sortie.png> <x0,z0,x1,z1> [px_par_m]
+Usage:
+  python scripts/model_plan.py <project.json> <level> <output.png> <x0,z0,x1,z1> [px_per_m]
   python scripts/model_plan.py --self-test
 """
 
@@ -90,7 +90,7 @@ def render(project, level_id, out, box, ppm):
 
 
 def self_test():
-    """Non-régression sur un projet synthétique : aucune donnée réelle."""
+    """Non-regression on a synthetic project: no real data."""
     from tempfile import NamedTemporaryFile
 
     project = {
@@ -123,18 +123,18 @@ def self_test():
     if img.size != (300, 200):
         failures.append(f"taille {img.size}")
     for expected, name in (
-        ((232, 222, 205), "le remplissage de pièce"),
-        ((150, 150, 150), "le mur plein"),
-        ((60, 120, 220), "la baie non franchissable"),
-        ((255, 255, 255), "le fond hors pièce"),
+        ((232, 222, 205), "the room fill"),
+        ((150, 150, 150), "the solid wall"),
+        ((60, 120, 220), "the non-crossable opening"),
+        ((255, 255, 255), "the background outside rooms"),
     ):
         if expected not in colours:
-            failures.append(name + " absent du rendu")
+            failures.append(name + " missing from the render")
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print("rendu de niveau : auto-test réussi")
+    print("level render: self-test passed")
     return 0
 
 

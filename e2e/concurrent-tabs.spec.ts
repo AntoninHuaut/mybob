@@ -1,6 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 
-// Deux onglets sur la même maison : le second ne doit jamais écraser le travail du premier.
+// Two tabs on the same house: the second must never overwrite the first one's work.
 async function openTab(page: Page) {
   await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
@@ -31,7 +31,7 @@ const stored = (page: Page) =>
       .join('\n'),
   );
 
-test('le second onglet est en lecture seule et ne supprime pas le canapé du premier', async ({
+test('the second tab is read-only and does not delete the first one’s sofa', async ({
   context,
 }) => {
   const a = await context.newPage();
@@ -42,7 +42,7 @@ test('le second onglet est en lecture seule et ne supprime pas le canapé du pre
   await addFurniture(a, 'Canapé onglet A');
   await expect.poll(() => stored(a)).toContain('Canapé onglet A');
 
-  // L'événement storage prévient l'onglet B; son ajout est refusé et rien n'est écrit.
+  // The storage event warns tab B; its addition is refused and nothing is written.
   await expect(b.locator('#stale-banner')).toBeVisible();
   await addFurniture(b, 'Table onglet B');
   const draft = b.getByRole('dialog', { name: 'Ajouter un meuble', exact: true });

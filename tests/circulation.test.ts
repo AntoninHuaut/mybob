@@ -35,8 +35,8 @@ const sofa = (z: number) =>
   createFurniture({ id: 'sofa', kind: 'sofa', width: 2, depth: 0.9, position: [3, z] });
 
 test('a key item near a wall shows a tight passage strip on that side only', () => {
-  // Le mur nord occupe z [-0,1 ; 0,1] ; le canapé (profondeur 0,9) posé à z = 0,75
-  // laisse un passage de 0,2 m côté nord, libre côté sud.
+  // The north wall occupies z [-0.1; 0.1]; the sofa (depth 0.9) placed at z = 0.75
+  // leaves a 0.2 m passage on the north side, free on the south side.
   const bands = circulationBands([sofa(0.75)], level);
   assert.equal(bands.length, 1);
   assert.equal(bands[0].axis, 'z');
@@ -46,13 +46,13 @@ test('a key item near a wall shows a tight passage strip on that side only', () 
 });
 
 test('an amber strip appears beyond the tight threshold and disappears above the limit', () => {
-  // Dos du canapé à 0,8 m du mur : passage de 0,7 m, ambre.
+  // Back of the sofa 0.8 m from the wall: 0.7 m passage, amber.
   const visible = circulationBands([sofa(1.25)], level);
   assert.equal(visible.length, 1);
   const amber = visible[0];
   assert.ok(amber.distance >= CIRCULATION_TIGHT && amber.distance <= CIRCULATION_SHOWN);
   assert.ok(Math.abs(amber.distance - 0.7) < 1e-9);
-  // Passage de 0,81 m : au-delà du seuil, rien ne s'affiche.
+  // 0.81 m passage: above the threshold, nothing is shown.
   const hidden = circulationBands([sofa(1.36)], level);
   assert.equal(hidden.length, 0);
 });
@@ -96,7 +96,7 @@ test('linked group members do not count as passage obstacles', () => {
     position: [4.3, 0.75],
     groupId: 'ensemble',
   });
-  // Sans la liaison, la chaise réduirait le passage est de la table à ~0,55 m.
+  // Without the link, the chair would narrow the table's east passage to ~0.55 m.
   const withoutGroup = circulationBands([table, { ...chair, groupId: undefined }] as never, level);
   assert.ok(
     withoutGroup.some((band) => band.itemId === 'table' && band.axis === 'x'),

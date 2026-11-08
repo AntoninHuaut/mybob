@@ -181,7 +181,7 @@
   box-shadow: 0 4px 16px #2a452012;
   backdrop-filter: blur(10px);
 }
-/* Carte de démarrage : posée dans la scène, sans voile ; la maison reste utilisable. */
+/* Start card: set in the scene, no overlay; the house stays usable. */
 .start-card {
   position: absolute;
   z-index: 6;
@@ -198,7 +198,7 @@
 .viewport.walking .start-card {
   display: none;
 }
-/* Bandeau d'un projet reçu par lien : présent sans gêner la visite, retiré à l'adoption. */
+/* Banner of a project received by link: present without hindering the walk, removed on adoption. */
 .received-banner {
   position: absolute;
   z-index: 7;
@@ -298,7 +298,7 @@
     display: none;
   }
 }
-/* Sur un écran bas, la carte masquerait la colonne d’outils : l’entrée de la barre latérale suffit. */
+/* On a short screen the card would hide the tool column: the sidebar entry is enough. */
 @media (max-height: 600px) {
   .start-card {
     display: none;
@@ -402,7 +402,7 @@
   align-items: center;
   gap: 14px;
 }
-/* Cadence de rendu : un diagnostic, pas une commande. Discret et jamais cliquable. */
+/* Render frame rate: a diagnostic, not a control. Discreet and never clickable. */
 .frame-rate {
   font-size: 11px;
   font-variant-numeric: tabular-nums;

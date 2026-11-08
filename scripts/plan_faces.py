@@ -1,27 +1,27 @@
-"""Les pièces d'un niveau, calculées depuis ses murs.
+"""The rooms of a level, computed from its walls.
 
-Un polygone de pièce saisi à la main est une opinion. Les murs, eux, sont la
-géométrie : une pièce est ce que les murs laissent libre. Ce script ferme le
-niveau, découpe le plan en cellules aux faces de murs, remplit les cellules
-libres et rapporte chaque région avec sa surface exacte.
+A room polygon entered by hand is an opinion. Walls are the geometry: a room is
+what the walls leave free. This script closes the level, cuts the plan into
+cells at the wall faces, fills the free cells and reports each region with its
+exact area.
 
-Ce n'est pas une détection : c'est un calcul. Les coordonnées de découpe sont
-les faces des murs et les sommets du contour, donc aucune cellule ne peut
-traverser un mur, et la surface d'une région est la somme de ses cellules.
+It is not a detection: it is a computation. The cut coordinates are the wall
+faces and the outline vertices, so no cell can cross a wall, and a region's area
+is the sum of its cells.
 
-Les baies ne sont pas soustraites : une porte est un passage, pas une absence de
-mur. Deux pièces reliées par une porte restent deux pièces.
+Openings are not subtracted: a door is a passage, not an absence of wall. Two
+rooms linked by a door stay two rooms.
 
-Usage :
-  python scripts/plan_faces.py <projet.json> [--level rdc] [--json sortie.json]
-  python scripts/plan_faces.py <projet.json> --compare   # régions contre pièces
+Usage:
+  python scripts/plan_faces.py <project.json> [--level rdc] [--json output.json]
+  python scripts/plan_faces.py <project.json> --compare   # regions against rooms
 """
 import argparse
 import json
 import sys
 from pathlib import Path
 
-MIN_AREA = 0.05  # m², en dessous ce n'est pas une pièce mais un interstice
+MIN_AREA = 0.05  # m², below this it is not a room but a gap
 EPSILON = 1e-9
 
 
@@ -63,7 +63,7 @@ def contains(points, x, z):
 
 
 def wall_rect(wall):
-    """Emprise d'un mur droit, ou None s'il est oblique."""
+    """Footprint of a straight wall, or None if it is oblique."""
     (x1, z1), (x2, z2) = wall["start"], wall["end"]
     half = wall["thickness"] / 2
     if abs(z1 - z2) < EPSILON:
@@ -74,13 +74,13 @@ def wall_rect(wall):
 
 
 def region_polygon(cells, xs, zs):
-    """Contour d'une région, tracé sur les arêtes de ses cellules.
+    """Outline of a region, traced on the edges of its cells.
 
-    Une région est une union de cellules : son contour est l'ensemble des côtés
-    qui n'ont pas de voisin dans la région. On les oriente tous dans le même
-    sens, on les enchaîne, et on retire les points alignés. Le résultat est exact
-    — c'est le contour de ce que les murs laissent libre, y compris les retours
-    de cloison qui dépassent dans la pièce.
+    A region is a union of cells: its outline is the set of sides that have no
+    neighbour in the region. They are all oriented the same way, chained, and
+    aligned points are removed. The result is exact — it is the outline of what
+    the walls leave free, including the partition returns sticking out into the
+    room.
     """
     inside = set(cells)
     edges = []
@@ -128,7 +128,7 @@ def region_polygon(cells, xs, zs):
 
 
 def build(level):
-    """Régions libres du niveau, en cellules puis en surfaces."""
+    """Free regions of the level, as cells then as areas."""
     rects = []
     oblique = []
     for wall in level.get("walls") or []:
@@ -139,7 +139,7 @@ def build(level):
             rects.append(rect)
     outline = level.get("outline") or []
     if not outline:
-        raise ValueError("le niveau n'a pas de contour")
+        raise ValueError("the level has no outline")
 
     xs = sorted({round(value, 6) for rect in rects for value in (rect[0], rect[1])})
     zs = sorted({round(value, 6) for rect in rects for value in (rect[2], rect[3])})
@@ -148,7 +148,7 @@ def build(level):
 
     columns, rows = len(xs) - 1, len(zs) - 1
     if columns < 1 or rows < 1:
-        raise ValueError("géométrie dégénérée : aucune cellule")
+        raise ValueError("degenerate geometry: no cell")
 
     free = [[False] * rows for _ in range(columns)]
     for i in range(columns):
@@ -224,7 +224,7 @@ def build(level):
 
 
 def compare(result, level):
-    """Apparie chaque pièce du projet à la région qui contient son centre."""
+    """Pairs each project room with the region containing its centre."""
     rooms = [room for room in level.get("rooms") or [] if room.get("polygon")]
     rows = []
     used = set()
@@ -245,7 +245,7 @@ def compare(result, level):
                     "polygon": round(declared, 3),
                     "face": None,
                     "delta": None,
-                    "verdict": "aucune région sous le centre",
+                    "verdict": "no region under the centre",
                 }
             )
             continue
@@ -258,7 +258,7 @@ def compare(result, level):
                 "polygon": round(declared, 3),
                 "face": round(face, 3),
                 "delta": round(delta, 3),
-                "verdict": "cohérent" if abs(delta) <= 0.02 else "polygone faux",
+                "verdict": "consistent" if abs(delta) <= 0.02 else "wrong polygon",
             }
         )
     orphans = [
@@ -270,11 +270,11 @@ def compare(result, level):
 
 
 def apply(result, level):
-    """Remplace le polygone des pièces fermées par le contour calculé.
+    """Replaces the polygon of closed rooms with the computed outline.
 
-    Une région qui ne porte qu'une pièce donne son contour exact, retours de
-    cloison compris. Une région qui en porte plusieurs est un espace ouvert : sa
-    découpe est une convention, on n'y touche pas et on le dit.
+    A region carrying a single room gives its exact outline, partition returns
+    included. A region carrying several is an open space: its split is a
+    convention, it is left untouched and that is said.
     """
     rooms = [room for room in level.get("rooms") or [] if room.get("polygon")]
     holders = {}
@@ -302,7 +302,7 @@ def apply(result, level):
 
 
 def self_test():
-    """Non-régression : deux pièces séparées par une cloison de 7 cm."""
+    """Non-regression: two rooms separated by a 7 cm partition."""
     level = {
         "id": "rdc",
         "outline": [[0, 0], [6, 0], [6, 4], [0, 4]],
@@ -321,22 +321,22 @@ def self_test():
     result = build(level)
     failures = []
     if len(result["regions"]) != 2:
-        failures.append(f"{len(result['regions'])} régions au lieu de 2")
+        failures.append(f"{len(result['regions'])} regions instead of 2")
     else:
         expected = (3 - 0.15 - 0.035) * (3.85 - 0.15)
         for region in result["regions"]:
             if abs(region["area"] - expected) > 0.01:
-                failures.append(f"surface {region['area']} au lieu de {expected:.3f}")
+                failures.append(f"area {region['area']} instead of {expected:.3f}")
     rows, orphans = compare(result, level)
     if orphans:
-        failures.append(f"{len(orphans)} région(s) sans pièce")
-    if any(row["verdict"] != "cohérent" for row in rows):
+        failures.append(f"{len(orphans)} region(s) without a room")
+    if any(row["verdict"] != "consistent" for row in rows):
         failures.append(f"appariement {rows}")
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print("pièces depuis les murs : auto-test réussi")
+    print("rooms from walls: self-test passed")
     return 0
 
 
@@ -348,9 +348,9 @@ def main(argv):
     parser.add_argument(
         "--apply",
         action="store_true",
-        help="remplacer le polygone des pièces fermées par le contour calculé",
+        help="replace the polygon of closed rooms with the computed outline",
     )
-    parser.add_argument("--write", default=None, help="écrire le projet corrigé")
+    parser.add_argument("--write", default=None, help="write the corrected project")
     parser.add_argument("--json", default=None)
     parser.add_argument("--self-test", action="store_true")
     if "--self-test" in argv:
@@ -364,14 +364,14 @@ def main(argv):
         None,
     )
     if level is None:
-        parser.error(f"niveau {args.level} absent du projet")
+        parser.error(f"level {args.level} missing from the project")
     result = build(level)
     print(
-        f"{result['walls']} murs, grille {result['grid'][0]}x{result['grid'][1]}, "
-        f"{len(result['regions'])} régions, total {result['total']:.2f} m²"
+        f"{result['walls']} walls, grid {result['grid'][0]}x{result['grid'][1]}, "
+        f"{len(result['regions'])} regions, total {result['total']:.2f} m²"
     )
     if result["obliqueWalls"]:
-        print(f"murs obliques ignorés : {', '.join(result['obliqueWalls'])}")
+        print(f"oblique walls ignored: {', '.join(result['obliqueWalls'])}")
     for region in result["regions"]:
         print(
             f"  {region['area']:7.3f} m²  centre {region['centroid']}  "
@@ -380,13 +380,13 @@ def main(argv):
     if args.compare:
         rows, orphans = compare(result, level)
         print()
-        print(f"{'pièce':14s} {'polygone':>9s} {'murs':>9s} {'écart':>7s}  verdict")
+        print(f"{'room':14s} {'polygon':>9s} {'walls':>9s} {'gap':>7s}  verdict")
         for row in rows:
             face = "—" if row["face"] is None else f"{row['face']:.3f}"
             delta = "—" if row["delta"] is None else f"{row['delta']:+.3f}"
             print(f"{row['room']:14s} {row['polygon']:9.3f} {face:>9s} {delta:>7s}  {row['verdict']}")
         for orphan in orphans:
-            print(f"  région sans pièce : {orphan['area']:.3f} m² en {orphan['centroid']}")
+            print(f"  region without a room: {orphan['area']:.3f} m² at {orphan['centroid']}")
         result["compare"] = {"rows": rows, "orphans": orphans}
     if args.apply:
         applied, skipped = apply(result, level)
@@ -397,8 +397,8 @@ def main(argv):
             )
         for item in skipped:
             print(
-                f"  espace ouvert laissé tel quel : {item['area']:.3f} m² "
-                f"({', '.join(item['rooms']) or 'aucune pièce'})"
+                f"  open space left as is: {item['area']:.3f} m² "
+                f"({', '.join(item['rooms']) or 'no room'})"
             )
         result["applied"] = applied
         result["skipped"] = skipped

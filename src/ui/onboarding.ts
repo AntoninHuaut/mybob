@@ -1,7 +1,7 @@
-/** État local des premiers pas : une carte montrée une fois, jamais bloquante. */
+/** Local state of the first steps: a card shown once, never blocking. */
 export const ONBOARDING_STORAGE = 'maison-atelier:onboarding';
 
-/** Incrémenter repropose la carte une fois après une refonte de l’accueil. */
+/** Incrementing offers the card again once after a redesign of the welcome. */
 export const ONBOARDING_VERSION = 1;
 
 export interface OnboardingState {
@@ -14,7 +14,7 @@ export const defaultOnboarding: OnboardingState = {
   cardSeen: false,
 };
 
-/** Lecture tolérante : une valeur absente, illisible ou d’une autre version repart de zéro. */
+/** Tolerant read: an absent, unreadable or other-version value starts from scratch. */
 export function parseOnboarding(raw: string | null): OnboardingState {
   if (!raw) return { ...defaultOnboarding };
   try {
@@ -32,7 +32,7 @@ export function serializeOnboarding(state: OnboardingState): string {
   return JSON.stringify({ version: ONBOARDING_VERSION, cardSeen: state.cardSeen });
 }
 
-/** Seule la carte dépend de cet état : l’aide, la démo et les projets restent toujours accessibles. */
+/** Only the card depends on this state: help, demo and projects always stay reachable. */
 export function shouldShowStartCard(state: OnboardingState): boolean {
   return !state.cardSeen;
 }

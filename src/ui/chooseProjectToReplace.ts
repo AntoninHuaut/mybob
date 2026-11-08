@@ -6,8 +6,8 @@ export interface ReplaceCandidate {
 }
 
 /**
- * Limite de projets atteinte : propose de remplacer l'un d'eux plutôt que d'échouer.
- * Ne supprime rien : renvoie l'identifiant choisi, ou `null` si l'utilisateur annule.
+ * Project limit reached: offers to replace one of them rather than failing.
+ * Deletes nothing: returns the chosen identifier, or `null` if the user cancels.
  */
 export function chooseProjectToReplace(
   candidates: ReplaceCandidate[],

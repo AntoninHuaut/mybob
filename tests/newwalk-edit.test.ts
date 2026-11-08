@@ -223,7 +223,7 @@ test('a capture refused in the rebind window retries once; a refused retry is re
       run.callback();
     };
     // Chromium refuses a re-lock right after the pointer lock left through the
-    // keyboard (Échap) — captureMouse schedules the one-shot silent retry.
+    // keyboard (Escape) — captureMouse schedules the one-shot silent retry.
     failures = 1;
     viewer.captureMouse();
     await flush();

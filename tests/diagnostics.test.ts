@@ -41,12 +41,12 @@ function scene(): DiagnosticScene {
 
 const view = { mode: 'walk', exterior: false, environment: true, occlusion: 'active' } as const;
 
-test('le nom du moteur donne la version WebGL, ou le nom de classe à défaut', () => {
+test('the engine name gives the WebGL version, or the class name as a fallback', () => {
   assert.equal(engineLabel(engine()), 'WebGL 2');
   assert.equal(engineLabel(engine({ webGLVersion: undefined })), 'ThinEngine');
 });
 
-test('le GPU se lit sur le moteur et reste lisible sans information', () => {
+test('the GPU is read from the engine and stays readable without information', () => {
   assert.deepEqual(engineInfo(engine()), {
     vendor: 'WebKit',
     renderer: 'ANGLE (NVIDIA RTX 3060)',
@@ -59,7 +59,7 @@ test('le GPU se lit sur le moteur et reste lisible sans information', () => {
   });
 });
 
-test('le rapport reprend moteur, cadence, vue, rendu et scène', () => {
+test('the report covers engine, frame rate, view, rendering and scene', () => {
   const snapshot = collectDiagnostics(engine(), scene(), view);
   const lines = diagnosticLines(snapshot);
   assert.equal(lines[0], '[diag] MyBob — rapport de performance');
@@ -70,7 +70,7 @@ test('le rapport reprend moteur, cadence, vue, rendu et scène', () => {
   assert.match(lines[5], /412 maillages, 187 actifs, 38 matériaux, 6 lumières/);
 });
 
-test('le rapport nomme l’extérieur et l’occlusion indisponible', () => {
+test('the report names the exterior and unavailable occlusion', () => {
   const lines = diagnosticLines(
     collectDiagnostics(engine(), scene(), {
       mode: 'overview',
@@ -82,13 +82,13 @@ test('le rapport nomme l’extérieur et l’occlusion indisponible', () => {
   assert.match(lines[3], /extérieur · occlusion indisponible \(WebGL\) · environnement inactif/);
 });
 
-test('au repos, le rapport dit que l’image est figée au lieu d’une cadence trompeuse', () => {
+test('at rest, the report says the image is frozen instead of a misleading frame rate', () => {
   const lines = diagnosticLines(collectDiagnostics(engine(), scene(), { ...view, idle: true }));
   assert.match(lines[2], /au repos, image figée · bougez la vue pendant la mesure/);
   assert.doesNotMatch(lines[2], /fps/);
 });
 
-test('le rapport dit à quelle résolution la vue est rendue en mouvement', () => {
+test('the report says at which resolution the view renders while moving', () => {
   assert.match(
     diagnosticLines(collectDiagnostics(engine(), scene(), view))[4],
     /en mouvement 100 %/,
@@ -99,7 +99,7 @@ test('le rapport dit à quelle résolution la vue est rendue en mouvement', () =
   assert.match(slow[4], /en mouvement 67 %/);
 });
 
-test('un instantané complet reste formattable sans navigateur', () => {
+test('a complete snapshot stays formattable without a browser', () => {
   const snapshot: DiagnosticSnapshot = {
     engine: 'WebGL 2',
     gpu: 'WebKit · ANGLE (NVIDIA RTX 3060)',
@@ -125,7 +125,7 @@ test('un instantané complet reste formattable sans navigateur', () => {
   assert.equal(lines[7], '  navigateur  test');
 });
 
-test('diag imprime le rapport une fois et report le renvoie pour la copie', () => {
+test('diag prints the report once and report returns it for copying', () => {
   const window = new Window({ url: 'http://localhost' });
   const globals = globalThis as { window?: unknown };
   const previousWindow = globals.window;

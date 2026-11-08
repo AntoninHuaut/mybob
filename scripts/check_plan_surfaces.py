@@ -1,22 +1,22 @@
-"""Contrôle des surfaces : ce que le plan imprime contre ce que le projet calcule.
+"""Area check: what the plan prints against what the project computes.
 
-Le plan porte la surface de chaque pièce (« SH : 13.03 m² », « SA : 16.53 m² »).
-C'est la seule mesure du document qui juge le résultat : une pièce dont la
-surface calculée s'écarte de la surface imprimée est une pièce dont les murs
-sont mal placés, quelle que soit la propreté du dessin.
+The plan carries the area of each room (« SH : 13.03 m² », « SA : 16.53 m² »).
+It is the only measurement in the document that judges the result: a room whose
+computed area departs from the printed area is a room whose walls are misplaced,
+however clean the drawing.
 
-Ce script ne décide rien et ne corrige rien. Il lit les surfaces imprimées dans
-le registre de cotes, calcule la surface des polygones du projet, apparie
-chaque étiquette à la pièce qui la contient et rapporte l'écart. La correction
-reste au modèle.
+This script decides nothing and corrects nothing. It reads the printed areas in
+the dimension registry, computes the area of the project's polygons, pairs each
+label with the room containing it and reports the gap. Correction stays with the
+model.
 
-Le repère est déduit du document, pas fourni : les chaînes de cotes donnent
-l'échelle et l'origine par moindres carrés sur tous leurs segments. Un plan à
-une autre échelle, ou un autre constructeur, se lit sans réglage.
+The frame is deduced from the document, not supplied: the dimension chains give
+the scale and the origin by least squares over all their segments. A plan at
+another scale, or from another builder, is read without any setting.
 
-Usage :
-  python scripts/check_plan_surfaces.py <registre.json> <projet.json> \
-      [--level rdc] [--page 8] [--tolerance 0.05] [--json sortie.json]
+Usage:
+  python scripts/check_plan_surfaces.py <registry.json> <project.json> \
+      [--level rdc] [--page 8] [--tolerance 0.05] [--json output.json]
 """
 import argparse
 import json
@@ -25,11 +25,11 @@ import sys
 import tempfile
 from pathlib import Path
 
-DEFAULT_TOLERANCE = 0.05  # m², écart accepté entre surface calculée et imprimée
-NEAREST_LIMIT = 2.0  # m, distance maximale pour apparier une étiquette orpheline
-POINTS_PER_METRE = 2834.6457  # 1000 mm à 1:1, en points PostScript
+DEFAULT_TOLERANCE = 0.05  # m², accepted gap between computed and printed area
+NEAREST_LIMIT = 2.0  # m, maximum distance to pair an orphan label
+POINTS_PER_METRE = 2834.6457  # 1000 mm at 1:1, in PostScript points
 STANDARD_SCALES = (20, 25, 33.333, 50, 75, 100, 125, 200, 250, 500)
-SCALE_TOLERANCE = 0.01  # 1 %, au-delà le fichier n'est pas à l'échelle 1:1
+SCALE_TOLERANCE = 0.01  # 1 %, beyond this the file is not at 1:1 scale
 
 
 def load(path):
@@ -70,7 +70,7 @@ def contains(points, x, z):
 
 
 def chain_pairs(chains, axis):
-    """(cumul en mètres au milieu du segment, position en points) pour un axe."""
+    """(cumulative metres at the segment middle, position in points) for an axis."""
     pairs = []
     for chain in chains:
         if chain.get("axis") != axis:
@@ -87,32 +87,32 @@ def chain_pairs(chains, axis):
 
 
 def fit(pairs):
-    """position = origine + échelle * cumul, par moindres carrés."""
+    """position = origin + scale * cumulative, by least squares."""
     if len(pairs) < 2:
-        raise ValueError("au moins deux segments de cote sont nécessaires")
+        raise ValueError("at least two dimension segments are needed")
     mean_c = sum(c for c, _ in pairs) / len(pairs)
     mean_p = sum(p for _, p in pairs) / len(pairs)
     denominator = sum((c - mean_c) ** 2 for c, _ in pairs)
     if denominator < 1e-9:
-        raise ValueError("les cotes ne couvrent pas l'axe")
+        raise ValueError("the dimensions do not cover the axis")
     scale = sum((c - mean_c) * (p - mean_p) for c, p in pairs) / denominator
     if scale <= 0:
-        raise ValueError("échelle négative : le plan est orienté à l'envers")
+        raise ValueError("negative scale: the plan is oriented upside down")
     return scale, mean_p - scale * mean_c
 
 
 def axis_frame(chains, axis, extent=None, dimensions=None):
-    """Échelle médiane des chaînes, origine de la chaîne qui couvre tout l'axe.
+    """Median scale of the chains, origin from the chain covering the whole axis.
 
-    Les chaînes partielles ne commencent pas au même endroit : on ne peut pas
-    les fondre en un seul ajustement. Chacune donne une échelle ; la plus longue
-    donne l'origine, parce que c'est la seule qui parte du bord du niveau.
+    Partial chains do not start at the same place: they cannot be merged into a
+    single fit. Each gives a scale; the longest gives the origin, because it is the
+    only one starting from the level's edge.
 
-    Sauf quand aucune chaîne ne couvre l'axe. La page 14 du plan B n'a
-    qu'une chaîne verticale partielle (2,78 + 1,27) pour une emprise de 8,50 m :
-    l'origine tombait 3,5 m trop bas et toutes les étiquettes de surface se
-    projetaient à z négatif. La cote d'ensemble « 8.50 » est alors la seule
-    source — elle est centrée sur l'emprise, donc son milieu donne l'origine.
+    Except when no chain covers the axis. Page 14 of plan B only has a partial
+    vertical chain (2.78 + 1.27) for an 8.50 m footprint: the origin fell 3.5 m
+    too low and every area label projected to negative z. The overall dimension
+    « 8.50 » is then the only source — it is centred on the footprint, so its
+    middle gives the origin.
     """
     fitted = []
     for chain in chains:
@@ -124,7 +124,7 @@ def axis_frame(chains, axis, extent=None, dimensions=None):
         scale, _ = fit(pairs)
         fitted.append((chain.get("sum") or 0.0, scale, chain))
     if not fitted:
-        raise ValueError(f"aucune chaîne de cotes sur l'axe {axis}")
+        raise ValueError(f"no dimension chain on axis {axis}")
     scales = sorted(scale for _, scale, _ in fitted)
     scale = scales[len(scales) // 2]
     _, _, longest = max(fitted, key=lambda item: item[0])
@@ -133,10 +133,10 @@ def axis_frame(chains, axis, extent=None, dimensions=None):
         overall = overall_dimension(dimensions, axis, extent)
         if overall is not None:
             along = 0 if axis == "horizontal" else 1
-            # La cote d'ensemble mesure le bâtiment, pas le plancher du niveau :
-            # un niveau en retrait (combles entre rampants) a une emprise plus
-            # petite que la cote. L'origine est le coin du bâtiment, donc c'est
-            # la valeur de la cote qui la donne, pas l'emprise du niveau.
+            # The overall dimension measures the building, not the level's floor:
+            # a recessed level (attic between rafters) has a smaller footprint
+            # than the dimension. The origin is the building's corner, so it is
+            # the dimension's value that gives it, not the level footprint.
             origin = overall["at"][along] - overall["value"] * scale / 2
             return scale, origin, scales[0], scales[-1], extent
     first = longest["segments"][0]
@@ -145,10 +145,10 @@ def axis_frame(chains, axis, extent=None, dimensions=None):
 
 
 def overall_dimension(dimensions, axis, extent, tolerance=0.02):
-    """Cote d'ensemble d'un axe : celle qui vaut l'emprise du niveau.
+    """Overall dimension of an axis: the one equal to the level footprint.
 
-    À défaut, la plus grande cote de l'axe : c'est celle du bâtiment, et un
-    niveau en retrait s'y rattache encore.
+    Failing that, the axis's largest dimension: it is the building's, and a
+    recessed level still hangs off it.
     """
     horizontal = axis == "horizontal"
     candidates = [
@@ -165,11 +165,11 @@ def overall_dimension(dimensions, axis, extent, tolerance=0.02):
 
 
 def scale_hint(scale):
-    """Échelle normalisée la plus proche, et l'écart relatif.
+    """Nearest standard scale, and the relative deviation.
 
-    Un PDF vectoriel exporté à 1:1 tombe exactement sur 2834,6457 / N points par
-    mètre. Un écart franc veut dire que le fichier a été redimensionné à
-    l'export : la cote imprimée reste juste, le ratio du cartouche non.
+    A vector PDF exported at 1:1 lands exactly on 2834.6457 / N points per
+    metre. A clear deviation means the file was resized on export: the printed
+    dimension stays right, the title-block ratio does not.
     """
     denominator = min(STANDARD_SCALES, key=lambda n: abs(POINTS_PER_METRE / n - scale))
     expected = POINTS_PER_METRE / denominator
@@ -181,7 +181,7 @@ def scale_hint(scale):
 
 
 def transform(page, level=None):
-    """Repère points -> mètres, déduit des chaînes de cotes de la page."""
+    """Points -> metres frame, deduced from the page's dimension chains."""
     chains = page.get("chains") or []
     dimensions = (page.get("labels") or {}).get("dimensions") or []
     outline = (level or {}).get("outline") or []
@@ -233,7 +233,7 @@ def printed_surfaces(page, frame):
 
 
 def match(surfaces, rooms):
-    """Apparie chaque étiquette à une pièce : contenance, puis centroïde proche."""
+    """Pairs each label with a room: containment, then nearest centroid."""
     centroids = {room["id"]: polygon_centroid(room["polygon"]) for room in rooms}
     used = set()
     pairs = []
@@ -250,21 +250,21 @@ def match(surfaces, rooms):
         nearest = min(rooms, key=lambda room: math.dist(centroids[room["id"]], (x, z)))
         distance = math.dist(centroids[nearest["id"]], (x, z))
         if distance <= NEAREST_LIMIT:
-            pairs.append((surface, nearest, f"centroïde à {distance:.2f} m"))
+            pairs.append((surface, nearest, f"centroid at {distance:.2f} m"))
             used.add(nearest["id"])
         else:
-            pairs.append((surface, None, f"aucune pièce à moins de {NEAREST_LIMIT} m"))
+            pairs.append((surface, None, f"no room within {NEAREST_LIMIT} m"))
     orphans = [room for room in rooms if room["id"] not in used]
     return pairs, orphans
 
 
 def reference(surfaces):
-    """Surface de référence d'une pièce : SU si le plan l'imprime, sinon SH, sinon SA.
+    """Reference area of a room: SU if the plan prints it, otherwise SH, otherwise SA.
 
-    Un polygone de pièce est un plancher. Quand le plan imprime les deux, c'est
-    la surface utile qui se compare au plancher : la surface habitable exclut la
-    partie sous 1,80 m de hauteur, donc elle est plus petite sans que rien soit
-    faux. Comparer un plancher à une SH fabrique un écart qui n'existe pas.
+    A room polygon is a floor. When the plan prints both, it is the usable area
+    (SU) that compares to the floor: the living area (SH) excludes the part under
+    1.80 m of headroom, so it is smaller without anything being wrong. Comparing a
+    floor to an SH produces a gap that does not exist.
     """
     order = {"SU": 0, "SH": 1, "SA": 2}
     return min(surfaces, key=lambda surface: order.get(surface["kind"], 3))
@@ -281,7 +281,7 @@ def report(pairs, orphans, tolerance):
                     "printed": surface["area"],
                     "computed": None,
                     "delta": None,
-                    "verdict": "étiquette sans pièce",
+                    "verdict": "label without a room",
                     "how": how,
                     "text": surface["text"],
                 }
@@ -311,7 +311,7 @@ def report(pairs, orphans, tolerance):
                 "delta": round(delta, 3),
                 "declared": declared,
                 "declaredDelta": None if declared is None else round(declared - chosen["area"], 3),
-                "verdict": "exact" if abs(delta) <= tolerance else "écart",
+                "verdict": "exact" if abs(delta) <= tolerance else "gap",
                 "how": entry["how"],
                 "text": chosen["text"],
             }
@@ -326,7 +326,7 @@ def report(pairs, orphans, tolerance):
                 "delta": None,
                 "declared": room.get("planArea"),
                 "declaredDelta": None,
-                "verdict": "pièce sans étiquette",
+                "verdict": "room without a label",
                 "how": None,
                 "text": None,
             }
@@ -335,7 +335,7 @@ def report(pairs, orphans, tolerance):
 
 
 def print_table(rows, tolerance):
-    print(f"{'pièce':14s} {'imprimé':>8s} {'calculé':>8s} {'écart':>7s}  verdict")
+    print(f"{'room':14s} {'printed':>8s} {'computed':>8s} {'gap':>7s}  verdict")
     for row in rows:
         printed = "—" if row["printed"] is None else f"{row['printed']:.2f}"
         if row.get("printedKind"):
@@ -347,14 +347,14 @@ def print_table(rows, tolerance):
     off = [row for row in rows if row["verdict"] != "exact"]
     print()
     if off:
-        print(f"{len(off)} pièce(s) hors tolérance ({tolerance:.2f} m²) :")
+        print(f"{len(off)} room(s) out of tolerance ({tolerance:.2f} m²):")
         for row in off:
-            if row["delta"] is not None:
+                print(f"  {row['room']}: {row['delta']:+.2f} m² — {row['how']}")
                 print(f"  {row['room']} : {row['delta']:+.2f} m² — {row['how']}")
-            else:
+                print(f"  {row['room']}: {row['verdict']}")
                 print(f"  {row['room']} : {row['verdict']}")
     else:
-        print(f"toutes les pièces sont à ±{tolerance:.2f} m² de la surface imprimée")
+        print(f"every room is within ±{tolerance:.2f} m² of the printed area")
 
 
 def build(registry, project, level_id, page_index, tolerance):
@@ -365,14 +365,14 @@ def build(registry, project, level_id, page_index, tolerance):
             page = candidate
             break
     if page is None:
-        raise ValueError(f"page {page_index} absente du registre")
+        raise ValueError(f"page {page_index} missing from the registry")
     level = None
     for candidate in project.get("levels") or []:
         if candidate.get("id") == level_id:
             level = candidate
             break
     if level is None:
-        raise ValueError(f"niveau {level_id} absent du projet")
+        raise ValueError(f"level {level_id} missing from the project")
     rooms = [room for room in level.get("rooms") or [] if room.get("polygon")]
     frame = transform(page, level)
     surfaces = printed_surfaces(page, frame)
@@ -397,7 +397,7 @@ def build(registry, project, level_id, page_index, tolerance):
 
 
 def self_test():
-    """Non-régression sur un registre et un projet synthétiques."""
+    """Non-regression on a synthetic registry and project."""
     scale, origin = POINTS_PER_METRE / 50, 100.0
     registry = {
         "pages": [
@@ -464,22 +464,22 @@ def self_test():
     failures = []
     frame = result["frame"]
     if abs(frame["scaleX"] - scale) > 0.01 or abs(frame["scaleZ"] - scale) > 0.01:
-        failures.append(f"échelle {frame['scaleX']}/{frame['scaleZ']} au lieu de {scale}")
+        failures.append(f"scale {frame['scaleX']}/{frame['scaleZ']} instead of {scale}")
     if abs(frame["originX"] - origin) > 0.01 or abs(frame["originZ"] - origin) > 0.01:
-        failures.append(f"origine {frame['originX']}/{frame['originZ']} au lieu de {origin}")
+        failures.append(f"origin {frame['originX']}/{frame['originZ']} instead of {origin}")
     if frame["scale"]["denominator"] != 50 or abs(frame["scale"]["deviation"]) > 0.001:
-        failures.append(f"échelle reconnue {frame['scale']} au lieu de 1/50 exact")
+        failures.append(f"recognised scale {frame['scale']} instead of exact 1/50")
     by_room = {row["room"]: row for row in result["rows"]}
     if by_room["a"]["verdict"] != "exact":
-        failures.append(f"pièce a {by_room['a']}")
-    if by_room["b"]["verdict"] != "écart" or abs(by_room["b"]["delta"] + 0.5) > 0.01:
-        failures.append(f"pièce b {by_room['b']}")
+        failures.append(f"room a {by_room['a']}")
+    if by_room["b"]["verdict"] != "gap" or abs(by_room["b"]["delta"] + 0.5) > 0.01:
+        failures.append(f"room b {by_room['b']}")
     if result["summary"]["printed"] != 2 or result["summary"]["rooms"] != 2:
         failures.append(f"appariement {result['summary']}")
 
-    # Une chaîne partielle ne donne pas l'origine : la cote d'ensemble, si.
-    # Sans elle, l'origine tombait au début de la chaîne partielle et toutes les
-    # étiquettes se projetaient hors du niveau.
+    # A partial chain does not give the origin: the overall dimension does.
+    # Without it, the origin fell at the start of the partial chain and every
+    # label projected outside the level.
     partial = {
         "pages": [
             {
@@ -543,15 +543,15 @@ def self_test():
     partial_frame = partial_result["frame"]
     if abs(partial_frame["originZ"] - origin) > 0.01:
         failures.append(
-            f"origine verticale {partial_frame['originZ']} au lieu de {origin} "
-            "sur une chaîne partielle"
+            f"vertical origin {partial_frame['originZ']} instead of {origin} "
+            "on a partial chain"
         )
     if partial_result["rows"][0]["verdict"] != "exact":
-        failures.append(f"étiquette mal projetée : {partial_result['rows'][0]}")
+        failures.append(f"label projected wrongly: {partial_result['rows'][0]}")
 
-    # Un niveau en retrait — des combles entre rampants — a une emprise plus
-    # petite que la cote d'ensemble. L'origine reste le coin du bâtiment : la
-    # calculer avec l'emprise du niveau décalait tout de la moitié de l'écart.
+    # A recessed level — an attic between rafters — has a smaller footprint
+    # than the overall dimension. The origin stays the building's corner:
+    # computing it with the level footprint shifted everything by half the gap.
     retreat_project = {
         "id": "auto-test-retrait",
         "levels": [
@@ -573,19 +573,19 @@ def self_test():
     retreat_frame = retreat_result["frame"]
     if abs(retreat_frame["originZ"] - origin) > 0.01:
         failures.append(
-            f"origine verticale {retreat_frame['originZ']} au lieu de {origin} "
-            "sur un niveau en retrait"
+            f"vertical origin {retreat_frame['originZ']} instead of {origin} "
+            "on a recessed level"
         )
     if retreat_result["rows"][0]["verdict"] != "exact":
         failures.append(
-            f"étiquette mal projetée en retrait : {retreat_result['rows'][0]}"
+            f"label projected wrongly on a recessed level: {retreat_result['rows'][0]}"
         )
 
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print("contrôle des surfaces : auto-test réussi")
+    print("area check: self-test passed")
     return 0
 
 
@@ -602,7 +602,7 @@ def main(argv):
         return self_test()
     args = parser.parse_args(argv)
     if not args.registry or not args.project:
-        parser.error("registre et projet sont requis")
+        parser.error("registry and project are required")
     result = build(
         load(args.registry), load(args.project), args.level, args.page, args.tolerance
     )
@@ -611,20 +611,20 @@ def main(argv):
     frame = result["frame"]
     hint = frame["scale"]
     print(
-        f"repère : {frame['scaleX']:.2f} pt/m, "
-        f"origine {frame['originX']:.2f}/{frame['originZ']:.2f}, "
-        f"1/{hint['denominator']:g} attendu {hint['expected']:.3f} "
+        f"frame: {frame['scaleX']:.2f} pt/m, "
+        f"origin {frame['originX']:.2f}/{frame['originZ']:.2f}, "
+        f"1/{hint['denominator']:g} expected {hint['expected']:.3f} "
         f"({hint['deviation'] * 100:+.1f} %)"
     )
     if abs(hint["deviation"]) > SCALE_TOLERANCE:
         print(
-            "attention : le fichier n'est pas à l'échelle 1:1, il a été "
-            "redimensionné à l'export. Les cotes imprimées restent justes, le "
-            "ratio du cartouche non."
+            "warning: the file is not at 1:1 scale, it was "
+            "resized on export. Printed dimensions stay right, the "
+            "title-block ratio does not."
         )
     print(
-        f"total imprimé {result['summary']['printedTotal']:.2f} m², "
-        f"total calculé {result['summary']['computedTotal']:.2f} m²"
+        f"printed total {result['summary']['printedTotal']:.2f} m², "
+        f"computed total {result['summary']['computedTotal']:.2f} m²"
     )
     if args.json:
         Path(args.json).write_text(

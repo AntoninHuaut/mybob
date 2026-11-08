@@ -83,7 +83,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('#project-select')).toContainText('Démonstration');
 });
 
-test('huit chaises, copie indépendante et historique sans interception des champs', async ({
+test('eight chairs, independent copy and history without intercepting fields', async ({
   page,
 }, info) => {
   test.slow();
@@ -142,7 +142,7 @@ test('huit chaises, copie indépendante et historique sans interception des cham
   await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
 });
 
-test('liaison meuble TV et TV enregistrée conserve le groupe au glisser, au clavier et au rechargement', async ({
+test('linked TV unit and saved TV keep the group on drag, keyboard and reload', async ({
   page,
 }, info) => {
   test.slow();
@@ -202,7 +202,7 @@ test('liaison meuble TV et TV enregistrée conserve le groupe au glisser, au cla
   await expect(editor.locator('.furniture-group-members li')).toHaveCount(2);
 });
 
-test('la table se déplace dans le creux du canapé avec la souris et les flèches et sa distance varie', async ({
+test('the table moves into the sofa hollow with mouse and arrows and its distance changes', async ({
   page,
 }, info) => {
   test.slow();

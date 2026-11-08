@@ -133,8 +133,8 @@ test('neighbour gaps are real distances, capped and group-aware', () => {
     depth: 1,
     position: [3, 2],
   });
-  // Voisin en diagonale : aucun des 4 rayons ne l'atteint, seule la cote
-  // réelle entre empreintes doit apparaître (coin à coin : 0,14 m).
+  // Diagonal neighbour: none of the 4 rays reaches it, only the real dimension
+  // between footprints must appear (corner to corner: 0.14 m).
   const diagonal = createFurniture({
     id: 'side',
     name: 'Table d’appoint',
@@ -147,7 +147,7 @@ test('neighbour gaps are real distances, capped and group-aware', () => {
   const side = gaps.find((d) => d.label === 'Table d’appoint');
   assert.ok(side, 'la cote du voisin diagonal doit exister');
   near(side!.distance, Math.SQRT2 * 0.1);
-  // Deux chaises de son ensemble ne sont jamais cotées ; le voisin seul reste.
+  // Two chairs of its set are never dimensioned; only the neighbour remains.
   const chairs = [
     { ...createFurniture({ id: 'c1', position: [2.2, 2] }), groupId: 'ensemble' },
     { ...createFurniture({ id: 'c2', position: [3.8, 2] }), groupId: 'ensemble' },
@@ -163,7 +163,7 @@ test('neighbour gaps are real distances, capped and group-aware', () => {
     withGroup.some((d) => d.label === 'Table d’appoint'),
     'le voisin hors ensemble reste coté',
   );
-  // Au-delà d’un mètre, aucune cote de voisin.
+  // Beyond one metre, no neighbour dimension.
   const far = createFurniture({ id: 'far', width: 0.4, depth: 0.4, position: [5.2, 4.2] });
   assert.equal(
     furnitureDistances(table, room, [table, far]).filter(

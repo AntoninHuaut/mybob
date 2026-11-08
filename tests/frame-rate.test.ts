@@ -16,19 +16,19 @@ function setup() {
   return { element, meter: new FrameRateMeter(element as unknown as HTMLElement) };
 }
 
-test('la cadence s’arrondit et ne descend jamais sous zéro', () => {
+test('the frame rate is rounded and never goes below zero', () => {
   assert.equal(frameRateText(59.6), '60 fps');
   assert.equal(frameRateText(59.4), '59 fps');
   assert.equal(frameRateText(-3), '0 fps');
 });
 
-test('le plancher de jouabilité marque la lecture, sans la changer', () => {
+test('the playability floor marks the reading, without changing it', () => {
   assert.equal(frameRateIsLow(FRAME_RATE_FLOOR - 1), true);
   assert.equal(frameRateIsLow(FRAME_RATE_FLOOR), false);
   assert.equal(frameRateText(FRAME_RATE_FLOOR - 1), '23 fps');
 });
 
-test('le compteur s’affiche à la première mesure puis se limite à quatre écritures par seconde', () => {
+test('the counter shows at the first measurement then limits itself to four writes per second', () => {
   const { element, meter } = setup();
   meter.update(1000, 60);
   assert.equal(element.hidden, false, 'la première mesure rend le compteur visible');
@@ -41,7 +41,7 @@ test('le compteur s’affiche à la première mesure puis se limite à quatre é
   assert.equal(element.textContent, '12 fps');
 });
 
-test('le compteur signale une cadence sous le plancher', () => {
+test('the counter flags a frame rate below the floor', () => {
   const { element, meter } = setup();
   meter.update(0, 60);
   assert.equal(element.classList.contains('low'), false);

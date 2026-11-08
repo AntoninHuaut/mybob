@@ -15,13 +15,13 @@ const project = read('project.json');
 const registry: EvidenceRegistry = read('registry.json');
 const decisions: DecisionsFile = read('decisions.json');
 
-test('le plan de référence synthétique est un projet valide', () => {
+test('the synthetic reference plan is a valid project', () => {
   const validated = validateProject(project);
   assert.equal(validated.id, 'maison-reference');
   assert.equal(validated.levels.length, 1);
 });
 
-test('la porte accepte le plan de référence sans erreur ni avertissement', () => {
+test('the gate accepts the reference plan without error or warning', () => {
   const report = checkDecisions(decisions, registry, project);
   assert.deepEqual(report.errors, []);
   assert.deepEqual(report.warnings, []);
@@ -30,7 +30,7 @@ test('la porte accepte le plan de référence sans erreur ni avertissement', () 
   assert.deepEqual(report.openings.unresolved, []);
 });
 
-test('le plan de référence exerce les trois classes de preuve', () => {
+test('the reference plan exercises the three evidence classes', () => {
   const report = checkDecisions(decisions, registry, project);
   assert.equal(report.faces.byClass.printed, 2);
   assert.equal(report.faces.byClass['printed-partial'], 1);
@@ -38,37 +38,37 @@ test('le plan de référence exerce les trois classes de preuve', () => {
   assert.equal(report.openings.byClass.printed, 5);
 });
 
-test('la porte refuse le plan de référence dès qu’une cote est altérée', () => {
+test('the gate refuses the reference plan as soon as a dimension is altered', () => {
   const tampered: DecisionsFile = JSON.parse(JSON.stringify(decisions));
   const face = tampered.faces.find((decision) => decision.id === 'nord');
   assert.ok(face?.evidence.length !== undefined);
   face.evidence.length = 6.1;
   const report = checkDecisions(tampered, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('somme imprimée')));
+  assert.ok(report.errors.some((error) => error.includes('printed sum')));
 });
 
-test('la porte refuse une preuve empruntée à la page d’un autre niveau', () => {
+test('the gate refuses a proof borrowed from another level’s page', () => {
   const borrowed: DecisionsFile = JSON.parse(JSON.stringify(decisions));
   borrowed.pages = [2];
   const report = checkDecisions(borrowed, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('hors des pages du niveau')));
+  assert.ok(report.errors.some((error) => error.includes("outside the level's pages")));
 });
 
-test('la porte refuse une chaîne calée dont l’origine ne tombe plus sur les faces', () => {
+test('the gate refuses a fitted chain whose origin no longer lands on the faces', () => {
   const shifted: DecisionsFile = JSON.parse(JSON.stringify(decisions));
   assert.ok(shifted.envelopes && shifted.envelopes.length > 0);
   shifted.envelopes[0].base += 0.5;
   const report = checkDecisions(shifted, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('intervalle imprimé')));
+  assert.ok(report.errors.some((error) => error.includes('printed interval')));
 });
 
-test('la porte refuse une preuve d’emprise sans chaîne calée déclarée', () => {
+test('the gate refuses a footprint proof without a declared fitted chain', () => {
   const bare: DecisionsFile = JSON.parse(JSON.stringify(decisions));
   bare.envelopes = [];
   const report = checkDecisions(bare, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('sans chaîne calée déclarée')));
+  assert.ok(report.errors.some((error) => error.includes('without a declared fitted chain')));
 });

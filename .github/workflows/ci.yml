@@ -132,18 +132,18 @@ jobs:
           case "${{ runner.arch }}" in
             X64) browser_platform=linux64 ;;
             ARM64) browser_platform=linux-arm64 ;;
-            *) echo "Architecture non prise en charge : ${{ runner.arch }}"; exit 1 ;;
+            *) echo "Unsupported architecture: ${{ runner.arch }}"; exit 1 ;;
           esac
           browser_binary=$(find "$HOME/.cache/ms-playwright" -type f -path "*/chrome-headless-shell-$browser_platform/chrome-headless-shell" -print -quit)
           if [ -z "$browser_binary" ]; then
-            echo "Chromium headless shell introuvable"
+            echo "Chromium headless shell not found"
             exit 1
           fi
           dependencies=$(ldd "$browser_binary")
           if printf '%s\n' "$dependencies" | grep -q 'not found'; then
             pnpm exec playwright install-deps chromium
           else
-            echo "Les bibliothèques système de Chromium sont déjà disponibles"
+            echo "Chromium system libraries are already available"
           fi
       - name: Test public build in desktop Chromium
         run: pnpm run test:e2e:built --shard=${{ matrix.shard }}/3

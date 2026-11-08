@@ -65,35 +65,35 @@ export interface Level {
   spawn: { position: Point2; yaw: number };
 }
 /**
- * Chien-assis percé dans un pan : le rendu ouvre le versant sur l'emprise et
- * bâtit les joues et le toit. La face avant reste portée par le mur de fond du
- * niveau traversé, qui garde sa hauteur et sa fenêtre.
+ * Dormer pierced in a roof face: the renderer opens the slope over the footprint and
+ * builds the cheeks and the roof. The front face stays carried by the back wall of the
+ * crossed level, which keeps its height and its window.
  */
 export interface RoofDormer {
   id: string;
-  /** Emprise au sol en plan (x, z) : deux coins opposés du rectangle, dans le repère du projet. */
+  /** Footprint in plan (x, z): two opposite corners of the rectangle, in the project frame. */
   start: Point2;
   end: Point2;
-  /** Mur de fond du niveau traversé : il porte la face avant et sa fenêtre. */
+  /** Back wall of the crossed level: it carries the front face and its window. */
   wallId: string;
   /**
-   * Pente du toit de la lucarne vers le faîtage, en montée par mètre de repli.
-   * Sans valeur, le toit rejoint la couverture à l'arrière de l'emprise.
+   * Pitch of the dormer roof towards the ridge, as rise per metre of setback.
+   * Without a value, the roof meets the covering at the back of the footprint.
    */
   slope?: number;
 }
 /**
- * Fenêtre de toit posée sur un pan, sans volume de lucarne : le rendu ouvre le
- * versant sur la baie et pose le châssis dans le plan du rampant. Sa position
- * en profondeur se lit sur la coupe, pas sur le plan horizontal.
+ * Roof window set on a roof face, without a dormer volume: the renderer opens the
+ * slope over the window and sets the frame in the plane of the rafter. Its depth
+ * position is read on the section, not on the horizontal plan.
  */
 export interface RoofWindow {
   id: string;
-  /** Centre de la baie en plan (x, z) : un point du pan projeté au sol. */
+  /** Centre of the window in plan (x, z): a point of the roof face projected to the ground. */
   center: Point2;
-  /** Largeur de la baie, horizontale, en mètres. */
+  /** Width of the window, horizontal, in metres. */
   width: number;
-  /** Hauteur de la baie mesurée dans le plan du pan, le long du rampant, en mètres. */
+  /** Height of the window measured in the roof face plane, along the rafter, in metres. */
   height: number;
 }
 export interface SiteRoof {
@@ -104,9 +104,9 @@ export interface SiteRoof {
   faces: number[][];
   /** Rendered with the exterior plaster instead of the roof material. */
   gables?: number[][];
-  /** Chiens-assis percés dans les pans de cette toiture. */
+  /** Dormers pierced in the faces of this roof. */
   dormers?: RoofDormer[];
-  /** Fenêtres de toit percées dans les pans de cette toiture. */
+  /** Roof windows pierced in the faces of this roof. */
   windows?: RoofWindow[];
 }
 export interface ProjectSite {

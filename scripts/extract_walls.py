@@ -1,9 +1,9 @@
-"""Extraction du tracé vectoriel d'une page de plans (murs et lignes de cote).
+"""Extracts the vector drawing of a plan page (walls and dimension lines).
 
-Usage : uvx --from pymupdf python extract_walls.py <pdf> <numero-page> [zone x0,x1,y0,y1]
-        <numero-page> : compté à partir de 1, comme les autres scripts du dépôt.
-Sortie : lignes horizontales et verticales noires regroupées par ordonnée (axes des murs),
-         avec emprise le long de l'axe, en points PDF (après correction de rotation).
+Usage: uvx --from pymupdf python extract_walls.py <pdf> <page-number> [zone x0,x1,y0,y1]
+        <page-number>: counted from 1, like the other repository scripts.
+Output: black horizontal and vertical lines grouped by ordinate (wall axes),
+         with their extent along the axis, in PDF points (after rotation correction).
 """
 import sys
 import pymupdf
@@ -17,13 +17,13 @@ if len(sys.argv) > 3:
 
 doc = pymupdf.open(pdf)
 if not 1 <= page_number <= doc.page_count:
-    sys.exit(f"page {page_number} inexistante : le document en a {doc.page_count}")
+    sys.exit(f"page {page_number} does not exist: the document has {doc.page_count}")
 page_index = page_number - 1
 p = doc[page_index]
 words = p.get_text().split()
 print(f"page {page_number} : {' '.join(words[:6])}")
 mb = p.mediabox
-# Corriger les pages en /Rotate 90 : (x, y) PDF -> points d'affichage (x + y inversés)
+# Correct /Rotate 90 pages: (x, y) PDF -> display points (x and y swapped)
 def tx(x, y):
     if p.rotation == 90:
         return (mb.height - y, x)

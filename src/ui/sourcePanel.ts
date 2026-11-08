@@ -2,16 +2,16 @@ import type { HouseProject, Room } from '../model/types';
 import { polygonArea } from '../model/geometry';
 import { area, escapeHtml as esc } from './format';
 
-/** Un écart sous ce seuil n’est pas significatif à l’échelle d’un plan. */
+/** A gap under this threshold is not significant at the scale of a plan. */
 export const AREA_GAP_TOLERANCE = 0.1;
 
-/** Écart entre la surface reconstruite et celle annoncée au plan, en mètres carrés. */
+/** Gap between the reconstructed area and the one stated on the plan, in square metres. */
 export function areaGap(room: Room): number | undefined {
   if (room.planArea === undefined) return undefined;
   return polygonArea(room.polygon) - room.planArea;
 }
 
-/** « équivalent » plutôt qu’un chiffre bruité quand l’écart tient dans la tolérance. */
+/** « équivalent » rather than a noisy figure when the gap fits within the tolerance. */
 export function gapLabel(gap: number | undefined): string {
   if (gap === undefined) return '—';
   if (Math.abs(gap) <= AREA_GAP_TOLERANCE) return 'équivalent';
@@ -37,8 +37,8 @@ function areaTableHtml(rooms: Room[]): string {
 }
 
 /**
- * Contenu de « Plans et précision ». Les surfaces passent en premier : c’est ce qu’on vient
- * vérifier, et les notes du document restent disponibles en dessous.
+ * Content of « Plans et précision ». Areas come first: that is what you come to
+ * check, and the document notes stay available below.
  */
 export function sourceDialogHtml(project: HouseProject, rooms: Room[]): string {
   const compared = rooms.some((room) => room.planArea !== undefined);

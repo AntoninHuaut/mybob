@@ -24,7 +24,7 @@ const chain: RegistryChain = {
   closed: true,
 };
 
-/** Même mur, cote imprimée plus longue de deux demi-épaisseurs déclarées. */
+/** Same wall, printed dimension longer by two declared half-thicknesses. */
 const wideChain: RegistryChain = {
   ...chain,
   perpendicular: 200,
@@ -124,7 +124,7 @@ test('plan decisions accept a closed chain and a recomputed opening offset', () 
   assert.equal(report.ready, true);
   assert.equal(report.faces.byClass.printed, 1);
   assert.equal(report.openings.byClass.printed, 1);
-  assert.ok(report.warnings.some((warning) => warning.includes('origine du mur non déclarée')));
+  assert.ok(report.warnings.some((warning) => warning.includes('wall origin not declared')));
 });
 
 test('plan decisions verify the offset once the wall origin is declared', () => {
@@ -148,7 +148,7 @@ test('plan decisions reject an opening offset that contradicts the chain', () =>
   shifted.openings[0].evidence.wallOrigin = 0;
   const report = checkDecisions(shifted, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('offset projet 0.5')));
+  assert.ok(report.errors.some((error) => error.includes('project offset 0.5')));
 });
 
 test('plan decisions reject a face resting on an unclosed chain', () => {
@@ -158,7 +158,7 @@ test('plan decisions reject a face resting on an unclosed chain', () => {
   };
   const report = checkDecisions(decisions(), open, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('chaîne ouverte')));
+  assert.ok(report.errors.some((error) => error.includes('open chain')));
 });
 
 test('plan decisions accept a partial proof on an open chain', () => {
@@ -178,9 +178,7 @@ test('plan decisions reject a partial proof on a closed chain', () => {
   partial.faces[0].evidence.class = 'printed-partial';
   const report = checkDecisions(partial, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(
-    report.errors.some((error) => error.includes('preuve partielle sur une chaîne refermée')),
-  );
+  assert.ok(report.errors.some((error) => error.includes('partial proof on a closed chain')));
 });
 
 test('plan decisions reject a declared length that the printed segments do not sum to', () => {
@@ -188,7 +186,7 @@ test('plan decisions reject a declared length that the printed segments do not s
   wrong.faces[0].evidence.length = 2.6;
   const report = checkDecisions(wrong, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('somme imprimée 2.500')));
+  assert.ok(report.errors.some((error) => error.includes('printed sum 2.500')));
 });
 
 test('plan decisions reject a face whose axis length does not follow from the cote', () => {
@@ -196,7 +194,7 @@ test('plan decisions reject a face whose axis length does not follow from the co
   wrong.faces[0].evidence.startOffset = -0.1;
   const report = checkDecisions(wrong, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes("longueur d'axe 2.500")));
+  assert.ok(report.errors.some((error) => error.includes('axis length 2.500')));
 });
 
 test('plan decisions accept a derived face whose cote spans two declared half-thicknesses', () => {
@@ -226,7 +224,7 @@ test('plan decisions reject a printed face carrying declared offsets', () => {
   };
   const report = checkDecisions(derived, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('décalages non nuls')));
+  assert.ok(report.errors.some((error) => error.includes('non-zero offsets')));
 });
 
 test('plan decisions reject a chain taken from another level page', () => {
@@ -234,7 +232,7 @@ test('plan decisions reject a chain taken from another level page', () => {
   elsewhere.pages = [2];
   const report = checkDecisions(elsewhere, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('hors des pages du niveau')));
+  assert.ok(report.errors.some((error) => error.includes("outside the level's pages")));
 });
 
 test('plan decisions require the level pages', () => {
@@ -242,7 +240,7 @@ test('plan decisions require the level pages', () => {
   delete bare.pages;
   const report = checkDecisions(bare, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('pages du niveau manquantes')));
+  assert.ok(report.errors.some((error) => error.includes('level pages missing')));
 });
 
 test('plan decisions reject an opening whose printed width contradicts the segment', () => {
@@ -250,7 +248,7 @@ test('plan decisions reject an opening whose printed width contradicts the segme
   wrong.openings[0].evidence.printedWidth = 1.4;
   const report = checkDecisions(wrong, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('largeur déclarée 1.4')));
+  assert.ok(report.errors.some((error) => error.includes('declared width 1.4')));
 });
 
 test('plan decisions reject an opening pointing at a dimension segment', () => {
@@ -258,7 +256,7 @@ test('plan decisions reject an opening pointing at a dimension segment', () => {
   wrong.openings[0].evidence.segmentIndex = 0;
   const report = checkDecisions(wrong, registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes("n'est pas une baie")));
+  assert.ok(report.errors.some((error) => error.includes('is not an opening')));
 });
 
 test('plan decisions block construction while a decision is unresolved', () => {
@@ -273,20 +271,20 @@ test('plan decisions block construction while a decision is unresolved', () => {
 test('plan decisions require one decision per wall and per opening', () => {
   const report = checkDecisions(decisions({ faces: [], openings: [] }), registry, project);
   assert.equal(report.ready, false);
-  assert.ok(report.errors.some((error) => error.includes('face nord: aucune décision')));
-  assert.ok(report.errors.some((error) => error.includes('opening baie: aucune décision')));
+  assert.ok(report.errors.some((error) => error.includes('face nord: no decision')));
+  assert.ok(report.errors.some((error) => error.includes('opening baie: no decision')));
 });
 
 test('plan decisions reject an unresolved flag without a reason', () => {
   const pending = decisions();
   pending.openings[0].unresolved = true;
   const report = checkDecisions(pending, registry, project);
-  assert.ok(report.errors.some((error) => error.includes('unresolved sans motif')));
+  assert.ok(report.errors.some((error) => error.includes('unresolved without a reason')));
 });
 
 test('plan decisions reject a printed claim without a chain reference', () => {
   const bare = decisions();
   bare.faces[0].evidence = { class: 'printed' };
   const report = checkDecisions(bare, registry, project);
-  assert.ok(report.errors.some((error) => error.includes('sans référence de chaîne')));
+  assert.ok(report.errors.some((error) => error.includes('without a chain reference')));
 });

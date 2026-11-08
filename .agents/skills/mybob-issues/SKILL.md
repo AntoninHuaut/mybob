@@ -3,77 +3,75 @@ name: mybob-issues
 description: Open a Mybob GitHub issue that can actually be worked from — the body format, the level of evidence expected, the acceptance criterion, and the anonymisation rules for a public repository.
 ---
 
-# Ouvrir une issue Mybob
+# Opening a Mybob issue
 
-Une issue de ce dépôt n'est pas un pense-bête : c'est le brief d'une session
-future qui n'aura pas le contexte de celle qui l'a écrite. Elle doit tenir seule.
+An issue in this repository is not a reminder: it is the brief of a future session that will
+not have the context of the one that wrote it. It must stand on its own. Write it in English;
+quote interface text in French as it appears in the app.
 
-## Avant d'écrire
+## Before writing
 
-1. **Vérifier qu'elle n'existe pas.** `gh issue list --state all --limit 30`.
-   Une issue existante s'étend d'un commentaire ; elle ne se double pas.
-2. **Nommer le fichier et la ligne.** Une issue qui dit « le cadrage est trop
-   large » se discute ; une issue qui dit `src/scene/framing.ts:94` remplace
-   `outline: site.boundary` se corrige.
-3. **Compter.** Un nombre mesuré vaut mieux qu'un adjectif : « 22 portes dont la
-   position n'est garantie par rien » plutôt que « beaucoup de portes ».
+1. **Check it does not exist.** `gh issue list --state all --limit 30`. An existing issue is
+   extended with a comment; it is not duplicated.
+2. **Name the file and the line.** An issue saying "the framing is too wide" gets debated; an
+   issue saying `src/scene/framing.ts:94` replaces `outline: site.boundary` gets fixed.
+3. **Count.** A measured number beats an adjective: "22 doors whose position nothing
+   guarantees" rather than "many doors".
 
-## Le corps
+## The body
 
-Cinq sections, dans cet ordre. Celles qui n'ont rien à dire se suppriment.
+Five sections, in this order. Delete those with nothing to say.
 
 ```markdown
-## Le problème
+## The problem
 
-Ce qui est faux, où c'est dans le code, et ce que ça produit concrètement.
-Une phrase de conséquence pour l'utilisateur, pas pour le développeur.
+What is wrong, where it is in the code, and what it concretely produces.
+One sentence of consequence for the user, not for the developer.
 
-## Ce qu'on sait déjà
+## What we already know
 
-Les mesures, les essais qui ont échoué, les chiffres des deux plans.
-Un tableau quand il y a plus de deux valeurs à comparer.
+Measurements, failed attempts, the figures of both plans.
+A table when there are more than two values to compare.
 
-## Ce qu'il faudrait
+## What is needed
 
-Les options par coût croissant, avec la préférée nommée et la raison.
-Pas de liste de souhaits : une direction.
+The options by increasing cost, with the preferred one named and why.
+No wish list: one direction.
 
-## Critère d'acceptation
+## Acceptance criterion
 
-Une phrase vérifiable par quelqu'un qui n'a pas lu le reste.
-« Sur les deux plans, la maison occupe au moins la moitié de la largeur. »
+One sentence checkable by someone who has not read the rest.
+"On both plans, the house takes at least half of the width."
 
-## Vérification
+## Verification
 
-Les commandes exactes, et ce qu'elles doivent rendre.
+The exact commands, and what they must return.
 ```
 
-## Ce qui rend une issue exploitable
+## What makes an issue workable
 
-- **Un critère d'acceptation mesurable.** « Ça marche » n'en est pas un.
-  « Le même script rend exactement ces deux contours » en est un.
-- **Les pièges déjà payés.** Si une tentative a échoué, l'écrire : la session
-  suivante la refera sinon. C'est la partie la plus utile du corps.
-- **Les chiffres des deux plans** quand le sujet touche à la conversion. Un cas
-  unique ne prouve rien ; deux cas montrent ce qui est général.
-- **La distinction lecture / décision.** Ce qu'un script peut mesurer et ce que
-  l'IA doit trancher ne se mélangent pas dans la même phrase.
+- **A measurable acceptance criterion.** "It works" is not one. "The same script returns
+  exactly these two outlines" is one.
+- **The traps already paid for.** If an attempt failed, write it down: otherwise the next
+  session will repeat it. This is the most useful part of the body.
+- **The figures of both plans** when the subject touches conversion. A single case proves
+  nothing; two cases show what is general.
+- **The reading / decision distinction.** What a script can measure and what the AI must decide
+  do not mix in the same sentence.
 
 ## Anonymisation
 
-Le dépôt est public. Jamais de nom de personne, de constructeur, de lot, de
-numéro de dossier, d'adresse, ni de coordonnée personnelle. Une maison se nomme
-par sa commune, comme dans
-[mybob-plan-conversion](../mybob-plan-conversion/SKILL.md) : le propriétaire
-l'autorise. Les deux cas de référence de la conversion gardent leurs noms
-**plan A** et **plan B**. Les cotes, elles, se citent : ce sont des mesures, pas une identité.
+The repository is public. Never a person's name, builder, plot, file number, address, nor
+personal coordinates. A house is named by its town, as in
+[mybob-plan-conversion](../mybob-plan-conversion/SKILL.md): the owner allows it. The two
+reference cases of the conversion keep their names **plan A** and **plan B**. Dimensions, on
+the other hand, may be quoted: they are measurements, not an identity.
 
-Vérifier avant d'envoyer : `gh issue create --body-file` puis relire le rendu.
-Une issue est publique dès sa création, et son historique aussi.
+Check before sending: `gh issue create --body-file` then re-read the rendering. An issue is
+public as soon as it is created, and so is its history.
 
-## Après
+## Afterwards
 
-- Poser un label quand il est évident (`enhancement`, `bug`) ; sinon rien.
-- Ne pas fermer une issue parce que le code a bougé ailleurs : la fermer quand
-  le critère d'acceptation est atteint, et le dire dans le commentaire de
-  fermeture.
+- Add a label when it is obvious (`enhancement`, `bug`); otherwise none.
+- Do not close an issue because the code moved elsewhere: close it when the acceptance
+  criterion is met, and say so in the closing comment.

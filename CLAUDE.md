@@ -2,10 +2,10 @@
 
 ## Claude Code
 
-- `AGENTS.md` ci-dessus est la seule source des règles : ce fichier n'en ajoute aucune, il
-  dit seulement comment Claude Code y accède.
-- Les skills du dépôt vivent dans `.agents/skills/` (partagés avec les autres agents).
-  `.claude/skills/` n'en contient que des renvois, pour que Claude Code les découvre :
-  modifier le skill source, jamais le renvoi.
-- `.claude/settings.json` autorise les commandes de vérification courantes. Les réglages
-  personnels vont dans `.claude/settings.local.json`, git-ignoré.
+- `AGENTS.md` above is the only source of rules: this file adds none, it only says how Claude
+  Code reaches them.
+- The repository skills live in `.agents/skills/` (shared with other agents). `.claude/skills/`
+  only holds pointers to them, so that Claude Code discovers them: edit the source skill, never
+  the pointer.
+- `.claude/settings.json` allows the usual verification commands. Personal settings go in
+  `.claude/settings.local.json`, git-ignored.

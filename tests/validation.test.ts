@@ -281,15 +281,15 @@ test('containment handles concave boundary vertices and permits valid shared edg
   );
 });
 
-test('la contenance absorbe la quantification millimétrique du pack du lien', () => {
+test('containment absorbs the millimetre quantisation of the link pack', () => {
   const square: Point2[] = [
     [0, 0],
     [6, 0],
     [6, 6],
     [0, 6],
   ];
-  // Un sommet posé exactement sur un bord recule de 0,71 mm au pire quand le pack arrondit
-  // au millimètre : le projet déballé doit rester valide.
+  // A vertex lying exactly on an edge moves back by 0.71 mm at worst when the pack rounds
+  // to the millimetre: the unpacked project must stay valid.
   assert.equal(
     polygonInsidePolygon(
       [

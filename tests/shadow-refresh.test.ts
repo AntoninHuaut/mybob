@@ -26,14 +26,14 @@ function setup() {
   return { map, refresh };
 }
 
-test('la carte d’ombres reste redessinée tant qu’un mur compile encore', () => {
+test('the shadow map keeps being redrawn while a wall is still compiling', () => {
   const { map, refresh } = setup();
   for (let frame = 0; frame < 20; frame++) refresh.step();
   assert.equal(refresh.settled, false);
   assert.equal(map.refreshRate, RenderTargetTexture.REFRESHRATE_RENDER_ONEVERYFRAME);
 });
 
-test('une fois les murs prêts, la carte est dessinée une dernière fois puis gardée', () => {
+test('once the walls are ready, the map is drawn one last time then kept', () => {
   const { map, refresh } = setup();
   map.ready = true;
   for (let frame = 0; frame < SHADOW_SETTLE_FRAMES; frame++) refresh.step();
@@ -46,7 +46,7 @@ test('une fois les murs prêts, la carte est dessinée une dernière fois puis g
   assert.equal(map.writes, writes);
 });
 
-test('un changement de soleil, de coupe ou de porte relance le dessin jusqu’à stabilisation', () => {
+test('a sun, cutaway or door change restarts drawing until it settles', () => {
   const { map, refresh } = setup();
   map.ready = true;
   for (let frame = 0; frame <= SHADOW_SETTLE_FRAMES; frame++) refresh.step();

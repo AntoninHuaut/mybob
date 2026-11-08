@@ -4,9 +4,9 @@ import { pathToFileURL } from 'node:url';
 import { wallLength } from '../src/model/geometry';
 import type { HouseProject, Level, Opening, Wall } from '../src/model/types';
 
-const OFFSET_TOL = 0.01; // m, écart accepté entre l'offset du projet et le cumul de chaîne
-const LENGTH_TOL = 0.01; // m, écart accepté sur une longueur ou une cote
-const PERPENDICULAR_TOL = 0.5; // pt, appariement d'une ligne de cote
+const OFFSET_TOL = 0.01; // m, accepted gap between the project offset and the chain cumulative sum
+const LENGTH_TOL = 0.01; // m, accepted gap on a length or a dimension
+const PERPENDICULAR_TOL = 0.5; // pt, pairing of a dimension line
 const CLASSES = ['printed', 'printed-partial', 'derived', 'scaled', 'assumed'] as const;
 const CONVENTIONS = ['both', 'width', 'height'] as const;
 const OPENING_TEXT = /^(\d+(?:[.,]\d+)?)\/(\d+(?:[.,]\d+)?)$/;
@@ -32,7 +32,7 @@ export interface RegistryChain {
   closed: boolean;
 }
 
-/** Couche 1 : registre produit par `scripts/extract_plan_evidence.py`. */
+/** Layer 1: registry produced by `scripts/extract_plan_evidence.py`. */
 export interface EvidenceRegistry {
   schemaVersion: number;
   source: { file: string; sha256: string; pageCount: number };
@@ -59,23 +59,23 @@ export interface Decision {
   evidence: {
     class: EvidenceClass;
     chain?: ChainRef;
-    /** Suite contiguë de segments imprimés qui porte la cote. */
+    /** Contiguous sequence of printed segments carrying the dimension. */
     span?: { start: number; end: number };
-    /** Somme imprimée de la suite, en mètres. */
+    /** Printed sum of the sequence, in metres. */
     length?: number;
-    /** Décalage de la première face du mur par rapport à son axe. */
+    /** Offset of the wall's first face relative to its axis. */
     startOffset?: number;
-    /** Décalage de la dernière face du mur par rapport à son axe. */
+    /** Offset of the wall's last face relative to its axis. */
     endOffset?: number;
     segmentIndex?: number;
-    /** Position imprimée du repère, cumulée depuis l'origine de la chaîne. */
+    /** Printed position of the tick, cumulated from the chain origin. */
     cumulativeOffset?: number;
-    /** Position de l'origine du mur dans la chaîne ; sans elle l'offset n'est pas vérifiable. */
+    /** Position of the wall origin in the chain; without it the offset cannot be checked. */
     wallOrigin?: number;
     printedWidth?: number;
     printedHeight?: number;
     convention?: OpeningConvention;
-    /** Ce qui rattache la cote au mur : ses propres baies, ou une chaîne calée sur l'emprise. */
+    /** What ties the dimension to the wall: its own openings, or a chain fitted to the footprint. */
     anchor?: 'openings' | 'envelope';
     equation?: string;
     note?: string;
@@ -84,15 +84,15 @@ export interface Decision {
   reason?: string;
 }
 
-/** Couche 2 : une décision par face de mur et par ouverture. */
+/** Layer 2: one decision per wall face and per opening. */
 export interface DecisionsFile {
   schemaVersion: number;
   project: string;
   level: string;
   registry: string;
-  /** Pages du registre qui portent ce niveau ; une cote d'un autre niveau ne prouve rien. */
+  /** Registry pages carrying this level; a dimension from another level proves nothing. */
   pages?: number[];
-  /** Chaînes refermées calées sur l'emprise, avec leur origine et leur sens de lecture. */
+  /** Closed chains fitted to the footprint, with their origin and reading direction. */
   envelopes?: EnvelopeFrame[];
   faces: Decision[];
   openings: Decision[];
@@ -105,7 +105,7 @@ export interface DecisionReport {
   openings: { total: number; byClass: Record<string, number>; unresolved: string[] };
   errors: string[];
   warnings: string[];
-  /** Vrai seulement si aucune erreur et aucune décision non résolue. */
+  /** True only if there is no error and no unresolved decision. */
   ready: boolean;
 }
 
@@ -125,7 +125,7 @@ function findChain(registry: EvidenceRegistry, ref: ChainRef): RegistryChain | n
   );
 }
 
-/** Somme des segments imprimés avant `segmentIndex` : position cumulée le long de la chaîne. */
+/** Sum of the printed segments before `segmentIndex`: cumulative position along the chain. */
 export function cumulativeOffset(chain: RegistryChain, segmentIndex: number): number {
   return chain.segments.slice(0, segmentIndex).reduce((total, segment) => total + segment.value, 0);
 }
@@ -136,27 +136,26 @@ function checkCommon(
   errors: string[],
   warnings: string[],
 ): boolean {
-  const where = `${kind} ${decision.id || '(sans id)'}`;
-  if (!decision.id) errors.push(`${where}: identifiant manquant`);
-  if (!decision.wall) errors.push(`${where}: mur de rattachement manquant`);
-  if (typeof decision.unresolved !== 'boolean')
-    errors.push(`${where}: drapeau unresolved manquant`);
+  const where = `${kind} ${decision.id || '(no id)'}`;
+  if (!decision.id) errors.push(`${where}: missing identifier`);
+  if (!decision.wall) errors.push(`${where}: missing host wall`);
+  if (typeof decision.unresolved !== 'boolean') errors.push(`${where}: missing unresolved flag`);
   if (!CLASSES.includes(decision.evidence?.class)) {
-    errors.push(`${where}: classe de preuve invalide (${String(decision.evidence?.class)})`);
+    errors.push(`${where}: invalid evidence class (${String(decision.evidence?.class)})`);
     return false;
   }
   if (decision.evidence.class === 'assumed') {
-    warnings.push(`${where}: preuve supposée, à confirmer par une cote ou un relevé`);
+    warnings.push(`${where}: assumed proof, to be confirmed by a dimension or a survey`);
   }
   if (decision.unresolved && !decision.reason) {
-    errors.push(`${where}: unresolved sans motif`);
+    errors.push(`${where}: unresolved without a reason`);
   }
   return true;
 }
 
 /**
- * Vérifie l'arithmétique d'une face : la suite imprimée vaut la cote déclarée,
- * et la longueur d'axe du mur se recalcule depuis cette cote et les décalages.
+ * Checks a face's arithmetic: the printed sequence equals the declared dimension,
+ * and the wall's axis length is recomputed from that dimension and the offsets.
  */
 function checkFace(
   decision: Decision,
@@ -166,30 +165,28 @@ function checkFace(
   errors: string[],
   warnings: string[],
 ): void {
-  const where = `face ${decision.id || '(sans id)'}`;
+  const where = `face ${decision.id || '(no id)'}`;
   if (!checkCommon(decision, 'face', errors, warnings)) return;
   const evidence = decision.evidence;
   const ref = evidence.chain;
   if (!ref) {
     if (evidence.class !== 'scaled' && evidence.class !== 'assumed') {
-      errors.push(`${where}: preuve ${evidence.class} sans référence de chaîne`);
+      errors.push(`${where}: ${evidence.class} proof without a chain reference`);
     }
     return;
   }
   const chain = findChain(registry, ref);
   if (!chain) {
     errors.push(
-      `${where}: chaîne introuvable (page ${ref.page}, ${ref.axis}, perpendiculaire ${ref.perpendicular})`,
+      `${where}: chain not found (page ${ref.page}, ${ref.axis}, perpendicular ${ref.perpendicular})`,
     );
     return;
   }
   if (evidence.class === 'printed' && !chain.closed) {
-    errors.push(
-      `${where}: preuve imprimée sur une chaîne ouverte (résidu ${String(chain.residual)})`,
-    );
+    errors.push(`${where}: printed proof on an open chain (residual ${String(chain.residual)})`);
   }
   if (evidence.class === 'printed-partial' && chain.closed) {
-    errors.push(`${where}: preuve partielle sur une chaîne refermée`);
+    errors.push(`${where}: partial proof on a closed chain`);
   }
   const { span, length, startOffset, endOffset } = evidence;
   if (
@@ -198,7 +195,7 @@ function checkFace(
     startOffset === undefined ||
     endOffset === undefined
   ) {
-    errors.push(`${where}: preuve sans suite, longueur ou décalages`);
+    errors.push(`${where}: proof without a sequence, length or offsets`);
     return;
   }
   if (
@@ -208,7 +205,7 @@ function checkFace(
     span.end >= chain.segments.length ||
     span.start > span.end
   ) {
-    errors.push(`${where}: suite ${span.start}..${span.end} hors de la chaîne`);
+    errors.push(`${where}: sequence ${span.start}..${span.end} outside the chain`);
     return;
   }
   const printed = chain.segments
@@ -216,36 +213,38 @@ function checkFace(
     .reduce((total, segment) => total + segment.value, 0);
   if (Math.abs(printed - length) > LENGTH_TOL) {
     errors.push(
-      `${where}: longueur déclarée ${length} ≠ somme imprimée ${printed.toFixed(3)} ` +
+      `${where}: declared length ${length} ≠ printed sum ${printed.toFixed(3)} ` +
         `(segments ${span.start}..${span.end})`,
     );
   }
   const wall: Wall | undefined = level.walls.find((candidate) => candidate.id === decision.wall);
   if (!wall) {
-    errors.push(`${where}: mur ${decision.wall} absent du niveau`);
+    errors.push(`${where}: wall ${decision.wall} missing from the level`);
     return;
   }
   const axis = wallLength(wall);
   const expected = length - endOffset + startOffset;
   if (Math.abs(expected - axis) > LENGTH_TOL) {
     errors.push(
-      `${where}: longueur d'axe ${axis.toFixed(3)} ≠ ${expected.toFixed(3)} ` +
-        `(cote ${length} − décalages ${startOffset}/${endOffset})`,
+      `${where}: axis length ${axis.toFixed(3)} ≠ ${expected.toFixed(3)} ` +
+        `(dimension ${length} − offsets ${startOffset}/${endOffset})`,
     );
   }
   const exact = Math.abs(startOffset) <= LENGTH_TOL && Math.abs(endOffset) <= LENGTH_TOL;
   if ((evidence.class === 'printed' || evidence.class === 'printed-partial') && !exact) {
-    errors.push(`${where}: preuve imprimée avec des décalages non nuls`);
+    errors.push(`${where}: printed proof with non-zero offsets`);
   }
   if (evidence.class === 'derived' && exact) {
-    errors.push(`${where}: preuve dérivée sans décalage, la cote est déjà la longueur du mur`);
+    errors.push(
+      `${where}: derived proof without an offset, the dimension already is the wall length`,
+    );
   }
   if (evidence.anchor === 'envelope') {
     checkEnvelopeFace(decisions, chain, level, wall, span, startOffset, endOffset, where, errors);
   }
 }
 
-/** Vérifie qu'une ouverture recalculée depuis sa cote imprimée concorde avec le projet. */
+/** Checks that an opening recomputed from its printed dimension agrees with the project. */
 function checkOpening(
   decision: Decision,
   decisions: DecisionsFile,
@@ -254,70 +253,68 @@ function checkOpening(
   errors: string[],
   warnings: string[],
 ): void {
-  const where = `ouverture ${decision.id || '(sans id)'}`;
+  const where = `opening ${decision.id || '(no id)'}`;
   if (!checkCommon(decision, 'opening', errors, warnings)) return;
   const evidence = decision.evidence;
   const ref = evidence.chain;
   if (!ref) {
     if (evidence.class !== 'scaled' && evidence.class !== 'assumed') {
-      errors.push(`${where}: preuve ${evidence.class} sans référence de chaîne`);
+      errors.push(`${where}: ${evidence.class} proof without a chain reference`);
     }
     return;
   }
   const chain = findChain(registry, ref);
   if (!chain) {
     errors.push(
-      `${where}: chaîne introuvable (page ${ref.page}, ${ref.axis}, perpendiculaire ${ref.perpendicular})`,
+      `${where}: chain not found (page ${ref.page}, ${ref.axis}, perpendicular ${ref.perpendicular})`,
     );
     return;
   }
   const index = evidence.segmentIndex;
   if (index === undefined) {
-    errors.push(`${where}: preuve sans segment de baie`);
+    errors.push(`${where}: proof without an opening segment`);
     return;
   }
   if (!Number.isInteger(index) || index < 0 || index >= chain.segments.length) {
     errors.push(
-      `${where}: segmentIndex ${index} hors de la chaîne (${chain.segments.length} segments)`,
+      `${where}: segmentIndex ${index} outside the chain (${chain.segments.length} segments)`,
     );
     return;
   }
   const segment = chain.segments[index];
   if (segment.kind !== 'opening') {
-    errors.push(`${where}: le segment ${index} n'est pas une baie (${segment.kind})`);
+    errors.push(`${where}: segment ${index} is not an opening (${segment.kind})`);
     return;
   }
   const parsed = OPENING_TEXT.exec(segment.text);
   if (!parsed) {
-    errors.push(`${where}: cote de baie illisible « ${segment.text} »`);
+    errors.push(`${where}: unreadable opening dimension « ${segment.text} »`);
     return;
   }
   const width = metres(parsed[1]);
   const height = metres(parsed[2]);
   const convention = evidence.convention;
   if (!convention || !CONVENTIONS.includes(convention)) {
-    errors.push(`${where}: convention d'appariement inconnue (${String(convention)})`);
+    errors.push(`${where}: unknown pairing convention (${String(convention)})`);
     return;
   }
   if (convention !== 'height' && Math.abs(width - (evidence.printedWidth ?? NaN)) > LENGTH_TOL) {
-    errors.push(`${where}: largeur déclarée ${String(evidence.printedWidth)} ≠ imprimée ${width}`);
+    errors.push(`${where}: declared width ${String(evidence.printedWidth)} ≠ printed ${width}`);
   }
   if (convention !== 'width' && Math.abs(height - (evidence.printedHeight ?? NaN)) > LENGTH_TOL) {
-    errors.push(
-      `${where}: hauteur déclarée ${String(evidence.printedHeight)} ≠ imprimée ${height}`,
-    );
+    errors.push(`${where}: declared height ${String(evidence.printedHeight)} ≠ printed ${height}`);
   }
   const expected = cumulativeOffset(chain, index);
   if (Math.abs((evidence.cumulativeOffset ?? NaN) - expected) > LENGTH_TOL) {
     errors.push(
-      `${where}: cumul déclaré ${String(evidence.cumulativeOffset)} ≠ cumul imprimé ${expected.toFixed(3)}`,
+      `${where}: declared cumulative ${String(evidence.cumulativeOffset)} ≠ printed cumulative ${expected.toFixed(3)}`,
     );
   }
   if (evidence.anchor === 'envelope') {
     const wall = level.walls.find((candidate) => candidate.id === decision.wall);
     const opening = wall?.openings?.find((candidate) => candidate.id === decision.id);
     if (!wall || !opening) {
-      errors.push(`${where}: mur ou baie introuvable pour la preuve d'emprise`);
+      errors.push(`${where}: wall or opening not found for the footprint proof`);
     } else {
       checkEnvelopeOpening(decisions, chain, level, wall, opening, index, where, errors);
     }
@@ -336,7 +333,7 @@ function cumulativeSums(chain: RegistryChain): number[] {
   return sums;
 }
 
-/** Intervalle monde d'une suite, une fois la chaîne calée sur le contour. */
+/** World interval of a sequence, once the chain is fitted to the outline. */
 function runInterval(
   chain: RegistryChain,
   start: number,
@@ -376,7 +373,7 @@ function findEnvelope(decisions: DecisionsFile, ref: ChainRef): EnvelopeFrame | 
   );
 }
 
-/** Une preuve d'emprise n'est valable que si la chaîne couvre le contour et tombe sur les faces. */
+/** A footprint proof is only valid if the chain covers the outline and lands on the faces. */
 function checkEnvelopeFace(
   decisions: DecisionsFile,
   chain: RegistryChain,
@@ -394,13 +391,13 @@ function checkEnvelopeFace(
     perpendicular: chain.perpendicular,
   });
   if (!frame) {
-    errors.push(`${where}: preuve d'emprise sans chaîne calée déclarée`);
+    errors.push(`${where}: footprint proof without a declared fitted chain`);
     return;
   }
   const bounds = outlineBounds(level, chain.axis);
   if (Math.abs(chain.sum - (bounds.high - bounds.low)) > LENGTH_TOL) {
     errors.push(
-      `${where}: la chaîne somme ${chain.sum.toFixed(3)} m, l'emprise ${(bounds.high - bounds.low).toFixed(3)} m`,
+      `${where}: the chain sums ${chain.sum.toFixed(3)} m, the footprint ${(bounds.high - bounds.low).toFixed(3)} m`,
     );
     return;
   }
@@ -411,8 +408,8 @@ function checkEnvelopeFace(
     Math.abs(interval[1] - expected[1]) > LENGTH_TOL
   ) {
     errors.push(
-      `${where}: intervalle imprimé ${interval[0].toFixed(3)}..${interval[1].toFixed(3)} ` +
-        `≠ faces du mur ${expected[0].toFixed(3)}..${expected[1].toFixed(3)}`,
+      `${where}: printed interval ${interval[0].toFixed(3)}..${interval[1].toFixed(3)} ` +
+        `≠ wall faces ${expected[0].toFixed(3)}..${expected[1].toFixed(3)}`,
     );
   }
 }
@@ -433,13 +430,13 @@ function checkEnvelopeOpening(
     perpendicular: chain.perpendicular,
   });
   if (!frame) {
-    errors.push(`${where}: preuve d'emprise sans chaîne calée déclarée`);
+    errors.push(`${where}: footprint proof without a declared fitted chain`);
     return;
   }
   const bounds = outlineBounds(level, chain.axis);
   if (Math.abs(chain.sum - (bounds.high - bounds.low)) > LENGTH_TOL) {
     errors.push(
-      `${where}: la chaîne somme ${chain.sum.toFixed(3)} m, l'emprise ${(bounds.high - bounds.low).toFixed(3)} m`,
+      `${where}: the chain sums ${chain.sum.toFixed(3)} m, the footprint ${(bounds.high - bounds.low).toFixed(3)} m`,
     );
     return;
   }
@@ -450,8 +447,8 @@ function checkEnvelopeOpening(
     Math.abs(interval[1] - expected[1]) > LENGTH_TOL
   ) {
     errors.push(
-      `${where}: intervalle imprimé ${interval[0].toFixed(3)}..${interval[1].toFixed(3)} ` +
-        `≠ baie du projet ${expected[0].toFixed(3)}..${expected[1].toFixed(3)}`,
+      `${where}: printed interval ${interval[0].toFixed(3)}..${interval[1].toFixed(3)} ` +
+        `≠ project opening ${expected[0].toFixed(3)}..${expected[1].toFixed(3)}`,
     );
   }
 }
@@ -467,11 +464,11 @@ function checkCoverage(
   for (const item of expected) {
     const matches = decisions.filter((decision) => decision.id === item.id);
     if (matches.length === 0) {
-      errors.push(`${kind} ${item.id}: aucune décision`);
+      errors.push(`${kind} ${item.id}: no decision`);
       continue;
     }
     if (matches.length > 1)
-      errors.push(`${kind} ${item.id}: ${matches.length} décisions concurrentes`);
+      errors.push(`${kind} ${item.id}: ${matches.length} competing decisions`);
     const decision = matches[0];
     if (kind !== 'opening' || item.offset === undefined) continue;
     const ref = decision.evidence.chain;
@@ -480,19 +477,19 @@ function checkCoverage(
     if (!chain) continue;
     const printed = cumulativeOffset(chain, decision.evidence.segmentIndex);
     if (decision.evidence.wallOrigin === undefined) {
-      // Une preuve d'emprise place déjà la baie en absolu : rien à avertir.
+      // A footprint proof already places the opening absolutely: nothing to warn about.
       if (decision.evidence.anchor === 'envelope') continue;
       warnings.push(
-        `${kind} ${item.id}: origine du mur non déclarée, offset ${item.offset} non vérifiable ` +
-          `(repère imprimé à ${printed.toFixed(3)} sur la chaîne page ${ref.page})`,
+        `${kind} ${item.id}: wall origin not declared, offset ${item.offset} cannot be checked ` +
+          `(tick printed at ${printed.toFixed(3)} on the chain, page ${ref.page})`,
       );
       continue;
     }
     const expectedOffset = printed - decision.evidence.wallOrigin;
     if (Math.abs(expectedOffset - item.offset) > OFFSET_TOL) {
       errors.push(
-        `${kind} ${item.id}: offset projet ${item.offset} ≠ ${expectedOffset.toFixed(3)} ` +
-          `(repère imprimé ${printed.toFixed(3)} − origine ${decision.evidence.wallOrigin})`,
+        `${kind} ${item.id}: project offset ${item.offset} ≠ ${expectedOffset.toFixed(3)} ` +
+          `(printed tick ${printed.toFixed(3)} − origin ${decision.evidence.wallOrigin})`,
       );
     }
   }
@@ -511,9 +508,9 @@ function tally(decisions: Decision[]) {
 }
 
 /**
- * Vérifie le fichier de décisions contre le registre d'évidence et le projet.
- * La construction ne démarre que si `ready` est vrai : aucune erreur, aucune
- * décision non résolue, et chaque preuve recalculée depuis ses segments.
+ * Checks the decision file against the evidence registry and the project.
+ * Construction only starts if `ready` is true: no error, no
+ * unresolved decision, and every proof recomputed from its segments.
  */
 export function checkDecisions(
   decisions: DecisionsFile,
@@ -523,17 +520,17 @@ export function checkDecisions(
   const errors: string[] = [];
   const warnings: string[] = [];
   if (decisions.schemaVersion !== 1)
-    errors.push(`schemaVersion inattendu : ${decisions.schemaVersion}`);
+    errors.push(`unexpected schemaVersion: ${decisions.schemaVersion}`);
   if (registry.schemaVersion !== 1)
-    errors.push(`registre : schemaVersion inattendu : ${registry.schemaVersion}`);
+    errors.push(`registry: unexpected schemaVersion: ${registry.schemaVersion}`);
   if (decisions.project !== project.id) {
-    errors.push(`projet ${decisions.project} ≠ projet importé ${project.id}`);
+    errors.push(`project ${decisions.project} ≠ imported project ${project.id}`);
   }
   const level: Level | undefined = project.levels.find(
     (candidate) => candidate.id === decisions.level,
   );
   if (!level) {
-    errors.push(`niveau ${decisions.level} absent du projet`);
+    errors.push(`level ${decisions.level} missing from the project`);
     return {
       project: decisions.project,
       level: decisions.level,
@@ -548,13 +545,13 @@ export function checkDecisions(
   const openings = decisions.openings ?? [];
   const pages = decisions.pages;
   if (!Array.isArray(pages) || pages.length === 0) {
-    errors.push('pages du niveau manquantes : une cote d’un autre niveau ne prouve rien');
+    errors.push('level pages missing: a dimension from another level proves nothing');
   } else {
     for (const decision of [...faces, ...openings]) {
       const page = decision.evidence?.chain?.page;
       if (page !== undefined && !pages.includes(page)) {
         errors.push(
-          `${decision.id}: chaîne page ${page} hors des pages du niveau (${pages.join(', ')})`,
+          `${decision.id}: chain page ${page} outside the level's pages (${pages.join(', ')})`,
         );
       }
     }
@@ -604,9 +601,9 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
         'Usage: node --import tsx scripts/check-plan-decisions.ts decisions.json project.json registry.json [--allow-unresolved]',
       );
     }
-    // Une face non résolue n'est pas une contradiction : en fusion, les murs
-    // viennent du modèle et la décision ne construit rien. Le drapeau dit que
-    // l'appelant assume ce repli ; une erreur, elle, bloque toujours.
+    // An unresolved face is not a contradiction: in merge mode, walls
+    // come from the model and the decision builds nothing. The flag says
+    // the caller accepts this fallback; an error, on the other hand, always blocks.
     const allowUnresolved = process.argv.includes('--allow-unresolved');
     const read = async (path: string) => JSON.parse(await readFile(path, 'utf8'));
     const report = checkDecisions(

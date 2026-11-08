@@ -1,18 +1,18 @@
-"""Dessine les murs et pièces du projet par-dessus une page PDF rendue.
+"""Draws the project's walls and rooms over a rendered PDF page.
 
-Le calque de référence : les murs du modèle en orange translucide, les pièces
-en bleu, les baies marquées en vert (franchissables) ou bleu (fenêtres), chaque
-identifiant écrit à sa place. Une bande hachurée sans orange est un mur du
-dessin absent du modèle ; un rectangle orange sans hachure est un mur inventé —
-c'est la porte qui voit ce qu'aucune surface ni aucun audit ne voient.
+The reference overlay: the model's walls in translucent orange, rooms in blue,
+openings marked in green (crossable) or blue (windows), each identifier written
+in place. A hatched band without orange is a drawing wall missing from the
+model; an orange rectangle without hatching is an invented wall — it is the
+gate that sees what no area nor audit sees.
 
-Le repère `(ox, oy, échelle)` donne le point affiché de la page tournée :
-point affiché = (ox + échelle * x, oy + échelle * z).
+The frame `(ox, oy, scale)` gives the displayed point of the rotated page:
+displayed point = (ox + scale * x, oy + scale * z).
 
-Usage :
-  python scripts/overlay_page.py <projet.json> <niveau> <pdf> <page> <ox> <oy> <echelle> <sortie.png> [clip]
-  <page> : comptée à partir de 1, comme les autres scripts du dépôt.
-  <clip> : x0,y0,x1,y1 en points affichés, facultatif (toute la page sinon).
+Usage:
+  python scripts/overlay_page.py <project.json> <level> <pdf> <page> <ox> <oy> <scale> <output.png> [clip]
+  <page>: counted from 1, like the other repository scripts.
+  <clip>: x0,y0,x1,y1 in displayed points, optional (whole page otherwise).
   python scripts/overlay_page.py --self-test
 """
 
@@ -34,7 +34,7 @@ DPI = 400
 
 
 def page_identity(page):
-    """Premiers mots et titres en capitales — la page se repère par son texte."""
+    """First words and capitalised titles — a page is located by its text."""
     words = page.get_text().split()
     head = " ".join(words[:6])
     caps = [w for w in words if len(w) > 2 and w.isupper()][:6]
@@ -50,15 +50,15 @@ def render(project, level_id, pdf_path, page_number, ox, oy, scale, out, clip=No
     doc = pymupdf.open(pdf_path)
     index = int(page_number) - 1
     if not 0 <= index < doc.page_count:
-        sys.exit(f"page {page_number} inexistante : le document en a {doc.page_count}")
+        sys.exit(f"page {page_number} does not exist: the document has {doc.page_count}")
     page = doc[index]
-    print(f"page {page_number} : {page_identity(page)}")
+    print(f"page {page_number}: {page_identity(page)}")
 
     zoom = DPI / 72
     rect = pymupdf.Rect(*clip) if clip else page.rect
     pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), clip=rect)
-    # Base en RGB : un Draw(img, "RGBA") sur une base RGBA écraserait les
-    # pixels au lieu de blonder, et les alphas ne serviraient à rien.
+    # RGB base: a Draw(img, "RGBA") on an RGBA base would overwrite the
+    # pixels instead of blending, and the alphas would serve no purpose.
     img = Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
     draw = ImageDraw.Draw(img, "RGBA")
 
@@ -107,7 +107,7 @@ def render(project, level_id, pdf_path, page_number, ox, oy, scale, out, clip=No
 
 
 def self_test():
-    """Non-régression sur un PDF et un projet synthétiques : aucune donnée réelle."""
+    """Non-regression on a synthetic PDF and project: no real data."""
     from pathlib import Path
     from tempfile import mkdtemp
 
@@ -139,23 +139,23 @@ def self_test():
     img = render(project, "l", pdf_path, 1, 100.0, 100.0, 56.69, png_path)
     colours = set(img.getdata())
     failures = []
-    # Les traits pleins sont exacts ; le remplissage translucide est compté, pas égalé.
+    # Solid strokes are exact; the translucent fill is counted, not matched.
     for expected, name in (
-        ((200, 90, 0), "le contour de mur"),
-        ((0, 170, 0), "la marque de baie franchissable"),
-        ((0, 90, 255), "le contour de pièce"),
+        ((200, 90, 0), "the wall outline"),
+        ((0, 170, 0), "the crossable opening mark"),
+        ((0, 90, 255), "the room outline"),
     ):
         if expected not in colours:
-            failures.append(name + " absent du rendu")
-    # (255,140,0,90) sur du blanc rend des pixels orange clair, pas une couleur exacte.
+            failures.append(name + " missing from the render")
+    # (255,140,0,90) on white renders light orange pixels, not an exact colour.
     orange = sum(1 for r, g, b in colours if 245 <= r <= 255 and 205 <= g <= 225 and 155 <= b <= 175)
     if orange < 10:
-        failures.append("le remplissage de mur orange absent du rendu")
+        failures.append("the orange wall fill missing from the render")
     if failures:
         for failure in failures:
-            print(f"ECHEC {failure}")
+            print(f"FAIL {failure}")
         return 1
-    print("calque sur page : auto-test réussi")
+    print("page overlay: self-test passed")
     return 0
 
 

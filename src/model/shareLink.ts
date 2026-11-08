@@ -6,20 +6,20 @@ import {
 } from './linkPacker';
 
 /**
- * Lien de partage : `#p1:<base64url(deflate-raw(pack sémantique))>`. Le préfixe isole le
- * format pour une migration future sans ambiguïté de lecture. Le fragment n'est jamais
- * envoyé au serveur d'hébergement.
+ * Share link: `#p1:<base64url(deflate-raw(semantic pack))>`. The prefix isolates the
+ * format for a future migration without reading ambiguity. The fragment is never
+ * sent to the hosting server.
  */
 export const LINK_PREFIX = 'p1';
 const LINK_MARKER = `#${LINK_PREFIX}:`;
-/** Strict base64url : `-` et `_`, sans remplissage `=`. */
+/** Strict base64url: `-` and `_`, no `=` padding. */
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 
 export class ShareLinkError extends Error {}
 
 export interface DecodedShareLink {
   document: ShareDocument;
-  /** Représentation packée canonique, sans compression : base de la comparaison silencieuse. */
+  /** Canonical packed representation, uncompressed: basis of the silent comparison. */
   packed: Uint8Array;
 }
 
@@ -41,7 +41,7 @@ export async function decodeShareLinkHash(hash: string): Promise<DecodedShareLin
   }
   try {
     const document = unpackShareDocument(packed);
-    // Repacké à la révision courante : un ancien lien (révision 1) se compare ainsi à l'état local.
+    // Repacked at the current revision: an old link (revision 1) is thus compared with the local state.
     return { document, packed: packShareDocument(document) };
   } catch (error) {
     if (error instanceof LinkPackError)
@@ -50,7 +50,7 @@ export async function decodeShareLinkHash(hash: string): Promise<DecodedShareLin
   }
 }
 
-/** Comparaison canonique de deux états : mêmes octets packés, mêmes données à la quantification près. */
+/** Canonical comparison of two states: same packed bytes, same data up to quantisation. */
 export function samePackedState(a: Uint8Array, b: Uint8Array): boolean {
   if (a.length !== b.length) return false;
   for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
@@ -58,7 +58,7 @@ export function samePackedState(a: Uint8Array, b: Uint8Array): boolean {
 }
 
 /* ---------------------------------------------------------------------------------------------- */
-/* deflate-raw natif — pas de repli sans compression, CompressionStream existe partout depuis 2023  */
+/* Native deflate-raw — no uncompressed fallback, CompressionStream exists everywhere since 2023  */
 /* ---------------------------------------------------------------------------------------------- */
 
 async function deflate(bytes: Uint8Array): Promise<Uint8Array> {

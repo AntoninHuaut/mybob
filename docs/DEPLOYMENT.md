@@ -1,58 +1,58 @@
-# Déploiement Cloudflare Pages et CI GitHub
+# Cloudflare Pages deployment and GitHub CI
 
-## Publication publique, données de maison locales
+## Public publication, local house data
 
-`npm run build` produit désormais une application publique avec **uniquement le studio de démonstration**. Vite ne copie pas le dossier `public/` : un plugin embarque explicitement le favicon et `studio-demo.json`. Tout plan personnel (`public/projects/private-*.json`, git-ignoré), les PDF et les photos de chantier ne font pas partie de cet artefact.
+`npm run build` produces a public application with **only the demonstration studio**. Vite does not copy the `public/` folder: a plugin explicitly bundles the favicon and `studio-demo.json`. Any personal plan (`public/projects/private-*.json`, git-ignored), PDFs and building-site photos are not part of this artefact.
 
-Les meubles, réglages solaires et projets importés sont traités et conservés dans le navigateur. Leur export reste un fichier personnel. Ces données ne sont pas envoyées à Cloudflare par l’application. Un changement d’origine de site ne transfère pas le stockage du navigateur : **exporter le projet et son aménagement depuis l’ancien site privé avant la migration**, puis importer ce fichier sur le nouveau site.
+Furniture, solar settings and imported projects are processed and kept in the browser. Their export stays a personal file. This data is not sent to Cloudflare by the application. Changing the site origin does not transfer browser storage: **export the project and its arrangement from the old private site before the migration**, then import that file on the new site.
 
-Le dépôt GitHub est public et ne contient aucun plan personnel : les projets personnels vivent dans `public/projects/private-*.json`, git-ignorés, et leur historique a été purgé.
+The GitHub repository is public and contains no personal plan: personal projects live in `public/projects/private-*.json`, git-ignored, and their history has been purged.
 
-Le service de build Cloudflare compile ces sources publiques ; la séparation garantit l’absence de données personnelles du site distribué.
+The Cloudflare build service compiles these public sources; the separation guarantees that the distributed site contains no personal data.
 
-Pour utiliser le vrai plan localement, de manière explicite :
+To use the real plan locally, explicitly:
 
 ```sh
 npm run dev:private
 npm run build:private
 ```
 
-Le résultat de `build:private` ne doit pas être publié sur un site public. `npm run check:public` le rejette.
+The output of `build:private` must never be published on a public site. `npm run check:public` rejects it.
 
-## CI GitHub Actions
+## GitHub Actions CI
 
-Toutes les modifications passent par une branche `<type>/<slug>` et une MR vers `main`. Les messages de commit suivent les Conventional Commits (`type(scope): description`, description en français, impératif présent, sans point final) ; les types sont `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `chore`, `build` et `ci`. Aucun push direct ni fusion avec CI distante en attente ou en échec. Les tests locaux ne remplacent pas les checks du dernier commit de la MR. Le propriétaire autorise l’auto-merge GitHub lorsque les checks requis sont verts : l’activer pour les changements terminés et validés, sans redemander une permission par MR. Cloudflare ne doit recevoir la branche de production qu’après cette validation ; ses pipelines de build restent techniquement indépendants de GitHub Actions.
+Every change goes through a `<type>/<slug>` branch and a PR to `main`; commit conventions are in [AGENTS.md](../AGENTS.md). No direct push nor merge with remote CI pending or failing. Local tests do not replace the checks of the PR's latest commit. The owner authorises GitHub auto-merge once required checks are green: enable it for completed, validated changes, without asking permission again for each PR. Cloudflare must only receive the production branch after this validation; its build pipelines stay technically independent of GitHub Actions.
 
-Protection GitHub de `main` : MR obligatoire, check « Tests, types, build et confidentialité » exigé depuis GitHub Actions, branche à jour (`strict`), règles appliquées aux administrateurs, force-push et suppression interdits. L’auto-merge attend ces checks et ne constitue pas un contournement. Ces réglages serveur ne sont pas contenus dans le diff Git.
+GitHub protection of `main`: PR required, check « Tests, types, build et confidentialité » required from GitHub Actions, branch up to date (`strict`), rules applied to administrators, force-push and deletion forbidden. Auto-merge waits for these checks and is not a bypass. These server settings are not contained in the Git diff. The CI job names stay in French because the required check is matched by name: renaming it breaks branch protection.
 
-Le workflow `.github/workflows/ci.yml` s’exécute sur les pushes vers `main`, les pull requests visant `main` et sur lancement manuel. Il utilise Node 24, pnpm 12.15.0 et `pnpm install --frozen-lockfile` avec `pnpm-lock.yaml`. Le passage à pnpm remplace l’ancienne installation `npm ci`.
+The `.github/workflows/ci.yml` workflow runs on pushes to `main`, pull requests targeting `main` and on manual dispatch. It uses Node 24, pnpm 12.15.0 and `pnpm install --frozen-lockfile` with `pnpm-lock.yaml`.
 
-Contrôles : mise en forme, tests, vérification TypeScript, compilation publique, puis contrôle de l’artefact. Le contrôle public rejette les fichiers hors liste autorisée, les documents d’origine, le vrai projet de maison et ses signatures connues dans les ressources JavaScript. Ce garde-fou complète l’inclusion explicite des seuls fichiers de démonstration ; il ne remplace pas la revue de tout nouvel asset destiné à être public.
+Checks: formatting, tests, TypeScript check, public build, then artefact check. The public check rejects files outside the allowlist, original documents, the real house project and its known signatures in the JavaScript assets. This safeguard complements the explicit inclusion of the demonstration files only; it does not replace reviewing any new asset meant to be public.
 
-Les Actions ont uniquement `contents: read`, aucun secret Cloudflare, une limite de 15 minutes et annulent les exécutions devenues obsolètes sur la même branche.
+Actions only have `contents: read`, no Cloudflare secret, a 15-minute limit, and cancel runs made obsolete on the same branch.
 
-Après le contrôle public, GitHub partage le build avec trois runners qui exécutent les tests E2E en parallèle (`--shard`), en Chromium ordinateur. Chromium headless shell est mis en cache par version. Le check obligatoire « Tests, types, build et confidentialité » agrège le build et les trois lots : tout échec ou lot ignoré bloque sa réussite et l’auto-merge. Les rapports et traces d’échec sont archivés sept jours. Voir `docs/E2E.md`. Cette étape n’est pas incluse dans `npm run ci` côté Cloudflare : les deux pipelines restent indépendants.
+After the public check, GitHub shares the build with three runners that run the E2E tests in parallel (`--shard`), in desktop Chromium. Chromium headless shell is cached per version. The required check « Tests, types, build et confidentialité » aggregates the build and the three shards: any failure or skipped shard blocks it and blocks auto-merge. Failure reports and traces are archived for seven days. See `docs/E2E.md`. This step is not part of `npm run ci` on the Cloudflare side: the two pipelines stay independent.
 
-## Connexion Cloudflare Pages
+## Cloudflare Pages connection
 
-Dans le compte Cloudflare du propriétaire : **Workers & Pages → créer une application Pages → connecter GitHub**, puis autoriser uniquement le dépôt `AntoninHuaut/mybob`.
+In the owner's Cloudflare account: **Workers & Pages → create a Pages application → connect GitHub**, then authorise only the `AntoninHuaut/mybob` repository.
 
-| Paramètre               | Valeur                       |
+| Setting                 | Value                        |
 | ----------------------- | ---------------------------- |
-| Projet Pages            | `mybob` ou un nom disponible |
-| Branche de production   | `main`                       |
-| Dossier racine          | racine du dépôt              |
-| Framework               | aucun / Vite                 |
-| Commande de build       | `npm run ci`                 |
-| Dossier publié          | `dist`                       |
-| Variable `NODE_VERSION` | `24`                         |
+| Pages project           | `mybob` or an available name |
+| Production branch       | `main`                       |
+| Root directory          | repository root              |
+| Framework               | none / Vite                  |
+| Build command           | `npm run ci`                 |
+| Output directory        | `dist`                       |
+| `NODE_VERSION` variable | `24`                         |
 
-Cloudflare installe les dépendances puis exécute les mêmes contrôles avant sa publication. Un échec de test ou du contrôle public empêche ce déploiement et conserve la version précédente. Il n’est donc pas nécessaire de supposer que la CI GitHub a déjà terminé : les deux pipelines sont indépendants et utilisent les mêmes exigences.
+Cloudflare installs the dependencies then runs the same checks before publishing. A test or public-check failure prevents that deployment and keeps the previous version. There is therefore no need to assume GitHub CI has already finished: the two pipelines are independent and enforce the same requirements.
 
-Le fichier `wrangler.toml` déclare le dossier de sortie Pages. Aucun jeton Cloudflare n’est enregistré dans le dépôt. Les prévisualisations de branches doivent elles aussi conserver la commande publique ; ne pas y substituer `build:private`.
+`wrangler.toml` declares the Pages output directory. No Cloudflare token is stored in the repository. Branch previews must also keep the public command; never substitute `build:private`.
 
-## État de la connexion
+## Connection status
 
-La connexion GitHub → Cloudflare Pages est active sur `main`. Le site est `https://mybob-9rj.pages.dev/`. Cloudflare Access protège les previews ; ne pas modifier ces restrictions pour tester. Vérifier les checks GitHub CI et Cloudflare du commit précis avant d’annoncer une publication.
+The GitHub → Cloudflare Pages connection is active on `main`. The site is `https://mybob-9rj.pages.dev/`. Cloudflare Access protects previews; do not change these restrictions to test. Check the GitHub CI and Cloudflare checks of the exact commit before announcing a publication.
 
-La recherche de commune du réglage Soleil contacte Open-Meteo uniquement après un clic explicite et transmet seulement le nom recherché. Les coordonnées choisies, plans et meubles restent dans le stockage local et les exports.
+The town search of the Soleil setting contacts Open-Meteo only after an explicit click and only sends the searched name. Chosen coordinates, plans and furniture stay in local storage and exports.

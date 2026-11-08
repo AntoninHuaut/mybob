@@ -10,27 +10,27 @@ import { SHOWER_PANEL_SIDES } from '../furniture/model';
 import type { LayoutVariant, VariantBook } from '../furniture/variants';
 
 /**
- * Pack maison du lien de partage. Le pack n'existe que dans le hash de l'URL : en mémoire,
- * dans le `localStorage` et dans l'import/export, le format reste le JSON `HouseProject`
- * actuel. Quantification millimétrique, omission des champs absents et internement des
- * chaînes répétées : c'est l'information que deflate ne peut pas inventer lui-même.
+ * Home-made pack of the share link. The pack only exists in the URL hash: in memory,
+ * in `localStorage` and in import/export, the format stays the current `HouseProject`
+ * JSON. Millimetre quantisation, omission of absent fields and interning of repeated
+ * strings: that is the information deflate cannot invent by itself.
  */
 export class LinkPackError extends Error {}
 
-/** Un projet d'export complet : le projet, l'aménagement de sa variante active et toutes ses variantes. */
+/** A complete export project: the project, the arrangement of its active variant and all its variants. */
 export type ShareDocument = HouseProject & {
   furnishing?: { version: number; levels: Record<string, FurnitureItem[]>; variants?: unknown };
 };
 export interface UnpackedShare {
   project: HouseProject;
-  /** Miroir de la variante active, comme dans un export complet. */
+  /** Mirror of the active variant, as in a complete export. */
   levels: Record<string, FurnitureItem[]>;
   variants: VariantBook;
 }
 
 /**
- * Révision 2 : vitrage et vantaux des ouvertures, lucarnes et fenêtres de toit. La lecture
- * accepte encore la révision 1 (liens déjà partagés) ; l'écriture produit toujours la 2.
+ * Revision 2: glazing and leaves of openings, dormers and roof windows. Reading
+ * still accepts revision 1 (links already shared); writing always produces 2.
  */
 export const LINK_PACK_VERSION = 2;
 
@@ -86,7 +86,7 @@ const parseIntColor = (value: string): number => {
 };
 
 /* ---------------------------------------------------------------------------------------------- */
-/* Écriture                                                                                        */
+/* Writing                                                                                         */
 /* ---------------------------------------------------------------------------------------------- */
 
 class Packer {
@@ -97,7 +97,7 @@ class Packer {
   bytes(): Uint8Array {
     return Uint8Array.from(this.data);
   }
-  /** Varint non signé, octet de poids faible d'abord. */
+  /** Unsigned varint, least significant byte first. */
   u(value: number): void {
     if (!Number.isInteger(value) || value < 0 || value > Number.MAX_SAFE_INTEGER)
       throw new LinkPackError('Quantité invalide pour le pack.');
@@ -109,23 +109,23 @@ class Packer {
       this.data.push(byte);
     } while (rest > 0);
   }
-  /** Varint signé en zigzag. */
+  /** Zigzag-encoded signed varint. */
   i(value: number): void {
     const n = Math.round(value);
     this.u(n >= 0 ? n * 2 : -n * 2 - 1);
   }
-  /** Millimètres : quantification en entiers, le gros du gain après deflate. */
+  /** Millimetres: integer quantisation, most of the gain after deflate. */
   mm(value: number): void {
     this.i(Math.round(value * 1000));
   }
-  /** Angle en radians, au dix-millième près. */
+  /** Angle in radians, to a ten-thousandth. */
   angle(value: number): void {
     this.i(Math.round(value * 10000));
   }
   b(value: boolean): void {
     this.u(value ? 1 : 0);
   }
-  /** Trois états : absent, faux, vrai. */
+  /** Three states: absent, false, true. */
   tri(value: boolean | undefined): void {
     this.u(value === undefined ? 0 : value ? 2 : 1);
   }
@@ -133,7 +133,7 @@ class Packer {
     this.u(value === undefined ? 0 : 1);
     if (value !== undefined) this.mm(value);
   }
-  /** Aire en centimètres carrés, toujours positive. */
+  /** Area in square centimetres, always positive. */
   optArea(value: number | undefined): void {
     this.u(value === undefined ? 0 : 1);
     if (value !== undefined) this.u(Math.round(value * 10000));
@@ -142,7 +142,7 @@ class Packer {
     this.u(value === undefined ? 0 : 1);
     if (value !== undefined) this.u(parseIntColor(value));
   }
-  /** Chaîne internée : référence par indice quand elle revient, sinon ajout à la table. */
+  /** Interned string: reference by index when it comes back, otherwise added to the table. */
   str(value: string): void {
     const known = this.seen.get(value);
     if (known !== undefined) {
@@ -196,10 +196,10 @@ function packShowerPanels(packer: Packer, sides: ShowerPanelSide[]): void {
 }
 
 /**
- * Pack un meuble. Son identifiant n'est pas transporté : c'est sa position dans la liste,
- * et le groupe reprend l'indice de son premier membre. Les identifiants générés (UUID)
- * sont de l'entropie qu'aucun algorithme ne compresse ; la position reconstitue la même
- * structure liée au déballage. `meuble-<n>` et `groupe-<n>` reprennent le relais à la lecture.
+ * Packs a piece of furniture. Its identifier is not carried: it is its position in the list,
+ * and the group takes the index of its first member. Generated identifiers (UUID)
+ * are entropy no algorithm compresses; the position rebuilds the same linked
+ * structure on unpacking. `meuble-<n>` and `groupe-<n>` take over on reading.
  */
 function packFurnitureItem(packer: Packer, item: FurnitureItem, groupFirstIndex: number): void {
   packer.str(item.name);
@@ -271,8 +271,8 @@ function packVariant(packer: Packer, variant: LayoutVariant, levelIds: string[])
 }
 
 /**
- * Pack un document d'export complet. La description binaire est déterministe : deux états
- * identiques produisent toujours les mêmes octets, quelle que soit la plateforme.
+ * Packs a complete export document. The binary description is deterministic: two identical
+ * states always produce the same bytes, whatever the platform.
  */
 export function packShareDocument(document: ShareDocument): Uint8Array {
   const project = document;
@@ -283,7 +283,7 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
     furnishing?.levels ?? activeVariant?.levels ?? {};
   const packer = new Packer();
   packer.u(LINK_PACK_VERSION);
-  // Position (niveau, mur) de chaque mur : les identifiants sont renumérotés au déballage.
+  // Position (level, wall) of every wall: identifiers are renumbered on unpacking.
   const wallPositions = new Map<string, [number, number]>();
   project.levels.forEach((level, l) =>
     level.walls.forEach((wall, w) => wallPositions.set(wall.id, [l, w])),
@@ -319,9 +319,9 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
   packer.u(project.levels.length);
   const levelIds: string[] = [];
   for (const level of project.levels) {
-    // L'identifiant d'un niveau, d'un mur, d'une pièce… est sa position dans la liste :
-    // `niveau-0`, `mur-0-1`… reprennent le relais au déballage. Ne restent que les textes
-    // affichés (noms, notes) et l'identifiant du projet lui-même.
+    // The identifier of a level, a wall, a room… is its position in the list:
+    // `niveau-0`, `mur-0-1`… take over on unpacking. Only the displayed texts
+    // (names, notes) and the project's own identifier remain.
     levelIds.push(level.id);
     packer.str(level.name);
     packer.mm(level.elevation);
@@ -543,7 +543,7 @@ class Unpacker {
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
-/** Déballe des octets packés en document d'export complet, prêt pour le pipeline de validation de l'import. */
+/** Unpacks packed bytes into a complete export document, ready for the import validation pipeline. */
 export function unpackShareDocument(data: Uint8Array): ShareDocument {
   const reader = new Unpacker(data);
   const version = reader.u();
@@ -786,7 +786,7 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
         const itemCount = reader.count(200);
         for (let it = 0; it < itemCount; it++) {
           const item: FurnitureItem = {
-            // L'identifiant du lien est la position dans la liste : renumérotée au déballage.
+            // The link's identifier is its position in the list: renumbered on unpacking.
             id: `meuble-${it}`,
             name: reader.str(),
             kind: enumValue(FURNITURE_KIND_ORDER, reader.u()),

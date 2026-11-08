@@ -1,15 +1,15 @@
-## Changement
+## Change
 
-Décrire le problème concret et le comportement après correction.
+Describe the concrete problem and the behaviour after the fix.
 
 ## Validation
 
-- Commandes locales exécutées et résultats :
-- Parcours navigateur réellement contrôlés et limites :
-- CI distante : vérifier tous les checks du dernier commit avant fusion.
+- Local commands run and results:
+- Browser flows actually checked, and limits:
+- Remote CI: check every check of the latest commit before merging.
 
 ## Publication
 
-- Le build public contient uniquement la démonstration fictive.
-- Handoff et documentation des comportements modifiés mis à jour.
-- Aucun fichier personnel, export utilisateur ou secret ajouté.
+- The public build only contains the fictitious demonstration.
+- Handoff and documentation of changed behaviour updated.
+- No personal file, user export or secret added.

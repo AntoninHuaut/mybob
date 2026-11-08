@@ -2,10 +2,10 @@ import { createServer } from 'node:net';
 import { defineConfig, devices } from '@playwright/test';
 
 /**
- * Port libre tiré à chaque exécution : plusieurs agents lancent la suite sur la même machine.
- * Un port fixe avec --strictPort fait échouer la suite dès qu'un autre serveur l'occupe.
- * Playwright recharge la configuration dans chaque worker : la variable d'environnement
- * transmet le port déjà choisi pour que tous visent le même serveur.
+ * Free port drawn on every run: several agents run the suite on the same machine.
+ * A fixed port with --strictPort makes the suite fail as soon as another server holds it.
+ * Playwright reloads the configuration in every worker: the environment variable
+ * passes on the port already chosen so that all of them target the same server.
  */
 async function freePort(): Promise<number> {
   const probe = createServer();

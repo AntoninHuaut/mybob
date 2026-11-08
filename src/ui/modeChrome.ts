@@ -1,6 +1,6 @@
 import type { ViewMode } from '../scene/viewer';
 
-/** Textes d'en-tête et d'aide par mode : purs, sans DOM ni caméra. */
+/** Header and help texts per mode: pure, no DOM nor camera. */
 export function modeTitle(
   mode: ViewMode,
   eyeHeightLabel: string,
@@ -17,7 +17,7 @@ export function modeTitle(
   return titles[mode];
 }
 
-/** Aide clavier/souris affichée en bas de la scène ; les icônes sont des SVG fournis. */
+/** Keyboard/mouse help shown at the bottom of the scene; icons are provided SVGs. */
 export function desktopHint(
   mode: ViewMode,
   icons: { mouseLeft: string; mouseRight: string; mouseWheel: string },

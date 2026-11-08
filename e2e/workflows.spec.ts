@@ -3,7 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createFurniture } from '../src/furniture/model';
 
 // Only exercise the compiled public demo through its UI; each test gets fresh storage.
-test('agrandir un canapé contre un mur conserve le bord bloqué et reste annulable', async ({
+test('enlarging a sofa against a wall keeps the blocked edge and stays undoable', async ({
   page,
 }, testInfo) => {
   test.slow();
@@ -125,9 +125,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('#project-select')).toContainText('Démonstration');
 });
 
-test('ajout, brouillon annulé et rechargement conservent les valeurs enregistrées', async ({
-  page,
-}) => {
+test('add, cancelled draft and reload keep the saved values', async ({ page }) => {
   await addSofa(page);
   await page.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: 'Modifier Canapé E2E', exact: true });
@@ -160,9 +158,7 @@ async function emptyVariant(page: Page) {
   await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(0);
 }
 
-test('variantes indépendantes, annuler/rétablir et confirmation du nom inchangé', async ({
-  page,
-}) => {
+test('independent variants, undo/redo and confirming an unchanged name', async ({ page }) => {
   await emptyVariant(page);
   await page.getByRole('button', { name: 'Annuler la dernière modification', exact: true }).click();
   await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
@@ -193,7 +189,7 @@ test('variantes indépendantes, annuler/rétablir et confirmation du nom inchang
   await expect(select.locator('option')).toHaveCount(1);
 });
 
-test('export JSON puis import dans un navigateur vierge restaurent toutes les variantes', async ({
+test('JSON export then import into a blank browser restore every variant', async ({
   page,
   browser,
 }, testInfo) => {
@@ -233,8 +229,8 @@ test('export JSON puis import dans un navigateur vierge restaurent toutes les va
       imported.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }),
     ).toBeVisible();
     await imported.reload();
-    // Le hash de l'onglet décrit son propre état : le rechargement ne doit pas le prendre
-    // pour un lien reçu et rouvrir le dialogue de divergence (qui bloquerait la suite).
+    // The tab's hash describes its own state: the reload must not take it
+    // for a received link and reopen the divergence dialog (which would block the rest).
     await expect(imported.getByRole('dialog')).toHaveCount(0);
     await furnishings(imported);
     await expect(
@@ -245,7 +241,7 @@ test('export JSON puis import dans un navigateur vierge restaurent toutes les va
   }
 });
 
-test('Plan, export PNG et outils sur écran bas restent utilisables', async ({ page }, testInfo) => {
+test('Plan, PNG export and tools on a short screen stay usable', async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.getByRole('button', { name: 'Plan', exact: true }).click();
@@ -274,7 +270,7 @@ test('Plan, export PNG et outils sur écran bas restent utilisables', async ({ p
   expect(errors).toEqual([]);
 });
 
-test('actions rapides et Ctrl Z fonctionnent sans popup et sans sélection active', async ({
+test('quick actions and Ctrl Z work without popup and without an active selection', async ({
   page,
 }, testInfo) => {
   test.slow();
@@ -333,7 +329,7 @@ test('actions rapides et Ctrl Z fonctionnent sans popup et sans sélection activ
   await expect(toolbar).not.toBeVisible();
 });
 
-test('mesure avec aperçu, alignement droit et validation au second clic', async ({
+test('measure with preview, straight alignment and confirmation on the second click', async ({
   page,
 }, testInfo) => {
   await page.getByRole('button', { name: 'Plan', exact: true }).click();
@@ -362,7 +358,7 @@ test('mesure avec aperçu, alignement droit et validation au second clic', async
   await page.keyboard.press('Escape');
   await expect(page.locator('#measure-label')).not.toBeVisible();
 });
-test('MyBob accueille et présente les commandes sans masquer le projet', async ({
+test('MyBob welcomes and presents the controls without hiding the project', async ({
   page,
 }, testInfo) => {
   await expect(page).toHaveTitle(/MyBob/);
@@ -385,22 +381,22 @@ test('MyBob accueille et présente les commandes sans masquer le projet', async 
   await expect(dialog).not.toBeVisible();
 });
 
-test('la visite recapture le pointeur après sa libération, clic dans la vue compris', async ({
+test('the walk recaptures the pointer after its release, click in the view included', async ({
   page,
 }) => {
   const locked = () => page.evaluate(() => document.pointerLockElement !== null);
-  // Le Chromium headless ignore la sortie au clavier de la capture : le test
-  // libère le pointeur par l'API DOM que déclenche aussi Échap, et l'app
-  // doit rebinder dans les deux chemins de reprise.
+  // Headless Chromium ignores leaving the capture through the keyboard: the test
+  // releases the pointer through the DOM API that Escape also triggers, and the app
+  // must rebind in both resume paths.
   await page.getByRole('button', { name: 'Entrer dans la visite' }).click();
   await page.locator('#capture-mouse').click();
   await expect.poll(locked).toBe(true);
   await page.evaluate(() => document.exitPointerLock());
   await expect.poll(locked).toBe(false);
-  // Un clic dans la vue reprend la capture — rien ne se passait auparavant.
+  // A click in the view resumes the capture — nothing happened before.
   await page.locator('#scene').click({ position: { x: 640, y: 360 } });
   await expect.poll(locked, { timeout: 5_000 }).toBe(true);
-  // Le bouton « Reprendre la visite » rebinde aussi un second aller-retour.
+  // The « Reprendre la visite » button also rebinds a second round trip.
   await page.evaluate(() => document.exitPointerLock());
   await expect.poll(locked).toBe(false);
   await page.locator('#resume-walk').click();

@@ -1,21 +1,21 @@
-# Maison — Atelier 3D
+# Maison — Atelier 3D (MyBob)
 
-Application de visite de maisons en 3D pour ordinateur, réalisée avec **Babylon.js 9**, TypeScript et Vite. Le moteur est indépendant des projets : un plan importé et le studio fictif utilisent exactement le même code.
+3D house walkthrough application for desktop, built with **Babylon.js 9**, TypeScript and Vite. The engine is independent of the projects: an imported plan and the fictitious studio use exactly the same code. The interface is in French; code, documentation and tooling are in English.
 
-## Reprise avec un nouvel agent
+## Picking up with a new agent
 
-Lire [AGENTS.md](AGENTS.md), puis [la carte du code](docs/ARCHITECTURE.md) et [le skill de maintenance](.agents/skills/mybob-maintenance/SKILL.md). **Exporter son projet depuis le navigateur actuel avant de passer en local** : le dépôt ne contient pas l’aménagement sauvegardé dans ce navigateur.
+Read [AGENTS.md](AGENTS.md), then [the code map](docs/ARCHITECTURE.md) and [the maintenance skill](.agents/skills/mybob-maintenance/SKILL.md). **Export your project from the current browser before switching to local**: the repository does not contain the arrangement saved in that browser.
 
-## Démarrer
+## Getting started
 
-Node.js 24 et pnpm 12.15.0.
+Node.js 24 and pnpm 12.15.0.
 
 ```sh
 pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
-Ouvrir l’adresse indiquée par Vite. Par défaut, seul le studio de démonstration est embarqué ; importer sa maison localement. `npm run dev:private` charge un plan personnel local. L’application rend en WebGL 2 ; l’accélération graphique du navigateur reste nécessaire. Aucun compte ni serveur de données n’est nécessaire en local.
+Open the address printed by Vite. By default only the demonstration studio is bundled; import your house locally. `npm run dev:private` loads a local personal plan. The application renders with WebGL 2; browser graphics acceleration is required. No account nor data server is needed locally.
 
 ```sh
 npm test
@@ -23,58 +23,60 @@ npm run build
 npm run format:check
 ```
 
-Le dossier `dist/` contient la version statique déployable. Les dépendances et les données de maison sont intégrées ou servies localement ; Google Fonts est facultatif et possède des polices de repli système.
+The `dist/` folder contains the deployable static version. Dependencies and house data are bundled or served locally; Google Fonts is optional and has system fallback fonts.
 
-Tests navigateur automatisés : `pnpm exec playwright install chromium`, puis `pnpm run test:e2e`. Voir [le guide E2E](docs/E2E.md).
+Automated browser tests: `pnpm exec playwright install chromium`, then `pnpm run test:e2e`. See [the E2E guide](docs/E2E.md).
 
-Le build normal est **public et limité à la démonstration**. La commande `npm run ci` exécute tous les contrôles et vérifie qu’aucun plan personnel n’est présent dans l’artefact. Configuration Cloudflare Pages et GitHub Actions : [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+The normal build is **public and limited to the demonstration**. `npm run ci` runs every check and verifies that no personal plan is present in the artefact. Cloudflare Pages and GitHub Actions configuration: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
-La V2 ajoute le terrain et la toiture paramétrables, une navigation réglable et un éclairage avec tone mapping. Le bouton Soleil ajoute un aperçu selon la commune, le nord du plan, la date et l’heure locale ; la vue Plan reste neutre. Détails et limites : [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/EXTERIOR.md](docs/EXTERIOR.md).
+V2 adds a configurable terrain and roof, adjustable navigation and tone-mapped lighting. The Soleil button adds a preview based on the town, the plan's north, the date and the local time; Plan view stays neutral. Details and limits: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/EXTERIOR.md](docs/EXTERIOR.md).
 
-## Utilisation
+## Usage
 
-- **Premiers pas** : au premier lancement, une carte propose de tourner autour de la maison, d’ouvrir le plan ou d’entrer dans la visite. Elle ne bloque rien, reste jusqu’à sa fermeture et reste accessible depuis la barre latérale.
-- **Vue 3D** : glisser avec le bouton gauche pour tourner ; molette pour zoomer ; bouton droit pour déplacer.
-- Le cadrage s’adapte à la fenêtre et réserve une marge pour l’interface. **Recentrer** réaffiche la maison entière après un zoom ou un déplacement.
-- **Extérieur** : si le projet contient un terrain, affiche la parcelle, les façades et la toiture ; la vue 3D garde la toiture ouverte pour aménager.
-- **Plan** : vue orthographique, sélection des pièces et des dimensions extérieures ; glisser pour déplacer, pincer ou utiliser la molette pour zoomer.
-- **Visite** : ZQSD, WASD ou flèches pour marcher, souris pour regarder, Maj pour accélérer, E pour ouvrir ou fermer une porte proche. Échap libère la souris.
-- En cas de refus de capture de souris, cliquer dans la scène et glisser avec le bouton gauche pour regarder.
-- Cliquer sur une pièce dans la liste ou le plan miniature, puis sur **Visiter cette pièce**, pour s’y rendre.
-- **Mesurer** : premier clic sur le sol, aperçu du segment et de sa distance au déplacement, second clic pour confirmer. Alignement automatique près des axes du plan ; Maj force une ligne droite, Alt conserve l’angle libre. Un troisième clic commence une nouvelle mesure ; les mesures confirmées restent affichées et « Effacer les mesures » les retire. Il ne s’agit pas d’un accrochage aux arêtes ni d’une cotation d’exécution.
-- **Actions du meuble** : modifier, tourner, dupliquer, placer contre un mur et retirer sont accessibles dans la barre de sélection. Cliquer ailleurs dans la scène ou appuyer sur Échap désélectionne. Ctrl Z annule la dernière modification même sans sélection ou avec un bouton actif ; les champs de texte et fenêtres d’édition conservent leur comportement natif.
-- Les portes intérieures sont ouvertes au départ. En vue 3D, un clic sur une porte la manipule également.
-- Les projets peuvent être exportés et importés en JSON. Les projets importés sont conservés dans le stockage local du navigateur, sur cet ordinateur. Exporter les fichiers pour les sauvegarder ou les transférer.
-- **Variantes** : dans Meubles, dupliquer et nommer plusieurs aménagements, puis basculer entre eux avec la même caméra ; chaque variante affiche un aperçu en plan du niveau courant. L’export JSON conserve toutes les variantes et tous les niveaux.
-- **Répéter des meubles** : Ctrl C puis Ctrl V copie le meuble sélectionné ; chaque copie est indépendante et annulable. Sur une table, **Chaises** répartit le nombre voulu autour du plateau, avec dimensions réglables et liaison facultative.
-- **Placement précis** : sélectionner plusieurs meubles pour les aligner ou répartir leurs espacements ; activer séparément l’accrochage à une grille réglable ou aux murs pendant le glisser.
-- **Soleil** : après localisation, le panneau dans la scène propose un curseur horaire, Été/Hiver et lever/coucher approximatifs, sans déplacer la caméra. « Animer la journée » déroule l’ensoleillement en 12 secondes ; toute manipulation manuelle l’arrête.
-- **Image** : télécharger un PNG du Plan ou de la 3D sans panneaux, avec noms/surfaces et dimensions facultatifs ; fond transparent et cartouche projet en option.
+Interface names are given in French, as shown in the application.
 
-## Fichiers importants
+- **Premiers pas**: on first launch, a card offers to orbit around the house, open the plan or enter the walk. It blocks nothing, stays until closed and remains reachable from the sidebar.
+- **Vue 3D**: drag with the left button to rotate; wheel to zoom; right button to pan.
+- Framing adapts to the window and keeps a margin for the interface. **Recentrer** shows the whole house again after a zoom or a pan.
+- **Extérieur**: if the project contains a terrain, shows the plot, façades and roof; the 3D view keeps the roof open for arranging.
+- **Plan**: orthographic view, selection of rooms and exterior dimensions; drag to pan, pinch or use the wheel to zoom.
+- **Visite**: ZQSD, WASD or arrows to walk, mouse to look, Shift to speed up, E to open or close a nearby door. Escape releases the mouse.
+- If mouse capture is refused, click in the scene and drag with the left button to look.
+- Click a room in the list or the mini-map, then **Visiter cette pièce**, to go there.
+- **Mesurer**: first click on the floor, preview of the segment and its distance while moving, second click to confirm. Automatic alignment near the plan axes; Shift forces a straight line, Alt keeps a free angle. A third click starts a new measurement; confirmed measurements stay displayed and « Effacer les mesures » removes them. This is neither edge snapping nor construction dimensioning.
+- **Furniture actions**: edit, rotate, duplicate, place against a wall and remove are available in the selection bar. Clicking elsewhere in the scene or pressing Escape deselects. Ctrl Z undoes the last change even with no selection or with a button focused; text fields and edit dialogs keep their native behaviour.
+- Interior doors are open at start. In 3D view, clicking a door also operates it.
+- Projects can be exported and imported as JSON. Imported projects are kept in the browser's local storage, on this computer. Export the files to back them up or transfer them.
+- **Variantes**: in Meubles, duplicate and name several arrangements, then switch between them with the same camera; each variant shows a plan preview of the current level. The JSON export keeps every variant and every level.
+- **Repeating furniture**: Ctrl C then Ctrl V copies the selected piece; each copy is independent and undoable. On a table, **Chaises** distributes the requested number around the top, with adjustable dimensions and optional linking.
+- **Precise placement**: select several pieces to align them or distribute their spacing; separately enable snapping to an adjustable grid or to walls while dragging.
+- **Soleil**: after locating, the panel in the scene offers a time slider, Été/Hiver and approximate sunrise/sunset, without moving the camera. « Animer la journée » plays the day's sunlight in 12 seconds; any manual action stops it.
+- **Image**: download a PNG of Plan or 3D without panels, with optional names/areas and dimensions; transparent background and project title block as options.
 
-La carte complète des modules est dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). Les seuls
-chemins à connaître avant de lire le code :
+## Important files
+
+The full module map is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md). The only paths to know
+before reading the code:
 
 ```text
-public/projects/private-*.json  Plans personnels locaux (git-ignorés, jamais commités)
-public/projects/studio-demo.json Démonstration publique
-public/projects/maison-atelier.json Gabarit synthétique des tests, aucune donnée personnelle
-docs/PROJECT-FORMAT.md          Format des projets, pour ajouter une autre maison
+public/projects/private-*.json      Local personal plans (git-ignored, never committed)
+public/projects/studio-demo.json    Public demonstration
+public/projects/maison-atelier.json Synthetic test template, no personal data
+docs/PROJECT-FORMAT.md              Project format, to add another house
 ```
 
-## Périmètre de cette version
+## Scope of this version
 
-Niveaux multiples, visite, portes, plan, mesures et projets multiples. L’atelier permet maintenant d’ajouter des meubles paramétriques cotés, de les déplacer, de vérifier leurs espaces et de sauvegarder/exporter l’aménagement. Les canapés peuvent avoir un angle ou une méridienne, les téléviseurs une hauteur de pose, et les meubles sont contrôlés contre les murs. L’ajout se fait par dimensions ; les anciennes options photo et lien marchand ont été retirées. Voir [docs/FURNITURE.md](docs/FURNITURE.md). Le terrain et l’enveloppe extérieure sont inclus ; l’aménagement des combles reste hors périmètre.
+Multiple levels, walk, doors, plan, measurements and multiple projects. The workshop now adds dimensioned parametric furniture, moves it, checks its clearances and saves/exports the arrangement. Sofas may have a corner or chaise longue, televisions a mounting height, and furniture is checked against walls. Adding goes by dimensions; the old photo and merchant-link options were removed. See [docs/FURNITURE.md](docs/FURNITURE.md). Terrain and the exterior envelope are included; fitting out the attic stays out of scope.
 
-**Un projet importé n’est pas un relevé exact de l’existant.** Les cotes viennent du document de référence, mais les raccords entre pièces et murs restent à confirmer projet par projet. Les surfaces annoncées au plan et celles calculées sur les contours du modèle sont affichées séparément.
+**An imported project is not an exact survey of the existing building.** Dimensions come from the reference document, but the joins between rooms and walls remain to be confirmed project by project. Areas stated on the plan and areas computed from the model's outlines are shown separately.
 
-Aucun plan ni photo personnel n’est inclus dans les sources ni dans le site. Le build Cloudflare Pages embarque seulement la démonstration ; un projet personnel est importé et conservé localement dans le navigateur.
+No personal plan or photo is included in the sources nor on the site. The Cloudflare Pages build only bundles the demonstration; a personal project is imported and kept locally in the browser.
 
-Le téléphone permet de consulter la vue 3D et le plan en pleine largeur, avec un panneau des pièces repliable. La visite en déplacement reste destinée à l’ordinateur avec clavier et souris. Les textes, le focus et les dialogues ont été repris lors de la revue d’accessibilité.
+A phone can view the 3D view and the plan at full width, with a collapsible rooms panel. Walking stays intended for a computer with keyboard and mouse. Texts, focus and dialogs were reworked during the accessibility review.
 
-## Extensions prévues
+## Planned extensions
 
-Le mobilier forme une collection indépendante, liée au projet et au niveau, avec identifiants, dimensions en mètres et transformations. Le rendu, les contrôles de placement, l’historique et les sauvegardes sont isolés dans `src/furniture/`. Un futur test de livraison complet nécessiterait une simulation du trajet et des rotations ; le module théorique de passage debout reste dans le code, mais n’est plus exposé comme alerte de placement.
+Furniture is an independent collection, tied to the project and the level, with identifiers, dimensions in metres and transforms. Rendering, placement checks, history and saves are isolated in `src/furniture/`. A future full delivery test would need a simulation of the path and rotations; the theoretical standing-passage module stays in the code, but is no longer exposed as a placement warning.
 
-Les identifiants sont stables et le format porte `schemaVersion: 1`, afin de permettre des migrations ultérieures. Aucun outil d’analyse automatique de PDF n’est inclus.
+Identifiers are stable and the format carries `schemaVersion: 1`, to allow later migrations. No automatic PDF analysis tool is included in the application.

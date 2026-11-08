@@ -37,7 +37,7 @@ const level = (rooms: Room[]): Level => ({
   spawn: { position: [2, 1.5], yaw: 0 },
 });
 
-test('la surface habitable est annoncée au plan quand les pièces déclarent planArea', () => {
+test('the living area is the plan’s stated one when rooms declare planArea', () => {
   const html = roomSummaryHtml(level([room('sejour', 'living', 12)]), {
     areasFromPlan: true,
     icon,
@@ -45,7 +45,7 @@ test('la surface habitable est annoncée au plan quand les pièces déclarent pl
   assert.match(html, /<strong>12,00<\/strong><span>m² habitables au plan/);
 });
 
-test('la surface habitable reste calculée sans planArea', () => {
+test('the living area stays computed without planArea', () => {
   const html = roomSummaryHtml(level([room('sejour', 'living')]), {
     areasFromPlan: false,
     icon,
@@ -54,7 +54,7 @@ test('la surface habitable reste calculée sans planArea', () => {
   assert.doesNotMatch(html, /au plan/);
 });
 
-test('le garage est isolé du total habitable', () => {
+test('the garage is kept out of the living total', () => {
   const html = roomSummaryHtml(
     level([room('sejour', 'living', 12), room('garage', 'garage', 18)]),
     { areasFromPlan: true, icon },

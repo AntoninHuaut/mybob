@@ -43,14 +43,14 @@ const project = (rooms: Room[], withSite = false): HouseProject => ({
   ...(withSite ? { site: { boundary: outline, elevation: 0, notes: ['Note du terrain'] } } : {}),
 });
 
-test('l’écart compare la surface reconstruite à celle annoncée au plan', () => {
+test('the gap compares the reconstructed area with the one stated on the plan', () => {
   assert.equal(areaGap(room('sans-plan')), undefined);
   assert.equal(areaGap(room('egal', 12)), 0);
   assert.equal(areaGap(room('plus-petit', 12.5)), -0.5);
   assert.equal(areaGap(room('plus-grand', 11.5)), 0.5);
 });
 
-test('un écart dans la tolérance s’annonce « équivalent » plutôt qu’un chiffre bruité', () => {
+test('a gap within tolerance reads « équivalent » rather than a noisy figure', () => {
   assert.equal(gapLabel(undefined), '—');
   assert.equal(gapLabel(0), 'équivalent');
   assert.equal(gapLabel(0.1), 'équivalent');
@@ -59,7 +59,7 @@ test('un écart dans la tolérance s’annonce « équivalent » plutôt qu’un
   assert.equal(gapLabel(-0.12), '−0,12 m²');
 });
 
-test('les surfaces passent avant les notes du document', () => {
+test('areas come before the document notes', () => {
   const html = sourceDialogHtml(project([room('Espace de vie', 12)]), [room('Espace de vie', 12)]);
   const table = html.indexOf('area-table');
   const notes = html.indexOf('Ce que dit le document');
@@ -67,7 +67,7 @@ test('les surfaces passent avant les notes du document', () => {
   assert.ok(table < notes, 'la table des surfaces précède les notes');
 });
 
-test('la colonne Écart apparaît dès qu’une pièce annonce sa surface au plan', () => {
+test('the Écart column appears as soon as a room states its area on the plan', () => {
   const compared = sourceDialogHtml(project([room('Espace de vie', 12)]), [
     room('Espace de vie', 12),
   ]);
@@ -80,12 +80,12 @@ test('la colonne Écart apparaît dès qu’une pièce annonce sa surface au pla
   assert.match(bare, /n’annonce pas de surface au plan/);
 });
 
-test('un écart significatif est signalé dans sa cellule', () => {
+test('a significant gap is flagged in its cell', () => {
   const html = sourceDialogHtml(project([room('Salle d’eau', 11.5)]), [room('Salle d’eau', 11.5)]);
   assert.match(html, /class="area-gap differs">\+0,50 m²/);
 });
 
-test('le terrain n’apparaît que si le projet en déclare un', () => {
+test('the terrain only appears if the project declares one', () => {
   const rooms = [room('Espace de vie', 12)];
   assert.doesNotMatch(sourceDialogHtml(project(rooms), rooms), /Terrain et extérieur/);
   assert.match(sourceDialogHtml(project(rooms, true), rooms), /Terrain et extérieur/);

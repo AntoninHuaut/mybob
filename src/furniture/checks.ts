@@ -260,11 +260,11 @@ function raySegment(from: Point2, direction: Point2, a: Point2, b: Point2): numb
 }
 
 /** Distances from the four face centres, not a claim of minimum walking clearance. */
-/** Distance maximale à un voisin pour afficher une cote (hors murs et hors ensemble lié). */
+/** Maximum distance to a neighbour for showing a dimension (excluding walls and the linked set). */
 export const NEIGHBOR_GAP_RANGE = 1;
-/** Nombre maximal de voisins cotés simultanément autour de la sélection. */
+/** Maximum number of neighbours dimensioned at once around the selection. */
 export const NEIGHBOR_GAP_LIMIT = 3;
-/** En dessous de cet écart, les cotes sont considérées « au contact » et masquées. */
+/** Below this gap, dimensions are considered "touching" and hidden. */
 export const GAP_DISPLAY_EPS = 0.02;
 
 const pointOnSegment = (point: Point2, from: Point2, to: Point2): Point2 => {
@@ -279,7 +279,7 @@ const pointOnSegment = (point: Point2, from: Point2, to: Point2): Point2 => {
   return [from[0] + dx * t, from[1] + dz * t];
 };
 
-/** Paire de points les plus proches sur deux segments (croisement exclu en amont). */
+/** Closest pair of points on two segments (crossing ruled out upstream). */
 function closestSegmentPoints(a1: Point2, a2: Point2, b1: Point2, b2: Point2) {
   const pairs: [Point2, Point2][] = [
     [[...a1] as Point2, pointOnSegment(a1, b1, b2)],
@@ -295,7 +295,7 @@ function closestSegmentPoints(a1: Point2, a2: Point2, b1: Point2, b2: Point2) {
   return best!;
 }
 
-/** Écart réel entre deux(ensembles de) empreintes : points les plus proches, 0 si chevauchement. */
+/** Real gap between two (sets of) footprints: closest points, 0 when overlapping. */
 function footprintGap(
   a: FurnitureItem,
   b: FurnitureItem,
@@ -346,8 +346,8 @@ export function furnitureDistances(
       direction: [Math.cos(item.rotation), -Math.sin(item.rotation)],
     },
   ];
-  // Un ensemble lié (table + chaises) se déplace comme un bloc : ses distances
-  // internes ne servent ni d'obstacle ni de cote.
+  // A linked set (table + chairs) moves as one block: its internal distances
+  // serve neither as obstacles nor as dimensions.
   const ensemble = new Set(
     items
       .filter((other) => item.groupId !== undefined && other.groupId === item.groupId)

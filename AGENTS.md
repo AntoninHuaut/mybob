@@ -8,7 +8,7 @@
 3. The one doc for the area you touch: [PROJECT-FORMAT](docs/PROJECT-FORMAT.md),
    [FURNITURE](docs/FURNITURE.md), [EXTERIOR](docs/EXTERIOR.md),
    [UI-REFINEMENT](docs/UI-REFINEMENT.md), [DEPLOYMENT](docs/DEPLOYMENT.md),
-   [E2E](docs/E2E.md), [IDENTITE-MYBOB](docs/IDENTITE-MYBOB.md).
+   [E2E](docs/E2E.md), [BRAND](docs/BRAND.md).
 4. Then only the files that map names. Do not re-read all of `src/` to "get oriented": the map
    exists so you don't have to. If it is wrong or silent about what you needed, fix the map in
    the same change.
@@ -31,7 +31,12 @@ These files replace reliance on any previous chat context.
 
 ## Product and privacy
 
-- French UI; desktop keyboard/mouse is the primary target. Babylon.js + TypeScript + Vite,
+- Language: the web application's user-facing text (UI labels, messages, validation errors
+  shown to the user, bundled project names) is French. Everything else is English: code,
+  identifiers, comments, tests and test titles, scripts and their output, documentation,
+  skills, commits, PRs and issues. Exceptions kept on purpose: the CI job names (the required
+  check is matched by name) and `maison-atelier:` storage keys.
+- Desktop keyboard/mouse is the primary target. Babylon.js + TypeScript + Vite,
   modular JSON projects and parametric furniture, metres internally.
 - Keep the application adaptable to other houses. Never hardcode the owner's house dimensions
   or identifiers into scene/UI logic.
@@ -93,9 +98,9 @@ orphaned `vite preview` is simply ignored because the suite picks a different po
 
 All changes must go through a pull request (MR) to `main`. Do not commit or push changes
 directly to `main`. Branch names are `<type>/<kebab-case-slug>`, using the Conventional Commit
-types below (`feat/visite-eclairage`, `fix/porte-garage`). Commit messages follow
+types below (`feat/walk-lighting`, `fix/garage-door`). Commit messages follow
 [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`,
-description in French like the rest of the project, imperative present, no trailing period.
+description in English, imperative mood, no trailing period.
 Types: `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `chore`, `build`, `ci`. Add `!` after
 the type or scope for a breaking change. A local test pass is not a substitute for the remote
 CI. Never merge while any required check is pending, failed, cancelled or missing; verify the

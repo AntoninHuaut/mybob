@@ -115,9 +115,9 @@ let draggingFurniture = false;
 let overlays: FurnitureOverlays = { distances: true, clearances: false, openings: false };
 let syncingViewerMode = false;
 let onboarding: OnboardingState = parseOnboarding(null);
-// Lien de partage : un projet reçu par #p1: vit en mémoire uniquement, lecture seule
-// jusqu'à « Ajouter à mes projets ». Le hash est réécrit (debounce) pour tout projet
-// possédé, jamais pour un projet reçu — son lien reste celui qui a été partagé.
+// Share link: a project received through #p1: lives in memory only, read-only
+// until « Ajouter à mes projets ». The hash is rewritten (debounced) for every owned
+// project, never for a received one — its link stays the one that was shared.
 let readOnlyLink = false;
 let receivedShare: DecodedShareLink | undefined;
 let linkHashTimer: ReturnType<typeof setTimeout>;
@@ -157,8 +157,8 @@ function saveOnboarding(next: OnboardingState) {
 }
 
 /**
- * La carte ne bloque rien et ne disparaît que sur sa croix : un clic dans la scène est une
- * exploration, pas une réponse. Les trois actions la laissent ouverte pour les essayer à la suite.
+ * The card blocks nothing and only disappears with its close button: a click in the scene is
+ * exploration, not an answer. The three actions leave it open so they can be tried in a row.
  */
 function dismissStartCard() {
   const card = el('#start-card');
@@ -192,7 +192,7 @@ function setLayoutStatus(message = 'Aménagement sauvegardé sur cet ordinateur'
 
 let projectsStale = false;
 
-/** Un autre onglet a écrit : cet onglet ne sauvegarde plus rien tant qu'il n'est pas rechargé. */
+/** Another tab has written: this tab no longer saves anything until it is reloaded. */
 function showStaleBanner() {
   if (document.querySelector('#stale-banner')) return;
   const banner = document.createElement('div');
@@ -211,7 +211,7 @@ function showStaleBanner() {
   setLayoutStatus('Modifié dans un autre onglet · rechargez la page', true);
 }
 
-/** Des projets locaux n'ont pas pu être ouverts : ils sont conservés, et exportables en un clic. */
+/** Some local projects could not be opened: they are kept, and exportable in one click. */
 function showQuarantineBanner(count: number) {
   const banner = document.createElement('div');
   banner.id = 'quarantine-banner';
@@ -244,7 +244,7 @@ function showQuarantineBanner(count: number) {
   document.body.prepend(banner);
 }
 
-/** Refuse d'écraser la liste des projets si un autre onglet l'a réécrite depuis notre lecture. */
+/** Refuses to overwrite the project list if another tab rewrote it since our read. */
 function assertProjectsUnchanged() {
   if (projectsStale || localStorage.getItem(STORAGE) !== projectsRaw) {
     projectsStale = true;
@@ -295,7 +295,7 @@ function syncFurniture(save = true) {
   if (save) persistFurniture();
 }
 
-/** Un autre onglet a écrit ce projet : plus aucune modification ici, brouillon de popup compris. */
+/** Another tab has written this project: no more changes here, popup draft included. */
 function furnitureStale(): boolean {
   if (!current || !layoutSession.isStale(current.id)) return false;
   toast(STALE_MESSAGE);
@@ -747,9 +747,9 @@ function renderProjectOptions() {
 }
 
 function loadProject(id: string, levelId?: string, override?: HouseProject) {
-  // Un projet reçu par lien ne figure pas dans `projects` : le recharger par son identifiant
-  // (changement de niveau) doit garder son document et sa lecture seule, au lieu de retomber
-  // sur la démonstration.
+  // A project received by link is not in `projects`: reloading it by its identifier
+  // (level change) must keep its document and its read-only state, instead of falling back
+  // to the demonstration.
   const received = override ?? (readOnlyLink && current?.id === id ? current : undefined);
   const p = received ?? projects.find((p) => p.id === id) ?? projects[0];
   if (!p) return;
@@ -783,8 +783,8 @@ function loadProject(id: string, levelId?: string, override?: HouseProject) {
   );
   const projectSelect = el<HTMLSelectElement>('#project-select');
   if (received) {
-    // Le projet reçu n'est pas dans la liste : une entrée dédiée, retirée au prochain
-    // chargement normal par renderProjectOptions.
+    // The received project is not in the list: a dedicated entry, removed on the next
+    // normal load by renderProjectOptions.
     if (!projectSelect.querySelector(`option[value="${CSS.escape(p.id)}"]`)) {
       const option = document.createElement('option');
       option.value = p.id;
@@ -974,7 +974,7 @@ function openDialog(title: string, content: string) {
   el<HTMLDialogElement>('#info-dialog').showModal();
 }
 
-/** Aide courte par défaut ; le texte détaillé reste à un clic, sans rien retirer. */
+/** Short help by default; the detailed text stays one click away, nothing removed. */
 function openFirstSteps() {
   openDialog('PRENDRE EN MAIN L’ATELIER', shortHelpHtml());
   el('#show-full-help').addEventListener('click', () => {
@@ -983,9 +983,9 @@ function openFirstSteps() {
 }
 
 /**
- * Le document d'état courant, dans la forme d'un export complet : projet, aménagement
- * effectif de chaque niveau et toutes les variantes. C'est ce que porte le lien et
- * ce que télécharge « Exporter » — jamais la caméra ni les préférences de navigation.
+ * The current state document, in the shape of a complete export: project, effective
+ * arrangement of every level and all the variants. It is what the link carries and
+ * what « Exporter » downloads — never the camera nor the navigation preferences.
  */
 function currentDocument(): ShareDocument {
   return {
@@ -1006,7 +1006,7 @@ function currentDocument(): ShareDocument {
   };
 }
 
-/** L'état enregistré d'un projet possédé, sans passer par la vue : base de la comparaison au démarrage. */
+/** The saved state of an owned project, without going through the view: basis of the start-up comparison. */
 function storedDocumentFor(project: HouseProject): ShareDocument {
   try {
     layoutSession.register(
@@ -1025,8 +1025,8 @@ function storedDocumentFor(project: HouseProject): ShareDocument {
       },
     };
   } catch {
-    // Aménagement illisible : la comparaison se fera sur le projet seul, le lien
-    // sera déclaré divergent plutôt qu'accepté silencieusement.
+    // Unreadable arrangement: the comparison will be on the project alone, the link
+    // will be declared divergent rather than silently accepted.
     return { ...project, solar: solarPanel.settingsFor(project) };
   }
 }
@@ -1050,7 +1050,7 @@ function downloadProject() {
 }
 
 /* ---------------------------------------------------------------------------------------------- */
-/* Écriture du hash : l'URL est une photographie de l'état, mise à jour après chaque modification  */
+/* Writing the hash: the URL is a snapshot of the state, updated after every change               */
 /* ---------------------------------------------------------------------------------------------- */
 
 function scheduleLinkHashUpdate() {
@@ -1060,9 +1060,9 @@ function scheduleLinkHashUpdate() {
 }
 
 /**
- * Écrit l'état courant dans le hash via `history.replaceState` — jamais `location.hash`,
- * qui empilerait l'historique de navigation à chaque déplacement de meuble. Un échec
- * silencieux de replaceState (quota, sandbox) est réessayé au prochain pointerup.
+ * Writes the current state into the hash via `history.replaceState` — never `location.hash`,
+ * which would stack navigation history on every furniture move. A silent
+ * replaceState failure (quota, sandbox) is retried on the next pointerup.
  */
 async function writeLinkHash() {
   clearTimeout(linkHashTimer);
@@ -1072,7 +1072,7 @@ async function writeLinkHash() {
   try {
     hash = await encodeShareLinkHash(currentDocument());
   } catch {
-    return; // État incorruptible : l'export JSON reste la sortie de secours.
+    return; // Incorruptible state: the JSON export stays the way out.
   }
   desiredLinkHash = hash;
   try {
@@ -1082,21 +1082,21 @@ async function writeLinkHash() {
     return;
   }
   linkHashPending = false;
-  // Mémoire écrite seulement une fois l'URL publiée : si replaceState échoue ou si l'onglet
-  // disparaît entre-temps, l'URL garde un hash ancien et la mémoire ne doit pas le devancer,
-  // sinon un rechargement prendrait son propre hash périmé pour un lien étranger.
+  // Memory written only once the URL is published: if replaceState fails or if the tab
+  // disappears in between, the URL keeps an old hash and the memory must not run ahead of it,
+  // otherwise a reload would take its own stale hash for a foreign link.
   try {
     sessionStorage.setItem(LINK_HASH_MEMORY, hash);
   } catch {
-    /* Sans ce souvenir, un hash périmé pourrait être pris pour un vieux lien. */
+    /* Without this memory, a stale hash could be taken for an old link. */
   }
 }
 
 /**
- * En quittant la page, une écriture du hash en attente ne partira jamais (le deflate est
- * asynchrone) : l'URL restée sur place décrirait un état périmé, et un rechargement la
- * prendrait pour un vieux lien. Le hash est retiré synchronement — l'état d'un projet
- * possédé vit dans le stockage local, et la prochaine modification réécrira le hash.
+ * When leaving the page, a pending hash write will never go out (deflate is
+ * asynchronous): the URL left in place would describe a stale state, and a reload would
+ * take it for an old link. The hash is removed synchronously — an owned project's state
+ * lives in local storage, and the next change will rewrite the hash.
  */
 function wireLinkHashFlush() {
   const dropStaleHash = () => {
@@ -1106,7 +1106,7 @@ function wireLinkHashFlush() {
     try {
       history.replaceState(null, '', location.pathname + location.search);
     } catch {
-      /* Le hash périmé reste : sans suite, il n'est jamais relu qu'au chargement. */
+      /* The stale hash stays: with no follow-up, it is only ever read back on load. */
     }
   };
   window.addEventListener('pagehide', dropStaleHash);
@@ -1152,9 +1152,9 @@ type ProjectDocument = {
 };
 
 /**
- * Valide un projet d'export complet (fichier ou lien) et sépare l'aménagement en attente
- * d'installation. Ne modifie pas l'objet reçu : le document d'un lien reste intact pour
- * une adoption ultérieure.
+ * Validates a complete export project (file or link) and separates the arrangement awaiting
+ * installation. Does not modify the received object: a link's document stays intact for
+ * a later adoption.
  */
 function readProjectDocument(input: unknown): ProjectDocument {
   const project = validateProject(structuredClone(input)) as HouseProject & {
@@ -1190,7 +1190,7 @@ function purgeProjectData(project: HouseProject) {
     try {
       localStorage.removeItem(key);
     } catch {
-      /* Données orphelines sans conséquence : le projet n'est plus listé. */
+      /* Orphan data with no consequence: the project is no longer listed. */
     }
   }
   layoutSession.forgetProject(project.id);
@@ -1198,10 +1198,10 @@ function purgeProjectData(project: HouseProject) {
 }
 
 /**
- * Installe un projet validé dans ce navigateur : sauvegarde locale, variantes, puis
- * chargement. `confirmed` court-circuite la demande de remplacement (choix déjà posé
- * par le dialogue de divergence ou l'adoption d'un projet reçu). Repli sur l'état
- * précédent si l'affichage échoue.
+ * Installs a validated project in this browser: local save, variants, then
+ * loading. `confirmed` skips the replacement prompt (choice already made
+ * by the divergence dialog or the adoption of a received project). Falls back to the
+ * previous state if display fails.
  */
 async function installProjectDocument(
   incoming: ProjectDocument,
@@ -1241,8 +1241,8 @@ async function installProjectDocument(
   let next = [...imported.filter((p) => p.id !== project.id), project];
   let replaced: HouseProject | undefined;
   if (next.length > MAX_IMPORTED) {
-    // Limite atteinte : on propose de remplacer un projet plutôt que d'échouer. Rien n'est
-    // supprimé avant que l'installation du nouveau n'ait réussi.
+    // Limit reached: offer to replace a project rather than failing. Nothing is
+    // deleted before the new one has been installed successfully.
     const choice = await chooseProjectToReplace(
       imported.filter((p) => p.id !== project.id).map(({ id, name }) => ({ id, name })),
       MAX_IMPORTED,
@@ -1305,30 +1305,30 @@ async function importProject(file: File) {
 }
 
 /* ---------------------------------------------------------------------------------------------- */
-/* Lecture d'un lien de partage : propriétaire (comparaison) ou destinataire (lecture seule)       */
+/* Reading a share link: owner (comparison) or recipient (read-only)                              */
 /* ---------------------------------------------------------------------------------------------- */
 
 /**
- * Un lien #p1: ouvert au démarrage. Pour le propriétaire du projet : identique = silence,
- * différent = trois issues (remplacer, garder les deux, ignorer) — jamais de perte
- * silencieuse. Pour un visiteur : le projet vit en mémoire seule, en lecture seule,
- * jusqu'à « Ajouter à mes projets ».
+ * A #p1: link opened at start-up. For the project's owner: identical = silence,
+ * different = three outcomes (replace, keep both, ignore) — never a silent
+ * loss. For a visitor: the project lives in memory only, read-only,
+ * until « Ajouter à mes projets ».
  */
 async function openSharedLink(fallbackId: string) {
-  // Reprise d'onglet : une écriture du hash interrompue par un rechargement laisse dans
-  // l'URL un hash périmé. S'il est le dernier écrit par cet onglet, ce n'est pas un lien
-  // partageable : l'état local (plus récent) est chargé sans dialogue.
+  // Tab resume: a hash write interrupted by a reload leaves a stale hash in
+  // the URL. If it is the last one written by this tab, it is not a shareable
+  // link: the (more recent) local state is loaded without a dialog.
   let ownLastHash: string | null = null;
   try {
     ownLastHash = sessionStorage.getItem(LINK_HASH_MEMORY);
   } catch {
-    /* Sans mémoire, le dialogue jugera normalement. */
+    /* Without memory, the dialog will judge normally. */
   }
   if (ownLastHash !== null && ownLastHash === location.hash) {
     try {
       history.replaceState(null, '', location.pathname + location.search);
     } catch {
-      /* Sans conséquence : rechargé, le hash sera reconnu de nouveau. */
+      /* No consequence: once reloaded, the hash will be recognised again. */
     }
     loadProject(fallbackId);
     return;
@@ -1359,10 +1359,10 @@ async function openSharedLink(fallbackId: string) {
   } else if (choice === 'copy') {
     await adoptReceived(link.document);
   }
-  // 'ignore' : le projet local reste affiché ; le hash reprendra l'état courant.
+  // 'ignore': the local project stays displayed; the hash will catch up with the current state.
 }
 
-/** Le projet du lien n'existe pas ici : ouverture en mémoire seule, sans toucher au localStorage. */
+/** The link's project does not exist here: opened in memory only, without touching localStorage. */
 function openReceivedShare(link: DecodedShareLink, fallbackId: string) {
   try {
     const { project, staged, variants } = readProjectDocument(link.document);
@@ -1389,15 +1389,15 @@ function openReceivedShare(link: DecodedShareLink, fallbackId: string) {
   }
 }
 
-/** « Ajouter à mes projets » : copie du projet reçu sous un nouvel identifiant, puis installation normale. */
+/** « Ajouter à mes projets »: copy of the received project under a new identifier, then normal installation. */
 async function adoptReceived(source: ShareDocument) {
   const fork: ShareDocument = {
     ...source,
     id: `${source.id}-${crypto.randomUUID().slice(0, 8)}`,
   };
   if (await installProjectDocument(readProjectDocument(fork))) {
-    // Le lien partagé ne doit plus survivre à un rechargement : il est retiré tout de
-    // suite, l'écriture différée réinscrira l'état du projet possédé.
+    // The shared link must no longer survive a reload: it is removed right
+    // away, the deferred write will re-record the owned project's state.
     history.replaceState(null, '', location.pathname + location.search);
     toast('Projet ajouté à vos projets : il est maintenant modifiable.');
   }
@@ -1575,7 +1575,7 @@ function wireNavigationControls() {
 }
 
 function wireKeyboardShortcuts() {
-  // L'aimantation se suspend en maintenant Alt pendant le glisser ; sans effet ailleurs.
+  // Snapping is suspended by holding Alt while dragging; no effect elsewhere.
   window.addEventListener('keydown', (event) => {
     if (event.key !== 'Alt') return;
     magnetSuspended = true;
@@ -2116,8 +2116,8 @@ async function start() {
       /* optional persistence */
     }
     if (isShareLink(location.hash)) {
-      // Une erreur du lien (limite de 10 projets, document refusé…) n'est pas une panne du
-      // moteur 3D : message en toast, puis le projet local reste utilisable.
+      // A link error (10-project limit, rejected document…) is not a failure of the
+      // 3D engine: a toast message, then the local project stays usable.
       try {
         await openSharedLink(initial);
       } catch (error) {

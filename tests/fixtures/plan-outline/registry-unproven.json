@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "generatedBy": "tests/fixtures/plan-outline (synthétique)",
-  "note": "Une seule chaîne fermée par axe, sans recoupement : l'étendue n'est pas prouvée et le script doit refuser de dériver un contour. Aucune donnée réelle.",
+  "generatedBy": "tests/fixtures/plan-outline (synthetic)",
+  "note": "A single closed chain per axis, without a cross-check: the extent is not proven and the script must refuse to derive an outline. No real data.",
   "source": { "file": "synthetique", "sha256": "0", "pageCount": 1 },
   "pages": [
     {
