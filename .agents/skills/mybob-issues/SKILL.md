@@ -61,9 +61,12 @@ Les commandes exactes, et ce qu'elles doivent rendre.
 
 ## Anonymisation
 
-Le dépôt est public. Jamais de nom de ville, de constructeur, de lot, de numéro
-de dossier, ni de coordonnée personnelle. Les plans s'appellent **plan A** et
-**plan B**. Les cotes, elles, se citent : ce sont des mesures, pas une identité.
+Le dépôt est public. Jamais de nom de personne, de constructeur, de lot, de
+numéro de dossier, d'adresse, ni de coordonnée personnelle. Une maison se nomme
+par sa commune, comme dans
+[mybob-plan-conversion](../mybob-plan-conversion/SKILL.md) : le propriétaire
+l'autorise. Les deux cas de référence de la conversion gardent leurs noms
+**plan A** et **plan B**. Les cotes, elles, se citent : ce sont des mesures, pas une identité.
 
 Vérifier avant d'envoyer : `gh issue create --body-file` puis relire le rendu.
 Une issue est publique dès sa création, et son historique aussi.
