@@ -429,3 +429,21 @@ test('#116 : vitrage, vantaux, lucarnes et fenêtres de toit survivent à l’al
     ),
   );
 });
+
+test('#116 non-régression : un lien de révision 1 déjà partagé se lit toujours', async () => {
+  // Généré par le packer d'avant la révision 2 (maison-atelier) : ces octets sont figés.
+  const oldHash = readFileSync('tests/fixtures/share-link-v1-maison-atelier.txt', 'utf8').trim();
+  const decoded = await decodeShareLinkHash(oldHash);
+  const original = readPlan(PLANS[0]);
+  validateProject(decoded.document);
+  assert.equal(decoded.document.levels.length, original.levels.length);
+  assert.equal(decoded.document.name, original.name);
+  for (const level of decoded.document.levels)
+    for (const wall of level.walls)
+      for (const opening of wall.openings ?? []) {
+        assert.equal(opening.glazed, undefined);
+        assert.equal(opening.leaves, undefined);
+      }
+  // Comparé à l'état local identique : pas de fausse divergence entre révisions.
+  assert.ok(samePackedState(decoded.packed, packShareDocument(original as ShareDocument)));
+});
