@@ -12,6 +12,8 @@ export interface Opening {
   exterior?: boolean;
   /** A `door` leaf built as a glazed French window instead of a solid slab. */
   glazed?: boolean;
+  /** A `door` that hangs one leaf per jamb, meeting at the middle stile. */
+  leaves?: 1 | 2;
 }
 export interface Wall {
   id: string;

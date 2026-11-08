@@ -1,7 +1,7 @@
 import { Plane } from '@babylonjs/core/Maths/math.plane';
 import type { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
 import type { Level, Point2, ProjectSite, Wall } from '../model/types';
-import { floorElevationAt, pointInPolygon } from '../model/geometry';
+import { bounds, floorElevationAt, pointInPolygon } from '../model/geometry';
 import { ELLIPSOID_HALF_HEIGHT, VISITOR_RADIUS } from './walkCamera';
 import type { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
@@ -150,4 +150,21 @@ export function wallFacesCamera(level: Level, wall: Wall, camera: Point2) {
     nz = -nz;
   }
   return nx * (camera[0] - midpoint[0]) + nz * (camera[1] - midpoint[1]) > 0;
+}
+
+/** A return shorter than this never frames the view: it lowers with its facade. */
+export const RETURN_MAX_LENGTH = 1;
+
+/**
+ * A short return seen edge-on still stands in front of the rooms: the sides of a
+ * recessed entrance, for instance. Lowering it with the facade it extends keeps
+ * the automatic display free of floating wall stubs.
+ */
+export function wallHidesInterior(level: Level, wall: Wall, camera: Point2) {
+  if (Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) > RETURN_MAX_LENGTH)
+    return false;
+  const [cx, cz] = bounds(level.outline).center;
+  const mx = (wall.start[0] + wall.end[0]) / 2 - cx,
+    mz = (wall.start[1] + wall.end[1]) / 2 - cz;
+  return mx * (camera[0] - cx) + mz * (camera[1] - cz) > 0;
 }

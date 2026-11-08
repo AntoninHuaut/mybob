@@ -122,12 +122,69 @@ test('a glazed door swings open like a French window and keeps a glass pane', ()
   const stile = scene.getMeshByName('door-stile:porte-fenetre:0')!;
   const rail = scene.getMeshByName('door-rail:porte-fenetre:1')!;
   assert.ok(pane && stile && rail);
+  assert.ok(
+    !scene.getMeshByName('door-leaf:porte-fenetre'),
+    'a glazed door must not keep the solid slab under its glass',
+  );
+  const opening = scene.getMeshByName('jamb:porte-fenetre:1')!;
+  const paneBox = pane.getBoundingInfo().boundingBox;
+  const jambBox = opening.getBoundingInfo().boundingBox;
+  assert.ok(paneBox.maximumWorld.x < jambBox.maximumWorld.x);
   assert.deepEqual(pane.metadata, { kind: 'door', id: 'porte-fenetre' });
   const closed = door.pivot.rotation.y;
   near(closed, 0);
   door.progress = 1;
   poseDoor(door);
   near(door.pivot.rotation.y, Math.PI / 2);
+  scene.dispose();
+  engine.dispose();
+});
+
+test('a two-leaf French window hangs on both jambs and swings mirrored', () => {
+  const { engine, scene, house } = sceneFor([
+    {
+      id: 'sud',
+      start: [0, 5.85],
+      end: [8, 5.85],
+      thickness: 0.3,
+      exterior: true,
+      openings: [
+        {
+          id: 'porte-fenetre-2',
+          kind: 'door',
+          offset: 2,
+          width: 1.2,
+          height: 2.15,
+          exterior: true,
+          glazed: true,
+          hinge: 'start',
+          swing: 1,
+          leaves: 2,
+        },
+      ],
+    },
+  ]);
+  const door = house.doors.find((d) => d.id === 'porte-fenetre-2')!;
+  assert.ok(door.pivotB, 'a two-leaf door carries a second jamb pivot');
+  const paneA = scene.getMeshByName('door-pane:porte-fenetre-2:0')!;
+  const paneB = scene.getMeshByName('door-pane:porte-fenetre-2:1')!;
+  assert.ok(paneA && paneB, 'each leaf keeps its own glass');
+  assert.ok(
+    !scene.getMeshByName('door-leaf:porte-fenetre-2'),
+    'a glazed two-leaf door must not carry a solid slab',
+  );
+  const boxA = paneA.getBoundingInfo().boundingBox;
+  const boxB = paneB.getBoundingInfo().boundingBox;
+  const jambA = scene.getMeshByName('jamb:porte-fenetre-2:-1')!;
+  const jambB = scene.getMeshByName('jamb:porte-fenetre-2:1')!;
+  // The leaves meet at the middle stile, each inside its half of the opening.
+  assert.ok(boxA.minimumWorld.x >= jambA.getBoundingInfo().boundingBox.maximumWorld.x);
+  assert.ok(boxB.maximumWorld.x <= jambB.getBoundingInfo().boundingBox.minimumWorld.x);
+  near((boxA.maximumWorld.x + boxB.minimumWorld.x) / 2, 2 + 1.2 / 2, 0.05);
+  door.progress = 1;
+  poseDoor(door);
+  near(door.pivot.rotation.y, Math.PI / 2);
+  near(door.pivotB!.rotation.y, -Math.PI / 2, 0.001);
   scene.dispose();
   engine.dispose();
 });

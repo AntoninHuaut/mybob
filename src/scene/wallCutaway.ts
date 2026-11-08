@@ -3,7 +3,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { Material } from '@babylonjs/core/Materials/material';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Level, Point2 } from '../model/types';
-import { wallFacesCamera } from './navigation';
+import { wallFacesCamera, wallHidesInterior } from './navigation';
 import { CAP_TOP_INSET } from './planOpenings';
 
 export type WallDisplay = 'auto' | 'full' | 'low';
@@ -47,7 +47,9 @@ export function buildWallCutaway(scene: Scene, level: Level) {
       for (const { wall, meshes } of groups) {
         const clipped =
           mode === 'low' ||
-          (mode === 'auto' && !!wall.exterior && wallFacesCamera(level, wall, camera));
+          (mode === 'auto' &&
+            !!wall.exterior &&
+            (wallFacesCamera(level, wall, camera) || wallHidesInterior(level, wall, camera)));
         if (clipped) selected.add(wall.id);
         for (const { mesh, shell } of meshes) {
           const original = originals.get(mesh)!;

@@ -201,6 +201,8 @@ export function validateProject(input: unknown): HouseProject {
           fail(`Les portes et portes de garage doivent partir du sol (allège de 0 m) : ${o.id}`);
         if (o.glazed !== undefined && (typeof o.glazed !== 'boolean' || o.kind !== 'door'))
           fail(`Seule une porte battante peut être vitrée : ${o.id}`);
+        if (o.leaves !== undefined && ((o.leaves !== 1 && o.leaves !== 2) || o.kind !== 'door'))
+          fail(`Seule une porte battante peut avoir un ou deux vantaux : ${o.id}`);
         if (!optionalBoolean(o.exterior))
           fail(`Le statut extérieur de l’ouverture doit être un booléen : ${o.id}`);
         if (o.hinge !== undefined && !['start', 'end'].includes(o.hinge))
