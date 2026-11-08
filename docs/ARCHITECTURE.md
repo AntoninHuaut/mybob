@@ -40,6 +40,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Navigation             | `src/scene/navigation.ts`               | Destination de visite, plan de coupe, mur face caméra               |
 | Caméra de visite       | `src/scene/walkCamera.ts`               | Hauteur du regard, rayon visiteur, vitesse, pas                     |
 | Coupe des murs         | `src/scene/wallCutaway.ts`              | `auto` / `full` / `low`, plans de découpe par matériau              |
+| Carte d'ombres         | `src/scene/shadowRefresh.ts`            | Carte du soleil redessinée seulement sur un changement d'ombre      |
 | Ouvertures en plan     | `src/scene/planOpenings.ts`             | Baies et portes dessinées dans la vue Plan, faces de coupe          |
 | Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, TAA, occlusion, bloom (visite, Vue 3D et Extérieur)     |
 | Diagnostic             | `src/scene/diagnostics.ts`              | `mybob.diag()` : moteur, GPU, cadence, résolution, scène            |
