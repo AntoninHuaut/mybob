@@ -38,6 +38,7 @@ export class RenderScheduler {
   private remaining = RENDER_SETTLE_FRAMES;
   private signature = '';
   private lastRender = Number.NEGATIVE_INFINITY;
+  private moved = false;
 
   /** Something on screen changed: render until the image is settled again. */
   request(): void {
@@ -49,7 +50,8 @@ export class RenderScheduler {
    * otherwise settled, so a costly check never runs while images are drawn anyway.
    */
   shouldRender(now: number, signature: string, busy: () => boolean): boolean {
-    if (signature !== this.signature) {
+    this.moved = signature !== this.signature;
+    if (this.moved) {
       this.signature = signature;
       this.remaining = RENDER_SETTLE_FRAMES;
     }
@@ -64,6 +66,11 @@ export class RenderScheduler {
       return true;
     }
     return false;
+  }
+
+  /** The camera signature changed at the last `shouldRender`. */
+  get cameraMoved(): boolean {
+    return this.moved;
   }
 
   /** True while no image is being drawn but the idle refresh. */

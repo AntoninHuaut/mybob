@@ -88,6 +88,17 @@ test('au repos, le rapport dit que l’image est figée au lieu d’une cadence 
   assert.doesNotMatch(lines[2], /fps/);
 });
 
+test('le rapport dit à quelle résolution la vue est rendue en mouvement', () => {
+  assert.match(
+    diagnosticLines(collectDiagnostics(engine(), scene(), view))[4],
+    /en mouvement 100 %/,
+  );
+  const slow = diagnosticLines(
+    collectDiagnostics(engine(), scene(), { ...view, motionScale: 0.67 }),
+  );
+  assert.match(slow[4], /en mouvement 67 %/);
+});
+
 test('un instantané complet reste formattable sans navigateur', () => {
   const snapshot: DiagnosticSnapshot = {
     engine: 'WebGL 2',
