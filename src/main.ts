@@ -2035,8 +2035,21 @@ async function start() {
     } catch {
       /* optional persistence */
     }
-    if (isShareLink(location.hash)) await openSharedLink(initial);
-    else loadProject(initial);
+    if (isShareLink(location.hash)) {
+      // Une erreur du lien (limite de 10 projets, document refusé…) n'est pas une panne du
+      // moteur 3D : message en toast, puis le projet local reste utilisable.
+      try {
+        await openSharedLink(initial);
+      } catch (error) {
+        console.error(error);
+        if (!current) loadProject(initial);
+        toast(
+          error instanceof Error
+            ? error.message
+            : 'Le lien n’a pas pu être ouvert : le projet enregistré sur cet ordinateur est chargé.',
+        );
+      }
+    } else loadProject(initial);
     // Development-only bench: the dynamic import behind `DEV` is what keeps the
     // whole module out of a production build.
     if (import.meta.env.DEV) {
