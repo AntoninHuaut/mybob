@@ -259,7 +259,20 @@ function syncFurniture(save = true) {
   if (save) persistFurniture();
 }
 
+/** Un autre onglet a écrit ce projet : plus aucune modification ici, brouillon de popup compris. */
+function furnitureStale(): boolean {
+  if (!current || !layoutSession.isStale(current.id)) return false;
+  toast(STALE_MESSAGE);
+  return true;
+}
+
 function commitFurniture(items: FurnitureItem[]): boolean {
+  if (furnitureStale()) {
+    previewFurniture = undefined;
+    furnitureLayer?.setItems(furnitureHistory.items);
+    furniturePanel?.render();
+    return false;
+  }
   if (readOnlyLink) {
     previewFurniture = undefined;
     furnitureLayer?.setItems(furnitureHistory.items);
@@ -509,7 +522,11 @@ function mountFurniture() {
           throw new Error('Pas de place sur ce meuble : retirez ou déplacez l’objet déjà présent.');
         const next = [...currentFurniture(), placed];
         if (!commitFurniture(linkedTo ? linkFurniture(next, placed.id, linkedTo) : next))
-          throw new Error('Ce meuble ne peut pas être placé ici. Vérifiez ses dimensions.');
+          throw new Error(
+            layoutSession.isStale(current.id)
+              ? STALE_MESSAGE
+              : 'Ce meuble ne peut pas être placé ici. Vérifiez ses dimensions.',
+          );
         selectFurniture(placed.id);
         if (!matchMedia('(min-width: 761px)').matches) setSidebar(false);
       },
@@ -536,10 +553,10 @@ function mountFurniture() {
       onSelect: selectFurniture,
       onEdit: openFurnitureEditor,
       onUndo: () => {
-        if (furnitureHistory.undo()) syncFurniture();
+        if (!furnitureStale() && furnitureHistory.undo()) syncFurniture();
       },
       onRedo: () => {
-        if (furnitureHistory.redo()) syncFurniture();
+        if (!furnitureStale() && furnitureHistory.redo()) syncFurniture();
       },
       onOverlays: (options) => {
         overlays = options;
@@ -1423,10 +1440,10 @@ function wireNavigationControls() {
       ),
     );
   el('#undo-selected-furniture').addEventListener('click', () => {
-    if (furnitureHistory.undo()) syncFurniture();
+    if (!furnitureStale() && furnitureHistory.undo()) syncFurniture();
   });
   el('#redo-selected-furniture').addEventListener('click', () => {
-    if (furnitureHistory.redo()) syncFurniture();
+    if (!furnitureStale() && furnitureHistory.redo()) syncFurniture();
   });
   for (const tab of ['house', 'furniture'] as const) {
     const button = el(`#sidebar-${tab}-tab`);
@@ -1534,6 +1551,7 @@ function wireKeyboardShortcuts() {
       if (modifier && !event.altKey && ['z', 'y'].includes(shortcut)) {
         event.preventDefault();
         event.stopImmediatePropagation();
+        if (furnitureStale()) return;
         const changed =
           shortcut === 'y' || event.shiftKey ? furnitureHistory.redo() : furnitureHistory.undo();
         if (changed) syncFurniture();
