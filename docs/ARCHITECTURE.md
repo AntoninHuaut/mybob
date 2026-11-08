@@ -42,6 +42,7 @@ viewer, et le viewer remonte par des callbacks (`onModeChange`, `onFrame`, `onSe
 | Coupe des murs         | `src/scene/wallCutaway.ts`              | `auto` / `full` / `low`, plans de découpe par matériau              |
 | Carte d'ombres         | `src/scene/shadowRefresh.ts`            | Carte du soleil redessinée seulement sur un changement d'ombre      |
 | Rendu au repos         | `src/scene/renderScheduler.ts`          | Image dessinée seulement quand la scène change                      |
+| Résolution dynamique   | `src/scene/adaptiveResolution.ts`       | Paliers de résolution en mouvement, selon le temps d'image          |
 | Ouvertures en plan     | `src/scene/planOpenings.ts`             | Baies et portes dessinées dans la vue Plan, faces de coupe          |
 | Ambiance de visite     | `src/scene/interiorAmbience.ts`         | IBL locale, TAA, occlusion, bloom (visite, Vue 3D et Extérieur)     |
 | Diagnostic             | `src/scene/diagnostics.ts`              | `mybob.diag()` : moteur, GPU, cadence, résolution, scène            |
@@ -230,6 +231,10 @@ rebattement de 500 ms garanti au dernier appel, et relu au démarrage.
   dessin. Un changement de scène qui ne vient d'aucun de ces signaux (minuterie, chargement,
   animation pilotée par `requestAnimationFrame`) appelle `viewer.requestRender()`, sinon il
   n'apparaît qu'à l'image de la seconde suivante.
+- Résolution dynamique (`adaptiveResolution.ts`), en mouvement seulement : si la médiane des
+  images dépasse 25 ms (moins de 40 fps), le rendu descend d'un palier (100, 80, 67, 50 %) ;
+  à l'arrêt, il revient toujours à 100 % et la TAA finit l'image fixe. Un PC qui tient la
+  cadence ne quitte jamais 100 %. `mybob.diag()` affiche le palier atteint.
 - La carte d'ombres du soleil n'est redessinée que sur un changement de ses porteurs
   (`shadowRefresh.ts`) : mode, coupe, toiture, soleil, porte animée. Un nouveau porteur
   d'ombre qui bouge appelle `invalidate()`.

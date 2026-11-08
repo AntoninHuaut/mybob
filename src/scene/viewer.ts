@@ -44,6 +44,7 @@ import { panOrbitWithKeys } from './orbitNavigation';
 import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
 import { ShadowRefresh } from './shadowRefresh';
 import { RenderScheduler, WAKE_EVENTS } from './renderScheduler';
+import { AdaptiveResolution } from './adaptiveResolution';
 import {
   AUTO_CUT_HEIGHT,
   buildWallCutaway,
@@ -163,6 +164,11 @@ export class HouseViewer {
   private cutawaySelection = '';
   private shadowRefresh?: ShadowRefresh;
   private readonly renderScheduler = new RenderScheduler();
+  private readonly adaptiveResolution = new AdaptiveResolution();
+  /** Hardware scaling at full resolution: the screen's pixel ratio, capped. */
+  private readonly baseScaling = 1 / Math.min(window.devicePixelRatio || 1, 1.6);
+  private renderScale = 1;
+  private lastRenderAt?: number;
   /** Any input anywhere in the page may change what the scene shows. */
   private wake = () => this.renderScheduler.request();
   private sectionHeight?: number;
@@ -220,7 +226,7 @@ export class HouseViewer {
     engine: AbstractEngine,
   ) {
     this.engine = engine;
-    this.engine.setHardwareScalingLevel(1 / Math.min(window.devicePixelRatio || 1, 1.6));
+    this.engine.setHardwareScalingLevel(this.baseScaling);
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas.parentElement!);
     window.addEventListener('keydown', this.keydown);
@@ -236,12 +242,13 @@ export class HouseViewer {
     this.engine.runRenderLoop(() => {
       this.stepOrbitTour();
       if (!this.scene) return;
-      if (
-        this.renderScheduler.shouldRender(performance.now(), this.cameraSignature(), () =>
-          this.busy(),
-        )
-      )
-        this.scene.render();
+      const now = performance.now();
+      const render = this.renderScheduler.shouldRender(now, this.cameraSignature(), () =>
+        this.busy(),
+      );
+      this.applyRenderScale(now, render);
+      if (render) this.scene.render();
+      this.lastRenderAt = render ? now : undefined;
     });
   }
 
@@ -1127,6 +1134,26 @@ export class HouseViewer {
     return this.renderScheduler?.idle ?? false;
   }
 
+  /**
+   * Full resolution at rest; fewer pixels while the camera moves, only on a machine
+   * too slow for 40 fps (`adaptiveResolution.ts`).
+   */
+  private applyRenderScale(now: number, render: boolean) {
+    const moving = this.renderScheduler.cameraMoved || this.keyState.size > 0;
+    const frameMs = render && this.lastRenderAt !== undefined ? now - this.lastRenderAt : undefined;
+    const scale = this.adaptiveResolution.update(now, moving, frameMs);
+    if (scale === this.renderScale) return;
+    this.renderScale = scale;
+    this.engine.setHardwareScalingLevel(this.baseScaling / scale);
+    // Back to full resolution: the still image is drawn again and settled.
+    this.renderScheduler.request();
+  }
+
+  /** Render scale used in motion on this machine (1 = full resolution), for the diagnostic. */
+  get motionScale(): number {
+    return this.adaptiveResolution?.motionScale ?? 1;
+  }
+
   /** Everything about the active camera that changes the image, rounded under visibility. */
   private cameraSignature(): string {
     const camera = this.scene.activeCamera;
@@ -1141,8 +1168,10 @@ export class HouseViewer {
       camera.orthoRight ?? 0,
       camera.orthoTop ?? 0,
       camera.orthoBottom ?? 0,
-      this.engine.getRenderWidth(),
-      this.engine.getRenderHeight(),
+      // The canvas size, not the render size: the adaptive resolution changes the
+      // latter, and must not read as a camera motion.
+      this.canvas.clientWidth,
+      this.canvas.clientHeight,
     ];
     if (camera === this.orbit) {
       const o = this.orbit;
