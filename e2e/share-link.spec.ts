@@ -243,31 +243,39 @@ test('à 10 projets, « Garder les deux » propose de remplacer un projet, sans 
   await expect(dialog).not.toBeVisible();
   await expect.poll(() => new URL(page.url()).hash).not.toBe(new URL(older).hash);
 
-  await page.goto(older);
-  await page.reload();
-  await expect(page.getByText('diffèrent', { exact: false })).toBeVisible({ timeout: 20_000 });
-  const total = await page.locator('#project-select option').count();
-  await page.getByRole('button', { name: 'Garder les deux' }).click();
-  const limit = page.getByRole('dialog', { name: /Limite de 10 projets/ });
+  // Chaque ouverture du lien se fait dans un nouvel onglet : un onglet qui a écrit le hash de
+  // son état reconnaît son propre lien au rechargement et n'affiche alors aucun dialogue.
+  const context = page.context();
+  await page.close();
+  const first = await context.newPage();
+  await first.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
+  await first.goto(older);
+  await expect(first.getByText('diffèrent', { exact: false })).toBeVisible({ timeout: 20_000 });
+  const total = await first.locator('#project-select option').count();
+  await first.getByRole('button', { name: 'Garder les deux' }).click();
+  const limit = first.getByRole('dialog', { name: /Limite de 10 projets/ });
   await expect(limit).toBeVisible();
-  await expect(page.locator('#fatal-error')).toBeHidden();
+  await expect(first.locator('#fatal-error')).toBeHidden();
 
   // Annuler ne supprime ni n'ajoute rien.
   await limit.getByRole('button', { name: 'Annuler' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  await expect(page.locator('#project-select option')).toHaveCount(total);
+  await expect(first.getByRole('dialog')).toHaveCount(0);
+  await expect(first.locator('#project-select option')).toHaveCount(total);
 
   // Remplacer : la copie est ajoutée, le projet choisi disparaît, le total reste à 10 importés.
-  await page.reload();
-  await expect(page.getByText('diffèrent', { exact: false })).toBeVisible({ timeout: 20_000 });
-  await page.getByRole('button', { name: 'Garder les deux' }).click();
-  await page.getByLabel('Projet à remplacer').selectOption({ label: 'Remplissage 0' });
-  await page.getByRole('button', { name: 'Remplacer ce projet' }).click();
-  await expect(page.locator('#toast')).toContainText('vos projets');
-  await expect(page.locator('#fatal-error')).toBeHidden();
-  await expect(page.locator('#project-select option')).toHaveCount(total);
-  await expect(page.locator('#project-select')).not.toContainText('Remplissage 0');
-  await expect(page.locator('#project-select')).toContainText('Remplissage 8');
+  await first.close();
+  const reopened = await context.newPage();
+  await reopened.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
+  await reopened.goto(older);
+  await expect(reopened.getByText('diffèrent', { exact: false })).toBeVisible({ timeout: 20_000 });
+  await reopened.getByRole('button', { name: 'Garder les deux' }).click();
+  await reopened.getByLabel('Projet à remplacer').selectOption({ label: 'Remplissage 0' });
+  await reopened.getByRole('button', { name: 'Remplacer ce projet' }).click();
+  await expect(reopened.locator('#toast')).toContainText('vos projets');
+  await expect(reopened.locator('#fatal-error')).toBeHidden();
+  await expect(reopened.locator('#project-select option')).toHaveCount(total);
+  await expect(reopened.locator('#project-select')).not.toContainText('Remplissage 0');
+  await expect(reopened.locator('#project-select')).toContainText('Remplissage 8');
 });
 
 test('un lien au hash corrompu charge le projet local avec un avertissement', async ({ page }) => {
