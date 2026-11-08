@@ -42,6 +42,7 @@ import {
 import { builtOutline, exteriorOverview, fitOverview, fitPlan, siteOverviewLevel } from './framing';
 import { panOrbitWithKeys } from './orbitNavigation';
 import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
+import { ShadowRefresh } from './shadowRefresh';
 import {
   AUTO_CUT_HEIGHT,
   buildWallCutaway,
@@ -158,6 +159,8 @@ export class HouseViewer {
   private lookSensitivity = 1;
   private wallDisplay: WallDisplay = 'auto';
   private wallCutaway?: WallCutaway;
+  private cutawaySelection = '';
+  private shadowRefresh?: ShadowRefresh;
   private sectionHeight?: number;
   private planOpenings?: PlanOpenings;
   private dimensions: LinesMesh[] = [];
@@ -323,6 +326,8 @@ export class HouseViewer {
     shadow.bias = 0.001;
     shadow.normalBias = 0.025;
     shadow.setDarkness(0.2);
+    this.shadowRefresh = new ShadowRefresh(shadow);
+    this.cutawaySelection = '';
     // The level above owns the stairwell opening: it also pierces this ceiling.
     const above = project.levels
       .filter((candidate) => candidate.elevation > level.elevation)
@@ -755,6 +760,7 @@ export class HouseViewer {
   private updateRoofVisibility() {
     const visible = this.mode === 'walk' || (this.exteriorView && this.mode === 'overview');
     this.exterior?.roofMeshes.forEach((mesh) => mesh.setEnabled(visible));
+    this.shadowRefresh?.invalidate();
   }
 
   /**
@@ -819,6 +825,8 @@ export class HouseViewer {
 
   private updateShadowPolicy() {
     if (!this.scene) return;
+    // Every caller changed the mode, the cut, the sun or the walls on show.
+    this.shadowRefresh?.invalidate();
     const explicitSection = this.sectionHeight !== undefined && Number.isFinite(this.sectionHeight);
     const suppressed =
       this.mode === 'plan' ||
@@ -854,6 +862,12 @@ export class HouseViewer {
       active && !explicitSection ? (this.wallDisplay ?? 'auto') : 'full',
       camera,
     );
+    // Called on every image: only a different set of cut walls changes the casters.
+    const selection = [...selected].join('|');
+    if (selection !== this.cutawaySelection) {
+      this.cutawaySelection = selection;
+      this.shadowRefresh?.invalidate();
+    }
     if (this.mode !== 'plan') {
       this.planOpenings?.setVisible(
         active && (explicitSection || selected.size > 0),
@@ -1102,8 +1116,10 @@ export class HouseViewer {
           Math.sign(door.target - door.progress) *
           Math.min(Math.abs(door.target - door.progress), dt * 2.5);
         poseDoor(door);
+        this.shadowRefresh?.invalidate();
       }
     }
+    this.shadowRefresh?.step();
     if (this.mode === 'walk') {
       const p = this.walk.position;
       // The visit may leave the house onto the parcel, but never the modeled ground:
