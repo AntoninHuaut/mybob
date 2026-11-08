@@ -281,6 +281,41 @@ test('containment handles concave boundary vertices and permits valid shared edg
   );
 });
 
+test('la contenance absorbe la quantification millimétrique du pack du lien', () => {
+  const square: Point2[] = [
+    [0, 0],
+    [6, 0],
+    [6, 6],
+    [0, 6],
+  ];
+  // Un sommet posé exactement sur un bord recule de 0,71 mm au pire quand le pack arrondit
+  // au millimètre : le projet déballé doit rester valide.
+  assert.equal(
+    polygonInsidePolygon(
+      [
+        [0, 0],
+        [6, 0],
+        [6, 6.0007],
+        [0, 6],
+      ],
+      square,
+    ),
+    true,
+  );
+  assert.equal(
+    polygonInsidePolygon(
+      [
+        [0, 0],
+        [6, 0],
+        [6, 6.005],
+        [0, 6],
+      ],
+      square,
+    ),
+    false,
+  );
+});
+
 test('import accepts a straight flight and a stairwell opening', () => {
   const valid = structuredClone(original);
   valid.levels[0].stairs = [

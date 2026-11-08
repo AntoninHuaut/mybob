@@ -8,7 +8,7 @@ import {
   type VariantBook,
 } from '../src/furniture/variants';
 import { validateProject } from '../src/model/validate';
-import type { HouseProject } from '../src/model/types';
+import type { HouseProject, Point2 } from '../src/model/types';
 import {
   LinkPackError,
   packShareDocument,
@@ -217,6 +217,33 @@ test('aller-retour pack / déballage sur les deux plans : projet identique, quan
     const repacked = packShareDocument(decoded.document);
     assert.ok(samePackedState(repacked, decoded.packed), `${plan} : le repack n'est pas stable`);
   }
+});
+
+test('un sommet de surface posé sur le bord de parcelle survit au lien', async () => {
+  const project = readPlan(PLANS[0]);
+  // Bord de parcelle en biais : le sommet est exactement dessus, la quantification au
+  // millimètre l'arrondit vers l'extérieur (0,375 mm) et le projet déballé doit rester valide.
+  project.site!.boundary = [
+    [-9, -3],
+    [15, -3],
+    [15, 15],
+    [-9, 13.5],
+  ];
+  const onEdge: Point2 = [-3.71, 13.830625];
+  project.site!.surfaces = [
+    {
+      id: 'surface-bord',
+      kind: 'gravel',
+      polygon: [onEdge, [-2, 13.830625], [-2, 12.5], [-3.71, 12.5]],
+    },
+  ];
+  validateProject(project);
+  const hash = await encodeShareLinkHash(shareDocument(project, planFurnishing(project)));
+  const decoded = await decodeShareLinkHash(hash);
+  const unpacked = decoded.document.site!.surfaces![0].polygon[0];
+  assert.ok(unpacked[1] > onEdge[1], 'la quantification doit pousser le sommet vers l’extérieur');
+  assert.ok(unpacked[1] - onEdge[1] < 0.001, 'l’écart doit rester sous le millimètre');
+  validateProject(decoded.document);
 });
 
 test('le pack est déterministe : deux packs du même état donnent les mêmes octets', () => {

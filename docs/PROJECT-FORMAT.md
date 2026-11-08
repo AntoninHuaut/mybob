@@ -165,7 +165,9 @@ Deux différences assumées vis-à-vis du JSON exporté :
   un lien rend les mêmes octets.
 - **Quantification.** Les distances sont arrondies au millimètre, les angles au dix-millième
   de radian, les couleurs sont internées en minuscules 24 bits ; les champs absents ne sont
-  pas écrits. L’écart est en dessous de la précision de saisie.
+  pas écrits. L’écart est en dessous de la précision de saisie. Un sommet posé exactement sur
+  un bord peut donc reculer de 0,71 mm au pire : la tolérance de contenance de
+  `src/model/geometry.ts` vaut un millimètre pour que le projet déballé reste valide.
 
 À l’ouverture d’un lien : le propriétaire du projet voit son état comparé au lien (rien si
 identique, un choix de trois issues sinon) ; un destinataire ouvre le projet en lecture seule,
