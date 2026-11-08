@@ -24,7 +24,12 @@ import { area, escapeHtml as esc, number } from './ui/format';
 import { minimap } from './ui/minimap';
 import { FurnitureLayer, type FurnitureOverlays } from './furniture/layer';
 import { FurniturePanel } from './furniture/panel';
-import { VariantSession, variantsStorageKey, type VariantBook } from './furniture/variants';
+import {
+  VariantSession,
+  STALE_MESSAGE,
+  variantsStorageKey,
+  type VariantBook,
+} from './furniture/variants';
 import { VariantsPanel } from './ui/variantsPanel';
 import { ArrangementPanel } from './ui/arrangementPanel';
 import { FurnitureClipboard } from './furniture/clipboard';
@@ -76,6 +81,7 @@ let solarPanel: SolarPanel;
 let frameRate: FrameRateMeter;
 let projects: HouseProject[] = [];
 let imported: HouseProject[] = [];
+let projectsRaw: string | null = null;
 let builtins: HouseProject[] = [];
 let current: HouseProject;
 let selectedRoom: Room | undefined;
@@ -179,6 +185,41 @@ function setLayoutStatus(message = 'Aménagement sauvegardé sur cet ordinateur'
   status.title = message;
   status.setAttribute('aria-label', message);
   status.classList.toggle('unsaved', unsaved);
+}
+
+let projectsStale = false;
+
+/** Un autre onglet a écrit : cet onglet ne sauvegarde plus rien tant qu'il n'est pas rechargé. */
+function showStaleBanner() {
+  if (document.querySelector('#stale-banner')) return;
+  const banner = document.createElement('div');
+  banner.id = 'stale-banner';
+  banner.className = 'stale-banner';
+  banner.setAttribute('role', 'alert');
+  const text = document.createElement('span');
+  text.textContent = 'Ce projet a été modifié dans un autre onglet. Rechargez avant de continuer.';
+  const reload = document.createElement('button');
+  reload.type = 'button';
+  reload.className = 'text-button';
+  reload.textContent = 'Recharger';
+  reload.addEventListener('click', () => location.reload());
+  banner.append(text, reload);
+  document.body.prepend(banner);
+  setLayoutStatus('Modifié dans un autre onglet · rechargez la page', true);
+}
+
+/** Refuse d'écraser la liste des projets si un autre onglet l'a réécrite depuis notre lecture. */
+function assertProjectsUnchanged() {
+  if (projectsStale || localStorage.getItem(STORAGE) !== projectsRaw) {
+    projectsStale = true;
+    showStaleBanner();
+    throw new Error(STALE_MESSAGE);
+  }
+}
+function writeProjects(list: HouseProject[]) {
+  const text = JSON.stringify(list);
+  localStorage.setItem(STORAGE, text);
+  projectsRaw = text;
 }
 
 function persistFurniture() {
@@ -1125,12 +1166,13 @@ async function installProjectDocument(
   const previousLevelId = viewer.level.id;
   const next = [...imported.filter((p) => p.id !== project.id), project];
   if (next.length > 10) throw new Error('Vous pouvez conserver jusqu’à 10 projets importés.');
+  assertProjectsUnchanged();
   const backups = [
     [variantsStorageKey(project.id), localStorage.getItem(variantsStorageKey(project.id))],
   ] as const;
   try {
     localStorage.setItem(variantsStorageKey(project.id), JSON.stringify(nextVariants));
-    localStorage.setItem(STORAGE, JSON.stringify(next));
+    writeProjects(next);
   } catch {
     for (const [key, value] of backups) {
       if (value === null) localStorage.removeItem(key);
@@ -1153,7 +1195,7 @@ async function installProjectDocument(
       if (value === null) localStorage.removeItem(key);
       else localStorage.setItem(key, value);
     }
-    localStorage.setItem(STORAGE, JSON.stringify(previous));
+    writeProjects(previous);
     renderProjectOptions();
     loadProject(previousProjectId, previousLevelId);
     throw error;
@@ -1333,6 +1375,14 @@ function wireFurnitureToolbar() {
   chairsButton.setAttribute('aria-label', chairsButton.title);
   el('#furniture-context-toolbar').insertBefore(chairsButton, el('#delete-selected-furniture'));
   chairsButton.addEventListener('click', openTableChairs);
+  layoutSession.onStale = showStaleBanner;
+  window.addEventListener('storage', (event) => {
+    if (event.storageArea !== localStorage) return;
+    if (event.key === null || event.key === variantsStorageKey(current.id))
+      layoutSession.markStale(current.id);
+    else if (event.key === STORAGE) projectsStale = true;
+    if (projectsStale) showStaleBanner();
+  });
   window.addEventListener('beforeunload', (event) => {
     if (!layoutSession.hasUnsaved) return;
     event.preventDefault();
@@ -1656,8 +1706,9 @@ function wireProjectControls() {
       ];
       let backups: [string, string | null][] = [];
       try {
+        assertProjectsUnchanged();
         backups = keys.map((key) => [key, localStorage.getItem(key)]);
-        localStorage.setItem(STORAGE, JSON.stringify(next));
+        writeProjects(next);
         for (const key of keys.slice(1)) localStorage.removeItem(key);
       } catch {
         for (const [key, value] of backups) {
@@ -1811,6 +1862,7 @@ async function start() {
       }),
     );
     builtins = loaded;
+    projectsRaw = localStorage.getItem(STORAGE);
     let storageWarning = false;
     try {
       const saved: unknown = JSON.parse(localStorage.getItem(STORAGE) ?? '[]');

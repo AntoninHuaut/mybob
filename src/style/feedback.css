@@ -583,3 +583,17 @@ dialog p {
 .bob-help p {
   margin: 0 0 8px;
 }
+
+.stale-banner {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 60;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  background: #fff3cd;
+  color: #3d2f00;
+  border-bottom: 1px solid #c9a227;
+}
