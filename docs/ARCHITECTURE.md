@@ -211,6 +211,10 @@ rebattement de 500 ms garanti au dernier appel, et relu au démarrage.
   - Le projet n'existe pas ici (destinataire) : ouverture **en mémoire seule** (aucune
     écriture `localStorage`), lecture seule avec bandeau et bouton **Ajouter à mes projets**
     qui copie le document sous un nouvel identifiant puis l'installe normalement.
+- **Rechargement de l'onglet** : `sessionStorage` retient le dernier hash publié par cet onglet,
+  et seulement après le succès de `replaceState` — la mémoire ne devance donc jamais l'URL.
+  Au chargement, un hash identique à cette mémoire est celui de l'onglet, pas un lien reçu :
+  l'état local, plus récent, est chargé sans dialogue.
 - Un hash illisible n'empêche jamais le démarrage : le projet local est chargé, un avertissement
   est affiché.
 

@@ -233,6 +233,9 @@ test('export JSON puis import dans un navigateur vierge restaurent toutes les va
       imported.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }),
     ).toBeVisible();
     await imported.reload();
+    // Le hash de l'onglet décrit son propre état : le rechargement ne doit pas le prendre
+    // pour un lien reçu et rouvrir le dialogue de divergence (qui bloquerait la suite).
+    await expect(imported.getByRole('dialog')).toHaveCount(0);
     await furnishings(imported);
     await expect(
       imported.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }),

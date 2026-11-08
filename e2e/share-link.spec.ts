@@ -285,6 +285,61 @@ test('à 10 projets, « Garder les deux » propose de remplacer un projet, sans 
   await expect(reopened.locator('#project-select')).toContainText('Remplissage 8');
 });
 
+test('une publication d’URL refusée ne fait pas du rechargement un lien reçu', async ({ page }) => {
+  // L'application retient en session le dernier hash qu'elle a publié. S'il était mémorisé
+  // avant `history.replaceState`, une publication refusée laisserait cette mémoire en avance
+  // sur l'URL : au rechargement, l'onglet prendrait son propre hash périmé pour un lien reçu
+  // et resterait bloqué derrière le dialogue de divergence.
+  await page.evaluate(() => {
+    const state = window as unknown as { refuseShareHash: boolean; refusedHashWrites: number };
+    const replaceState = History.prototype.replaceState;
+    state.refuseShareHash = false;
+    state.refusedHashWrites = 0;
+    History.prototype.replaceState = function (data, unused, url) {
+      if (state.refuseShareHash && String(url ?? '').startsWith('#p1:')) {
+        state.refusedHashWrites += 1;
+        throw new DOMException('Publication refusée pour le test.', 'SecurityError');
+      }
+      return replaceState.call(this, data, unused, url);
+    };
+  });
+  await importLinkProject(page);
+  const older = await sharedHash(page);
+  await page.evaluate(() => {
+    (window as unknown as { refuseShareHash: boolean }).refuseShareHash = true;
+  });
+  // La modification ne peut plus rejoindre l'URL : elle ne vit que dans le stockage local.
+  await furnishings(page);
+  await page.getByRole('button', { name: 'Ajouter un meuble', exact: true }).click();
+  const dialog = page.getByRole('dialog', { name: 'Ajouter un meuble', exact: true });
+  await dialog.getByLabel('Nom', { exact: true }).fill('Fauteuil refusé');
+  await dialog
+    .getByLabel(/Largeur/)
+    .first()
+    .fill('90');
+  await dialog.getByRole('button', { name: 'Ajouter dans la maison' }).click();
+  await expect(dialog).not.toBeVisible();
+  // L'écriture a bien été tentée et refusée avant le rechargement.
+  await expect
+    .poll(() =>
+      page.evaluate(() => (window as unknown as { refusedHashWrites: number }).refusedHashWrites),
+    )
+    .toBeGreaterThan(0);
+
+  await page.reload();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByText('diffèrent', { exact: false })).toHaveCount(0);
+  await expect(page.locator('#received-banner')).toBeHidden();
+  await furnishings(page);
+  // L'état local, plus récent que l'URL, reste la référence au rechargement.
+  await expect(
+    page.getByRole('button', { name: 'Modifier Fauteuil refusé', exact: true }),
+  ).toBeVisible();
+  await expect
+    .poll(() => new URL(page.url()).hash, { timeout: 20_000 })
+    .not.toBe(new URL(older).hash);
+});
+
 test('un lien au hash corrompu charge le projet local avec un avertissement', async ({ page }) => {
   // L'application réécrit le hash de l'état courant 500 ms après le chargement. Sans attendre
   // cette écriture, elle écrase `#p1:abc` avant le rechargement et aucun avertissement
