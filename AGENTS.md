@@ -2,13 +2,14 @@
 
 ## Start here
 
-1. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the code map: modules, data flow, the three
+1. [docs/CONTEXT.md](docs/CONTEXT.md) — what not to read, and how UI words map to code names.
+2. [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the code map: modules, data flow, the three
    view modes, invariants, verification recipes, known traps.
-2. The one doc for the area you touch: [PROJECT-FORMAT](docs/PROJECT-FORMAT.md),
+3. The one doc for the area you touch: [PROJECT-FORMAT](docs/PROJECT-FORMAT.md),
    [FURNITURE](docs/FURNITURE.md), [EXTERIOR](docs/EXTERIOR.md),
    [UI-REFINEMENT](docs/UI-REFINEMENT.md), [DEPLOYMENT](docs/DEPLOYMENT.md),
    [E2E](docs/E2E.md), [IDENTITE-MYBOB](docs/IDENTITE-MYBOB.md).
-3. Then only the files that map names. Do not re-read all of `src/` to "get oriented": the map
+4. Then only the files that map names. Do not re-read all of `src/` to "get oriented": the map
    exists so you don't have to. If it is wrong or silent about what you needed, fix the map in
    the same change.
 
