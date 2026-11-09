@@ -1754,8 +1754,6 @@ function wireProjectControls() {
   });
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) =>
     b.addEventListener('click', () => {
-      exteriorView = false;
-      viewer.setExteriorView(false);
       setMode(b.dataset.view as ViewMode);
     }),
   );

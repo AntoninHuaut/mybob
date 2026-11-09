@@ -130,8 +130,12 @@ export function validateProject(input: unknown): HouseProject {
   // A dormer back wall crosses its level's ceiling: it is the
   // volume piercing the covering, not a wall taller than the building.
   const dormerWallIds = new Set(
-    ((p.site as ProjectSite | undefined)?.roofs ?? [])
-      .flatMap((roof) => roof.dormers ?? [])
+    // `roofs` is not validated yet: tolerate any shape, the real check reports it later.
+    (Array.isArray((p.site as ProjectSite | undefined)?.roofs)
+      ? (p.site as ProjectSite).roofs!
+      : []
+    )
+      .flatMap((roof) => (Array.isArray(roof?.dormers) ? roof.dormers : []))
       .map((dormer) => dormer?.wallId)
       .filter((wallId): wallId is string => typeof wallId === 'string'),
   );
