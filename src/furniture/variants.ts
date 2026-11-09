@@ -62,7 +62,7 @@ export function validateVariantBook(input: unknown, levelIds: string[]): Variant
 
 /** One atomic document per project; old single-layout keys remain untouched as a backup. */
 export const STALE_MESSAGE =
-  'Ce projet a été modifié dans un autre onglet : rechargez la page avant de continuer, rien n’a été écrasé.';
+  'Ce projet a été modifié dans un autre onglet : rechargez la page avant de continuer, rien n’a été écrasé.';
 
 export class VariantSession {
   private entries = new Map<string, Entry>();
@@ -142,7 +142,7 @@ export class VariantSession {
       this.raw.set(projectId, text);
     } catch {
       throw new Error(
-        'Variante conservée dans cette session mais non sauvegardée : exportez le projet avant de fermer.',
+        'Variante conservée dans cette session mais non sauvegardée : exportez le projet avant de fermer.',
       );
     }
     entry.dirty = false;

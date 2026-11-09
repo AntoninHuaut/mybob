@@ -31,13 +31,13 @@ export class ArrangementPanel {
   ) {
     this.section.className = 'arrangement-panel';
     this.section.innerHTML = `<summary>Placement précis</summary><div class="arrangement-body">
-      <p>Cochez les meubles à placer ensemble. Le premier coché sert de référence ; les ensembles liés restent solidaires.</p>
+      <p>Cochez les meubles à placer ensemble. Le premier coché sert de référence ; les ensembles liés restent solidaires.</p>
       <div data-arrangement-items class="arrangement-items"></div>
       <div class="arrangement-selection"><span data-selection-count></span><button type="button" data-clear-selection>Effacer la sélection</button></div>
       <div class="arrangement-row"><label>Axe du plan<select data-arrangement-axis><option value="x">X · horizontal</option><option value="z">Z · vertical</option></select></label><label>Aligner les<select data-alignment-edge><option value="min">Bords de début</option><option value="center">Centres</option><option value="max">Bords de fin</option></select></label></div>
       <div class="arrangement-actions"><button type="button" data-align>Aligner</button><button type="button" data-distribute>Espacements égaux</button></div>
       <p>La répartition garde les deux extrêmes en place et demande au moins trois meubles ou ensembles.</p>
-      <fieldset><legend>Accrochage pendant le glisser</legend><label class="arrangement-check"><input type="checkbox" data-snap-grid> Grille</label><span class="arrangement-note">L’aimantation aux murs et aux meubles est toujours active : maintenez Alt pendant le glisser pour la suspendre.</span><label>Pas de grille <span class="arrangement-grid-size"><input data-grid-size type="number" min="1" max="100" step="1" value="10" aria-label="Pas de grille en centimètres"> cm</span></label></fieldset>
+      <fieldset><legend>Accrochage pendant le glisser</legend><label class="arrangement-check"><input type="checkbox" data-snap-grid> Grille</label><span class="arrangement-note">L’aimantation aux murs et aux meubles est toujours active : maintenez Alt pendant le glisser pour la suspendre.</span><label>Pas de grille <span class="arrangement-grid-size"><input data-grid-size type="number" min="1" max="100" step="1" value="10" aria-label="Pas de grille en centimètres"> cm</span></label></fieldset>
       <p data-arrangement-status role="status"></p></div>`;
     this.host.append(this.section);
     this.section.addEventListener('click', this.click);

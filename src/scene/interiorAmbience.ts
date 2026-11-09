@@ -262,7 +262,7 @@ export function createInteriorEnvironment(scene: Scene): RawCubeTexture | undefi
     return texture;
   } catch (error) {
     console.info(
-      `[visite] environnement local indisponible : ${error instanceof Error ? error.message : String(error)}`,
+      `[visite] environnement local indisponible : ${error instanceof Error ? error.message : String(error)}`,
     );
     return undefined;
   }
@@ -294,7 +294,7 @@ export function createInteriorTaa(scene: Scene, camera: Camera): TAARenderingPip
     return pipeline;
   } catch (error) {
     console.info(
-      `[visite] antialiasing temporel indisponible : ${error instanceof Error ? error.message : String(error)}`,
+      `[visite] antialiasing temporel indisponible : ${error instanceof Error ? error.message : String(error)}`,
     );
     return undefined;
   }
@@ -339,7 +339,7 @@ export function createInteriorOcclusion(
   } catch (error) {
     scene.disablePrePassRenderer();
     console.info(
-      `[visite] occlusion ambiante indisponible : ${error instanceof Error ? error.message : String(error)}`,
+      `[visite] occlusion ambiante indisponible : ${error instanceof Error ? error.message : String(error)}`,
     );
     return undefined;
   }
@@ -402,7 +402,7 @@ export function createInteriorBloom(
     return pipeline;
   } catch (error) {
     console.info(
-      `[visite] bloom indisponible : ${error instanceof Error ? error.message : String(error)}`,
+      `[visite] bloom indisponible : ${error instanceof Error ? error.message : String(error)}`,
     );
     return undefined;
   }
@@ -425,7 +425,7 @@ export function createOrbitBloom(
     return pipeline;
   } catch (error) {
     console.info(
-      `[vue 3d] bloom indisponible : ${error instanceof Error ? error.message : String(error)}`,
+      `[vue 3d] bloom indisponible : ${error instanceof Error ? error.message : String(error)}`,
     );
     return undefined;
   }

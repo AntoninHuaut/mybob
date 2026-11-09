@@ -7,7 +7,7 @@ export function confirmImportReplacement(
 ): Promise<boolean> {
   const dialog = document.createElement('dialog');
   dialog.setAttribute('aria-labelledby', 'replace-project-title');
-  dialog.innerHTML = `<h2 id="replace-project-title">Remplacer « ${escapeHtml(projectName)} » ?</h2>
+  dialog.innerHTML = `<h2 id="replace-project-title">Remplacer « ${escapeHtml(projectName)} » ?</h2>
     <p>Ce fichier porte le même identifiant qu’un projet déjà disponible. Il remplacera son modèle et, si le fichier en contient, les meubles des niveaux concernés. Gardez un export de la version actuelle avant de continuer.</p>
     ${
       onExport

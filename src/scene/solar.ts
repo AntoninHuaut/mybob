@@ -187,7 +187,7 @@ export function localDateTimeToInstant(
     );
   if (candidates.length > 1 && disambiguation === 'reject')
     throw new RangeError(
-      'Cette heure locale existe deux fois lors du changement d’heure ; choisissez la première ou la seconde occurrence.',
+      'Cette heure locale existe deux fois lors du changement d’heure ; choisissez la première ou la seconde occurrence.',
     );
   return new Date(disambiguation === 'later' ? candidates[candidates.length - 1] : candidates[0]);
 }

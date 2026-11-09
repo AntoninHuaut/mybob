@@ -17,7 +17,7 @@ test('replacement stays pending during backup export and Cancel preserves the ex
     );
     const dialog = window.document.querySelector('dialog')!;
     assert.equal(dialog.open, true);
-    assert.equal(dialog.querySelector('h2')!.textContent, 'Remplacer « <Maison> » ?');
+    assert.equal(dialog.querySelector('h2')!.textContent, 'Remplacer « <Maison> » ?');
     assert.equal(dialog.querySelector('maison'), null);
     dialog.querySelector<DOMButton>('[data-export]')!.click();
     assert.equal(exports, 1);

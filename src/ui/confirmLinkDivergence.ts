@@ -13,7 +13,7 @@ export function confirmLinkDivergence(
   const dialog = document.createElement('dialog');
   dialog.setAttribute('aria-labelledby', 'link-divergence-title');
   dialog.innerHTML = `<h2 id="link-divergence-title">Ce lien et « ${escapeHtml(projectName)} » diffèrent</h2>
-    <p>Le lien ouvert décrit une version de ce projet qui n’est pas celle enregistrée dans ce navigateur. Choisissez : remplacer le projet enregistré, en garder une copie à part, ou ignorer ce lien.</p>
+    <p>Le lien ouvert décrit une version de ce projet qui n’est pas celle enregistrée dans ce navigateur. Choisissez : remplacer le projet enregistré, en garder une copie à part, ou ignorer ce lien.</p>
     <form method="dialog" class="dialog-actions"><button type="submit" value="copy" class="text-button dialog-actions-start">Garder les deux</button><button type="submit" value="ignore" class="text-button" autofocus>Ignorer le lien</button><button type="submit" value="replace" class="danger-button">Remplacer le projet enregistré</button></form>`;
   document.body.append(dialog);
   return new Promise((resolve) => {

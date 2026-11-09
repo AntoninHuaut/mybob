@@ -17,7 +17,7 @@ export function createEngine(canvas: HTMLCanvasElement): Engine {
   } catch (error) {
     console.error(error);
     throw new Error(
-      'WebGL est indisponible dans ce navigateur. Activez l’accélération graphique (Edge/Chrome : Paramètres → Système) puis rechargez la page.',
+      'WebGL est indisponible dans ce navigateur. Activez l’accélération graphique (Edge/Chrome : Paramètres → Système) puis rechargez la page.',
     );
   }
 }

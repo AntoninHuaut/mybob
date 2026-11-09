@@ -119,7 +119,7 @@ export function cornerDiagram(data: FormData, labels: CornerDiagramLabels) {
     ? `M${x},${y}h${w}v${b}h${a - w}v${d - b}h${-a}Z`
     : `M${x},${y}h${w}v${d}h${-a}v${b - d}h${a - w}Z`;
   const ax = left ? x : x + w - a;
-  return `<svg viewBox="0 0 380 235" role="img" aria-label="Vue de dessus : largeur ${width} cm, ${labels.body} ${body} cm, ${labels.total} ${total} cm, ${labels.arm} ${arm} cm"><path d="${path}" fill="#dfe9d8" stroke="#3d6c50" stroke-width="2"/><g fill="none" stroke="#82917d" stroke-width="1"><path d="M${x},${y - 8}v-7h${w}v7M${x - 9},${y}h-7v${b}h7M${x + w + 9},${y}h7v${d}h-7M${ax},${y + d + 9}v7h${a}v-7"/></g><g font-size="12" fill="#314c3c" font-family="system-ui,sans-serif"><text x="${x + w / 2}" y="14" text-anchor="middle">${width} cm de large</text><text x="8" y="${y + b / 2 + 4}">${body} cm</text><text x="${x + w + 22}" y="${y + d / 2 + 4}">${total} cm</text><text x="${ax + a / 2}" y="${y + d + 33}" text-anchor="middle">${arm} cm</text></g></svg>`;
+  return `<svg viewBox="0 0 380 235" role="img" aria-label="Vue de dessus : largeur ${width} cm, ${labels.body} ${body} cm, ${labels.total} ${total} cm, ${labels.arm} ${arm} cm"><path d="${path}" fill="#dfe9d8" stroke="#3d6c50" stroke-width="2"/><g fill="none" stroke="#82917d" stroke-width="1"><path d="M${x},${y - 8}v-7h${w}v7M${x - 9},${y}h-7v${b}h7M${x + w + 9},${y}h7v${d}h-7M${ax},${y + d + 9}v7h${a}v-7"/></g><g font-size="12" fill="#314c3c" font-family="system-ui,sans-serif"><text x="${x + w / 2}" y="14" text-anchor="middle">${width} cm de large</text><text x="8" y="${y + b / 2 + 4}">${body} cm</text><text x="${x + w + 22}" y="${y + d / 2 + 4}">${total} cm</text><text x="${ax + a / 2}" y="${y + d + 33}" text-anchor="middle">${arm} cm</text></g></svg>`;
 }
 
 export const sofaDiagram = (data: FormData) =>
@@ -155,5 +155,5 @@ export function dressingDiagram(runDepth: number, runs: DressingRun[]) {
     return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="#dfe9d8" stroke="#3d6c50" stroke-width="1.5"/>`;
   });
   const label = `${Math.round(width * 100)} × ${Math.round(depth * 100)} cm hors tout`;
-  return `<svg viewBox="0 0 380 235" role="img" aria-label="Vue de dessus du dressing : ${runs.length} tronçon${runs.length > 1 ? 's' : ''}, ${label}">${rects.join('')}<text x="${ox}" y="${(oy + depth * scale + 24).toFixed(1)}" font-size="12" fill="#314c3c" font-family="system-ui,sans-serif">${label}</text></svg>`;
+  return `<svg viewBox="0 0 380 235" role="img" aria-label="Vue de dessus du dressing : ${runs.length} tronçon${runs.length > 1 ? 's' : ''}, ${label}">${rects.join('')}<text x="${ox}" y="${(oy + depth * scale + 24).toFixed(1)}" font-size="12" fill="#314c3c" font-family="system-ui,sans-serif">${label}</text></svg>`;
 }

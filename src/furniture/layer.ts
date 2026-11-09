@@ -787,7 +787,7 @@ export class FurnitureLayer {
         if (Math.hypot(position[0] - item.position[0], position[1] - item.position[1]) >= 0.015)
           this.reportBlockedDrag(
             movedBeforeSnap
-              ? 'Accrochage actif : déplacez davantage le pointeur ou maintenez Alt pour suspendre l’aimantation.'
+              ? 'Accrochage actif : déplacez davantage le pointeur ou maintenez Alt pour suspendre l’aimantation.'
               : 'Déplacement arrêté par le bâtiment ou un meuble lié. Vérifiez les murs, le contour et la hauteur des membres de l’ensemble.',
           );
         return;

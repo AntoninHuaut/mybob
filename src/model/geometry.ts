@@ -391,7 +391,7 @@ export function resolveRoofDormer(
       : roofFaceHeightAt(vertices, face, front, (z0 + z1) / 2);
     if (frontTop <= frontHeight + 0.005)
       return {
-        error: `Le mur de fond ${dormer.wallId} ne dépasse pas la couverture : la lucarne ${dormer.id} resterait invisible.`,
+        error: `Le mur de fond ${dormer.wallId} ne dépasse pas la couverture : la lucarne ${dormer.id} resterait invisible.`,
       };
     // The dormer roof meets the roof face: at the back of the footprint without a
     // declared slope, at a point inside the footprint when the slope is given.
@@ -497,7 +497,7 @@ export function resolveRoofWindow(
     return { error: `La fenêtre de toit ${id} doit avoir une position et des dimensions valides.` };
   if (window.width < ROOF_WINDOW_MIN_SIZE || window.height < ROOF_WINDOW_MIN_SIZE)
     return {
-      error: `Une fenêtre de toit doit mesurer au moins 10 cm de large et de haut pour les profils du modèle : ${id}`,
+      error: `Une fenêtre de toit doit mesurer au moins 10 cm de large et de haut pour les profils du modèle : ${id}`,
     };
   let unplaced: string | undefined;
   let overflow: string | undefined;
@@ -515,7 +515,7 @@ export function resolveRoofWindow(
     const horizontal = Math.hypot(upward[0], upward[2]);
     if (horizontal < 1e-6)
       return {
-        error: `La fenêtre de toit ${id} tombe sur un pan horizontal de la toiture : le châssis ne peut pas s'y poser.`,
+        error: `La fenêtre de toit ${id} tombe sur un pan horizontal de la toiture : le châssis ne peut pas s'y poser.`,
       };
     const centerY = roofFaceHeightAt(vertices, face, window.center[0], window.center[1]);
     if (!Number.isFinite(centerY)) {
@@ -550,7 +550,7 @@ export function resolveRoofWindow(
       !polygonInsidePolygon(plan, outline) ||
       plan.some((corner) => distanceToPolygonBoundary(corner, outline) < ROOF_WINDOW_EDGE_MARGIN)
     ) {
-      overflow = `La fenêtre de toit ${id} déborde du pan qui la porte : son châssis doit rester à ${ROOF_WINDOW_EDGE_MARGIN * 1000} mm des arêtes.`;
+      overflow = `La fenêtre de toit ${id} déborde du pan qui la porte : son châssis doit rester à ${ROOF_WINDOW_EDGE_MARGIN * 1000} mm des arêtes.`;
       continue;
     }
     return { frame: { ...frame, corners } };

@@ -521,7 +521,7 @@ export class HouseViewer {
       this.updateOrbitBloom();
     } catch (error) {
       console.info(
-        `[visite] ambiance indisponible : ${error instanceof Error ? error.message : String(error)}`,
+        `[visite] ambiance indisponible : ${error instanceof Error ? error.message : String(error)}`,
       );
     }
     this.dimensions.forEach((mesh) => mesh.setEnabled(this.dimensionOn && mode !== 'walk'));

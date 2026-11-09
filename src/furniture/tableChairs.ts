@@ -60,7 +60,7 @@ export function chairsAroundTable(
       );
       if (issue)
         throw new Error(
-          `Pas assez de place autour de la table : ${issue.message} Déplacez la table ou réduisez le nombre de chaises.`,
+          `Pas assez de place autour de la table : ${issue.message} Déplacez la table ou réduisez le nombre de chaises.`,
         );
       next = options.linked ? linkFurniture(candidate, table.id, added.id) : candidate;
     }

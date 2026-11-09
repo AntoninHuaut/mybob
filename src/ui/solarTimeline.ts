@@ -29,7 +29,7 @@ export class SolarTimeline {
         <div class="solar-timeline-date-row"><label>Date sur place<input type="date" min="0001-01-01" max="9999-12-30" data-solar-timeline-date></label><button type="button" data-solar-season="summer">Été</button><button type="button" data-solar-season="winter">Hiver</button><button type="button" data-solar-timeline-settings aria-label="Localisation et orientation du soleil" title="Localisation et orientation">Réglages</button></div>
         <label class="solar-timeline-slider">Heure sur place<input type="range" min="0" step="1" data-solar-timeline-slider></label>
         <div class="solar-timeline-play-row"><button type="button" data-solar-timeline-play aria-pressed="false" title="Dérouler la journée en 12 secondes">Animer la journée</button></div>
-        <p data-solar-timeline-day></p><p class="solar-timeline-note">Lever / coucher approximatifs · Plan : éclairage neutre</p>
+        <p data-solar-timeline-day></p><p class="solar-timeline-note">Lever / coucher approximatifs · Plan : éclairage neutre</p>
         <p class="solar-timeline-status" data-solar-timeline-status role="status"></p>
       </div>`;
     host.append(this.element);
