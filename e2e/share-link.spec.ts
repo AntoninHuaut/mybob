@@ -122,7 +122,7 @@ test('a shared link opens read-only, then editable after adding it', async ({
     await expect(received.getByRole('dialog', { name: 'Modifier Canapé lien' })).toHaveCount(0);
     await expect(received.locator('[data-furniture-edit-id]')).toHaveCount(1);
 
-    // « Ajouter à mes projets »: copy under a new identifier, now editable.
+    // « Ajouter à mes projets »: copy under a new identifier, now editable.
     await banner.getByRole('button', { name: 'Ajouter à mes projets' }).click();
     await expect(received.locator('#toast')).toContainText('vos projets');
     await expect(banner).toBeHidden();
@@ -219,7 +219,7 @@ test('a link older than the local state offers to keep both', async ({ page }) =
   await expect(page.locator('#received-banner')).toBeHidden();
 });
 
-test('at 10 projects, « Garder les deux » offers to replace a project from the link, no fatal screen', async ({
+test('at 10 projects, « Garder les deux » offers to replace a project from the link, no fatal screen', async ({
   page,
 }) => {
   // Three openings of the link, each with its WebGL session: leave headroom for the runner.

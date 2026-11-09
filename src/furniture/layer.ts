@@ -730,7 +730,7 @@ export class FurnitureLayer {
       const locked = groupMembers(this.items, item.id).find((member) => member.locked);
       if (locked) {
         this.reportBlockedDrag(
-          `« ${locked.name} » est verrouillé. Déverrouillez-le pour déplacer cet ensemble.`,
+          `« ${locked.name} » est verrouillé. Déverrouillez-le pour déplacer cet ensemble.`,
         );
         return;
       }
@@ -758,7 +758,7 @@ export class FurnitureLayer {
       const locked = groupMembers(this.items, item.id).find((member) => member.locked);
       if (locked) {
         this.reportBlockedDrag(
-          `« ${locked.name} » est verrouillé. Déverrouillez-le pour déplacer cet ensemble.`,
+          `« ${locked.name} » est verrouillé. Déverrouillez-le pour déplacer cet ensemble.`,
         );
         this.finishDrag();
         return;

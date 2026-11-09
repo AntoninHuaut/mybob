@@ -396,7 +396,7 @@ test('the walk recaptures the pointer after its release, click in the view inclu
   // A click in the view resumes the capture — nothing happened before.
   await page.locator('#scene').click({ position: { x: 640, y: 360 } });
   await expect.poll(locked, { timeout: 5_000 }).toBe(true);
-  // The « Reprendre la visite » button also rebinds a second round trip.
+  // The « Reprendre la visite » button also rebinds a second round trip.
   await page.evaluate(() => document.exitPointerLock());
   await expect.poll(locked).toBe(false);
   await page.locator('#resume-walk').click();

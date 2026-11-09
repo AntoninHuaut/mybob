@@ -39,7 +39,7 @@ test('variant naming keeps native input while typing, cancels without callbacks 
     host
       .querySelector('[data-variant-action=delete]')!
       .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-    assert.match(host.textContent!, /Supprimer « A »/);
+    assert.match(host.textContent!, /Supprimer « A »/);
     host
       .querySelector('[data-variant-action=cancel]')!
       .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
