@@ -208,10 +208,13 @@ last call, and read back at start-up.
   - The project does not exist here (recipient): opened **in memory only** (no `localStorage`
     write), read-only with a banner and an **Ajouter à mes projets** button that copies the
     document under a new identifier then installs it normally.
-- **Tab reload**: `sessionStorage` remembers the last hash published by this tab, and only
-  after `replaceState` succeeded — so the memory never runs ahead of the URL. On load, a hash
-  identical to that memory is the tab's own, not a received link: the more recent local state
-  is loaded without a dialog.
+- **Tab reload**: `sessionStorage` remembers the last 8 hashes published by this tab (only
+  after `replaceState` succeeded) and the hash shown at `pagehide`; no hash is published once
+  the page is being left. A reload starts with the URL of the moment it was requested, so a
+  debounced write can publish a newer hash before the page goes away. On load
+  (`isOwnStaleHash`), the last published hash is the tab's own; an older one is too, unless
+  the page was showing it when left — a deliberate return to an older link still opens the
+  dialog. An own hash loads the more recent local state without a dialog.
 - An unreadable hash never prevents start-up: the local project is loaded, a warning is shown.
 
 ## Invariants not to break
