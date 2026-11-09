@@ -67,7 +67,9 @@ import type { WallDisplay } from './scene/wallCutaway';
 import {
   decodeShareLinkHash,
   encodeShareLinkHash,
+  isOwnStaleHash,
   isShareLink,
+  OWN_HASH_MEMORY_SIZE,
   samePackedState,
   type DecodedShareLink,
 } from './model/shareLink';
@@ -124,10 +126,27 @@ let linkHashTimer: ReturnType<typeof setTimeout>;
 let desiredLinkHash: string | undefined;
 let linkHashPending = false;
 let linkHashWriteScheduled = false;
+// Set when the page is being left: a write finishing then would move the memory past the URL
+// the reload was started with.
+let leavingPage = false;
 const LINK_HASH_DEBOUNCE = 500;
 const READ_ONLY_TOAST =
   'Ce projet a été reçu par lien : il est en lecture seule. « Ajouter à mes projets » pour le modifier.';
 const LINK_HASH_MEMORY = 'maison-atelier:last-link-hash';
+const LINK_HASH_EXIT = 'maison-atelier:exit-link-hash';
+
+/** Hashes this tab published, oldest first (the memory once held a single hash). */
+function publishedLinkHashes(): string[] {
+  const raw = sessionStorage.getItem(LINK_HASH_MEMORY);
+  if (raw === null) return [];
+  try {
+    const list: unknown = JSON.parse(raw);
+    if (Array.isArray(list)) return list.filter((item) => typeof item === 'string');
+  } catch {
+    /* A bare hash from the single-hash memory. */
+  }
+  return [raw];
+}
 
 el('#app').innerHTML = appTemplate();
 
@@ -1074,6 +1093,7 @@ async function writeLinkHash() {
   } catch {
     return; // Incorruptible state: the JSON export stays the way out.
   }
+  if (leavingPage) return;
   desiredLinkHash = hash;
   try {
     history.replaceState(null, '', hash);
@@ -1086,7 +1106,12 @@ async function writeLinkHash() {
   // disappears in between, the URL keeps an old hash and the memory must not run ahead of it,
   // otherwise a reload would take its own stale hash for a foreign link.
   try {
-    sessionStorage.setItem(LINK_HASH_MEMORY, hash);
+    const published = publishedLinkHashes().filter((item) => item !== hash);
+    published.push(hash);
+    sessionStorage.setItem(
+      LINK_HASH_MEMORY,
+      JSON.stringify(published.slice(-OWN_HASH_MEMORY_SIZE)),
+    );
   } catch {
     /* Without this memory, a stale hash could be taken for an old link. */
   }
@@ -1109,7 +1134,20 @@ function wireLinkHashFlush() {
       /* The stale hash stays: with no follow-up, it is only ever read back on load. */
     }
   };
-  window.addEventListener('pagehide', dropStaleHash);
+  window.addEventListener('pagehide', () => {
+    dropStaleHash();
+    leavingPage = true;
+    // The hash shown when leaving tells a reload overtaken by a write from a deliberate
+    // return to an older link (see `isOwnStaleHash`).
+    try {
+      sessionStorage.setItem(LINK_HASH_EXIT, location.hash);
+    } catch {
+      /* Without it, an older own hash counts as the tab's own. */
+    }
+  });
+  window.addEventListener('pageshow', () => {
+    leavingPage = false;
+  });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') dropStaleHash();
   });
@@ -1315,16 +1353,18 @@ async function importProject(file: File) {
  * until « Ajouter à mes projets ».
  */
 async function openSharedLink(fallbackId: string) {
-  // Tab resume: a hash write interrupted by a reload leaves a stale hash in
-  // the URL. If it is the last one written by this tab, it is not a shareable
-  // link: the (more recent) local state is loaded without a dialog.
-  let ownLastHash: string | null = null;
+  // Tab resume: a hash write interrupted or overtaken by a reload leaves a stale hash in
+  // the URL. If this tab published it, it is not a shareable link: the (more recent)
+  // local state is loaded without a dialog.
+  let ownStale = false;
   try {
-    ownLastHash = sessionStorage.getItem(LINK_HASH_MEMORY);
+    const exitHash = sessionStorage.getItem(LINK_HASH_EXIT);
+    sessionStorage.removeItem(LINK_HASH_EXIT);
+    ownStale = isOwnStaleHash(location.hash, publishedLinkHashes(), exitHash);
   } catch {
     /* Without memory, the dialog will judge normally. */
   }
-  if (ownLastHash !== null && ownLastHash === location.hash) {
+  if (ownStale) {
     try {
       history.replaceState(null, '', location.pathname + location.search);
     } catch {
