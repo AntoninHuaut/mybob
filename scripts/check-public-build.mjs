@@ -26,7 +26,7 @@ export async function verifyPublicBuild(directory) {
       }
       const name = relative(root, path).replaceAll('\\', '/');
       const allowed =
-        ['index.html', 'favicon.svg', demoName].includes(name) ||
+        ['index.html', 'favicon.svg', '_headers', demoName].includes(name) ||
         /^assets\/[\w.-]+\.(?:js|css|woff2?)$/.test(name) ||
         /^assets\/bob-[\w-]+\.png$/.test(name);
       if (!allowed) throw new Error(`File not meant for publication: ${name}`);
