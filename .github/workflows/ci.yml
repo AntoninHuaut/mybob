@@ -43,21 +43,21 @@ jobs:
         run: npm test
       - name: Test the plan comparison helper
         run: |
-          python3 -m pip install --quiet pillow
+          python3 -m pip install --quiet -r scripts/requirements.txt && python3 -m pip freeze | grep -iE "^(pillow|pymupdf)=="
           python3 scripts/compare_plan.py --self-test
       - name: Test the plan decision layer on the reference plan
         run: python3 scripts/derive_plan_decisions.py --self-test
       - name: Test the plan geometry extractor
         run: |
-          python3 -m pip install --quiet pymupdf
+          python3 -m pip install --quiet -r scripts/requirements.txt && python3 -m pip freeze | grep -iE "^(pillow|pymupdf)=="
           python3 scripts/extract_plan.py --self-test
       - name: Test the derived level outline
         run: |
-          python3 -m pip install --quiet pymupdf
+          python3 -m pip install --quiet -r scripts/requirements.txt && python3 -m pip freeze | grep -iE "^(pillow|pymupdf)=="
           python3 scripts/derive_outline.py --self-test
       - name: Test the interior doors read from swing arcs
         run: |
-          python3 -m pip install --quiet pymupdf
+          python3 -m pip install --quiet -r scripts/requirements.txt && python3 -m pip freeze | grep -iE "^(pillow|pymupdf)=="
           python3 scripts/extract_doors.py --self-test
       - name: Test the dimension registry
         run: python3 scripts/extract_plan_evidence.py --self-test
@@ -71,7 +71,7 @@ jobs:
         run: python3 scripts/check_site.py --self-test
       - name: Test the plan page tools
         run: |
-          python3 -m pip install --quiet pymupdf pillow
+          python3 -m pip install --quiet -r scripts/requirements.txt && python3 -m pip freeze | grep -iE "^(pillow|pymupdf)=="
           python3 scripts/grid_page.py --self-test
           python3 scripts/overlay_page.py --self-test
           python3 scripts/model_plan.py --self-test
