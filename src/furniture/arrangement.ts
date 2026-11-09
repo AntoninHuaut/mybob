@@ -48,7 +48,7 @@ function validatePlacement(before: FurnitureItem[], after: FurnitureItem[], leve
     const old = before.find((old) => old.id === item.id)!;
     if (old.position.every((value, axis) => Math.abs(value - item.position[axis]) < 1e-9)) continue;
     const issue = getBuildingPlacementIssues(item, level)[0];
-    if (issue) throw new Error(`Placement impossible pour « ${item.name} » : ${issue.message}`);
+    if (issue) throw new Error(`Placement impossible pour « ${item.name} » : ${issue.message}`);
   }
   return after;
 }

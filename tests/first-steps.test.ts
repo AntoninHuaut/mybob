@@ -44,11 +44,11 @@ test('the short help fits in three gestures and keeps the detailed text reachabl
   assert.match(short, /id="show-full-help"/);
   const full = fullHelpHtml();
   for (const kept of ['Mesures', 'Importer votre maison', 'Ctrl Z', 'Alt', 'Affichage des murs']) {
-    assert.ok(full.includes(kept), `l’aide complète conserve « ${kept} »`);
+    assert.ok(full.includes(kept), `l’aide complète conserve « ${kept} »`);
   }
   assert.ok(
     full.length > short.length * 2,
-    'le texte détaillé reste disponible derrière « Tout voir »',
+    'le texte détaillé reste disponible derrière « Tout voir »',
   );
   assert.equal(
     [...full.matchAll(/<h3>/g)].length,

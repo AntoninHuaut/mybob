@@ -11,7 +11,7 @@ export function areaGap(room: Room): number | undefined {
   return polygonArea(room.polygon) - room.planArea;
 }
 
-/** « équivalent » rather than a noisy figure when the gap fits within the tolerance. */
+/** « équivalent » rather than a noisy figure when the gap fits within the tolerance. */
 export function gapLabel(gap: number | undefined): string {
   if (gap === undefined) return '—';
   if (Math.abs(gap) <= AREA_GAP_TOLERANCE) return 'équivalent';
@@ -37,7 +37,7 @@ function areaTableHtml(rooms: Room[]): string {
 }
 
 /**
- * Content of « Plans et précision ». Areas come first: that is what you come to
+ * Content of « Plans et précision ». Areas come first: that is what you come to
  * check, and the document notes stay available below.
  */
 export function sourceDialogHtml(project: HouseProject, rooms: Room[]): string {

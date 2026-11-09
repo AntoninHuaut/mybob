@@ -163,8 +163,8 @@ export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureI
           footprintParts(other).some((otherPart) => polygonsOverlap(part, otherPart)),
         )
       ) {
-        add(item, 'error', `Chevauche « ${other.name} ».`);
-        add(other, 'error', `Chevauche « ${item.name} ».`);
+        add(item, 'error', `Chevauche « ${other.name} ».`);
+        add(other, 'error', `Chevauche « ${item.name} ».`);
       }
     }
     if (item.clearances && Object.values(item.clearances).some((value) => value > 0)) {

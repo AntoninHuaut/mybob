@@ -1,3 +1,4 @@
+import { userMessage } from '../errorMessage';
 import './solarPanel.css';
 import type { HouseProject, SolarSettings } from '../model/types';
 import { validateSolarSettings } from '../model/solarSettings';
@@ -181,7 +182,7 @@ export class SolarPanel {
       this.commit(settings, instant);
       this.dialog.close();
     } catch (error) {
-      this.status(error instanceof Error ? error.message : 'Réglages impossibles à appliquer.');
+      this.status(userMessage(error, 'Réglages impossibles à appliquer.'));
     }
   }
   private reset() {
@@ -255,8 +256,7 @@ export class SolarPanel {
           : 'Aucune commune trouvée. Essayez un nom voisin ou les coordonnées.',
       );
     } catch (error) {
-      if (!controller.signal.aborted)
-        this.status(error instanceof Error ? error.message : 'Recherche indisponible.');
+      if (!controller.signal.aborted) this.status(userMessage(error, 'Recherche indisponible.'));
     } finally {
       if (!controller.signal.aborted) button.disabled = false;
     }

@@ -1,3 +1,4 @@
+import { userMessage } from './errorMessage';
 import './style.css';
 import { SolarPanel } from './ui/solarPanel';
 import { appTemplate } from './ui/appTemplate';
@@ -118,7 +119,7 @@ let overlays: FurnitureOverlays = { distances: true, clearances: false, openings
 let syncingViewerMode = false;
 let onboarding: OnboardingState = parseOnboarding(null);
 // Share link: a project received through #p1: lives in memory only, read-only
-// until « Ajouter à mes projets ». The hash is rewritten (debounced) for every owned
+// until « Ajouter à mes projets ». The hash is rewritten (debounced) for every owned
 // project, never for a received one — its link stays the one that was shared.
 let readOnlyLink = false;
 let receivedShare: DecodedShareLink | undefined;
@@ -131,7 +132,7 @@ let linkHashWriteScheduled = false;
 let leavingPage = false;
 const LINK_HASH_DEBOUNCE = 500;
 const READ_ONLY_TOAST =
-  'Ce projet a été reçu par lien : il est en lecture seule. « Ajouter à mes projets » pour le modifier.';
+  'Ce projet a été reçu par lien : il est en lecture seule. « Ajouter à mes projets » pour le modifier.';
 const LINK_HASH_MEMORY = 'maison-atelier:last-link-hash';
 const LINK_HASH_EXIT = 'maison-atelier:exit-link-hash';
 
@@ -284,7 +285,7 @@ function persistFurniture() {
     scheduleLinkHashUpdate();
   } catch (error) {
     setLayoutStatus('Aménagement non sauvegardé · exportez le projet', true);
-    toast(error instanceof Error ? error.message : 'Sauvegarde indisponible.');
+    toast(userMessage(error, 'Sauvegarde indisponible.'));
   }
 }
 
@@ -360,7 +361,7 @@ function commitFurniture(items: FurnitureItem[]): boolean {
     previewFurniture = undefined;
     furnitureLayer?.setItems(furnitureHistory.items);
     furniturePanel?.render();
-    toast(error instanceof Error ? error.message : 'Modification invalide.');
+    toast(userMessage(error, 'Modification invalide.'));
     return false;
   }
   syncFurniture();
@@ -371,7 +372,7 @@ function updateFurniture(item: FurnitureItem) {
   try {
     return commitFurniture(applyFurnitureTransform(currentFurniture(), item));
   } catch (error) {
-    toast(error instanceof Error ? error.message : 'Déplacement de l’ensemble impossible.');
+    toast(userMessage(error, 'Déplacement de l’ensemble impossible.'));
     return false;
   }
 }
@@ -437,8 +438,7 @@ function openTableChairs() {
       el<HTMLDialogElement>('#info-dialog').close();
       toast('Chaises ajoutées. Ctrl Z annule l’ensemble.');
     } catch (error) {
-      el('#table-chairs-status').textContent =
-        error instanceof Error ? error.message : 'Ajout impossible.';
+      el('#table-chairs-status').textContent = userMessage(error, 'Ajout impossible.');
     }
   });
 }
@@ -515,7 +515,7 @@ function mountFurniture() {
     items = layoutSession.load(current.id, viewer.level.id);
   } catch (error) {
     restoreError = true;
-    toast(error instanceof Error ? error.message : 'Aménagement illisible.');
+    toast(userMessage(error, 'Aménagement illisible.'));
   }
   const historyKey = JSON.stringify([
     current.id,
@@ -596,7 +596,7 @@ function mountFurniture() {
           if (commitFurniture(linkFurniture(currentFurniture(), id, other)))
             toast('Meubles liés : déplacez ou tournez l’un pour déplacer l’ensemble.');
         } catch (error) {
-          toast(error instanceof Error ? error.message : 'Liaison impossible.');
+          toast(userMessage(error, 'Liaison impossible.'));
         }
       },
       onUnlink: (id) => {
@@ -668,7 +668,7 @@ function changeVariant(action: () => void, remount: boolean) {
   try {
     action();
   } catch (error) {
-    toast(error instanceof Error ? error.message : 'Variante indisponible.');
+    toast(userMessage(error, 'Variante indisponible.'));
   }
   const changed = JSON.stringify(layoutSession.book(current.id)) !== before;
   if (changed) {
@@ -1004,7 +1004,7 @@ function openFirstSteps() {
 /**
  * The current state document, in the shape of a complete export: project, effective
  * arrangement of every level and all the variants. It is what the link carries and
- * what « Exporter » downloads — never the camera nor the navigation preferences.
+ * what « Exporter » downloads — never the camera nor the navigation preferences.
  */
 function currentDocument(): ShareDocument {
   return {
@@ -1055,7 +1055,7 @@ function downloadProject() {
   try {
     snapshot = currentDocument();
   } catch (error) {
-    toast(error instanceof Error ? error.message : 'Export indisponible.');
+    toast(userMessage(error, 'Export indisponible.'));
     return;
   }
   const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
@@ -1338,7 +1338,7 @@ async function importProject(file: File) {
     if (await installProjectDocument(parsed))
       toast('Maison importée et conservée dans ce navigateur.');
   } catch (error) {
-    toast(error instanceof Error ? error.message : 'Impossible de lire ce projet.');
+    toast(userMessage(error, 'Impossible de lire ce projet.'));
   }
 }
 
@@ -1350,7 +1350,7 @@ async function importProject(file: File) {
  * A #p1: link opened at start-up. For the project's owner: identical = silence,
  * different = three outcomes (replace, keep both, ignore) — never a silent
  * loss. For a visitor: the project lives in memory only, read-only,
- * until « Ajouter à mes projets ».
+ * until « Ajouter à mes projets ».
  */
 async function openSharedLink(fallbackId: string) {
   // Tab resume: a hash write interrupted or overtaken by a reload leaves a stale hash in
@@ -1429,7 +1429,7 @@ function openReceivedShare(link: DecodedShareLink, fallbackId: string) {
   }
 }
 
-/** « Ajouter à mes projets »: copy of the received project under a new identifier, then normal installation. */
+/** « Ajouter à mes projets »: copy of the received project under a new identifier, then normal installation. */
 async function adoptReceived(source: ShareDocument) {
   const fork: ShareDocument = {
     ...source,
@@ -1682,7 +1682,7 @@ function wireKeyboardShortcuts() {
         event.stopImmediatePropagation();
         if (item.locked) {
           if (!event.repeat)
-            toast(`« ${item.name} » est verrouillé. Déverrouillez-le pour le supprimer.`);
+            toast(`« ${item.name} » est verrouillé. Déverrouillez-le pour le supprimer.`);
         } else commitFurniture(currentFurniture().filter((candidate) => candidate.id !== item.id));
         return;
       }
@@ -1694,7 +1694,7 @@ function wireKeyboardShortcuts() {
         return;
       if (item.locked) {
         if (!event.repeat && (event.code.startsWith('Arrow') || shortcut === 'r'))
-          toast(`« ${item.name} » est verrouillé. Déverrouillez-le pour le déplacer.`);
+          toast(`« ${item.name} » est verrouillé. Déverrouillez-le pour le déplacer.`);
         return;
       }
       const step = event.shiftKey ? 0.1 : 0.01;
@@ -1724,8 +1724,7 @@ function wireKeyboardShortcuts() {
               toast('Déplacement bloqué par le bâtiment ou un meuble de l’ensemble.');
           } else commitFurniture(next);
         } catch (error) {
-          if (!event.repeat)
-            toast(error instanceof Error ? error.message : 'Déplacement impossible.');
+          if (!event.repeat) toast(userMessage(error, 'Déplacement impossible.'));
         }
       } else if (shortcut === 'r' && !modifier) {
         event.preventDefault();
@@ -1802,8 +1801,7 @@ function wireProjectControls() {
         el<HTMLDialogElement>('#info-dialog').close();
         toast('Image PNG exportée.');
       } catch (error) {
-        el('#image-export-status').textContent =
-          error instanceof Error ? error.message : 'Export image impossible.';
+        el('#image-export-status').textContent = userMessage(error, 'Export image impossible.');
         button.disabled = false;
       }
     });
@@ -1821,7 +1819,7 @@ function wireProjectControls() {
     if (!project) return;
     openDialog(
       'SUPPRIMER CE PROJET',
-      `<h2>Supprimer « ${esc(project.name)} » ?</h2><p>Ce projet et les aménagements de ses niveaux seront supprimés de cet ordinateur. Exportez une copie pour les conserver.</p><div class="dialog-actions"><button type="button" class="text-button dialog-actions-start" id="export-before-delete">${icon('export', 17)} Exporter une copie</button><button type="button" class="text-button" id="cancel-delete-project">Annuler</button><button type="button" class="danger-button" id="confirm-delete-project">Supprimer le projet</button></div>`,
+      `<h2>Supprimer « ${esc(project.name)} » ?</h2><p>Ce projet et les aménagements de ses niveaux seront supprimés de cet ordinateur. Exportez une copie pour les conserver.</p><div class="dialog-actions"><button type="button" class="text-button dialog-actions-start" id="export-before-delete">${icon('export', 17)} Exporter une copie</button><button type="button" class="text-button" id="cancel-delete-project">Annuler</button><button type="button" class="danger-button" id="confirm-delete-project">Supprimer le projet</button></div>`,
     );
     el('#export-before-delete').addEventListener('click', downloadProject);
     el('#cancel-delete-project').addEventListener('click', () =>
@@ -2194,7 +2192,7 @@ async function start() {
     el('#loading').hidden = true;
     el('#fatal-error').hidden = false;
     el('#fatal-error').innerHTML =
-      `${icon('info', 30)}<h2>La vue 3D n’a pas pu démarrer.</h2><p>${esc(error instanceof Error ? error.message : 'Erreur de chargement.')}</p><p>Utilisez une version récente de Chrome, Firefox ou Edge, avec l’accélération graphique activée.</p><button class="primary-button" id="reload">Réessayer</button>`;
+      `${icon('info', 30)}<h2>La vue 3D n’a pas pu démarrer.</h2><p>${esc(userMessage(error, 'Erreur de chargement.'))}</p><p>Utilisez une version récente de Chrome, Firefox ou Edge, avec l’accélération graphique activée.</p><button class="primary-button" id="reload">Réessayer</button>`;
     el('#reload').addEventListener('click', () => location.reload());
     console.error(error);
   }

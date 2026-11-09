@@ -50,7 +50,7 @@ test('the gap compares the reconstructed area with the one stated on the plan', 
   assert.equal(areaGap(room('plus-grand', 11.5)), 0.5);
 });
 
-test('a gap within tolerance reads « équivalent » rather than a noisy figure', () => {
+test('a gap within tolerance reads « équivalent » rather than a noisy figure', () => {
   assert.equal(gapLabel(undefined), '—');
   assert.equal(gapLabel(0), 'équivalent');
   assert.equal(gapLabel(0.1), 'équivalent');

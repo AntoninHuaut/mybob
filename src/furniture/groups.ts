@@ -121,7 +121,7 @@ export function applyFurnitureTransform(
     const old = current.find((item) => item.id === next.id)!;
     if (old.locked && geometryChanged(old, next))
       throw new Error(
-        `« ${old.name} » est verrouillé. Déverrouillez ce meuble pour déplacer le groupe.`,
+        `« ${old.name} » est verrouillé. Déverrouillez ce meuble pour déplacer le groupe.`,
       );
     if ((next.elevation ?? 0) < 0)
       throw new Error(
@@ -150,7 +150,7 @@ export function constrainGroupDrag(
   const locked = members.find((item) => item.locked);
   if (locked)
     throw new Error(
-      `« ${locked.name} » est verrouillé. Déverrouillez ce meuble pour déplacer le groupe.`,
+      `« ${locked.name} » est verrouillé. Déverrouillez ce meuble pour déplacer le groupe.`,
     );
   let fraction = 1;
   for (const member of members) {
