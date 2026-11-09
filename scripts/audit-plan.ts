@@ -217,7 +217,7 @@ function reachable(grid: Grid, start: Point2): Uint8Array {
 }
 
 export function auditPlan(project: HouseProject) {
-  const checked = validateProject(project);
+  const checked = validateProject(project, { allowRoomOverlap: true });
   const issues: { level: string; kind: string; ids: string[]; value: number; unit: string }[] = [];
   const levels = checked.levels.map((level) => {
     const walls = level.walls.map((wall) => ({ wall, solids: wallFootprints(wall) }));

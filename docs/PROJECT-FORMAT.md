@@ -111,7 +111,7 @@ Windows are fixed in this version. Sliding bays have one moving panel and one fi
 
 ## Rooms
 
-A room is a finished interior outline independent of the walls. `polygon` is used for area computation, selection and location. Both must therefore be updated when the plan changes. Format validation does not guarantee architectural conformity: it does not yet check every overlap between rooms and walls.
+A room is a finished interior outline independent of the walls. `polygon` is used for area computation, selection and location. Both must therefore be updated when the plan changes. Import refuses two rooms whose overlap exceeds 1 % of the smaller one. Format validation otherwise does not guarantee architectural conformity: a wall crossing a room is not checked (the plan audit reports it).
 
 `planArea` is optional: it keeps the area stated in the reference document. The computed area is always derived from `polygon` and shown separately. Never change the outline only to force an area: linear dimensions and geometry take precedence.
 
