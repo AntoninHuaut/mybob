@@ -1,0 +1,40 @@
+// Renovate keeps the pnpm dependencies, the packageManager pin, the pinned
+// Python requirements of the plan scripts and the workflow's actions current.
+//
+// Routine bumps (minor, patch, digest) arrive together in one PR a week.
+// Majors stay one PR each: a Babylon.js, Vite or TypeScript major usually needs code
+// changes and is tested and reverted on its own.
+{
+  $schema: 'https://docs.renovatebot.com/renovate-schema.json',
+  // best-practices adds, on top of config:recommended: actions and Docker
+  // images pinned to digests, devDependencies pinned, a 3-day strict
+  // minimumReleaseAge on npm, weekly lock file maintenance, config
+  // migration PRs and abandoned-package warnings on the dashboard.
+  extends: ['config:best-practices'],
+  timezone: 'Europe/Paris',
+  schedule: ['* 7-12 * * 6'],
+  labels: ['dependencies'],
+  semanticCommits: 'enabled',
+  semanticCommitType: 'chore',
+  semanticCommitScope: 'deps',
+  // Security PRs already skip the Saturday schedule and the release-age
+  // wait. OSV adds a second advisory source next to GitHub's, which often
+  // lists a fix first. Still flagged experimental upstream (#20542).
+  osvVulnerabilityAlerts: true,
+  // Move the ranges in package.json along with the lockfile, as Dependabot
+  // did, so package.json still says which version is installed.
+  rangeStrategy: 'bump',
+  // Lock file maintenance refreshes transitive dependencies, which nothing
+  // else bumps. It runs in the same Saturday window, not the preset's
+  // Monday; pnpm applies its own one-day minimumReleaseAge to it.
+  lockFileMaintenance: {
+    schedule: ['* 7-12 * * 6'],
+  },
+  packageRules: [
+    {
+      groupName: 'routine updates',
+      groupSlug: 'routine',
+      matchUpdateTypes: ['minor', 'patch', 'digest'],
+    },
+  ],
+}
