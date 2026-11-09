@@ -22,16 +22,11 @@ import { validateProject } from './model/validate';
 import { quarantineExport, restoreProjects } from './projectStorage';
 import { bounds, floorElevationAt, pointInPolygon, polygonArea } from './model/geometry';
 import { icon } from './ui/icons';
-import { area, escapeHtml as esc, number } from './ui/format';
+import { escapeHtml as esc, number } from './ui/format';
 import { minimap } from './ui/minimap';
 import { FurnitureLayer, type FurnitureOverlays } from './furniture/layer';
 import { FurniturePanel } from './furniture/panel';
-import {
-  VariantSession,
-  STALE_MESSAGE,
-  variantsStorageKey,
-  type VariantBook,
-} from './furniture/variants';
+import { VariantSession, STALE_MESSAGE, variantsStorageKey } from './furniture/variants';
 import { VariantsPanel } from './ui/variantsPanel';
 import { ArrangementPanel } from './ui/arrangementPanel';
 import { FurnitureClipboard } from './furniture/clipboard';
@@ -51,7 +46,6 @@ import { layoutLabels, type LabelBox } from './ui/labelLayout';
 import { exportSceneImage } from './ui/imageExport';
 import {
   FurnitureHistory,
-  createFurniture,
   layoutStorageKey,
   validateFurnitureList,
   type FurnitureItem,

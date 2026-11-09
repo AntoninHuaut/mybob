@@ -260,7 +260,7 @@ function packVariant(packer: Packer, variant: LayoutVariant, levelIds: string[])
     items.forEach((item, index) => {
       if (item.groupId !== undefined && !groups.has(item.groupId)) groups.set(item.groupId, index);
     });
-    items.forEach((item, index) =>
+    items.forEach((item) =>
       packFurnitureItem(
         packer,
         item,

@@ -1,5 +1,4 @@
 import bobPortrait from '../assets/brand/bob-portrait.png';
-import bobPlan from '../assets/brand/bob-plan.png';
 import bobMesure from '../assets/brand/bob-mesure.svg';
 import { icon } from './icons';
 import { startCardHtml } from './firstSteps';

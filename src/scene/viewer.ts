@@ -196,7 +196,6 @@ export class HouseViewer {
   private solarPosition?: SolarPosition;
   private baseSun?: { direction: Vector3; position: Vector3; diffuse: Color3 };
   private lightOn = true;
-  private ceilingOn = false;
   private dimensionOn = false;
   private paused = false;
   private capturing = false;

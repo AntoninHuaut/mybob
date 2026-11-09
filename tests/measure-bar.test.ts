@@ -4,7 +4,7 @@ import { registerHooks } from 'node:module';
 import { Window, HTMLElement as DOMElement, type Event as DOMEvent, MouseEvent } from 'happy-dom';
 
 registerHooks({
-  load(url, context, next) {
+  load(url, _context, next) {
     return url.endsWith('.css') ? { format: 'module', source: '', shortCircuit: true } : next(url);
   },
 });

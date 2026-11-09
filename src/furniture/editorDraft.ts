@@ -126,6 +126,7 @@ export class FurnitureEditorDraft {
       const room = this.level.rooms.find((room) => pointInPolygon(center, room.polygon));
       if (room) return room;
     }
+    return undefined;
   }
 
   duplicate(): void {

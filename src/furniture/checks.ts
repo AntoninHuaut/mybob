@@ -251,12 +251,13 @@ function raySegment(from: Point2, direction: Point2, a: Point2, b: Point2): numb
   const sx = b[0] - a[0],
     sz = b[1] - a[1];
   const cross = direction[0] * sz - direction[1] * sx;
-  if (Math.abs(cross) < 1e-9) return;
+  if (Math.abs(cross) < 1e-9) return undefined;
   const ax = a[0] - from[0],
     az = a[1] - from[1];
   const t = (ax * sz - az * sx) / cross;
   const u = (ax * direction[1] - az * direction[0]) / cross;
   if (t >= -0.001 && u >= -0.00001 && u <= 1.00001) return Math.max(0, t);
+  return undefined;
 }
 
 /** Distances from the four face centres, not a claim of minimum walking clearance. */

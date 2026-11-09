@@ -126,6 +126,7 @@ export function findVisitDestination(
       ];
       if (isSceneVisitDestination(scene, level, point)) return point;
     }
+  return undefined;
 }
 
 /** Positive half-space is clipped by Babylon: keep everything below this local height. */

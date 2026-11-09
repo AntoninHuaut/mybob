@@ -74,6 +74,7 @@ function setup(initialEditing = true, initialKind: FurnitureItem['kind'] = 'sofa
     onUpdate: (item) => {
       if (rejectUpdates) return false;
       items = items.map((old) => (old.id === item.id ? item : old));
+      return undefined;
     },
     onApplyDraft: (snapshot, id) => {
       if (rejectUpdates) return false;
