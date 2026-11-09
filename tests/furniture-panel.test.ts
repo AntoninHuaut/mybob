@@ -6,6 +6,7 @@ import {
   HTMLInputElement as DOMInput,
   HTMLFormElement as DOMForm,
   HTMLSelectElement as DOMSelect,
+  HTMLDetailsElement as DOMDetails,
 } from 'happy-dom';
 import { createFurniture, FURNITURE_PRESETS, type FurnitureItem } from '../src/furniture/model';
 
@@ -676,6 +677,56 @@ test('renaming preserves precise geometry and absent optional spaces', () => {
       assert.equal(next[key], original[key]);
     assert.deepEqual(next.position, original.position);
     assert.equal(next.clearances, undefined);
+  } finally {
+    cleanup();
+  }
+});
+
+test('a half-centimetre clearance stays valid and is saved exactly', () => {
+  const { window, panel, editor, getItems, setItems, cleanup } = setup(true, 'cabinet');
+  try {
+    const original = createFurniture({
+      kind: 'cabinet',
+      id: 'sofa',
+      position: [3, 3],
+      clearances: { front: 0.125, back: 0, left: 0, right: 0 },
+    });
+    setItems([original]);
+    panel.openEdit(original.id);
+    const form = editor.querySelector<DOMForm>('form')!;
+    const front = editor.querySelector<DOMInput>('input[name=front]')!;
+    assert.equal(front.value, '12.5');
+    // Happy DOM mis-validates every step="0.1" field, so the form itself is not
+    // asserted here; the clearance fields are the ones the issue was about.
+    for (const name of ['front', 'back', 'left', 'right', 'reach'])
+      assert.equal(editor.querySelector<DOMInput>(`input[name=${name}]`)!.checkValidity(), true);
+    editor.querySelector<DOMInput>('input[name=name]')!.value = 'Commode renommée';
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    const next = getItems()[0];
+    assert.equal(next.name, 'Commode renommée');
+    assert.equal(next.clearances?.front, 0.125);
+  } finally {
+    cleanup();
+  }
+});
+
+test('an invalid field inside a collapsed section is revealed and focused', () => {
+  const { window, panel, editor, cleanup } = setup();
+  try {
+    panel.openEdit('sofa');
+    const advanced = editor.querySelector<DOMDetails>('.furniture-advanced')!;
+    const placement = editor.querySelector<DOMDetails>('.furniture-placement')!;
+    assert.equal(advanced.open, false);
+    // Happy DOM wrongly rejects decimal values on step="0.1" fields; neutralise
+    // that so the only invalid field is the one this test makes invalid.
+    for (const input of editor.querySelectorAll<DOMInput>('input[step="0.1"]')) input.step = 'any';
+    const back = editor.querySelector<DOMInput>('input[name=back]')!;
+    back.value = '-3';
+    back.dispatchEvent(new window.Event('invalid', { cancelable: true }));
+    assert.equal(placement.open, true);
+    assert.equal(advanced.open, true);
+    assert.ok(window.document.activeElement === back, 'the invalid field receives focus');
   } finally {
     cleanup();
   }

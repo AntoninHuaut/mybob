@@ -257,6 +257,7 @@ export class FurniturePanel {
     this.editDialog.addEventListener('change', this.change);
     this.editDialog.addEventListener('input', this.measurementInput);
     this.editDialog.addEventListener('submit', this.submitDetails);
+    this.editDialog.addEventListener('invalid', this.revealInvalid, true);
     this.editDialog.addEventListener('close', this.editClosed);
     this.render();
   }
@@ -292,7 +293,7 @@ export class FurniturePanel {
         <details class="furniture-placement"><summary>Placement et options</summary>
         <label class="furniture-field">Hauteur de pose au-dessus du sol <span>cm</span><input name="elevation" type="number" min="0" max="2000" step="0.1" value="${cm(item.elevation ?? 0)}"${disabled(item.locked)}></label>
         <div class="furniture-field-grid"><label class="furniture-field">Position X <span>cm</span><input name="x" type="number" min="-100000" max="100000" step="0.1" value="${cm(item.position[0])}" required${disabled(item.locked)}></label><label class="furniture-field">Position Z <span>cm</span><input name="z" type="number" min="-100000" max="100000" step="0.1" value="${cm(item.position[1])}" required${disabled(item.locked)}></label><label class="furniture-field">Rotation <span>°</span><input name="rotation" type="number" min="-3600" max="3600" step="0.1" value="${degrees(item.rotation)}" required${disabled(item.locked)}></label></div>
-        <details class="furniture-advanced"${this.editDialog.querySelector<HTMLDetailsElement>('.furniture-advanced')?.open ? ' open' : ''}><summary>Passage et ouverture</summary><p>Les distances sont proposées pour tester votre aménagement ; ajustez-les à votre usage.</p><div class="furniture-field-grid"><label class="furniture-field">Devant <span>cm</span><input name="front" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.front ?? 0)}"></label><label class="furniture-field">Derrière <span>cm</span><input name="back" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.back ?? 0)}"></label><label class="furniture-field">À gauche <span>cm</span><input name="left" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.left ?? 0)}"></label><label class="furniture-field">À droite <span>cm</span><input name="right" type="number" min="0" max="500" step="1" value="${cm(item.clearances?.right ?? 0)}"></label></div><div class="furniture-field-grid two"><label class="furniture-field">Ouverture<select name="openingKind"><option value="none"${!item.opening ? ' selected' : ''}>Aucune</option><option value="hinged"${item.opening?.kind === 'hinged' ? ' selected' : ''}>Porte battante</option><option value="drawer"${item.opening?.kind === 'drawer' ? ' selected' : ''}>Tiroir</option></select></label><label class="furniture-field">Débattement <span>cm</span><input name="reach" type="number" min="0" max="500" step="1" value="${cm(item.opening?.reach ?? 0.6)}"></label></div></details>
+        <details class="furniture-advanced"${this.editDialog.querySelector<HTMLDetailsElement>('.furniture-advanced')?.open ? ' open' : ''}><summary>Passage et ouverture</summary><p>Les distances sont proposées pour tester votre aménagement ; ajustez-les à votre usage.</p><div class="furniture-field-grid"><label class="furniture-field">Devant <span>cm</span><input name="front" type="number" min="0" max="500" step="any" value="${cm(item.clearances?.front ?? 0)}"></label><label class="furniture-field">Derrière <span>cm</span><input name="back" type="number" min="0" max="500" step="any" value="${cm(item.clearances?.back ?? 0)}"></label><label class="furniture-field">À gauche <span>cm</span><input name="left" type="number" min="0" max="500" step="any" value="${cm(item.clearances?.left ?? 0)}"></label><label class="furniture-field">À droite <span>cm</span><input name="right" type="number" min="0" max="500" step="any" value="${cm(item.clearances?.right ?? 0)}"></label></div><div class="furniture-field-grid two"><label class="furniture-field">Ouverture<select name="openingKind"><option value="none"${!item.opening ? ' selected' : ''}>Aucune</option><option value="hinged"${item.opening?.kind === 'hinged' ? ' selected' : ''}>Porte battante</option><option value="drawer"${item.opening?.kind === 'drawer' ? ' selected' : ''}>Tiroir</option></select></label><label class="furniture-field">Débattement <span>cm</span><input name="reach" type="number" min="0" max="500" step="any" value="${cm(item.opening?.reach ?? 0.6)}"></label></div></details>
         <label class="furniture-lock"><input type="checkbox" name="locked"${checked(item.locked)}> Verrouiller le meuble</label>
         </details>
       </form>
@@ -610,6 +611,19 @@ export class FurniturePanel {
       );
     }
   }
+
+  // Native validation must never point at a field hidden in a collapsed
+  // section: Save would otherwise do nothing visible.
+  private revealInvalid = (event: Event) => {
+    const field = event.target as HTMLInputElement;
+    for (let node = field.parentElement; node; node = node.parentElement)
+      if (node.tagName === 'DETAILS') (node as HTMLDetailsElement).open = true;
+    const first = [...(field.form?.elements ?? [])].find(
+      (control) =>
+        (control as HTMLInputElement).willValidate && !(control as HTMLInputElement).validity.valid,
+    );
+    if (first === field) field.focus();
+  };
 
   private submitDetails = (event: Event) => {
     event.preventDefault();
