@@ -91,3 +91,27 @@ function fromBase64Url(encoded: string): Uint8Array {
   for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
   return bytes;
 }
+
+/** How many hashes published by a tab are remembered to recognise its own stale URL. */
+export const OWN_HASH_MEMORY_SIZE = 8;
+
+/**
+ * Whether the hash a tab loads with is one of its own stale snapshots rather than a link.
+ * `published` lists the hashes this tab put in the URL, oldest first; `exitHash` is the hash
+ * the page showed when it was left (null if unknown).
+ *
+ * - The last published hash is always the tab's own: reloading it must stay silent.
+ * - An older published hash is the tab's own only if the page was not showing it when left.
+ *   A reload can start with the URL of the moment it was requested while a debounced write
+ *   publishes a newer hash before the page goes away; the deliberate return to an older link
+ *   instead leaves that link displayed, and must still ask what to do.
+ */
+export function isOwnStaleHash(
+  hash: string,
+  published: readonly string[],
+  exitHash: string | null,
+): boolean {
+  if (published.length === 0) return false;
+  if (published[published.length - 1] === hash) return true;
+  return exitHash !== hash && published.includes(hash);
+}
