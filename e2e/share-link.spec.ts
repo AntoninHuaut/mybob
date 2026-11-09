@@ -178,7 +178,6 @@ test('changing level keeps the project received by link, without going back to t
 
 test('the owner reloading their own link sees no dialog', async ({ page }) => {
   await importLinkProject(page);
-  const shared = await sharedHash(page);
   await page.reload();
   await expect(page.locator('#received-banner')).toBeHidden();
   await expect(page.getByRole('dialog')).toHaveCount(0);

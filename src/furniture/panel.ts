@@ -29,7 +29,7 @@ export interface FurniturePanelAdapter {
   getAddPosition?(): Point2;
   getAddRoomName?(): string | undefined;
   onAdd(item: FurnitureItem, linkedTo?: string): void;
-  onUpdate(item: FurnitureItem): boolean | void;
+  onUpdate(item: FurnitureItem): boolean | undefined;
   onApplyDraft(items: FurnitureItem[], selectedId: string | undefined): boolean;
   onDelete(id: string): void;
   onDuplicate(id: string): void;
@@ -228,7 +228,6 @@ export class FurniturePanel {
   private dialog: HTMLDialogElement;
   private overlays = { distances: true, clearances: false, openings: false };
   private editDialog: HTMLDialogElement;
-  private editId?: string;
   private draft?: FurnitureEditorDraft;
 
   constructor(
@@ -335,7 +334,6 @@ export class FurniturePanel {
 
   private renderDraft(message = '') {
     const item = this.draft?.selected;
-    this.editId = item?.id;
     this.editDialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-edit-title">${item ? `Modifier ${esc(item.name)}` : 'Retirer le meuble'}</h2><button type="button" class="icon-button" data-edit-close aria-label="Fermer">${icon('close', 20)}</button></div>${item ? this.details(item) : '<p>Le meuble sera retiré lorsque vous enregistrerez.</p><div class="furniture-edit-status" role="status"></div><div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button type="button" class="primary-button" data-save-draft>Enregistrer</button></div>'}`;
     if (item) {
       const form = this.editDialog.querySelector<HTMLFormElement>('form')!;
@@ -369,7 +367,6 @@ export class FurniturePanel {
 
   private editClosed = () => {
     if (this.editDialog.open) return;
-    this.editId = undefined;
     this.draft = undefined;
     this.dialogClosed();
   };

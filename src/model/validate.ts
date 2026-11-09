@@ -1,5 +1,6 @@
-import type { HouseProject, Point2, ProjectSite } from './types';
+import type { HouseProject, Room, Point2, ProjectSite } from './types';
 import {
+  bounds,
   pointInPolygon,
   polygonArea,
   polygonInsidePolygon,
@@ -94,7 +95,10 @@ function validRoofFace(face: unknown, vertices: [number, number, number][]): boo
   );
 }
 
-export function validateProject(input: unknown): HouseProject {
+export function validateProject(
+  input: unknown,
+  { allowRoomOverlap = false }: { allowRoomOverlap?: boolean } = {},
+): HouseProject {
   if (!record(input)) fail('Le fichier doit contenir un objet de projet JSON.');
   const p = input as HouseProject;
   if (p.schemaVersion !== 1 || p.units !== 'm')
@@ -258,6 +262,7 @@ export function validateProject(input: unknown): HouseProject {
           fail(`La hauteur libre de la pièce doit être d’au moins 1,80 m : ${r.id}`);
       }
     }
+    if (!allowRoomOverlap) rejectOverlappingRooms(l.rooms);
     if (l.stairs !== undefined) {
       if (!Array.isArray(l.stairs) || l.stairs.length > 20) fail(`Escaliers invalides : ${l.id}`);
       for (const stair of l.stairs) {
@@ -403,4 +408,33 @@ export function validateProject(input: unknown): HouseProject {
   const result = structuredClone(p);
   if (solar !== undefined) result.solar = solar;
   return result;
+}
+
+/**
+ * Two rooms must not share floor: it gives a wrong picture and a wrong surface.
+ * The overlap is sampled on a 5 cm grid over the smaller room (rooms can be concave);
+ * more than 1 % of the smaller room is refused. Touching edges are fine.
+ */
+function rejectOverlappingRooms(rooms: Room[]) {
+  const step = 0.05;
+  for (let i = 0; i < rooms.length; i++)
+    for (let j = i + 1; j < rooms.length; j++) {
+      const [small, other] =
+        polygonArea(rooms[i].polygon) <= polygonArea(rooms[j].polygon)
+          ? [rooms[i], rooms[j]]
+          : [rooms[j], rooms[i]];
+      const a = bounds(small.polygon),
+        b = bounds(other.polygon);
+      if (a.maxX <= b.minX || b.maxX <= a.minX || a.maxZ <= b.minZ || b.maxZ <= a.minZ) continue;
+      let inSmall = 0,
+        inBoth = 0;
+      for (let x = a.minX + step / 2; x < a.maxX; x += step)
+        for (let z = a.minZ + step / 2; z < a.maxZ; z += step) {
+          if (!pointInPolygon([x, z], small.polygon)) continue;
+          inSmall++;
+          if (pointInPolygon([x, z], other.polygon)) inBoth++;
+        }
+      if (inSmall && inBoth / inSmall > 0.01)
+        fail(`Les pièces ${small.id} et ${other.id} se chevauchent.`);
+    }
 }

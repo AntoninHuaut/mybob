@@ -382,3 +382,11 @@ test('import rejects a stair or a stairwell outside the level outline', () => {
     ];
   }, /trémie/);
 });
+
+test('import rejects overlapping rooms but accepts rooms that only touch', () => {
+  const rooms = original.levels[0].rooms;
+  expectInvalid((p) => {
+    p.levels[0].rooms.push({ ...structuredClone(rooms[0]), id: 'double' });
+  }, /se chevauchent/);
+  assert.doesNotThrow(() => validateProject(structuredClone(original)));
+});

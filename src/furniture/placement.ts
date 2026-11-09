@@ -212,7 +212,7 @@ export function findFurniturePlacement(
     typeof preferredRoom === 'string'
       ? level.rooms.find((r) => r.id === preferredRoom)
       : preferredRoom && level.rooms.find((r) => r.id === preferredRoom.id);
-  if (preferredRoom && !requested) return;
+  if (preferredRoom && !requested) return undefined;
   const validBuilding = buildingChecker(level);
   const free = (position: Point2) => {
     if (requested && !pointInPolygon(position, requested.polygon)) return false;
@@ -266,4 +266,5 @@ export function findFurniturePlacement(
       if (free(position)) return clone({ ...item, position });
     }
   }
+  return undefined;
 }
