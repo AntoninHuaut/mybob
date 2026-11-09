@@ -15,19 +15,19 @@ pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
-Open the address printed by Vite. By default only the demonstration studio is bundled; import your house locally. `npm run dev:private` loads a local personal plan. The application renders with WebGL 2; browser graphics acceleration is required. No account nor data server is needed locally.
+Open the address printed by Vite. By default only the demonstration studio is bundled; import your house locally. `pnpm run dev:private` loads a local personal plan. The application renders with WebGL 2; browser graphics acceleration is required. No account nor data server is needed locally.
 
 ```sh
-npm test
-npm run build
-npm run format:check
+pnpm test
+pnpm run build
+pnpm run format:check
 ```
 
 The `dist/` folder contains the deployable static version. Dependencies and house data are bundled or served locally; Google Fonts is optional and has system fallback fonts.
 
-Automated browser tests: `pnpm exec playwright install chromium`, then `pnpm run test:e2e`. See [the E2E guide](docs/E2E.md).
+Automated browser tests: `pnpm exec playwright install chromium`, then run only the scenarios of the feature you touched; CI runs the full suite. See [the E2E guide](docs/E2E.md).
 
-The normal build is **public and limited to the demonstration**. `npm run ci` runs every check and verifies that no personal plan is present in the artefact. Cloudflare Pages and GitHub Actions configuration: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+The normal build is **public and limited to the demonstration**. `pnpm run ci` runs every check and verifies that no personal plan is present in the artefact. Cloudflare Pages and GitHub Actions configuration: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 V2 adds a configurable terrain and roof, adjustable navigation and tone-mapped lighting. The Soleil button adds a preview based on the town, the plan's north, the date and the local time; Plan view stays neutral. Details and limits: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), [docs/EXTERIOR.md](docs/EXTERIOR.md).
 

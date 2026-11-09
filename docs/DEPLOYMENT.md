@@ -2,7 +2,7 @@
 
 ## Public publication, local house data
 
-`npm run build` produces a public application with **only the demonstration studio**. Vite does not copy the `public/` folder: a plugin explicitly bundles the favicon and `studio-demo.json`. Any personal plan (`public/projects/private-*.json`, git-ignored), PDFs and building-site photos are not part of this artefact.
+`pnpm run build` produces a public application with **only the demonstration studio**. Vite does not copy the `public/` folder: a plugin explicitly bundles the favicon and `studio-demo.json`. Any personal plan (`public/projects/private-*.json`, git-ignored), PDFs and building-site photos are not part of this artefact.
 
 Furniture, solar settings and imported projects are processed and kept in the browser. Their export stays a personal file. This data is not sent to Cloudflare by the application. Changing the site origin does not transfer browser storage: **export the project and its arrangement from the old private site before the migration**, then import that file on the new site.
 
@@ -13,11 +13,11 @@ The Cloudflare build service compiles these public sources; the separation guara
 To use the real plan locally, explicitly:
 
 ```sh
-npm run dev:private
-npm run build:private
+pnpm run dev:private
+pnpm run build:private
 ```
 
-The output of `build:private` must never be published on a public site. `npm run check:public` rejects it.
+The output of `build:private` must never be published on a public site. `pnpm run check:public` rejects it.
 
 ## GitHub Actions CI
 
