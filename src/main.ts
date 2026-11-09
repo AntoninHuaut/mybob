@@ -126,7 +126,7 @@ let linkHashWriteScheduled = false;
 let leavingPage = false;
 const LINK_HASH_DEBOUNCE = 500;
 const READ_ONLY_TOAST =
-  'Ce projet a été reçu par lien : il est en lecture seule. « Ajouter à mes projets » pour le modifier.';
+  'Ce projet a été reçu par lien : il est en lecture seule. « Ajouter à mes projets » pour le modifier.';
 const LINK_HASH_MEMORY = 'maison-atelier:last-link-hash';
 const LINK_HASH_EXIT = 'maison-atelier:exit-link-hash';
 
@@ -234,8 +234,8 @@ function showQuarantineBanner(count: number) {
   const text = document.createElement('span');
   text.textContent =
     count === 1
-      ? '1 projet local n’a pas pu être ouvert. Il est conservé : exportez-le pour le récupérer.'
-      : `${count} projets locaux n’ont pas pu être ouverts. Ils sont conservés : exportez-les pour les récupérer.`;
+      ? '1 projet local n’a pas pu être ouvert. Il est conservé : exportez-le pour le récupérer.'
+      : `${count} projets locaux n’ont pas pu être ouverts. Ils sont conservés : exportez-les pour les récupérer.`;
   const download = document.createElement('button');
   download.type = 'button';
   download.className = 'text-button';
@@ -348,7 +348,7 @@ function commitFurniture(items: FurnitureItem[]): boolean {
         previous.position[1] !== item.position[1];
       if (!geometryChanged) continue;
       const issue = getBuildingPlacementIssues(item, viewer.level)[0];
-      if (issue) throw new Error(`Placement impossible : ${issue.message}`);
+      if (issue) throw new Error(`Placement impossible : ${issue.message}`);
     }
     furnitureHistory.commit(items);
   } catch (error) {
@@ -568,7 +568,7 @@ function mountFurniture() {
           Math.hypot(placed.position[0] - item.position[0], placed.position[1] - item.position[1]) >
             0.001
         )
-          throw new Error('Pas de place sur ce meuble : retirez ou déplacez l’objet déjà présent.');
+          throw new Error('Pas de place sur ce meuble : retirez ou déplacez l’objet déjà présent.');
         const next = [...currentFurniture(), placed];
         if (!commitFurniture(linkedTo ? linkFurniture(next, placed.id, linkedTo) : next))
           throw new Error(
@@ -588,7 +588,7 @@ function mountFurniture() {
       onLink: (id, other) => {
         try {
           if (commitFurniture(linkFurniture(currentFurniture(), id, other)))
-            toast('Meubles liés : déplacez ou tournez l’un pour déplacer l’ensemble.');
+            toast('Meubles liés : déplacez ou tournez l’un pour déplacer l’ensemble.');
         } catch (error) {
           toast(userMessage(error, 'Liaison impossible.'));
         }
@@ -1154,7 +1154,7 @@ function wireLinkHashFlush() {
 
 async function copyShareLink() {
   clearTimeout(linkHashTimer);
-  const message = 'Lien copié : il contient une photographie de l’état actuel du projet.';
+  const message = 'Lien copié : il contient une photographie de l’état actuel du projet.';
   try {
     await writeLinkHash();
     await navigator.clipboard.writeText(location.href);
@@ -1172,7 +1172,7 @@ async function copyShareLink() {
       area.remove();
       toast(message);
     } catch {
-      toast('Copie impossible : copiez l’adresse depuis la barre d’adresse du navigateur.');
+      toast('Copie impossible : copiez l’adresse depuis la barre d’adresse du navigateur.');
     }
   }
 }
@@ -1372,7 +1372,7 @@ async function openSharedLink(fallbackId: string) {
     link = await decodeShareLinkHash(location.hash);
   } catch {
     loadProject(fallbackId);
-    toast('Lien illisible : le projet enregistré sur cet ordinateur est chargé.');
+    toast('Lien illisible : le projet enregistré sur cet ordinateur est chargé.');
     return;
   }
   const existing = projects.find((candidate) => candidate.id === link.document.id);
@@ -1418,7 +1418,7 @@ function openReceivedShare(link: DecodedShareLink, fallbackId: string) {
     toast(
       error instanceof Error
         ? error.message
-        : 'Lien illisible : le projet enregistré sur cet ordinateur est chargé.',
+        : 'Lien illisible : le projet enregistré sur cet ordinateur est chargé.',
     );
   }
 }
@@ -1433,7 +1433,7 @@ async function adoptReceived(source: ShareDocument) {
     // The shared link must no longer survive a reload: it is removed right
     // away, the deferred write will re-record the owned project's state.
     history.replaceState(null, '', location.pathname + location.search);
-    toast('Projet ajouté à vos projets : il est maintenant modifiable.');
+    toast('Projet ajouté à vos projets : il est maintenant modifiable.');
   }
 }
 
@@ -1811,7 +1811,7 @@ function wireProjectControls() {
     if (!project) return;
     openDialog(
       'SUPPRIMER CE PROJET',
-      `<h2>Supprimer « ${esc(project.name)} » ?</h2><p>Ce projet et les aménagements de ses niveaux seront supprimés de cet ordinateur. Exportez une copie pour les conserver.</p><div class="dialog-actions"><button type="button" class="text-button dialog-actions-start" id="export-before-delete">${icon('export', 17)} Exporter une copie</button><button type="button" class="text-button" id="cancel-delete-project">Annuler</button><button type="button" class="danger-button" id="confirm-delete-project">Supprimer le projet</button></div>`,
+      `<h2>Supprimer « ${esc(project.name)} » ?</h2><p>Ce projet et les aménagements de ses niveaux seront supprimés de cet ordinateur. Exportez une copie pour les conserver.</p><div class="dialog-actions"><button type="button" class="text-button dialog-actions-start" id="export-before-delete">${icon('export', 17)} Exporter une copie</button><button type="button" class="text-button" id="cancel-delete-project">Annuler</button><button type="button" class="danger-button" id="confirm-delete-project">Supprimer le projet</button></div>`,
     );
     el('#export-before-delete').addEventListener('click', downloadProject);
     el('#cancel-delete-project').addEventListener('click', () =>
@@ -1841,7 +1841,7 @@ function wireProjectControls() {
           }
         }
         toast(
-          'Suppression impossible : la mémoire locale est indisponible. Votre projet reste ouvert.',
+          'Suppression impossible : la mémoire locale est indisponible. Votre projet reste ouvert.',
         );
         return;
       }
@@ -2020,7 +2020,7 @@ async function start() {
     viewer.onEditFurniture = openFurnitureEditor;
     viewer.onPointerLockError = () => {
       toast(
-        'Capture indisponible : cliquez dans la vue, puis glissez pour regarder autour de vous.',
+        'Capture indisponible : cliquez dans la vue, puis glissez pour regarder autour de vous.',
       );
       el<HTMLCanvasElement>('#scene').focus();
     };
@@ -2156,7 +2156,7 @@ async function start() {
         toast(
           error instanceof Error
             ? error.message
-            : 'Le lien n’a pas pu être ouvert : le projet enregistré sur cet ordinateur est chargé.',
+            : 'Le lien n’a pas pu être ouvert : le projet enregistré sur cet ordinateur est chargé.',
         );
       }
     } else loadProject(initial);

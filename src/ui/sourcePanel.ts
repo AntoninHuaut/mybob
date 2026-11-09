@@ -44,9 +44,9 @@ export function sourceDialogHtml(project: HouseProject, rooms: Room[]): string {
   const compared = rooms.some((room) => room.planArea !== undefined);
   const caveat = compared
     ? 'Écart = reconstruite moins annoncée au plan. Contours enregistrés, pas un relevé sur chantier.'
-    : 'Ce projet n’annonce pas de surface au plan : seule la surface reconstruite est affichée.';
+    : 'Ce projet n’annonce pas de surface au plan : seule la surface reconstruite est affichée.';
   const site = project.site
     ? `<h3>Terrain et extérieur</h3><ul class="source-notes">${project.site.notes.map((note) => `<li>${esc(note)}</li>`).join('')}</ul>`
     : '';
-  return `<h2>Les dimensions d’abord.</h2><p class="source-title">${esc(project.source.title)}${project.source.date ? ` · ${esc(project.source.date)}` : ''}</p><span class="status-pill">${esc(project.source.status)}</span><h3>Surfaces : plan et reconstruction</h3>${areaTableHtml(rooms)}<p class="area-note">${caveat}</p><h3>Ce que dit le document</h3><ul class="source-notes">${project.source.notes.map((note) => `<li>${esc(note)}</li>`).join('')}</ul>${site}`;
+  return `<h2>Les dimensions d’abord.</h2><p class="source-title">${esc(project.source.title)}${project.source.date ? ` · ${esc(project.source.date)}` : ''}</p><span class="status-pill">${esc(project.source.status)}</span><h3>Surfaces : plan et reconstruction</h3>${areaTableHtml(rooms)}<p class="area-note">${caveat}</p><h3>Ce que dit le document</h3><ul class="source-notes">${project.source.notes.map((note) => `<li>${esc(note)}</li>`).join('')}</ul>${site}`;
 }

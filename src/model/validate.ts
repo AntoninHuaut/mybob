@@ -102,7 +102,7 @@ export function validateProject(
   if (!record(input)) fail('Le fichier doit contenir un objet de projet JSON.');
   const p = input as HouseProject;
   if (p.schemaVersion !== 1 || p.units !== 'm')
-    fail('Format attendu : schemaVersion 1, unités en mètres (m).');
+    fail('Format attendu : schemaVersion 1, unités en mètres (m).');
   if (!text(p.id) || !text(p.name) || typeof p.description !== 'string')
     fail('Identifiant, nom ou description du projet manquant.');
   let solar: HouseProject['solar'];
@@ -145,7 +145,7 @@ export function validateProject(
   );
   const ids = new Set<string>();
   const id = (value: unknown) => {
-    if (!text(value) || ids.has(value)) fail(`Identifiant manquant ou dupliqué : ${String(value)}`);
+    if (!text(value) || ids.has(value)) fail(`Identifiant manquant ou dupliqué : ${String(value)}`);
     ids.add(value as string);
   };
   for (const l of p.levels) {
@@ -154,7 +154,7 @@ export function validateProject(
     if (!text(l.name) || !finite(l.elevation) || !positive(l.ceilingHeight) || l.ceilingHeight > 20)
       fail('Nom ou hauteur de niveau invalide.');
     if (l.ceilingHeight < MIN_CEILING_HEIGHT)
-      fail(`La hauteur du niveau doit être d’au moins 1,80 m pour la caméra de visite : ${l.id}`);
+      fail(`La hauteur du niveau doit être d’au moins 1,80 m pour la caméra de visite : ${l.id}`);
     if (
       !Array.isArray(l.outline) ||
       l.outline.length < 3 ||
@@ -175,16 +175,16 @@ export function validateProject(
       if (!record(w)) fail(`Chaque mur du niveau ${l.id} doit être un objet.`);
       id(w.id);
       if (!point(w.start) || !point(w.end) || !positive(w.thickness) || wallLength(w) < 0.01)
-        fail(`Mur invalide : ${w.id}`);
+        fail(`Mur invalide : ${w.id}`);
       if (!optionalBoolean(w.exterior))
-        fail(`Le statut extérieur du mur doit être un booléen : ${w.id}`);
+        fail(`Le statut extérieur du mur doit être un booléen : ${w.id}`);
       if (
         w.height !== undefined &&
         (!positive(w.height) || (w.height > l.ceilingHeight && !dormerWallIds.has(w.id)))
       )
-        fail(`Hauteur de mur invalide : ${w.id}`);
+        fail(`Hauteur de mur invalide : ${w.id}`);
       if (w.openings !== undefined && (!Array.isArray(w.openings) || w.openings.length > 100))
-        fail(`Ouvertures invalides : ${w.id}`);
+        fail(`Ouvertures invalides : ${w.id}`);
       const openings = w.openings ?? [];
       for (const o of openings) {
         if (!record(o)) fail(`Chaque ouverture du mur ${w.id} doit être un objet.`);
@@ -200,28 +200,28 @@ export function validateProject(
           (o.sill ?? 0) < 0 ||
           o.height + (o.sill ?? 0) > (w.height ?? l.ceilingHeight) + 0.001
         )
-          fail(`Dimensions d’ouverture invalides : ${o.id}`);
+          fail(`Dimensions d’ouverture invalides : ${o.id}`);
         if (o.width < MIN_OPENING_SIZE || o.height < MIN_OPENING_SIZE)
           fail(
-            `Une ouverture doit mesurer au moins 10 cm de large et de haut pour les profils du modèle : ${o.id}`,
+            `Une ouverture doit mesurer au moins 10 cm de large et de haut pour les profils du modèle : ${o.id}`,
           );
         if (o.kind !== 'window' && o.kind !== 'sliding' && (o.sill ?? 0) !== 0)
-          fail(`Les portes et portes de garage doivent partir du sol (allège de 0 m) : ${o.id}`);
+          fail(`Les portes et portes de garage doivent partir du sol (allège de 0 m) : ${o.id}`);
         if (o.glazed !== undefined && (typeof o.glazed !== 'boolean' || o.kind !== 'door'))
-          fail(`Seule une porte battante peut être vitrée : ${o.id}`);
+          fail(`Seule une porte battante peut être vitrée : ${o.id}`);
         if (o.leaves !== undefined && ((o.leaves !== 1 && o.leaves !== 2) || o.kind !== 'door'))
-          fail(`Seule une porte battante peut avoir un ou deux vantaux : ${o.id}`);
+          fail(`Seule une porte battante peut avoir un ou deux vantaux : ${o.id}`);
         if (!optionalBoolean(o.exterior))
-          fail(`Le statut extérieur de l’ouverture doit être un booléen : ${o.id}`);
+          fail(`Le statut extérieur de l’ouverture doit être un booléen : ${o.id}`);
         if (o.hinge !== undefined && !['start', 'end'].includes(o.hinge))
-          fail(`Charnière invalide : ${o.id}`);
+          fail(`Charnière invalide : ${o.id}`);
         if (o.swing !== undefined && o.swing !== 1 && o.swing !== -1)
-          fail(`Sens de porte invalide : ${o.id}`);
+          fail(`Sens de porte invalide : ${o.id}`);
       }
       let previousEnd = 0;
       for (const o of [...openings].sort((a, b) => a.offset - b.offset)) {
         if (o.offset < previousEnd - 0.001)
-          fail(`Les ouvertures ne doivent pas se chevaucher : ${o.id}`);
+          fail(`Les ouvertures ne doivent pas se chevaucher : ${o.id}`);
         previousEnd = o.offset + o.width;
       }
     }
@@ -243,28 +243,28 @@ export function validateProject(
         !pointInPolygon(r.viewpoint, r.polygon) ||
         (r.planArea !== undefined && !positive(r.planArea))
       )
-        fail(`Pièce invalide : ${r.id}`);
+        fail(`Pièce invalide : ${r.id}`);
       if (
         !polygonInsidePolygon(r.polygon, l.outline) ||
         !pointInPolygon(r.label, l.outline) ||
         !pointInPolygon(r.viewpoint, l.outline)
       )
         fail(
-          `La pièce, son repère et son point de visite doivent rester dans le contour du niveau : ${r.id}`,
+          `La pièce, son repère et son point de visite doivent rester dans le contour du niveau : ${r.id}`,
         );
       if (r.note !== undefined && typeof r.note !== 'string')
-        fail(`La note de pièce doit être un texte : ${r.id}`);
+        fail(`La note de pièce doit être un texte : ${r.id}`);
       const floorOffset = r.floorOffset;
       if (floorOffset !== undefined) {
         if (!finite(floorOffset) || floorOffset < -1 || floorOffset > 0)
-          fail(`Le décalage de sol doit être compris entre −1 m et 0 m : ${r.id}`);
+          fail(`Le décalage de sol doit être compris entre −1 m et 0 m : ${r.id}`);
         if (l.ceilingHeight - floorOffset < MIN_CEILING_HEIGHT)
-          fail(`La hauteur libre de la pièce doit être d’au moins 1,80 m : ${r.id}`);
+          fail(`La hauteur libre de la pièce doit être d’au moins 1,80 m : ${r.id}`);
       }
     }
     if (!allowRoomOverlap) rejectOverlappingRooms(l.rooms);
     if (l.stairs !== undefined) {
-      if (!Array.isArray(l.stairs) || l.stairs.length > 20) fail(`Escaliers invalides : ${l.id}`);
+      if (!Array.isArray(l.stairs) || l.stairs.length > 20) fail(`Escaliers invalides : ${l.id}`);
       for (const stair of l.stairs) {
         if (!record(stair)) fail(`Chaque escalier du niveau ${l.id} doit être un objet.`);
         id(stair.id);
@@ -278,26 +278,26 @@ export function validateProject(
           !positive(stair.rise) ||
           stair.rise > 10
         )
-          fail(`Escalier invalide : ${stair.id}`);
+          fail(`Escalier invalide : ${stair.id}`);
         const run = Math.hypot(stair.end[0] - stair.start[0], stair.end[1] - stair.start[1]);
-        if (run < 0.5) fail(`La volée doit mesurer au moins 50 cm de long : ${stair.id}`);
+        if (run < 0.5) fail(`La volée doit mesurer au moins 50 cm de long : ${stair.id}`);
         if (run / stair.steps < 0.15)
-          fail(`Giron inférieur à 15 cm : l’escalier n’est pas franchissable : ${stair.id}`);
+          fail(`Giron inférieur à 15 cm : l’escalier n’est pas franchissable : ${stair.id}`);
         if (stair.rise / stair.steps > 0.25)
-          fail(`Hauteur de marche supérieure à 25 cm : ${stair.id}`);
+          fail(`Hauteur de marche supérieure à 25 cm : ${stair.id}`);
         if (!pointInPolygon(stair.start, l.outline) || !pointInPolygon(stair.end, l.outline))
-          fail(`L’escalier doit rester dans le contour du niveau : ${stair.id}`);
+          fail(`L’escalier doit rester dans le contour du niveau : ${stair.id}`);
         if (stair.note !== undefined && typeof stair.note !== 'string')
-          fail(`La note d’escalier doit être un texte : ${stair.id}`);
+          fail(`La note d’escalier doit être un texte : ${stair.id}`);
       }
     }
     if (l.floorVoids !== undefined) {
       if (!Array.isArray(l.floorVoids) || l.floorVoids.length > 20)
-        fail(`Trémies invalides : ${l.id}`);
+        fail(`Trémies invalides : ${l.id}`);
       for (const voidPolygon of l.floorVoids) {
         if (!validPolygon(voidPolygon) || !polygonInsidePolygon(voidPolygon, l.outline))
           fail(
-            `Une trémie doit être un polygone simple inscrit dans le contour du niveau : ${l.id}`,
+            `Une trémie doit être un polygone simple inscrit dans le contour du niveau : ${l.id}`,
           );
       }
     }
@@ -346,7 +346,7 @@ export function validateProject(
           !validPolygon(surface.polygon) ||
           !polygonInsidePolygon(surface.polygon, site.boundary)
         )
-          fail(`Surface extérieure invalide : ${surface.id}`);
+          fail(`Surface extérieure invalide : ${surface.id}`);
       }
     }
     if (site.roofs !== undefined) {
@@ -370,10 +370,10 @@ export function validateProject(
               roof.gables.length > 500 ||
               !roof.gables.every((f) => validRoofFace(f, roof.vertices))))
         )
-          fail(`Géométrie de toiture invalide : ${roof.id}`);
+          fail(`Géométrie de toiture invalide : ${roof.id}`);
         if (roof.dormers !== undefined) {
           if (!Array.isArray(roof.dormers) || roof.dormers.length > 30)
-            fail(`Lucarnes invalides : ${roof.id}`);
+            fail(`Lucarnes invalides : ${roof.id}`);
           for (const dormer of roof.dormers) {
             if (!record(dormer)) fail('Une lucarne de toiture doit être un objet.');
             id(dormer.id);
@@ -383,19 +383,19 @@ export function validateProject(
               !text(dormer.wallId) ||
               (dormer.slope !== undefined && !finite(dormer.slope))
             )
-              fail(`Lucarne invalide : ${dormer.id}`);
+              fail(`Lucarne invalide : ${dormer.id}`);
             const resolved = resolveRoofDormer(p, roof.vertices, roof.faces, dormer);
             if (resolved.error) fail(resolved.error);
           }
         }
         if (roof.windows !== undefined) {
           if (!Array.isArray(roof.windows) || roof.windows.length > 60)
-            fail(`Fenêtres de toit invalides : ${roof.id}`);
+            fail(`Fenêtres de toit invalides : ${roof.id}`);
           for (const window of roof.windows) {
             if (!record(window)) fail('Une fenêtre de toit doit être un objet.');
             id(window.id);
             if (!point(window.center) || !positive(window.width) || !positive(window.height))
-              fail(`Fenêtre de toit invalide : ${window.id}`);
+              fail(`Fenêtre de toit invalide : ${window.id}`);
             // The minimum size, the carrying roof face and the overflow are resolved
             // with the same function as the renderer: a single rule.
             const resolved = resolveRoofWindow(roof.vertices, roof.faces, window);

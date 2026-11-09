@@ -66,7 +66,7 @@ export class FurnitureEditorDraft {
     for (const item of next) {
       if (!geometryChanged(previous.get(item.id), item)) continue;
       const issue = getBuildingPlacementIssues(item, this.level)[0];
-      if (issue) throw new Error(`Placement impossible : ${issue.message}`);
+      if (issue) throw new Error(`Placement impossible : ${issue.message}`);
     }
     // Assign only after the whole candidate snapshot passes; failures leave no partial action.
     this.current = next;
@@ -166,7 +166,7 @@ export class FurnitureEditorDraft {
     const issue = checkFurniture([...this.current, tv], this.level).find(
       (issue) => issue.itemId === tv.id && issue.severity === 'error',
     );
-    if (issue) throw new Error(`Impossible de poser le téléviseur ici : ${issue.message}`);
+    if (issue) throw new Error(`Impossible de poser le téléviseur ici : ${issue.message}`);
     this.stage(linkFurniture([...this.current, tv], tv.id, stand.id), tv.id);
   }
 

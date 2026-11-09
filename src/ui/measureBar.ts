@@ -40,11 +40,11 @@ export class MeasureBar {
         measurement.aligned ? ' · droit' : ''
       }`;
       this.element('#measure-instructions span').textContent = measurement.preview
-        ? 'Cliquez pour confirmer · Maj : droit · Alt : libre'
+        ? 'Cliquez pour confirmer · Maj : droit · Alt : libre'
         : 'Un nouveau clic commence une autre mesure.';
     } else if (measurement)
       this.element('#measure-instructions span').textContent =
-        message ?? 'Déplacez le pointeur · Maj : droit · Alt : libre';
+        message ?? 'Déplacez le pointeur · Maj : droit · Alt : libre';
   }
 
   /** clears the measurement UI when leaving the view or the mode. */

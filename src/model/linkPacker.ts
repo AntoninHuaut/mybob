@@ -70,7 +70,7 @@ const FURNITURE_KIND_ORDER: FurnitureKind[] = [
 
 const enumInt = <T extends string>(list: readonly T[], value: T): number => {
   const index = list.indexOf(value);
-  if (index < 0) throw new LinkPackError(`Type inconnu du pack : ${String(value)}`);
+  if (index < 0) throw new LinkPackError(`Type inconnu du pack : ${String(value)}`);
   return index;
 };
 const enumValue = <T extends string>(list: readonly T[], index: number): T => {

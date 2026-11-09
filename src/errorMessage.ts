@@ -9,5 +9,5 @@ export function userMessage(error: unknown, fallback: string): string {
       return error.message;
   }
   console.error(error);
-  return `${fallback} Vos données locales sont peut-être illisibles ou le stockage est plein : exportez le projet.`;
+  return `${fallback} Vos données locales sont peut-être illisibles ou le stockage est plein : exportez le projet.`;
 }

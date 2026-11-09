@@ -226,7 +226,7 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
         sofa.returnWidth > item.width - 0.05
       )
         fail(
-          'Vérifiez les mesures : la profondeur totale du côté allongé doit dépasser celle du corps du canapé, et la largeur du retour doit être inférieure à la largeur totale.',
+          'Vérifiez les mesures : la profondeur totale du côté allongé doit dépasser celle du corps du canapé, et la largeur du retour doit être inférieure à la largeur totale.',
         );
     }
     if (item.dressing !== undefined) {
@@ -587,7 +587,7 @@ export function saveLayout(projectId: string, levelId: string, items: FurnitureI
     globalThis.localStorage.setItem(layoutStorageKey(projectId, levelId), JSON.stringify(data));
   } catch {
     throw new Error(
-      'Impossible de sauvegarder les meubles : mémoire locale pleine ou indisponible. Réduisez les photos ou exportez votre aménagement.',
+      'Impossible de sauvegarder les meubles : mémoire locale pleine ou indisponible. Réduisez les photos ou exportez votre aménagement.',
     );
   }
 }

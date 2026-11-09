@@ -219,7 +219,7 @@ export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureI
               ),
             )
           )
-            add(item, 'warning', 'Très proche d’un vitrage : vérifiez son ouverture et son accès.');
+            add(item, 'warning', 'Très proche d’un vitrage : vérifiez son ouverture et son accès.');
         }
         if (opening.kind !== 'door') continue;
         const hingeEnd = opening.hinge === 'end';
