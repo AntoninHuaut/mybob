@@ -94,6 +94,21 @@ test('import rejects a ceiling too low for the fixed-height walk camera', () => 
 
 test('null and malformed entries produce project validation errors, not TypeErrors', () => {
   const invalidEntries: [string, (project: HouseProject) => void][] = [
+    ...(['roofs object', 'roofs string', 'roofs null entry'] as const).map(
+      (name): [string, (project: HouseProject) => void] => [
+        name,
+        (p) => {
+          p.site = {
+            ...p.site,
+            roofs: (name === 'roofs object'
+              ? {}
+              : name === 'roofs string'
+                ? 'abc'
+                : [null]) as never,
+          } as never;
+        },
+      ],
+    ),
     [
       'level',
       (p) => {
