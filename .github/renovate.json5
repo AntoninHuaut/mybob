@@ -3,7 +3,8 @@
 //
 // Routine bumps (minor, patch, digest) arrive together in one PR a week.
 // Majors stay one PR each: a Babylon.js, Vite or TypeScript major usually needs code
-// changes and is tested and reverted on its own.
+// changes and is tested and reverted on its own. They are the only updates not
+// automerged.
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   // best-practices adds, on top of config:recommended: actions and Docker
@@ -30,7 +31,15 @@
   lockFileMaintenance: {
     schedule: ['* 7-12 * * 6'],
   },
+  // Everything but majors merges by itself once the required CI checks pass
+  // (GitHub auto-merge, Renovate's platformAutomerge default). Majors wait
+  // for a human.
+  automerge: true,
   packageRules: [
+    {
+      matchUpdateTypes: ['major'],
+      automerge: false,
+    },
     {
       groupName: 'routine updates',
       groupSlug: 'routine',
