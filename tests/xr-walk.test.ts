@@ -21,6 +21,7 @@ import {
   XR_WALK_SPEED,
 } from '../src/scene/xrWalk';
 import { createWalkCamera } from '../src/scene/walkCamera';
+import { FrameCounter, hudLines, XR_HUD_WINDOW_MS } from '../src/scene/xrHud';
 import { usePlanCoordinates, yawFromDirection } from '../src/scene/coordinates';
 
 const project: HouseProject = JSON.parse(
@@ -193,4 +194,24 @@ test('the headset visitor collides with walls but not with a step', () => {
   z = walk.position[1];
   assert.ok(z > 2.5, `crossed the step, z=${z}`);
   session.dispose();
+});
+
+test('the headset counter reads the frame rate once per window', () => {
+  const counter = new FrameCounter();
+  assert.equal(counter.tick(1000), undefined, 'the first frame only starts the window');
+  let rate: number | undefined;
+  let now = 1000;
+  // 72 Hz: a frame every 13.9 ms.
+  while (rate === undefined) {
+    now += 1000 / 72;
+    rate = counter.tick(now);
+  }
+  assert.ok(now - 1000 >= XR_HUD_WINDOW_MS && now - 1000 < XR_HUD_WINDOW_MS + 14);
+  assert.ok(Math.abs(rate - 72) < 2, `rate ${rate}`);
+  assert.equal(counter.tick(now + 1), undefined, 'a new window starts after each reading');
+});
+
+test('the headset counter names the terrain limit only once it was hit', () => {
+  assert.deepEqual(hudLines(71.6, 0), ['72 fps']);
+  assert.deepEqual(hudLines(30, 3), ['30 fps', 'limite du terrain ×3']);
 });

@@ -13,6 +13,7 @@ import type { Level, Point2, ProjectSite } from '../model/types';
 import { groundElevationAt } from '../model/geometry';
 import { isVisitArea } from './navigation';
 import { VISITOR_RADIUS } from './walkCamera';
+import { FrameCounter, XrHud } from './xrHud';
 
 /**
  * The visit in a WebXR headset (Quest browser). It is a state of the walk, not a
@@ -24,6 +25,9 @@ import { VISITOR_RADIUS } from './walkCamera';
  * - right stick sideways: snap turn; pushed forward then released: teleport;
  * - trigger, either hand: open or close the door the controller points at;
  * - B or Y: switch the walk post-processing on or off, to judge its cost.
+ *
+ * A small counter carried by the head shows the frame rate, and how many times the visit was
+ * sent back inside the modelled ground (`xrHud.ts`).
  *
  * Controller models are never downloaded: the session reads the gamepads directly
  * and draws its own pointers, so the visit keeps working without the network.
@@ -170,6 +174,9 @@ export class ImmersiveWalk {
   private readonly pointers = new Map<XRInputSource, Pointer>();
   private readonly material: StandardMaterial;
   private readonly marker: Mesh;
+  private readonly hud: XrHud;
+  private readonly counter = new FrameCounter();
+  private limitHits = 0;
   private collider?: Collider;
   private turnArmed = true;
   private aiming = false;
@@ -202,6 +209,7 @@ export class ImmersiveWalk {
     this.marker.material = this.material;
     this.marker.isPickable = false;
     this.marker.setEnabled(false);
+    this.hud = new XrHud(scene, camera);
     helper.sessionManager.onXRSessionEnded.addOnce(() => this.end());
   }
 
@@ -226,6 +234,8 @@ export class ImmersiveWalk {
     const frame = manager.currentFrame;
     const session = manager.session;
     if (!frame || !session || this.ended) return;
+    const fps = this.counter.tick(performance.now());
+    if (fps !== undefined) this.hud.show(fps, this.limitHits);
     let move: ControllerState | undefined;
     let aim: ControllerState | undefined;
     for (const source of session.inputSources) {
@@ -266,7 +276,10 @@ export class ImmersiveWalk {
     const head = this.head();
     const point: Point2 = [head.x, head.z];
     if (isVisitArea(this.host.level, this.host.site, point)) this.lastValid = point;
-    else if (this.lastValid) this.moveHeadTo(this.lastValid);
+    else if (this.lastValid) {
+      this.limitHits++;
+      this.moveHeadTo(this.lastValid);
+    }
     this.followFloor();
   }
 
@@ -293,6 +306,7 @@ export class ImmersiveWalk {
     this.pointers.clear();
     this.marker.dispose();
     this.material.dispose();
+    this.hud.dispose();
     this.camera.parent = null;
     this.helper.dispose();
     this.rig.dispose();

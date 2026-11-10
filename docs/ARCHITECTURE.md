@@ -244,6 +244,12 @@ walk where the headset left the visitor and restores the camera of the current m
   camera it renders into a zero-size target every frame (`INVALID_FRAMEBUFFER_OPERATION`) and
   adds nothing. Whether TAA and SSAO hold the frame rate on a Quest 2 is still to be measured on
   the device.
+- A counter plane (`scene/xrHud.ts`) is carried by the head, lower left of the view: the frame
+  rate over 500 ms windows, in red under 24 fps (the page's own counter is DOM, which a headset
+  never shows). A second line, `limite du terrain ×N`, appears once the `isVisitArea` guard has
+  sent the visitor back inside the modelled ground: it tells a rollback from that guard apart
+  from any other. It is drawn over the house (own rendering group, depth test off); its text is
+  not yet checked in a real headset.
 - Without a headset: the Immersive Web Emulator extension (Chrome/Edge, enabled for the site)
   emulates a Quest in the page, with its sticks and buttons in an overlay. It checks controls
   and rendering, not the headset's frame rate.
