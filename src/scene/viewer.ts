@@ -1113,12 +1113,17 @@ export class HouseViewer {
       if (this.immersive && !this.immersiveEffects) return;
       const camera = this.immersive?.camera ?? this.walk;
       this.interiorTaa ??= createInteriorTaa(this.scene, camera);
-      if (!this.occlusionUnavailable && !this.interiorOcclusion) {
+      if (
+        !this.occlusionUnavailable &&
+        !this.interiorOcclusion &&
+        this.adaptiveResolution.effectTier < 3
+      ) {
         this.interiorOcclusion = createInteriorOcclusion(this.scene, camera);
         // A backend without multiple render targets refuses every time: remember it
         // rather than throwing again on each visit entry.
         this.occlusionUnavailable = !this.interiorOcclusion;
       }
+      this.applyEffectTier();
       // Last in the chain, for the same reason the temporal pass is first: the glow
       // belongs on the finished image, not on the occlusion's half-resolution buffer.
       // Not in the headset: on the session camera the bloom renders into a zero-size
@@ -1281,11 +1286,37 @@ export class HouseViewer {
   private applyRenderScale(now: number, render: boolean) {
     const frameMs = render && this.lastRenderAt !== undefined ? now - this.lastRenderAt : undefined;
     const scale = this.adaptiveResolution.update(frameMs);
+    this.applyEffectTier();
     if (scale === this.renderScale) return;
     this.renderScale = scale;
     this.engine.setHardwareScalingLevel(this.baseScaling / scale);
     // The targets were resized: the image is drawn again and settled.
     this.renderScheduler.request();
+  }
+
+  /**
+   * Lighter visit effects once the resolution is at its floor and the machine is still
+   * under 40 fps (`adaptiveResolution.ts`). Idempotent: also called as the pipelines are built.
+   */
+  private applyEffectTier() {
+    const tier = this.adaptiveResolution.effectTier;
+    if (tier >= 1 && this.interiorOcclusion) {
+      this.interiorOcclusion.samples = 8;
+      this.interiorOcclusion.expensiveBlur = false;
+    }
+    if (tier >= 2 && this.interiorTaa) this.interiorTaa.samples = 8;
+    if (tier >= 3 && this.interiorOcclusion) {
+      // The temporal pass stays after the occlusion in the chain; removing the occlusion
+      // leaves it last, which is where it belongs.
+      this.interiorOcclusion.dispose(true);
+      this.interiorOcclusion = undefined;
+      this.renderScheduler.request();
+    }
+  }
+
+  /** Effect tier in use on this machine (0 = full quality), for the diagnostic. */
+  get currentEffectTier(): number {
+    return this.adaptiveResolution?.effectTier ?? 0;
   }
 
   /** Render scale in use on this machine (1 = full resolution), for the diagnostic. */

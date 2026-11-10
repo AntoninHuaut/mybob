@@ -311,7 +311,11 @@ last call, and read back at start-up.
   frame time exceeds 25 ms (under 40 fps), rendering drops one step (100, 80, 67 %). The
   scale only goes down and is kept for the session, because changing it resizes every render
   target, which hitches. The first 30 images and the 30 after each change are not measured.
-  A PC that holds the frame rate never leaves 100 %. `mybob.diag()` shows the scale.
+  Once at 67 % and still over budget, visit effects drop one tier per series: 1 lighter occlusion
+  (8 samples, cheap blur), 2 lighter temporal antialiasing (8 samples), 3 no occlusion; a
+  tier is never lifted either. A PC that holds the frame rate never leaves 100 % nor tier 0.
+  `mybob.diag()` shows the scale and the tier (`effets palier n/3`). The tier is not stored
+  between sessions.
 - The sun shadow map is only redrawn when its casters change (`shadowRefresh.ts`): mode,
   cutaway, roof, sun, animated door. A new moving shadow caster calls `invalidate()`.
 - The public build only contains the demonstration: `vite.config.ts` and

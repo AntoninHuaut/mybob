@@ -4,6 +4,13 @@
  */
 export const RENDER_SCALES = [1, 0.8, 0.67] as const;
 
+/**
+ * Effect tiers, tried once the resolution is at its floor (it costs the least to the eye),
+ * from the cheapest to the most visible: 1 lighter occlusion (8 samples, cheap blur),
+ * 2 lighter temporal antialiasing (8 samples), 3 no occlusion.
+ */
+export const EFFECT_TIERS = 3;
+
 /** Above this median frame time (under 40 fps), the next render scale is tried. */
 export const FRAME_BUDGET_MS = 25;
 
@@ -26,6 +33,7 @@ export const WARMUP_FRAMES = 30;
  */
 export class AdaptiveResolution {
   private level = 0;
+  private effectLevel = 0;
   private samples: number[] = [];
   private warmup = WARMUP_FRAMES;
 
@@ -44,12 +52,22 @@ export class AdaptiveResolution {
       const sorted = [...this.samples].sort((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)];
       this.samples = [];
-      if (median > FRAME_BUDGET_MS && this.level < RENDER_SCALES.length - 1) {
-        this.level++;
-        this.warmup = WARMUP_FRAMES;
+      if (median > FRAME_BUDGET_MS) {
+        if (this.level < RENDER_SCALES.length - 1) {
+          this.level++;
+          this.warmup = WARMUP_FRAMES;
+        } else if (this.effectLevel < EFFECT_TIERS) {
+          this.effectLevel++;
+          this.warmup = WARMUP_FRAMES;
+        }
       }
     }
     return RENDER_SCALES[this.level];
+  }
+
+  /** Effect tier in use (0 = every effect at full quality), for the diagnostic. */
+  get effectTier(): number {
+    return this.effectLevel;
   }
 
   /** The scale in use on this machine, for the diagnostic. */

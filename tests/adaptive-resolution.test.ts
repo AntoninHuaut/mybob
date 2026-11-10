@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   AdaptiveResolution,
+  EFFECT_TIERS,
   FRAME_SAMPLES,
   RENDER_SCALES,
   WARMUP_FRAMES,
@@ -65,4 +66,23 @@ test('a single slow frame does not lower the resolution', () => {
   for (let frame = 0; frame < SERIES * 5; frame++)
     scale = resolution.update(frame % SERIES === 0 ? 300 : 16.7);
   assert.equal(scale, 1);
+});
+
+test('effects are lowered one tier per series, only once the resolution is at its floor', () => {
+  const resolution = new AdaptiveResolution();
+  feed(resolution, SERIES * (RENDER_SCALES.length - 1), 45);
+  assert.equal(resolution.scale, RENDER_SCALES.at(-1));
+  assert.equal(resolution.effectTier, 0, 'the scale went first');
+  feed(resolution, SERIES, 45);
+  assert.equal(resolution.effectTier, 1);
+  feed(resolution, SERIES, 45);
+  assert.equal(resolution.effectTier, 2);
+  feed(resolution, SERIES * 10, 45);
+  assert.equal(resolution.effectTier, EFFECT_TIERS);
+});
+
+test('a machine holding the frame rate never leaves tier 0', () => {
+  const resolution = new AdaptiveResolution();
+  feed(resolution, SERIES * 20, 20);
+  assert.equal(resolution.effectTier, 0);
 });
