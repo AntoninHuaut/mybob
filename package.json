@@ -30,7 +30,7 @@
     "happy-dom": "^21.0.4",
     "prettier": "^3.9.10",
     "tsx": "^4.20.0",
-    "typescript": "^5.9.0",
+    "typescript": "^7.0.2",
     "vite": "^7.2.0"
   },
   "engines": {
