@@ -32,6 +32,18 @@
   },
   packageRules: [
     {
+      // AGENTS.md fixes the runtime at Node 24: the Node version files, the
+      // engines range and the type definitions stay on that major.
+      matchPackageNames: ['node', '@types/node'],
+      matchManagers: ['nodenv', 'npm'],
+      allowedVersions: '<25',
+    },
+    {
+      // A minimum-version range is policy, not a dependency to keep fresh.
+      matchDepTypes: ['engines'],
+      enabled: false,
+    },
+    {
       groupName: 'routine updates',
       groupSlug: 'routine',
       matchUpdateTypes: ['minor', 'patch', 'digest'],
