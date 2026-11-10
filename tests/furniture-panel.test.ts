@@ -980,3 +980,57 @@ test('Dupliquer inside the popup keeps focus inside the rebuilt popup', () => {
     cleanup();
   }
 });
+
+test('a shower panel length is a draft: exact when untouched, saved when edited', () => {
+  const { window, editor, panel, setItems, applied, cleanup } = setup(false);
+  try {
+    setItems([
+      createFurniture({
+        kind: 'shower',
+        id: 'sofa',
+        position: [3, 3],
+        width: 1.2,
+        showerPanels: ['front', 'left'],
+        // Sub-millimetre value: the displayed 80.5 cm must not overwrite it when untouched.
+        showerPanelSpans: { front: { length: 0.80449, from: 'right' } },
+      }),
+    ]);
+    panel.openEdit('sofa');
+    const field = (name: string) => editor.querySelector<DOMInput>(`[name=${name}]`)!;
+    assert.equal(field('showerPanelFrontLength').value, '80.4');
+    assert.equal(field('showerPanelFrontFrom').value, 'right');
+    assert.equal(field('showerPanelLeftLength').value, '');
+    // Back is not ticked: its length row is hidden and its field disabled.
+    assert.equal(editor.querySelector<DOMElement>('[data-shower-span=back]')!.hidden, true);
+    assert.equal(field('showerPanelBackLength').disabled, true);
+    const back = field('showerPanelBack');
+    back.checked = true;
+    back.dispatchEvent(new window.Event('change', { bubbles: true }));
+    assert.equal(editor.querySelector<DOMElement>('[data-shower-span=back]')!.hidden, false);
+    assert.equal(field('showerPanelBackLength').disabled, false);
+    back.checked = false;
+    back.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    const save = () => {
+      const form = editor.querySelector<DOMForm>('form')!;
+      form.reportValidity = () => true;
+      form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    };
+    save();
+    assert.equal(editor.querySelector('.furniture-edit-status')!.textContent, '');
+    assert.deepEqual(applied.at(-1)![0].showerPanelSpans, {
+      front: { length: 0.80449, from: 'right' },
+    });
+
+    panel.openEdit('sofa');
+    field('showerPanelLeftLength').value = '55';
+    field('showerPanelFrontFrom').value = 'left';
+    save();
+    assert.deepEqual(applied.at(-1)![0].showerPanelSpans, {
+      front: { length: 0.80449 },
+      left: { length: 0.55 },
+    });
+  } finally {
+    cleanup();
+  }
+});

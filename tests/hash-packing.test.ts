@@ -447,3 +447,45 @@ test('#116 non-regression: an already shared revision-1 link is still readable',
   // Compared with the identical local state: no false divergence between revisions.
   assert.ok(samePackedState(decoded.packed, packShareDocument(original as ShareDocument)));
 });
+
+test('shower panel lengths survive the link, and revision-2 links are still read', async () => {
+  const project = readPlan(PLANS[0]);
+  const levelId = project.levels[0].id;
+  const items = validateFurnitureList([
+    createFurniture({
+      kind: 'shower',
+      width: 1.2,
+      showerPanels: ['left', 'front'],
+      showerPanelSpans: { left: { length: 0.55 }, front: { length: 0.8, from: 'right' } },
+    }),
+    createFurniture({ kind: 'shower', showerPanels: ['back'] }),
+  ]);
+  const book = validateVariantBook(
+    {
+      version: 1,
+      activeId: 'initial',
+      variants: [{ id: 'initial', name: 'Initial', levels: { [levelId]: items } }],
+    },
+    project.levels.map((level) => level.id),
+  );
+  const decoded = await decodeShareLinkHash(
+    await encodeShareLinkHash(shareDocument(project, book)),
+  );
+  const [partial, whole] = validateFurnitureList(
+    Object.values(decoded.document.furnishing!.levels)[0],
+  );
+  assert.deepEqual(partial.showerPanelSpans, {
+    left: { length: 0.55 },
+    front: { length: 0.8, from: 'right' },
+  });
+  assert.equal(whole.showerPanelSpans, undefined);
+
+  // Bytes frozen from the packer before revision 3 (no span field at all).
+  const old = await decodeShareLinkHash(
+    readFileSync('tests/fixtures/share-link-v2-shower.txt', 'utf8').trim(),
+  );
+  validateProject(old.document);
+  const [shower] = validateFurnitureList(Object.values(old.document.furnishing!.levels)[0]);
+  assert.deepEqual(shower.showerPanels, ['left', 'front']);
+  assert.equal(shower.showerPanelSpans, undefined);
+});

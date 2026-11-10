@@ -44,11 +44,23 @@ export interface DressingConfiguration {
 }
 /** Shower only: a side of the volume that can carry a glass panel. */
 export type ShowerPanelSide = 'left' | 'right' | 'front' | 'back';
+/**
+ * Shower only: a panel shorter than its side leaves the rest of that side open. The panel
+ * starts at the back of the shower (side panels) or at the left (front and back panels);
+ * `from: 'right'` starts a front/back panel at the right instead.
+ */
+export interface ShowerPanelSpan {
+  length: number;
+  from?: 'right';
+}
+export const SHOWER_SPAN_LIMITS = { min: 0.05, max: 20 };
 /** Checkbox order in the shower form. */
 export const SHOWER_PANEL_SIDES: ShowerPanelSide[] = ['left', 'right', 'front', 'back'];
 /** Form field name for one shower panel checkbox. */
 export const showerPanelField = (side: ShowerPanelSide) =>
   `showerPanel${side.charAt(0).toUpperCase()}${side.slice(1)}`;
+export const showerPanelLengthField = (side: ShowerPanelSide) => `${showerPanelField(side)}Length`;
+export const showerPanelFromField = (side: ShowerPanelSide) => `${showerPanelField(side)}From`;
 export interface FurnitureItem {
   id: string;
   name: string;
@@ -64,6 +76,8 @@ export interface FurnitureItem {
   showerTray?: number;
   /** Shower only: sides closed by a glass panel. */
   showerPanels?: ShowerPanelSide[];
+  /** Shower only: sides whose panel is shorter than the side. Absent means the whole side. */
+  showerPanelSpans?: Partial<Record<ShowerPanelSide, ShowerPanelSpan>>;
   /** Display diagonal only; chassis dimensions remain editable approximations. */
   tvDiagonalInches?: number;
   position: Point2;
@@ -282,6 +296,25 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
       )
         fail('Les parois de la douche sont invalides.');
     }
+    if (item.showerPanelSpans !== undefined) {
+      const spans = item.showerPanelSpans;
+      if (
+        item.kind !== 'shower' ||
+        !record(spans) ||
+        !Object.entries(spans).every(
+          ([side, span]) =>
+            SHOWER_PANEL_SIDES.includes(side as ShowerPanelSide) &&
+            (item.showerPanels ?? ['left']).includes(side as ShowerPanelSide) &&
+            record(span) &&
+            finite(span.length) &&
+            span.length >= SHOWER_SPAN_LIMITS.min &&
+            span.length <= SHOWER_SPAN_LIMITS.max &&
+            (span.from === undefined ||
+              (span.from === 'right' && (side === 'front' || side === 'back'))),
+        )
+      )
+        fail('La longueur d’une paroi de douche est invalide.');
+    }
     if (
       !Array.isArray(item.position) ||
       item.position.length !== 2 ||
@@ -382,6 +415,8 @@ export function createFurniture(input: FurnitureInput = {}): FurnitureItem {
   if (kind === 'shower') {
     item.showerTray = input.showerTray ?? 0.06;
     item.showerPanels = input.showerPanels ?? ['left'];
+    if (input.showerPanelSpans && Object.keys(input.showerPanelSpans).length)
+      item.showerPanelSpans = input.showerPanelSpans;
   }
   return validateFurnitureList([item])[0];
 }
