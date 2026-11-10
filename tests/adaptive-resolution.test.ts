@@ -3,60 +3,66 @@ import test from 'node:test';
 import {
   AdaptiveResolution,
   FRAME_SAMPLES,
-  MOTION_SCALES,
-  REST_DELAY_MS,
+  RENDER_SCALES,
+  WARMUP_FRAMES,
 } from '../src/scene/adaptiveResolution';
 
-/** Feeds `count` moving images of `frameMs` each and returns the last scale. */
-function move(resolution: AdaptiveResolution, count: number, frameMs: number, start = 0) {
+/** Images needed for one decision: the ignored warm-up, then one series measured. */
+const SERIES = WARMUP_FRAMES + FRAME_SAMPLES;
+
+/** Feeds `count` images of `frameMs` each and returns the last scale. */
+function feed(resolution: AdaptiveResolution, count: number, frameMs: number) {
   let scale = 1;
-  for (let frame = 0; frame < count; frame++)
-    scale = resolution.update(start + frame * frameMs, true, frameMs);
+  for (let frame = 0; frame < count; frame++) scale = resolution.update(frameMs);
   return scale;
 }
 
 test('a machine holding 60 fps always stays at full resolution', () => {
   const resolution = new AdaptiveResolution();
-  assert.equal(move(resolution, FRAME_SAMPLES * 20, 16.7), 1);
-  assert.equal(resolution.motionScale, 1);
+  assert.equal(feed(resolution, SERIES * 20, 16.7), 1);
+  assert.equal(resolution.scale, 1);
 });
 
-test('a slow machine lowers resolution while moving, one step per series of frames', () => {
+test('a slow machine lowers resolution one step per series, down to the floor', () => {
   const resolution = new AdaptiveResolution();
-  assert.equal(move(resolution, FRAME_SAMPLES - 1, 45), 1);
-  assert.equal(move(resolution, 1, 45, 1000), MOTION_SCALES[1]);
-  assert.equal(move(resolution, FRAME_SAMPLES * 10, 45, 2000), MOTION_SCALES.at(-1));
+  assert.equal(feed(resolution, SERIES - 1, 45), 1);
+  assert.equal(feed(resolution, 1, 45), RENDER_SCALES[1]);
+  assert.equal(feed(resolution, SERIES * 10, 45), RENDER_SCALES.at(-1));
+  assert.ok(RENDER_SCALES.at(-1)! >= 0.67);
 });
 
-test('when still, the image returns to full resolution, and the learnt step stays for later', () => {
+test('the scale never goes back up: resizing again would hitch', () => {
   const resolution = new AdaptiveResolution();
-  move(resolution, FRAME_SAMPLES * 2, 45);
-  const learnt = resolution.motionScale;
-  assert.ok(learnt < 1);
-  const stop = FRAME_SAMPLES * 2 * 45;
-  assert.equal(resolution.update(stop + REST_DELAY_MS / 2, false), learnt);
-  assert.equal(resolution.update(stop + REST_DELAY_MS, false), 1);
-  // The next motion starts directly at the level learnt.
-  assert.equal(resolution.update(stop + 5000, true, undefined), learnt);
+  feed(resolution, SERIES, 45);
+  const reduced = resolution.scale;
+  assert.ok(reduced < 1);
+  assert.equal(feed(resolution, SERIES * 5, 8), reduced);
 });
 
-test('a very slow machine skips a step', () => {
+test('images that were not drawn in a row are not measured', () => {
   const resolution = new AdaptiveResolution();
-  assert.equal(move(resolution, FRAME_SAMPLES, 150), MOTION_SCALES[2]);
+  for (let frame = 0; frame < SERIES * 5; frame++) resolution.update(undefined);
+  assert.equal(resolution.scale, 1);
+});
+
+test('the hitches of the start are ignored', () => {
+  const resolution = new AdaptiveResolution();
+  assert.equal(feed(resolution, WARMUP_FRAMES, 400), 1);
+  assert.equal(feed(resolution, FRAME_SAMPLES * 3, 16.7), 1);
+});
+
+test('the hitch of a resolution change is ignored too', () => {
+  const resolution = new AdaptiveResolution();
+  feed(resolution, SERIES, 45);
+  assert.equal(resolution.scale, RENDER_SCALES[1]);
+  feed(resolution, WARMUP_FRAMES, 400);
+  assert.equal(feed(resolution, FRAME_SAMPLES, 20), RENDER_SCALES[1]);
 });
 
 test('a single slow frame does not lower the resolution', () => {
   const resolution = new AdaptiveResolution();
   let scale = 1;
-  for (let frame = 0; frame < FRAME_SAMPLES * 5; frame++)
-    scale = resolution.update(frame * 17, true, frame % FRAME_SAMPLES === 0 ? 300 : 16.7);
+  for (let frame = 0; frame < SERIES * 5; frame++)
+    scale = resolution.update(frame % SERIES === 0 ? 300 : 16.7);
   assert.equal(scale, 1);
-});
-
-test('with headroom, resolution goes back up one step', () => {
-  const resolution = new AdaptiveResolution();
-  move(resolution, FRAME_SAMPLES * 2, 45);
-  const reduced = resolution.motionScale;
-  move(resolution, FRAME_SAMPLES, 10, 10000);
-  assert.ok(resolution.motionScale > reduced);
 });
