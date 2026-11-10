@@ -79,7 +79,7 @@ These files replace reliance on any previous chat context.
 
 ## Work and verification
 
-Use Node 24 and `pnpm install --frozen-lockfile`. Verify locally only what the change
+Use Node 26 and `pnpm install --frozen-lockfile`. Verify locally only what the change
 touches, never the whole suite as a reflex. Unit test files mirror the module they test
 (`tests/furniture.test.ts`, `tests/plan-openings.test.ts`): run the touched ones,
 `node --import tsx --test --test-isolation=none tests/<zone>.test.ts`. A browser workflow is
