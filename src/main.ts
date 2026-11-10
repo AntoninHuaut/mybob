@@ -2252,6 +2252,7 @@ async function start() {
         occlusion: viewer.ambience.occlusion,
         idle: viewer.renderingIdle,
         renderScale: viewer.currentRenderScale,
+        effectTier: viewer.currentEffectTier,
       }),
     );
     wireEvents();

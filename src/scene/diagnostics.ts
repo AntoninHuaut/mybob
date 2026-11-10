@@ -35,6 +35,8 @@ export interface DiagnosticView {
   idle?: boolean;
   /** Render scale used while the camera moves; under 1 on a machine too slow for 40 fps. */
   renderScale?: number;
+  /** Effect tier (0 = full quality, 3 = no occlusion), lowered when the scale floor is not enough. */
+  effectTier?: number;
 }
 
 export interface DiagnosticSnapshot {
@@ -117,7 +119,7 @@ export function diagnosticLines(snapshot: DiagnosticSnapshot): string[] {
       ? '  cadence     au repos, image figée · bougez la vue pendant la mesure'
       : `  cadence     ${Math.round(snapshot.frameRate)} fps · ${decimal(snapshot.frameTimeMs)} ms par image`,
     `  vue         ${mode} · occlusion ${OCCLUSION_LABELS[view.occlusion]} · environnement ${view.environment ? 'actif' : 'inactif'}`,
-    `  rendu       ${snapshot.renderWidth} × ${snapshot.renderHeight} px · facteur ${decimal(snapshot.scaling)} · dpr ${decimal(snapshot.pixelRatio)} · échelle ${Math.round((view.renderScale ?? 1) * 100)} %`,
+    `  rendu       ${snapshot.renderWidth} × ${snapshot.renderHeight} px · facteur ${decimal(snapshot.scaling)} · dpr ${decimal(snapshot.pixelRatio)} · échelle ${Math.round((view.renderScale ?? 1) * 100)} % · effets palier ${view.effectTier ?? 0}/3`,
     `  scène       ${snapshot.meshes} maillages, ${snapshot.activeMeshes} actifs, ${snapshot.materials} matériaux, ${snapshot.lights} lumières`,
     `  machine     ${deviceLine(snapshot)}`,
     `  navigateur  ${snapshot.userAgent}`,
