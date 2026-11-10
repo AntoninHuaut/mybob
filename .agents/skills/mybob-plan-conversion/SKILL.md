@@ -447,7 +447,7 @@ Gaps are **listed, never silently corrected**:
 - **a two-leaf French window** has only one complete arc: the second is truncated at 37.7°.
   The script reports it as a **partial arc** and only counts the full leaf, hence 0.583 m
   instead of 1.20 m;
-- **three doors of plan A and three of plan B have the hinge on the other side** of the
+- **a door whose `hinge` contradicts the drawing is a blocking error** (`--compare` exits 1 and prints it). Plan A and plan B (RDC) now report 0; the attic of plan B has no frame (`--origin` needed) and was not re-measured. Historically, three doors of plan A and three of plan B had the hinge on the other side of the
   opening compared with the hand-written `hinge` field. The opening itself is in the right
   place: it is the pivot side that is wrong;
 - **two project walls are offset** and carry their door with them: `entree-fond` (plan B,

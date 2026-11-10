@@ -828,6 +828,12 @@ def main(argv):
             f"{within} within ±{args.tolerance * 100:.0f} cm along the wall, "
             f"{flipped} hinge(s) on the other side, {shifted} project wall(s) shifted"
         )
+        if flipped:
+            print(
+                f"  ERROR: {flipped} door(s) have `hinge` contradicting the drawing: "
+                "set `hinge: \"end\"` (or remove it) on the doors flagged above"
+            )
+            status = 1
         if matched != len(openings) or within != len(openings) or extra:
             status = 1
     if args.out:
