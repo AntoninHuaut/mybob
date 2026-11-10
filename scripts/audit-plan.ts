@@ -8,6 +8,8 @@ import {
   pointInOrOnPolygon,
   pointInPolygon,
   polygonArea,
+  roofFaceHeightAt,
+  roofFacePlanOutline,
   traversable,
   wallLength,
 } from '../src/model/geometry';
@@ -28,6 +30,15 @@ const OUTLINE_FLOOR_TOLERANCE = 0.01;
 // void; a wall bordering its face stays below it.
 const VOID_OVERLAP_TOLERANCE = 0.01;
 const MAX_CELLS = 400_000;
+// The inner face of a wall must sit on the edge of the room it bounds. A wall further than this
+// from the edge but still within WALL_ROOM_REACH is a conversion defect, not a thick wall.
+const WALL_ROOM_GAP = 0.03;
+const WALL_ROOM_REACH = 0.3;
+// A roof window further than this from the opening it carries does not carry it.
+const ROOF_WINDOW_REACH = 1;
+const ROOF_TOLERANCE = 0.005;
+/** Defects of a conversion that the audit refuses: they fail the command (exit code 1). */
+const BLOCKING_KINDS = new Set(['wall-room-gap', 'opening-under-roof-uncarried']);
 const cross = (a: Point2, b: Point2, c: Point2) =>
   (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
 
@@ -216,6 +227,43 @@ function reachable(grid: Grid, start: Point2): Uint8Array {
   return reached;
 }
 
+/** Gaps between a room edge and the nearest face of a parallel wall that runs along it. */
+export function wallRoomGaps(level: Level): { room: string; wall: string; gap: number }[] {
+  const gaps: { room: string; wall: string; gap: number }[] = [];
+  const flush = new Set<string>();
+  for (const room of level.rooms) {
+    room.polygon.forEach((a, i) => {
+      const b = room.polygon[(i + 1) % room.polygon.length];
+      const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (length < 0.3) return;
+      const ux = (b[0] - a[0]) / length;
+      const uz = (b[1] - a[1]) / length;
+      for (const wall of level.walls) {
+        const wl = wallLength(wall);
+        if (wl < 0.3) continue;
+        const wx = (wall.end[0] - wall.start[0]) / wl;
+        const wz = (wall.end[1] - wall.start[1]) / wl;
+        if (Math.abs(ux * wz - uz * wx) > 0.02) continue; // not parallel
+        const side = (p: Point2) => (p[0] - a[0]) * -uz + (p[1] - a[1]) * ux;
+        const along = (p: Point2) => (p[0] - a[0]) * ux + (p[1] - a[1]) * uz;
+        const distance = side(wall.start);
+        // the centreline is the same distance from the edge at both ends (parallel)
+        const overlap =
+          Math.min(length, Math.max(along(wall.start), along(wall.end))) -
+          Math.max(0, Math.min(along(wall.start), along(wall.end)));
+        if (overlap < Math.min(length, wl) * 0.5) continue;
+        const face = Math.abs(distance) - wall.thickness / 2;
+        if (face < -wall.thickness || face > WALL_ROOM_REACH) continue;
+        // a wall crossing the edge, or the room edge lying inside the wall, is the overlap check's job
+        if (Math.abs(face) <= WALL_ROOM_GAP) flush.add(wall.id);
+        else if (face > 0) gaps.push({ room: room.id, wall: wall.id, gap: face });
+      }
+    });
+  }
+  // A partition is judged on the side it bounds: flush with one room is enough.
+  return gaps.filter((entry) => !flush.has(entry.wall));
+}
+
 export function auditPlan(project: HouseProject) {
   const checked = validateProject(project, { allowRoomOverlap: true });
   const issues: { level: string; kind: string; ids: string[]; value: number; unit: string }[] = [];
@@ -378,6 +426,54 @@ export function auditPlan(project: HouseProject) {
           unit: 'm²',
         });
     }
+    for (const roof of checked.site?.roofs ?? []) {
+      const covering = (x: number, z: number) => {
+        for (const face of roof.faces)
+          if (pointInPolygon([x, z], roofFacePlanOutline(roof.vertices, face)))
+            return roofFaceHeightAt(roof.vertices, face, x, z);
+        return Number.NaN;
+      };
+      for (const wall of level.walls) {
+        if (!wall.exterior) continue;
+        const mid = alongWall(wall, wallLength(wall) / 2);
+        const top = level.elevation + (wall.height ?? level.ceilingHeight);
+        const roofHeight = covering(mid[0], mid[1]);
+        if (Number.isNaN(roofHeight)) continue;
+        if (
+          top <= roofHeight + ROOF_TOLERANCE &&
+          roofHeight - top > ROOF_TOLERANCE &&
+          wall.height !== undefined &&
+          wall.height < level.ceilingHeight - 0.01
+        ) {
+          for (const opening of wall.openings ?? []) {
+            const centre = alongWall(wall, opening.offset + opening.width / 2);
+            const carried =
+              (roof.dormers ?? []).some((dormer) => dormer.wallId === wall.id) ||
+              (roof.windows ?? []).some(
+                (window) =>
+                  Math.hypot(window.center[0] - centre[0], window.center[1] - centre[1]) <=
+                  ROOF_WINDOW_REACH,
+              );
+            if (!carried)
+              issues.push({
+                level: level.id,
+                kind: 'opening-under-roof-uncarried',
+                ids: [wall.id, opening.id],
+                value: 0,
+                unit: 'm',
+              });
+          }
+        }
+      }
+    }
+    for (const gap of wallRoomGaps(level))
+      issues.push({
+        level: level.id,
+        kind: 'wall-room-gap',
+        ids: [gap.room, gap.wall],
+        value: gap.gap,
+        unit: 'm',
+      });
     const openings = level.walls.flatMap((wall) =>
       (wall.openings ?? []).map((opening) => ({
         id: opening.id,
