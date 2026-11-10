@@ -265,6 +265,9 @@ last call, and read back at start-up.
   entropy does not fit under 3 KB. Only fields carrying a stable meaning are kept:
   `project.id`, names, notes, description, source, variant identifiers. Repacking an unpacked
   document yields the same bytes.
+- **Integrity**: since revision 4 the pack ends with a CRC-32 (`crc32` in `linkPacker.ts`). A
+  link altered by one character is refused (« Ce lien est tronqué ou illisible ») instead of
+  decoding into another valid project; revisions 1 to 3 carry no checksum and still read.
 - **Reading at start-up** (`main.ts`, `openSharedLink`): the hash wins over `localStorage`.
   - The project already exists here (owner): silent comparison on the **canonical packed
     bytes** (`samePackedState`, not on the compressed hash, deflate being non-deterministic

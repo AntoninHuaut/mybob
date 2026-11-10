@@ -31,10 +31,23 @@ export interface UnpackedShare {
 
 /**
  * Revision 2: glazing and leaves of openings, dormers and roof windows. Revision 3: the
- * length of each shower panel. Reading still accepts revisions 1 and 2 (links already
- * shared); writing always produces 3.
+ * length of each shower panel. Revision 4: a CRC-32 closes the pack, so a link altered by
+ * one character is refused instead of decoding into another valid project. Reading still
+ * accepts revisions 1 to 3 (links already shared); writing always produces 4.
  */
-export const LINK_PACK_VERSION = 3;
+export const LINK_PACK_VERSION = 4;
+
+const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
+  let c = n;
+  for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+  return c >>> 0;
+});
+/** CRC-32 (IEEE) of `data`, as an unsigned 32-bit integer. */
+export function crc32(data: Uint8Array): number {
+  let crc = 0xffffffff;
+  for (const byte of data) crc = CRC_TABLE[(crc ^ byte) & 0xff] ^ (crc >>> 8);
+  return (crc ^ 0xffffffff) >>> 0;
+}
 
 type OpeningKind = 'door' | 'window' | 'sliding' | 'garage';
 type RoomKind = 'living' | 'bedroom' | 'bathroom' | 'circulation' | 'garage' | 'storage';
@@ -469,7 +482,11 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
     if (activeIndex < 0) throw new LinkPackError('Variante active introuvable.');
     packer.u(activeIndex);
   }
-  return packer.bytes();
+  const body = packer.bytes();
+  const sealed = new Uint8Array(body.length + 4);
+  sealed.set(body);
+  new DataView(sealed.buffer).setUint32(body.length, crc32(body));
+  return sealed;
 }
 
 /* ---------------------------------------------------------------------------------------------- */
@@ -564,6 +581,14 @@ const textDecoder = new TextDecoder();
 
 /** Unpacks packed bytes into a complete export document, ready for the import validation pipeline. */
 export function unpackShareDocument(data: Uint8Array): ShareDocument {
+  // From revision 4 the last four bytes are the CRC-32 of everything before them.
+  if (data[0] >= 4 && data[0] <= LINK_PACK_VERSION) {
+    if (data.length < 5) throw new LinkPackError('Lien tronqué.');
+    const body = data.subarray(0, data.length - 4);
+    if (new DataView(data.buffer, data.byteOffset).getUint32(body.length) !== crc32(body))
+      throw new LinkPackError('Somme de contrôle invalide.');
+    data = body;
+  }
   const reader = new Unpacker(data);
   const version = reader.u();
   if (version < 1 || version > LINK_PACK_VERSION)
