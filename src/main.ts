@@ -1580,7 +1580,7 @@ function wireFurnitureToolbar() {
 
 function wireNavigationControls() {
   el('#tool-navigation').addEventListener('click', () =>
-    setNavigationPanel(el('#navigation-panel').hidden),
+    setNavigationPanel(Boolean(el('#navigation-panel').hidden)),
   );
   el('#close-navigation').addEventListener('click', () => setNavigationPanel(false));
   document.addEventListener('pointerdown', (event) => {
