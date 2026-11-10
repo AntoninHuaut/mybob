@@ -508,6 +508,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
       throw new Error('Usage: node --import tsx scripts/audit-plan.ts project.json');
     const result = auditPlan(JSON.parse(await readFile(process.argv[2], 'utf8')));
     process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+    const blocking = result.issues.filter((issue) => BLOCKING_KINDS.has(issue.kind));
+    if (blocking.length) {
+      const kinds = [...new Set(blocking.map((issue) => issue.kind))].join(', ');
+      process.stderr.write(`${blocking.length} blocking conversion issue(s): ${kinds}\n`);
+      process.exitCode = 1;
+    }
   } catch (error) {
     process.stderr.write(`${error instanceof Error ? error.message : error}\n`);
     process.exitCode = 1;
