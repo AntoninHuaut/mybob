@@ -7,6 +7,9 @@ import {
   HTMLFormElement as DOMForm,
   HTMLSelectElement as DOMSelect,
   HTMLDetailsElement as DOMDetails,
+  HTMLElement as DOMElement,
+  HTMLButtonElement as DOMButton,
+  HTMLDialogElement as DOMDialog,
 } from 'happy-dom';
 import { createFurniture, FURNITURE_PRESETS, type FurnitureItem } from '../src/furniture/model';
 
@@ -877,6 +880,102 @@ test('cancelling a staged television addition leaves the stand alone', async () 
     assert.equal(getItems().length, 1);
     assert.equal(getItems()[0].groupId, undefined);
     assert.equal(applied.length, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+// Keyboard focus: the panel rebuilds its HTML, which used to drop focus on <body> (WCAG 2.4.3).
+const focusedKey = (window: Window) =>
+  window.document.activeElement?.getAttribute('data-furniture-overlay') ??
+  window.document.activeElement?.getAttribute('data-furniture-select') ??
+  window.document.activeElement?.getAttribute('data-furniture-edit-id') ??
+  window.document.activeElement?.getAttribute('data-furniture-action') ??
+  window.document.activeElement?.tagName;
+
+test('ticking a Repères checkbox keeps focus on that checkbox after the panel rebuilds', () => {
+  const { window, container, panel, cleanup } = setup(false);
+  try {
+    const box = container.querySelector<DOMInput>('[data-furniture-overlay=clearances]')!;
+    box.focus();
+    box.checked = true;
+    box.dispatchEvent(new window.Event('change', { bubbles: true }));
+    panel.render(); // main.ts re-renders the panel from onOverlays
+    assert.equal(focusedKey(window), 'clearances');
+    assert.ok(window.document.activeElement?.isConnected);
+  } finally {
+    cleanup();
+  }
+});
+
+test('choosing a piece in the list keeps focus on its row', () => {
+  const { window, container, cleanup } = setup(false);
+  try {
+    const row = container.querySelector<DOMElement>('[data-furniture-select=sofa]')!;
+    row.focus();
+    row.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(focusedKey(window), 'sofa');
+  } finally {
+    cleanup();
+  }
+});
+
+test('Annuler and Rétablir hand focus to Ajouter when they become disabled', () => {
+  const { window, container, cleanup } = setup(false);
+  try {
+    // Stub history is empty, so the buttons render disabled: focus must not fall to <body>.
+    const undo = container.querySelector<DOMButton>('[data-furniture-action=undo]')!;
+    assert.ok(undo.disabled);
+    undo.removeAttribute('disabled');
+    undo.focus();
+    undo.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(focusedKey(window), 'add');
+  } finally {
+    cleanup();
+  }
+});
+
+test('closing the add popup returns focus to Ajouter, even though the panel was rebuilt', async () => {
+  const { window, container, panel, cleanup } = setup(false);
+  try {
+    container.querySelector<DOMElement>('[data-furniture-action=add]')!.focus();
+    panel.openAdd();
+    const form = window.document.querySelector<DOMForm>('#furniture-add-form')!;
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    panel.render();
+    await Promise.resolve();
+    assert.equal(focusedKey(window), 'add');
+  } finally {
+    cleanup();
+  }
+});
+
+test('closing the edit popup with Escape returns focus to the pencil that opened it', async () => {
+  const { window, container, editor, cleanup } = setup(false);
+  try {
+    const pencil = container.querySelector<DOMElement>('[data-furniture-edit-id=sofa]')!;
+    pencil.focus();
+    pencil.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.ok(editor.hasAttribute('open'));
+    (editor as unknown as DOMDialog).close();
+    await Promise.resolve();
+    assert.equal(focusedKey(window), 'sofa');
+    assert.equal(window.document.activeElement?.hasAttribute('data-furniture-edit-id'), true);
+  } finally {
+    cleanup();
+  }
+});
+
+test('Dupliquer inside the popup keeps focus inside the rebuilt popup', () => {
+  const { window, editor, cleanup } = setup(true);
+  try {
+    editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
+    const button = editor.querySelector<DOMElement>('[data-furniture-action=duplicate]')!;
+    button.focus();
+    button.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(focusedKey(window), 'duplicate');
+    assert.ok(editor.contains(window.document.activeElement));
   } finally {
     cleanup();
   }

@@ -2,6 +2,7 @@ import './panel.css';
 import type { Level, Point2 } from '../model/types';
 import { escapeHtml as esc } from '../ui/format';
 import { icon } from '../ui/icons';
+import { captureFocus, quote, restoreFocus } from '../ui/focusKeeper';
 import {
   measurementsFromForm,
   dressingDiagram,
@@ -229,6 +230,8 @@ export class FurniturePanel {
   private overlays = { distances: true, clearances: false, openings: false };
   private editDialog: HTMLDialogElement;
   private draft?: FurnitureEditorDraft;
+  /** Control that opened the open popup, so closing it hands focus back. */
+  private opener?: string;
 
   constructor(
     private container: HTMLElement,
@@ -265,6 +268,7 @@ export class FurniturePanel {
     const selectedId = this.adapter.getSelectedId();
     const items = this.adapter.getItems();
     const checks = this.adapter.getChecks();
+    const focused = captureFocus(this.container);
     this.container.innerHTML = `
       <div class="furniture-heading"><div class="eyebrow">Aménagement</div><div class="furniture-history"><button type="button" data-furniture-action="undo" aria-label="Annuler la dernière modification" title="Annuler · Ctrl Z"${disabled(!this.adapter.canUndo())}>↶</button><button type="button" data-furniture-action="redo" aria-label="Rétablir la modification" title="Rétablir · Ctrl Maj Z"${disabled(!this.adapter.canRedo())}>↷</button></div></div>
       <button type="button" class="furniture-add" data-furniture-action="add">${icon('plus', 17)} Ajouter un meuble</button>
@@ -275,6 +279,8 @@ export class FurniturePanel {
           : ''
       }
     `;
+    // A disabled Annuler/Rétablir cannot keep focus: Ajouter is the nearest stable control.
+    if (focused) restoreFocus(this.container, focused, '[data-furniture-action="add"]');
   }
 
   get overlayOptions() {
@@ -320,6 +326,7 @@ export class FurniturePanel {
   openEdit(id: string) {
     try {
       this.draft = new FurnitureEditorDraft(this.adapter.getItems(), this.adapter.getLevel(), id);
+      this.opener ??= captureFocus(this.container);
       if (this.dialog.open) this.dialog.close();
       this.renderDraft();
       if (!this.editDialog.open) this.editDialog.showModal();
@@ -334,6 +341,7 @@ export class FurniturePanel {
 
   private renderDraft(message = '') {
     const item = this.draft?.selected;
+    const focused = captureFocus(this.editDialog);
     this.editDialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-edit-title">${item ? `Modifier ${esc(item.name)}` : 'Retirer le meuble'}</h2><button type="button" class="icon-button" data-edit-close aria-label="Fermer">${icon('close', 20)}</button></div>${item ? this.details(item) : '<p>Le meuble sera retiré lorsque vous enregistrerez.</p><div class="furniture-edit-status" role="status"></div><div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button type="button" class="primary-button" data-save-draft>Enregistrer</button></div>'}`;
     if (item) {
       const form = this.editDialog.querySelector<HTMLFormElement>('form')!;
@@ -346,6 +354,7 @@ export class FurniturePanel {
       syncDepthLabel(form, item.kind);
     }
     this.setEditStatus(message);
+    if (focused && !restoreFocus(this.editDialog, focused)) this.focusDimensions();
   }
 
   private setEditStatus(message: string) {
@@ -628,6 +637,7 @@ export class FurniturePanel {
   };
 
   openAdd() {
+    this.opener ??= captureFocus(this.container);
     if (this.editDialog.open) this.editDialog.close();
     const initial = createFurniture({ kind: 'sofa' });
     this.dialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-add-title">Ajouter un meuble</h2><button type="button" class="icon-button" data-add-close aria-label="Fermer">${icon('close', 20)}</button></div><p>Renseignez ses dimensions réelles.${this.adapter.getAddRoomName?.() ? ` Placement dans : <strong>${esc(this.adapter.getAddRoomName()!)}</strong>.` : ''} Vous pourrez ensuite le déplacer dans la maison.</p>
@@ -725,7 +735,25 @@ export class FurniturePanel {
 
   private dialogClosed = () => {
     this.adapter.onDialogState?.(this.dialog.open || this.editDialog.open);
+    this.restoreAfterDialog();
   };
+
+  /**
+   * The panel is often rebuilt while a popup is open (Ajouter, Enregistrer), so the control
+   * that opened it may be gone: fall back to the selected piece's row, then to Ajouter.
+   */
+  private restoreAfterDialog() {
+    if (this.dialog.open || this.editDialog.open) return;
+    const opener = this.opener;
+    this.opener = undefined;
+    const selected = this.adapter.getSelectedId();
+    restoreFocus(
+      this.container,
+      opener,
+      selected ? `[data-furniture-select=${quote(selected)}]` : undefined,
+      '[data-furniture-action="add"]',
+    );
+  }
 
   dispose() {
     this.container.removeEventListener('click', this.click);
