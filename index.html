@@ -10,9 +10,23 @@
     />
     <title>MyBob — Atelier 3D</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      /* Shown until main.ts replaces #app: same colours as .loading, so nothing flashes. */
+      .boot {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: #f1f5e9;
+        color: #5b754c;
+        font:
+          14px system-ui,
+          sans-serif;
+      }
+    </style>
   </head>
   <body>
-    <div id="app"></div>
+    <div id="app"><div class="boot" role="status">Votre maison prend forme…</div></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

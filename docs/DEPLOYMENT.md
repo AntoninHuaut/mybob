@@ -27,7 +27,7 @@ GitHub protection of `main`: PR required, check « Tests, types, build et confid
 
 The `.github/workflows/ci.yml` workflow runs on pushes to `main`, pull requests targeting `main` and on manual dispatch. It uses Node 24, pnpm 12.15.0 and `pnpm install --frozen-lockfile` with `pnpm-lock.yaml`.
 
-Checks: formatting, tests, TypeScript check, public build, then artefact check. The public check rejects files outside the allowlist, original documents, the real house project and its known signatures in the JavaScript assets. This safeguard complements the explicit inclusion of the demonstration files only; it does not replace reviewing any new asset meant to be public.
+Checks: formatting, tests, TypeScript check, public build, then artefact check. The public check rejects files outside the allowlist and original documents. In the JavaScript assets it looks for two things: the wall identifiers and title of every `public/projects/private-*.json` present on the machine, and the shape of an inlined project (`schemaVersion`, `"levels"` and `"outline"` together). The first only exists locally (after `build:private`): in CI no private file is present, the script says so in its output, and only the file allowlist and the project shape protect the deployment. This safeguard complements the explicit inclusion of the demonstration files only; it does not replace reviewing any new asset meant to be public.
 
 Actions only have `contents: read`, no Cloudflare secret, a 15-minute limit, and cancel runs made obsolete on the same branch.
 
@@ -52,6 +52,10 @@ Cloudflare installs the dependencies then runs the same checks before publishing
 `public/_headers` sets the security headers Cloudflare serves. Never add a `Permissions-Policy` that
 blocks `xr-spatial-tracking`: the headset visit (Casque) needs it. WebXR also needs HTTPS, which
 Pages provides; locally, see [ARCHITECTURE](ARCHITECTURE.md#the-visit-in-a-headset).
+
+`vite.config.ts` splits `@babylonjs/core` into its own `babylon-*.js` chunk (shaders stay lazy
+chunks), so a change in `src/` renames only `index-*.js` and returning visitors keep the cached
+engine. `index.html` carries a static loading skeleton inside `#app`, replaced by `main.ts`.
 
 `wrangler.toml` declares the Pages output directory. No Cloudflare token is stored in the repository. Branch previews must also keep the public command; never substitute `build:private`.
 
