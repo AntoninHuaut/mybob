@@ -13,7 +13,7 @@ async function closePanel(page: Page) {
   if ((await page.locator('#toggle-sidebar').getAttribute('aria-expanded')) === 'true')
     await page.locator('#toggle-sidebar').click();
 }
-async function importItems(page: Page, items: FurnitureItem[]) {
+async function importItems(page: Page, items: FurnitureItem[], twoRooms = false) {
   const demo = JSON.parse(await readFile('public/projects/studio-demo.json', 'utf8'));
   const level: Level = {
     id: 'actions-level',
@@ -28,21 +28,50 @@ async function importItems(page: Page, items: FurnitureItem[]) {
     ],
     walls: [],
     lights: [],
-    rooms: [
-      {
-        id: 'room',
-        name: 'Repère test',
-        kind: 'living',
-        polygon: [
-          [0, 0],
-          [10, 0],
-          [10, 8],
-          [0, 8],
+    rooms: twoRooms
+      ? [
+          {
+            id: 'chambre',
+            name: 'Chambre test',
+            kind: 'bedroom',
+            polygon: [
+              [0, 0],
+              [5, 0],
+              [5, 8],
+              [0, 8],
+            ],
+            label: [2, 3],
+            viewpoint: [2, 3],
+          },
+          {
+            id: 'dressing',
+            name: 'Dressing test',
+            kind: 'storage',
+            polygon: [
+              [5, 0],
+              [10, 0],
+              [10, 8],
+              [5, 8],
+            ],
+            label: [7, 3],
+            viewpoint: [7, 3],
+          },
+        ]
+      : [
+          {
+            id: 'room',
+            name: 'Repère test',
+            kind: 'living',
+            polygon: [
+              [0, 0],
+              [10, 0],
+              [10, 8],
+              [0, 8],
+            ],
+            label: [4, 3],
+            viewpoint: [4, 3],
+          },
         ],
-        label: [4, 3],
-        viewpoint: [4, 3],
-      },
-    ],
     spawn: { position: [5, 4], yaw: 0 },
   };
   const project = {
@@ -266,4 +295,37 @@ test('the table moves into the sofa hollow with mouse and arrows and its distanc
   expect(distance(items)).toBeLessThan(previous);
   await closePanel(page);
   await page.screenshot({ path: info.outputPath('table-inside-sofa.png') });
+});
+
+test('a piece created in the wrong room moves to the right one in one action, undone by Ctrl Z', async ({
+  page,
+}) => {
+  await importItems(
+    page,
+    [
+      createFurniture({
+        id: 'penderie',
+        name: 'Penderie test',
+        kind: 'wardrobe',
+        width: 1.234,
+        depth: 0.6,
+        height: 2.1,
+        position: [2, 3],
+      }),
+    ],
+    true,
+  );
+  await page.locator('[data-furniture-select]').click();
+  await closePanel(page);
+  await page.getByRole('button', { name: 'Déplacer le meuble vers une autre pièce' }).click();
+  const dialog = page.getByRole('dialog');
+  await expect(dialog.getByRole('heading', { name: /Déplacer « Penderie test »/ })).toBeVisible();
+  await dialog.getByRole('button', { name: 'Dressing test', exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  const moved = (await exportedItems(page))[0];
+  expect(moved.position[0]).toBeGreaterThan(5);
+  expect(moved.width).toBe(1.234);
+  await page.keyboard.press('ControlOrMeta+z');
+  const back = (await exportedItems(page))[0];
+  expect(back.position).toEqual([2, 3]);
 });

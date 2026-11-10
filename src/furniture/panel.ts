@@ -218,7 +218,7 @@ function showerSpanRow(item: FurnitureItem, side: ShowerPanelSide) {
     side === 'front' || side === 'back'
       ? `<label class="furniture-field">Départ de la paroi <select name="${showerPanelFromField(side)}"><option value="left"${span?.from === 'right' ? '' : ' selected'}>Depuis la gauche</option><option value="right"${span?.from === 'right' ? ' selected' : ''}>Depuis la droite</option></select></label>`
       : '';
-  return `<div class="furniture-panel-span" data-shower-span="${side}"${ticked ? '' : ' hidden'}><label class="furniture-field">Longueur, paroi ${SHOWER_PANEL_LABELS[side].toLowerCase()} <span>cm</span><input name="${showerPanelLengthField(side)}" type="number" min="5" max="2000" step="0.1" placeholder="Entière" value="${span ? cm(span.length) : ''}"${ticked ? '' : ' disabled'}></label>${from}</div>`;
+  return `<div class="furniture-panel-span furniture-field-grid two" data-shower-span="${side}"${ticked ? '' : ' hidden'}><label class="furniture-field">Longueur, paroi ${SHOWER_PANEL_LABELS[side].toLowerCase()} <span>cm</span><input name="${showerPanelLengthField(side)}" type="number" min="5" max="2000" step="0.1" placeholder="Entière" value="${span ? cm(span.length) : ''}"${ticked ? '' : ' disabled'}></label>${from}</div>`;
 }
 
 function showerFields(item: FurnitureItem) {
