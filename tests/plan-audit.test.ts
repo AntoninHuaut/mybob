@@ -283,3 +283,96 @@ test('audit flags a wall standing over a stairwell void, not one flanking it', (
   assert.ok(over.some((i) => i.ids.includes('railing-as-wall')));
   assert.ok(!over.some((i) => i.ids.includes('flank')));
 });
+
+const square = (x0: number, z0: number, x1: number, z1: number): Point2[] => [
+  [x0, z0],
+  [x1, z0],
+  [x1, z1],
+  [x0, z1],
+];
+
+test('audit flags a wall whose face sits more than 3 cm off the room it bounds', () => {
+  const room = (id: string): HouseProject['levels'][0]['rooms'][0] => ({
+    id,
+    name: id,
+    kind: 'circulation',
+    polygon: square(1, 1, 3, 3),
+    label: [2, 2],
+    viewpoint: [2, 2],
+  });
+  const wall = (x: number) => ({
+    id: 'w',
+    start: [x, 0.9] as Point2,
+    end: [x, 3.1] as Point2,
+    thickness: 0.1,
+  });
+  const gaps = (x: number) =>
+    auditPlan(project({ rooms: [room('r')], walls: [wall(x)] })).issues.filter(
+      (i) => i.kind === 'wall-room-gap',
+    );
+  assert.equal(gaps(0.95).length, 0, 'flush: inner face on the room edge');
+  assert.equal(gaps(0.98).length, 0, 'within 3 cm');
+  const off = gaps(0.88);
+  assert.equal(off.length, 1);
+  assert.ok(Math.abs(off[0].value - 0.07) < 1e-9);
+});
+
+test('audit flags an opening under the roof covering that no roof window or dormer carries', () => {
+  const base = project({
+    ceilingHeight: 2,
+    walls: [
+      {
+        id: 'knee',
+        start: [1, 1],
+        end: [5, 1],
+        thickness: 0.05,
+        height: 1.2,
+        exterior: true,
+        openings: [{ id: 'skylight', kind: 'window', offset: 1.5, width: 1, height: 0.8 }],
+      },
+      {
+        id: 'back',
+        start: [1, 2.5],
+        end: [2, 2.5],
+        thickness: 0.1,
+        height: 1.1,
+        exterior: true,
+        openings: [{ id: 'dormer-window', kind: 'window', offset: 0, width: 0.9, height: 1 }],
+      },
+    ],
+  });
+  base.site = {
+    boundary: [
+      [-5, -5],
+      [15, -5],
+      [15, 9],
+      [-5, 9],
+    ],
+    elevation: 0,
+    notes: [],
+    roofs: [
+      {
+        id: 'roof',
+        vertices: [
+          [0, 1.5, 0],
+          [6, 1.5, 0],
+          [0, 2.5, 4],
+          [6, 2.5, 4],
+        ],
+        faces: [[0, 1, 3, 2]],
+      },
+    ],
+  };
+  const uncarried = () =>
+    auditPlan(base)
+      .issues.filter((i) => i.kind === 'opening-under-roof-uncarried')
+      .map((i) => i.ids[1])
+      .sort();
+  assert.deepEqual(uncarried(), ['dormer-window', 'skylight']);
+  const roof = base.site!.roofs![0];
+  roof.windows = [{ id: 'fenetre', center: [3, 1.2], width: 1, height: 0.8 }];
+  assert.deepEqual(uncarried(), ['dormer-window']);
+  base.levels[0].walls[1].height = 2.3;
+  roof.dormers = [{ id: 'lucarne', start: [1, 1.5], end: [2, 2.45], wallId: 'back' }];
+  assert.deepEqual(uncarried(), []);
+});

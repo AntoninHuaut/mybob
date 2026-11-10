@@ -140,6 +140,15 @@ unreachable by the walk, because the ground floor did not have a single opening.
 see it: they only compare the rooms they are given. All three gates are needed, and
 `reachedRooms` is read on every pass.
 
+**Two more audit kinds are blocking** (`audit-plan.ts` prints them and exits with code 1):
+`wall-room-gap` (the inner face of a wall further than 3 cm from the edge of the room it
+bounds, a partition being fine when it is flush with one of its two rooms),
+`opening-under-roof-uncarried` (an opening in a knee wall or dormer back wall that lies under
+the roof covering and that no `site.roofs[].windows` entry nor `dormers` entry carries). The
+fix is to recalibrate the walls on the printed dimensions, never to resize the room, and to
+declare the dormers and roof windows. A back wall that exceeds the covering without a dormer
+is already refused by the import (`validateProject`).
+
 The fourth removes the partition returns that stuck out into a room: on plan A, the audit goes
 from eight warnings to one.
 
