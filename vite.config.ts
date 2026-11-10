@@ -14,6 +14,19 @@ export default defineConfig(({ mode }) => {
     // Deep Babylon imports must share one shader registry in the development server.
     optimizeDeps: { exclude: ['@babylonjs/core'] },
     publicDir: publicBuild ? false : 'public',
+    build: {
+      rollupOptions: {
+        output: {
+          // Babylon changes only when its version does: a label edit in src/ must not
+          // invalidate the 2 MB of engine every visitor already cached.
+          manualChunks(id) {
+            if (!id.includes('/node_modules/@babylonjs/core/')) return undefined;
+            // Shaders stay lazy chunks: merging them would make every visit pay for all of them.
+            return /\/Shaders(?:WGSL)?\//.test(id) ? undefined : 'babylon';
+          },
+        },
+      },
+    },
     define: {
       __PUBLIC_BUILD__: JSON.stringify(publicBuild),
       __PRIVATE_PROJECTS__: JSON.stringify(privateProjects),

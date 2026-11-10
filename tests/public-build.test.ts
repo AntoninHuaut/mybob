@@ -3,7 +3,7 @@ import test from 'node:test';
 import { mkdtemp, mkdir, writeFile, copyFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { verifyPublicBuild } from '../scripts/check-public-build.mjs';
+import { personalFingerprints, verifyPublicBuild } from '../scripts/check-public-build.mjs';
 
 async function fixture(run: (root: string) => Promise<void>) {
   const root = await mkdtemp(join(tmpdir(), 'public-house-'));
@@ -42,10 +42,39 @@ test('public build rejects the personal project even when it is not referenced b
     await assert.rejects(verifyPublicBuild(root), /File not meant for publication/);
   }));
 
-test('public build rejects personal geometry embedded inside a JavaScript asset', () =>
+test('public build rejects the wall ids of a private plan embedded inside a JavaScript asset', () =>
   fixture(async (root) => {
-    await writeFile(join(root, 'assets/app.js'), 'const walls = ["mur-ouest-garage"]');
-    await assert.rejects(verifyPublicBuild(root), /Personal house data/);
+    const projects = new URL(`file://${root}/private-source/`);
+    await mkdir(projects, { recursive: true });
+    await writeFile(
+      new URL('private-test.json', projects),
+      JSON.stringify({ levels: [{ walls: [{ id: 'mur-secret-chambre' }] }] }),
+    );
+    await writeFile(join(root, 'assets/app.js'), 'const walls = ["mur-secret-chambre"]');
+    await assert.rejects(
+      verifyPublicBuild(root, { projectsDirectory: projects }),
+      /Personal house data detected: assets\/app\.js \(contains "mur-secret-chambre"\)/,
+    );
+    const { files, values } = await personalFingerprints(projects);
+    assert.deepEqual(files, ['private-test.json']);
+    assert.deepEqual(values, ['mur-secret-chambre']);
+  }));
+
+test('public build announces when no private plan provides a fingerprint', async () => {
+  const empty = new URL(`file://${await mkdtemp(join(tmpdir(), 'no-private-'))}/`);
+  assert.deepEqual(await personalFingerprints(empty), { files: [], values: [] });
+});
+
+test('public build rejects any project embedded in an asset, whoever it belongs to', () =>
+  fixture(async (root) => {
+    await writeFile(
+      join(root, 'assets/app.js'),
+      `JSON.parse('{"schemaVersion":3,"levels":[{"outline":[[0,0]]}]}')`,
+    );
+    await assert.rejects(verifyPublicBuild(root), /Embedded house project/);
+    // Minified application code writes keys unquoted: not a project.
+    await writeFile(join(root, 'assets/app.js'), 'const a={schemaVersion:3,levels:[],outline:[]}');
+    await verifyPublicBuild(root);
   }));
 
 test('public build rejects original documents and missing demonstrations', () =>
