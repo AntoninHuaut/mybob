@@ -81,7 +81,7 @@ jobs:
       - name: Ensure personal house data is absent from publication
         run: npm run check:public
       - name: Share verified public build
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: public-build
           path: dist/
@@ -110,7 +110,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Download verified public build
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: public-build
           path: dist/
@@ -149,7 +149,7 @@ jobs:
         run: pnpm run test:e2e:built --shard=${{ matrix.shard }}/3
       - name: Upload E2E report and failure traces
         if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: playwright-report-${{ matrix.shard }}
           path: |
