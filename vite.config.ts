@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => {
           {
             name: 'public-demo-only',
             generateBundle() {
-              for (const name of ['favicon.svg', 'projects/studio-demo.json']) {
+              for (const name of ['favicon.svg', '_headers', 'projects/studio-demo.json']) {
                 this.emitFile({
                   type: 'asset',
                   fileName: name,
