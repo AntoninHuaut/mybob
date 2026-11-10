@@ -1121,7 +1121,9 @@ export class HouseViewer {
       }
       // Last in the chain, for the same reason the temporal pass is first: the glow
       // belongs on the finished image, not on the occlusion's half-resolution buffer.
-      this.interiorBloom ??= createInteriorBloom(this.scene, camera);
+      // Not in the headset: on the session camera the bloom renders into a zero-size
+      // target every frame (WebGL INVALID_FRAMEBUFFER_OPERATION) and adds nothing.
+      if (!this.immersive) this.interiorBloom ??= createInteriorBloom(this.scene, camera);
       return;
     }
     if (this.interiorEnvironment && this.scene.environmentTexture === this.interiorEnvironment) {
@@ -1179,6 +1181,7 @@ export class HouseViewer {
         scene,
         level: this.level,
         site: this.site,
+        start: { point: [this.walk.position.x, this.walk.position.z], yaw: this.walk.rotation.y },
         isDestination: (point) =>
           isSceneVisitDestination(scene, this.level, point) ||
           isParcelDestination(this.level, this.site, point),
@@ -1186,6 +1189,11 @@ export class HouseViewer {
         toggleEffects: () => {
           this.immersiveEffects = !this.immersiveEffects;
           this.rebuildWalkPipelines();
+        },
+        // Built on the first headset frame: before it, the framebuffer may have no size
+        // yet and the pipelines' textures would be created empty, hiding the whole scene.
+        onReady: (ready) => {
+          if (this.immersive === ready) this.rebuildWalkPipelines();
         },
         onEnd: (ended) => this.leaveImmersive(ended),
       });
@@ -1195,7 +1203,8 @@ export class HouseViewer {
         return;
       }
       this.immersive = walk;
-      this.rebuildWalkPipelines();
+      // The screen walk's pipelines are bound to its camera: dropped until the headset is ready.
+      this.releaseWalkPipelines();
       this.onImmersiveChange?.(true);
     } finally {
       this.immersiveStarting = false;
@@ -1362,13 +1371,12 @@ export class HouseViewer {
     this.shadowRefresh?.step();
     if (this.immersive) {
       this.immersive.step(dt);
-      const camera = this.immersive.camera;
-      const p = camera.position;
+      const position = this.immersive.position;
       this.onFrame?.({
-        position: [p.x, p.z],
-        headingDegrees: planHeading(camera),
+        position,
+        headingDegrees: planHeading(this.immersive.camera),
         planUpDegrees: this.planUpDegrees(),
-        roomId: this.level.rooms.find((r) => pointInPolygon([p.x, p.z], r.polygon))?.id,
+        roomId: this.level.rooms.find((r) => pointInPolygon(position, r.polygon))?.id,
         nearDoor: false,
         locked: true,
       });
