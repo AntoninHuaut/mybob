@@ -1275,23 +1275,22 @@ export class HouseViewer {
   }
 
   /**
-   * Full resolution at rest; fewer pixels while the camera moves, only on a machine
-   * too slow for 40 fps (`adaptiveResolution.ts`).
+   * Fewer pixels on a machine too slow for 40 fps, at rest and in motion alike: a resize
+   * hitches, so it never follows the camera (`adaptiveResolution.ts`).
    */
   private applyRenderScale(now: number, render: boolean) {
-    const moving = this.renderScheduler.cameraMoved || this.keyState.size > 0;
     const frameMs = render && this.lastRenderAt !== undefined ? now - this.lastRenderAt : undefined;
-    const scale = this.adaptiveResolution.update(now, moving, frameMs);
+    const scale = this.adaptiveResolution.update(frameMs);
     if (scale === this.renderScale) return;
     this.renderScale = scale;
     this.engine.setHardwareScalingLevel(this.baseScaling / scale);
-    // Back to full resolution: the still image is drawn again and settled.
+    // The targets were resized: the image is drawn again and settled.
     this.renderScheduler.request();
   }
 
-  /** Render scale used in motion on this machine (1 = full resolution), for the diagnostic. */
-  get motionScale(): number {
-    return this.adaptiveResolution?.motionScale ?? 1;
+  /** Render scale in use on this machine (1 = full resolution), for the diagnostic. */
+  get currentRenderScale(): number {
+    return this.adaptiveResolution?.scale ?? 1;
   }
 
   /** Everything about the active camera that changes the image, rounded under visibility. */

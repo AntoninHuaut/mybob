@@ -307,10 +307,11 @@ last call, and read back at start-up.
   movement, a swinging door or a compiling shader restarts drawing. A scene change that comes
   from none of these signals (timer, loading, animation driven by `requestAnimationFrame`)
   calls `viewer.requestRender()`, otherwise it only appears with the next second's frame.
-- Dynamic resolution (`adaptiveResolution.ts`), only while moving: if the median frame time
-  exceeds 25 ms (under 40 fps), rendering drops one step (100, 80, 67, 50 %); when still, it
-  always returns to 100 % and TAA finishes the still image. A PC that holds the frame rate
-  never leaves 100 %. `mybob.diag()` shows the step reached.
+- Dynamic resolution (`adaptiveResolution.ts`), the same at rest and in motion: if the median
+  frame time exceeds 25 ms (under 40 fps), rendering drops one step (100, 80, 67 %). The
+  scale only goes down and is kept for the session, because changing it resizes every render
+  target, which hitches. The first 30 images and the 30 after each change are not measured.
+  A PC that holds the frame rate never leaves 100 %. `mybob.diag()` shows the scale.
 - The sun shadow map is only redrawn when its casters change (`shadowRefresh.ts`): mode,
   cutaway, roof, sun, animated door. A new moving shadow caster calls `invalidate()`.
 - The public build only contains the demonstration: `vite.config.ts` and

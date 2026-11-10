@@ -88,15 +88,12 @@ test('at rest, the report says the image is frozen instead of a misleading frame
   assert.doesNotMatch(lines[2], /fps/);
 });
 
-test('the report says at which resolution the view renders while moving', () => {
-  assert.match(
-    diagnosticLines(collectDiagnostics(engine(), scene(), view))[4],
-    /en mouvement 100 %/,
-  );
+test('the report says at which resolution the view renders', () => {
+  assert.match(diagnosticLines(collectDiagnostics(engine(), scene(), view))[4], /échelle 100 %/);
   const slow = diagnosticLines(
-    collectDiagnostics(engine(), scene(), { ...view, motionScale: 0.67 }),
+    collectDiagnostics(engine(), scene(), { ...view, renderScale: 0.67 }),
   );
-  assert.match(slow[4], /en mouvement 67 %/);
+  assert.match(slow[4], /échelle 67 %/);
 });
 
 test('a complete snapshot stays formattable without a browser', () => {

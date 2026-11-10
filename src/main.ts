@@ -2251,7 +2251,7 @@ async function start() {
         environment: viewer.ambience.environment,
         occlusion: viewer.ambience.occlusion,
         idle: viewer.renderingIdle,
-        motionScale: viewer.motionScale,
+        renderScale: viewer.currentRenderScale,
       }),
     );
     wireEvents();
