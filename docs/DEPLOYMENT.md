@@ -49,6 +49,10 @@ In the owner's Cloudflare account: **Workers & Pages → create a Pages applicat
 
 Cloudflare installs the dependencies then runs the same checks before publishing. A test or public-check failure prevents that deployment and keeps the previous version. There is therefore no need to assume GitHub CI has already finished: the two pipelines are independent and enforce the same requirements.
 
+`public/_headers` sets the security headers Cloudflare serves. Never add a `Permissions-Policy` that
+blocks `xr-spatial-tracking`: the headset visit (Casque) needs it. WebXR also needs HTTPS, which
+Pages provides; locally, see [ARCHITECTURE](ARCHITECTURE.md#the-visit-in-a-headset).
+
 `wrangler.toml` declares the Pages output directory. No Cloudflare token is stored in the repository. Branch previews must also keep the public command; never substitute `build:private`.
 
 ## Connection status

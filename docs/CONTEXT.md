@@ -21,6 +21,7 @@ Requests arrive with the interface's (French) words. The code name is the one to
 | Extérieur                        | `overview` + `viewer.setExteriorView(true)`, `#view-exterior` |
 | Plan                             | mode `plan`                                                   |
 | Visite                           | mode `walk`, `scene/walkCamera.ts`                            |
+| Casque (VR headset visit)        | `walk` + `viewer.enterImmersive()`, `scene/xrWalk.ts`         |
 | Coupe des murs (wall cutaway)    | `cutaway` (`auto` / `full` / `low`), `scene/wallCutaway.ts`   |
 | Meubles, edit popup              | `src/furniture/`, draft in `editorDraft.ts`                   |
 | Variantes                        | `furniture/variants.ts`, `ui/variantsPanel.ts`                |
