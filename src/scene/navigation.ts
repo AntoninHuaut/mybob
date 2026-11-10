@@ -156,12 +156,26 @@ export function wallFacesCamera(level: Level, wall: Wall, camera: Point2) {
 /** A return shorter than this never frames the view: it lowers with its facade. */
 export const RETURN_MAX_LENGTH = 1;
 
+/** Whether `other` ends on `wall`'s body: it is what the wall joins. */
+export function wallJoins(wall: Wall, other: Wall) {
+  if (wall.id === other.id) return false;
+  const reach = Math.max(wall.thickness, other.thickness);
+  return [other.start, other.end].some((point) => distanceToWall(point, wall) <= reach);
+}
+
 /**
  * A short return seen edge-on still stands in front of the rooms: the sides of a
- * recessed entrance, for instance. Lowering it with the facade it extends keeps
- * the automatic display free of floating wall stubs.
+ * recessed entrance, for instance. It is lowered with the facade it extends, and
+ * only then: lowered beside walls that stay full height it would leave a hole in
+ * the wall run. `loweredNeighbours` says whether a wall it joins is lowered.
  */
-export function wallHidesInterior(level: Level, wall: Wall, camera: Point2) {
+export function wallHidesInterior(
+  level: Level,
+  wall: Wall,
+  camera: Point2,
+  loweredNeighbours: boolean,
+) {
+  if (!loweredNeighbours) return false;
   if (Math.hypot(wall.end[0] - wall.start[0], wall.end[1] - wall.start[1]) > RETURN_MAX_LENGTH)
     return false;
   const [cx, cz] = bounds(level.outline).center;

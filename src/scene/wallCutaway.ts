@@ -3,7 +3,7 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { Material } from '@babylonjs/core/Materials/material';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Level, Point2 } from '../model/types';
-import { wallFacesCamera, wallHidesInterior } from './navigation';
+import { wallFacesCamera, wallHidesInterior, wallJoins } from './navigation';
 import { CAP_TOP_INSET } from './planOpenings';
 
 export type WallDisplay = 'auto' | 'full' | 'low';
@@ -44,12 +44,26 @@ export function buildWallCutaway(scene: Scene, level: Level) {
       const selected = new Set<string>();
       shellPlane.d = -(level.elevation + height);
       trimPlane.d = -(level.elevation + height - CAP_TOP_INSET);
+      // Facades first: a short return only follows a facade that is actually lowered.
+      const facing = new Set(
+        mode === 'auto'
+          ? level.walls
+              .filter((wall) => wall.exterior && wallFacesCamera(level, wall, camera))
+              .map((wall) => wall.id)
+          : [],
+      );
       for (const { wall, meshes } of groups) {
         const clipped =
           mode === 'low' ||
           (mode === 'auto' &&
             !!wall.exterior &&
-            (wallFacesCamera(level, wall, camera) || wallHidesInterior(level, wall, camera)));
+            (facing.has(wall.id) ||
+              wallHidesInterior(
+                level,
+                wall,
+                camera,
+                level.walls.some((other) => facing.has(other.id) && wallJoins(wall, other)),
+              )));
         if (clipped) selected.add(wall.id);
         for (const { mesh, shell } of meshes) {
           const original = originals.get(mesh)!;
