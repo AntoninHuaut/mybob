@@ -3,6 +3,10 @@ import {
   dressingStrips,
   SHOWER_PANEL_SIDES,
   showerPanelField,
+  showerPanelFromField,
+  showerPanelLengthField,
+  type ShowerPanelSide,
+  type ShowerPanelSpan,
   type DressingRun,
   type FurnitureItem,
 } from './model';
@@ -35,6 +39,7 @@ export function measurementsFromForm(
   | 'dressing'
   | 'showerTray'
   | 'showerPanels'
+  | 'showerPanelSpans'
   | 'tvDiagonalInches'
 > {
   const height = Number(data.get('height')) / 100;
@@ -53,6 +58,7 @@ export function measurementsFromForm(
       sofa: undefined,
       showerTray: undefined,
       showerPanels: undefined,
+      showerPanelSpans: undefined,
       tvDiagonalInches: undefined,
     };
   }
@@ -83,7 +89,25 @@ export function measurementsFromForm(
       kind === 'shower'
         ? SHOWER_PANEL_SIDES.filter((side) => data.has(showerPanelField(side)))
         : undefined,
+    showerPanelSpans: kind === 'shower' ? showerSpansFromForm(data) : undefined,
   };
+}
+
+/** A ticked side with a length in centimetres is a short panel; a blank length is the whole side. */
+function showerSpansFromForm(
+  data: FormData,
+): Partial<Record<ShowerPanelSide, ShowerPanelSpan>> | undefined {
+  const spans: Partial<Record<ShowerPanelSide, ShowerPanelSpan>> = {};
+  for (const side of SHOWER_PANEL_SIDES) {
+    if (!data.has(showerPanelField(side))) continue;
+    const raw = String(data.get(showerPanelLengthField(side)) ?? '').trim();
+    if (!raw) continue;
+    const span: ShowerPanelSpan = { length: Number(raw) / 100 };
+    if ((side === 'front' || side === 'back') && data.get(showerPanelFromField(side)) === 'right')
+      span.from = 'right';
+    spans[side] = span;
+  }
+  return Object.keys(spans).length ? spans : undefined;
 }
 
 interface CornerDiagramLabels {

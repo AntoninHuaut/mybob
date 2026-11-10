@@ -597,3 +597,28 @@ dialog p {
   color: #3d2f00;
   border-bottom: 1px solid #c9a227;
 }
+
+/* « Déplacer vers… »: one full-width choice per room of the level. */
+.move-room-list {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0 8px;
+}
+.move-room {
+  min-height: 42px;
+  padding: 9px 14px;
+  border: 1px solid #cfdcc5;
+  border-radius: 6px;
+  background: #f6f9f1;
+  color: #29412a;
+  font-size: 14px;
+  text-align: left;
+}
+.move-room:hover {
+  background: #e8f0df;
+}
+#move-room-status {
+  min-height: 1.4em;
+  color: #8a4b1a;
+  font-size: 13px;
+}

@@ -2,6 +2,7 @@ import './panel.css';
 import type { Level, Point2 } from '../model/types';
 import { escapeHtml as esc } from '../ui/format';
 import { icon } from '../ui/icons';
+import { captureFocus, quote, restoreFocus } from '../ui/focusKeeper';
 import {
   measurementsFromForm,
   dressingDiagram,
@@ -17,6 +18,8 @@ import {
   FURNITURE_CATEGORIES,
   SHOWER_PANEL_SIDES,
   showerPanelField,
+  showerPanelFromField,
+  showerPanelLengthField,
   type DressingRun,
   type FurnitureItem,
   type ShowerPanelSide,
@@ -208,6 +211,16 @@ const SHOWER_PANEL_LABELS: Record<ShowerPanelSide, string> = {
   back: 'Arrière',
 };
 
+function showerSpanRow(item: FurnitureItem, side: ShowerPanelSide) {
+  const span = item.showerPanelSpans?.[side];
+  const ticked = (item.showerPanels ?? ['left']).includes(side);
+  const from =
+    side === 'front' || side === 'back'
+      ? `<label class="furniture-field">Départ de la paroi <select name="${showerPanelFromField(side)}"><option value="left"${span?.from === 'right' ? '' : ' selected'}>Depuis la gauche</option><option value="right"${span?.from === 'right' ? ' selected' : ''}>Depuis la droite</option></select></label>`
+      : '';
+  return `<div class="furniture-panel-span furniture-field-grid two" data-shower-span="${side}"${ticked ? '' : ' hidden'}><label class="furniture-field">Longueur, paroi ${SHOWER_PANEL_LABELS[side].toLowerCase()} <span>cm</span><input name="${showerPanelLengthField(side)}" type="number" min="5" max="2000" step="0.1" placeholder="Entière" value="${span ? cm(span.length) : ''}"${ticked ? '' : ' disabled'}></label>${from}</div>`;
+}
+
 function showerFields(item: FurnitureItem) {
   const tray = item.showerTray ?? 0.06;
   const panels = item.showerPanels ?? ['left'];
@@ -215,13 +228,29 @@ function showerFields(item: FurnitureItem) {
     (side) =>
       `<label class="furniture-panel-side"><input type="checkbox" name="${showerPanelField(side)}"${panels.includes(side) ? ' checked' : ''}> ${SHOWER_PANEL_LABELS[side]}</label>`,
   ).join('');
-  return `<fieldset class="furniture-shape-fields" data-shower-fields${item.locked ? ' disabled' : ''}${item.kind === 'shower' ? '' : ' hidden'}><legend>Douche</legend><label class="furniture-field">Hauteur du bac <span>cm</span><input name="showerTray" type="number" min="0" max="40" step="0.5" value="${cm(tray)}"></label><div class="furniture-panel-sides-field"><span>Parois vitrées</span><div class="furniture-panel-sides">${sides}</div></div><p class="furniture-form-note">0 cm de bac donne une douche italienne. Le pommeau est au fond du volume ; tournez la douche pour changer de mur.</p></fieldset>`;
+  const spans = SHOWER_PANEL_SIDES.map((side) => showerSpanRow(item, side)).join('');
+  return `<fieldset class="furniture-shape-fields" data-shower-fields${item.locked ? ' disabled' : ''}${item.kind === 'shower' ? '' : ' hidden'}><legend>Douche</legend><label class="furniture-field">Hauteur du bac <span>cm</span><input name="showerTray" type="number" min="0" max="40" step="0.5" value="${cm(tray)}"></label><div class="furniture-panel-sides-field"><span>Parois vitrées</span><div class="furniture-panel-sides">${sides}</div></div>${spans}<p class="furniture-form-note">0 cm de bac donne une douche italienne. Le pommeau est au fond du volume ; tournez la douche pour changer de mur. Laissez la longueur vide pour une paroi sur tout le côté ; une paroi plus courte laisse l’entrée ouverte. Elle part du fond pour les côtés gauche et droit.</p></fieldset>`;
+}
+/** A length field only applies to a ticked side: the others are hidden and left out of the form. */
+function syncShowerSpans(form: HTMLFormElement) {
+  for (const side of SHOWER_PANEL_SIDES) {
+    const ticked = (form.elements.namedItem(showerPanelField(side)) as HTMLInputElement | null)
+      ?.checked;
+    const row = form.querySelector<HTMLElement>(`[data-shower-span="${side}"]`);
+    if (!row) continue;
+    row.hidden = !ticked;
+    for (const control of row.querySelectorAll<HTMLInputElement | HTMLSelectElement>(
+      'input, select',
+    ))
+      control.disabled = !ticked;
+  }
 }
 function updateShowerFields(form: HTMLFormElement, kind: string) {
   const fields = form.querySelector<HTMLFieldSetElement>('[data-shower-fields]');
   if (!fields) return;
   fields.hidden = kind !== 'shower';
   fields.disabled = kind !== 'shower' || form.dataset.geometryLocked === 'true';
+  syncShowerSpans(form);
 }
 
 export class FurniturePanel {
@@ -229,6 +258,8 @@ export class FurniturePanel {
   private overlays = { distances: true, clearances: false, openings: false };
   private editDialog: HTMLDialogElement;
   private draft?: FurnitureEditorDraft;
+  /** Control that opened the open popup, so closing it hands focus back. */
+  private opener?: string;
 
   constructor(
     private container: HTMLElement,
@@ -265,6 +296,7 @@ export class FurniturePanel {
     const selectedId = this.adapter.getSelectedId();
     const items = this.adapter.getItems();
     const checks = this.adapter.getChecks();
+    const focused = captureFocus(this.container);
     this.container.innerHTML = `
       <div class="furniture-heading"><div class="eyebrow">Aménagement</div><div class="furniture-history"><button type="button" data-furniture-action="undo" aria-label="Annuler la dernière modification" title="Annuler · Ctrl Z"${disabled(!this.adapter.canUndo())}>↶</button><button type="button" data-furniture-action="redo" aria-label="Rétablir la modification" title="Rétablir · Ctrl Maj Z"${disabled(!this.adapter.canRedo())}>↷</button></div></div>
       <button type="button" class="furniture-add" data-furniture-action="add">${icon('plus', 17)} Ajouter un meuble</button>
@@ -275,6 +307,8 @@ export class FurniturePanel {
           : ''
       }
     `;
+    // A disabled Annuler/Rétablir cannot keep focus: Ajouter is the nearest stable control.
+    if (focused) restoreFocus(this.container, focused, '[data-furniture-action="add"]');
   }
 
   get overlayOptions() {
@@ -320,6 +354,7 @@ export class FurniturePanel {
   openEdit(id: string) {
     try {
       this.draft = new FurnitureEditorDraft(this.adapter.getItems(), this.adapter.getLevel(), id);
+      this.opener ??= captureFocus(this.container);
       if (this.dialog.open) this.dialog.close();
       this.renderDraft();
       if (!this.editDialog.open) this.editDialog.showModal();
@@ -334,6 +369,7 @@ export class FurniturePanel {
 
   private renderDraft(message = '') {
     const item = this.draft?.selected;
+    const focused = captureFocus(this.editDialog);
     this.editDialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-edit-title">${item ? `Modifier ${esc(item.name)}` : 'Retirer le meuble'}</h2><button type="button" class="icon-button" data-edit-close aria-label="Fermer">${icon('close', 20)}</button></div>${item ? this.details(item) : '<p>Le meuble sera retiré lorsque vous enregistrerez.</p><div class="furniture-edit-status" role="status"></div><div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button type="button" class="primary-button" data-save-draft>Enregistrer</button></div>'}`;
     if (item) {
       const form = this.editDialog.querySelector<HTMLFormElement>('form')!;
@@ -346,6 +382,7 @@ export class FurniturePanel {
       syncDepthLabel(form, item.kind);
     }
     this.setEditStatus(message);
+    if (focused && !restoreFocus(this.editDialog, focused)) this.focusDimensions();
   }
 
   private setEditStatus(message: string) {
@@ -502,6 +539,10 @@ export class FurniturePanel {
       const form = input.closest<HTMLFormElement>('form');
       if (form) updateSofaFields(form, 'sofa', true);
     }
+    if (input.name?.startsWith('showerPanel')) {
+      const form = input.closest<HTMLFormElement>('form');
+      if (form) syncShowerSpans(form);
+    }
     const key = input.dataset.furnitureOverlay as keyof typeof this.overlays | undefined;
     if (key) {
       this.overlays[key] = input.checked;
@@ -579,6 +620,14 @@ export class FurniturePanel {
       next.width = bounds.width;
       next.depth = bounds.depth;
     } else if (unchanged('depth')) next.depth = bodyDepth(item);
+    if (next.showerPanelSpans && item.showerPanelSpans) {
+      for (const side of SHOWER_PANEL_SIDES) {
+        const before = item.showerPanelSpans[side];
+        const after = next.showerPanelSpans[side];
+        if (before && after && unchanged(showerPanelLengthField(side)))
+          after.length = before.length;
+      }
+    }
     if (unchanged('x')) next.position[0] = item.position[0];
     if (unchanged('z')) next.position[1] = item.position[1];
     if (unchanged('rotation')) next.rotation = item.rotation;
@@ -628,6 +677,7 @@ export class FurniturePanel {
   };
 
   openAdd() {
+    this.opener ??= captureFocus(this.container);
     if (this.editDialog.open) this.editDialog.close();
     const initial = createFurniture({ kind: 'sofa' });
     this.dialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-add-title">Ajouter un meuble</h2><button type="button" class="icon-button" data-add-close aria-label="Fermer">${icon('close', 20)}</button></div><p>Renseignez ses dimensions réelles.${this.adapter.getAddRoomName?.() ? ` Placement dans : <strong>${esc(this.adapter.getAddRoomName()!)}</strong>.` : ''} Vous pourrez ensuite le déplacer dans la maison.</p>
@@ -668,6 +718,8 @@ export class FurniturePanel {
         (form.elements.namedItem(showerPanelField(side)) as HTMLInputElement).checked = (
           preset.showerPanels ?? ['left']
         ).includes(side);
+      for (const side of SHOWER_PANEL_SIDES)
+        (form.elements.namedItem(showerPanelLengthField(side)) as HTMLInputElement).value = '';
       (form.elements.namedItem('elevation') as HTMLInputElement).value = String(
         cm(preset.elevation ?? 0),
       );
@@ -696,6 +748,7 @@ export class FurniturePanel {
     }
     if (input.name === 'sofaShape')
       updateSofaFields(form, (form.elements.namedItem('kind') as HTMLSelectElement).value, true);
+    if (input.name?.startsWith('showerPanel')) syncShowerSpans(form);
   };
 
   private submitAdd = (event: Event) => {
@@ -725,7 +778,25 @@ export class FurniturePanel {
 
   private dialogClosed = () => {
     this.adapter.onDialogState?.(this.dialog.open || this.editDialog.open);
+    this.restoreAfterDialog();
   };
+
+  /**
+   * The panel is often rebuilt while a popup is open (Ajouter, Enregistrer), so the control
+   * that opened it may be gone: fall back to the selected piece's row, then to Ajouter.
+   */
+  private restoreAfterDialog() {
+    if (this.dialog.open || this.editDialog.open) return;
+    const opener = this.opener;
+    this.opener = undefined;
+    const selected = this.adapter.getSelectedId();
+    restoreFocus(
+      this.container,
+      opener,
+      selected ? `[data-furniture-select=${quote(selected)}]` : undefined,
+      '[data-furniture-action="add"]',
+    );
+  }
 
   dispose() {
     this.container.removeEventListener('click', this.click);

@@ -28,7 +28,8 @@ const geometryChanged = (before: FurnitureItem | undefined, after: FurnitureItem
   JSON.stringify(before.sofa) !== JSON.stringify(after.sofa) ||
   JSON.stringify(before.dressing) !== JSON.stringify(after.dressing) ||
   before.showerTray !== after.showerTray ||
-  JSON.stringify(before.showerPanels) !== JSON.stringify(after.showerPanels);
+  JSON.stringify(before.showerPanels) !== JSON.stringify(after.showerPanels) ||
+  JSON.stringify(before.showerPanelSpans) !== JSON.stringify(after.showerPanelSpans);
 
 /** Isolated popup transaction. Only the caller's explicit Save commits this snapshot. */
 export class FurnitureEditorDraft {

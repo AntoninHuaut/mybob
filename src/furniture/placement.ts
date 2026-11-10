@@ -207,6 +207,8 @@ export function findFurniturePlacement(
   level: Level,
   existing: FurnitureItem[] = [],
   preferredRoom?: Room | string,
+  /** Extra condition on a candidate, e.g. that the rest of a linked set also fits. */
+  accept?: (candidate: FurnitureItem) => boolean,
 ): FurnitureItem | undefined {
   const requested =
     typeof preferredRoom === 'string'
@@ -218,6 +220,7 @@ export function findFurniturePlacement(
     if (requested && !pointInPolygon(position, requested.polygon)) return false;
     const candidate = { ...item, position };
     if (validBuilding(candidate).length) return false;
+    if (accept && !accept(candidate)) return false;
     const floor = floorElevationAt(level, position) + (candidate.elevation ?? 0),
       parts = footprintParts(candidate);
     return !existing.some((other) => {

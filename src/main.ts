@@ -52,6 +52,7 @@ import {
 } from './furniture/model';
 import { checkFurniture } from './furniture/checks';
 import { findFurniturePlacement, getBuildingPlacementIssues } from './furniture/placement';
+import { moveFurnitureToRoom } from './furniture/roomMove';
 import {
   applyFurnitureTransform,
   constrainGroupDrag,
@@ -400,6 +401,53 @@ function placeFurnitureCopy(copy: FurnitureItem) {
   if (commitFurniture([...currentFurniture(), placed])) selectFurniture(placed.id);
 }
 
+/** « Déplacer vers… »: one undoable move into another room, dimensions untouched. */
+function openMoveToRoom(id: string) {
+  if (readOnlyLink) {
+    toast(READ_ONLY_TOAST);
+    return;
+  }
+  const item = currentFurniture().find((candidate) => candidate.id === id);
+  if (!item) return;
+  const rooms = viewer.level.rooms;
+  openDialog(
+    'Déplacer le meuble',
+    `<h2>Déplacer « ${esc(item.name)} » vers…</h2><p>Le meuble garde ses dimensions et prend la place libre de la pièce la plus proche de sa position actuelle. Un meuble lié emmène son ensemble.</p>${
+      rooms.length
+        ? `<div class="move-room-list" role="group" aria-label="Pièces du niveau">${rooms
+            .map(
+              (room) =>
+                `<button type="button" class="move-room" data-move-room="${esc(room.id)}">${esc(room.name)}</button>`,
+            )
+            .join('')}</div>`
+        : '<p>Ce niveau ne décrit aucune pièce.</p>'
+    }<p id="move-room-status" role="status"></p><div class="furniture-dialog-footer"><button type="button" id="cancel-move-room" class="text-button">Annuler</button></div>`,
+  );
+  el('#cancel-move-room').addEventListener('click', () =>
+    el<HTMLDialogElement>('#info-dialog').close(),
+  );
+  // The list is rebuilt with each dialog, so its listener never piles up.
+  document.querySelector('.move-room-list')?.addEventListener('click', (event) => {
+    const button = (event.target as HTMLElement).closest<HTMLElement>('[data-move-room]');
+    if (!button) return;
+    const room = rooms.find((candidate) => candidate.id === button.dataset.moveRoom);
+    const result = moveFurnitureToRoom(
+      currentFurniture(),
+      viewer.level,
+      id,
+      button.dataset.moveRoom!,
+    );
+    if (!result.ok) {
+      el('#move-room-status').textContent = result.reason;
+      return;
+    }
+    if (!commitFurniture(result.items)) return;
+    el<HTMLDialogElement>('#info-dialog').close();
+    selectFurniture(id);
+    toast(`Meuble déplacé dans « ${room?.name ?? 'cette pièce'} ». Annulez avec Ctrl Z.`);
+  });
+}
+
 function openTableChairs() {
   const tableId = selectedFurnitureId;
   if (!currentFurniture().some((item) => item.id === tableId && item.kind === 'table')) return;
@@ -479,6 +527,8 @@ function updateFurnitureContext() {
   el<HTMLButtonElement>('#undo-selected-furniture').disabled = !furnitureHistory.canUndo;
   el<HTMLButtonElement>('#redo-selected-furniture').disabled = !furnitureHistory.canRedo;
   el('#table-chairs').hidden = item.kind !== 'table';
+  el<HTMLButtonElement>('#move-selected-furniture').disabled =
+    item.locked || furnitureContextMembers.some((member) => member.locked);
   toolbar.hidden = false;
 }
 
@@ -1517,6 +1567,9 @@ function wireFurnitureToolbar() {
   });
   el('#duplicate-selected-furniture').addEventListener('click', () => {
     if (selectedFurnitureId) duplicateFurniture(selectedFurnitureId);
+  });
+  el('#move-selected-furniture').addEventListener('click', () => {
+    if (selectedFurnitureId) openMoveToRoom(selectedFurnitureId);
   });
   el('#delete-selected-furniture').addEventListener('click', () => {
     if (!selectedFurnitureId) return;

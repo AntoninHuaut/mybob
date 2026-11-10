@@ -2,6 +2,7 @@ import { escapeHtml } from './format';
 import type { VariantBook } from '../furniture/variants';
 import type { Level } from '../model/types';
 import { variantThumbnail } from './variantThumbnail';
+import { captureFocus, restoreFocus } from './focusKeeper';
 
 interface VariantsAdapter {
   getBook(): VariantBook;
@@ -15,6 +16,8 @@ interface VariantsAdapter {
 }
 export class VariantsPanel {
   private editing?: 'duplicate' | 'rename' | 'delete';
+  /** The button that opened the name form: focus returns to it when the form closes. */
+  private lastAction = 'duplicate';
   constructor(
     private host: HTMLElement,
     private adapter: VariantsAdapter,
@@ -44,10 +47,15 @@ export class VariantsPanel {
         adapter.onDelete();
         return;
       }
+      if (action !== 'cancel') this.lastAction = action;
       this.editing =
         action === 'cancel' ? undefined : (action as 'duplicate' | 'rename' | 'delete');
       this.render();
-      host.querySelector<HTMLInputElement>('input[name=variantName]')?.select();
+      const field = host.querySelector<HTMLInputElement>('input[name=variantName]');
+      if (field) {
+        field.focus();
+        field.select();
+      } else restoreFocus(host, `[data-variant-action="${this.lastAction}"]`);
     });
     host.addEventListener('submit', (event) => {
       event.preventDefault();
@@ -66,6 +74,7 @@ export class VariantsPanel {
     this.render();
   }
   render() {
+    const focused = captureFocus(this.host);
     try {
       const book = this.adapter.getBook();
       const active = book.variants.find((variant) => variant.id === book.activeId)!;
@@ -86,6 +95,14 @@ export class VariantsPanel {
       this.host.textContent =
         'Variantes indisponibles. Importez une sauvegarde pour restaurer le projet.';
       this.adapter.onError(error instanceof Error ? error.message : 'Variantes illisibles.');
+      return;
     }
+    if (focused)
+      restoreFocus(
+        this.host,
+        focused,
+        `[data-variant-action="${this.lastAction}"]`,
+        'select[name="layoutVariant"]',
+      );
   }
 }

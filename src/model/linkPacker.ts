@@ -4,6 +4,7 @@ import type {
   FurnitureItem,
   FurnitureKind,
   ShowerPanelSide,
+  ShowerPanelSpan,
   SofaConfiguration,
 } from '../furniture/model';
 import { SHOWER_PANEL_SIDES } from '../furniture/model';
@@ -29,10 +30,11 @@ export interface UnpackedShare {
 }
 
 /**
- * Revision 2: glazing and leaves of openings, dormers and roof windows. Reading
- * still accepts revision 1 (links already shared); writing always produces 2.
+ * Revision 2: glazing and leaves of openings, dormers and roof windows. Revision 3: the
+ * length of each shower panel. Reading still accepts revisions 1 and 2 (links already
+ * shared); writing always produces 3.
  */
-export const LINK_PACK_VERSION = 2;
+export const LINK_PACK_VERSION = 3;
 
 type OpeningKind = 'door' | 'window' | 'sliding' | 'garage';
 type RoomKind = 'living' | 'bedroom' | 'bathroom' | 'circulation' | 'garage' | 'storage';
@@ -195,6 +197,22 @@ function packShowerPanels(packer: Packer, sides: ShowerPanelSide[]): void {
   }
 }
 
+function packShowerSpans(
+  packer: Packer,
+  spans: Partial<Record<ShowerPanelSide, ShowerPanelSpan>> | undefined,
+): void {
+  const entries = SHOWER_PANEL_SIDES.flatMap((side) => {
+    const span = spans?.[side];
+    return span ? [[side, span] as const] : [];
+  });
+  packer.u(entries.length);
+  for (const [side, span] of entries) {
+    packer.u(SHOWER_PANEL_SIDES.indexOf(side));
+    packer.mm(span.length);
+    packer.u(span.from === 'right' ? 1 : 0);
+  }
+}
+
 /**
  * Packs a piece of furniture. Its identifier is not carried: it is its position in the list,
  * and the group takes the index of its first member. Generated identifiers (UUID)
@@ -224,6 +242,7 @@ function packFurnitureItem(packer: Packer, item: FurnitureItem, groupFirstIndex:
     packer.u(1);
     packShowerPanels(packer, item.showerPanels);
   }
+  packShowerSpans(packer, item.showerPanelSpans);
   if (item.tvDiagonalInches === undefined) packer.u(0);
   else {
     packer.u(1);
@@ -547,7 +566,7 @@ const textDecoder = new TextDecoder();
 export function unpackShareDocument(data: Uint8Array): ShareDocument {
   const reader = new Unpacker(data);
   const version = reader.u();
-  if (version !== 1 && version !== LINK_PACK_VERSION)
+  if (version < 1 || version > LINK_PACK_VERSION)
     throw new LinkPackError('Version du pack inconnue.');
   const flags = reader.u();
   const project: ShareDocument = {
@@ -826,6 +845,16 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
             item.showerPanels = Array.from({ length: reader.count(4) }, () =>
               enumValue(SHOWER_PANEL_SIDES, reader.u()),
             );
+          }
+          if (version >= 3) {
+            const count = reader.count(4);
+            if (count > 0) item.showerPanelSpans = {};
+            for (let index = 0; index < count; index++) {
+              const side = enumValue(SHOWER_PANEL_SIDES, reader.u());
+              const span: ShowerPanelSpan = { length: reader.mm() };
+              if (reader.u() === 1) span.from = 'right';
+              item.showerPanelSpans![side] = span;
+            }
           }
           if (reader.u() === 1) item.tvDiagonalInches = reader.u() / 100;
           item.position = reader.point();

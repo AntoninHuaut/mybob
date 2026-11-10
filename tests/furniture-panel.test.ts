@@ -7,6 +7,9 @@ import {
   HTMLFormElement as DOMForm,
   HTMLSelectElement as DOMSelect,
   HTMLDetailsElement as DOMDetails,
+  HTMLElement as DOMElement,
+  HTMLButtonElement as DOMButton,
+  HTMLDialogElement as DOMDialog,
 } from 'happy-dom';
 import { createFurniture, FURNITURE_PRESETS, type FurnitureItem } from '../src/furniture/model';
 
@@ -877,6 +880,156 @@ test('cancelling a staged television addition leaves the stand alone', async () 
     assert.equal(getItems().length, 1);
     assert.equal(getItems()[0].groupId, undefined);
     assert.equal(applied.length, 0);
+  } finally {
+    cleanup();
+  }
+});
+
+// Keyboard focus: the panel rebuilds its HTML, which used to drop focus on <body> (WCAG 2.4.3).
+const focusedKey = (window: Window) =>
+  window.document.activeElement?.getAttribute('data-furniture-overlay') ??
+  window.document.activeElement?.getAttribute('data-furniture-select') ??
+  window.document.activeElement?.getAttribute('data-furniture-edit-id') ??
+  window.document.activeElement?.getAttribute('data-furniture-action') ??
+  window.document.activeElement?.tagName;
+
+test('ticking a Repères checkbox keeps focus on that checkbox after the panel rebuilds', () => {
+  const { window, container, panel, cleanup } = setup(false);
+  try {
+    const box = container.querySelector<DOMInput>('[data-furniture-overlay=clearances]')!;
+    box.focus();
+    box.checked = true;
+    box.dispatchEvent(new window.Event('change', { bubbles: true }));
+    panel.render(); // main.ts re-renders the panel from onOverlays
+    assert.equal(focusedKey(window), 'clearances');
+    assert.ok(window.document.activeElement?.isConnected);
+  } finally {
+    cleanup();
+  }
+});
+
+test('choosing a piece in the list keeps focus on its row', () => {
+  const { window, container, cleanup } = setup(false);
+  try {
+    const row = container.querySelector<DOMElement>('[data-furniture-select=sofa]')!;
+    row.focus();
+    row.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(focusedKey(window), 'sofa');
+  } finally {
+    cleanup();
+  }
+});
+
+test('Annuler and Rétablir hand focus to Ajouter when they become disabled', () => {
+  const { window, container, cleanup } = setup(false);
+  try {
+    // Stub history is empty, so the buttons render disabled: focus must not fall to <body>.
+    const undo = container.querySelector<DOMButton>('[data-furniture-action=undo]')!;
+    assert.ok(undo.disabled);
+    undo.removeAttribute('disabled');
+    undo.focus();
+    undo.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(focusedKey(window), 'add');
+  } finally {
+    cleanup();
+  }
+});
+
+test('closing the add popup returns focus to Ajouter, even though the panel was rebuilt', async () => {
+  const { window, container, panel, cleanup } = setup(false);
+  try {
+    container.querySelector<DOMElement>('[data-furniture-action=add]')!.focus();
+    panel.openAdd();
+    const form = window.document.querySelector<DOMForm>('#furniture-add-form')!;
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    panel.render();
+    await Promise.resolve();
+    assert.equal(focusedKey(window), 'add');
+  } finally {
+    cleanup();
+  }
+});
+
+test('closing the edit popup with Escape returns focus to the pencil that opened it', async () => {
+  const { window, container, editor, cleanup } = setup(false);
+  try {
+    const pencil = container.querySelector<DOMElement>('[data-furniture-edit-id=sofa]')!;
+    pencil.focus();
+    pencil.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.ok(editor.hasAttribute('open'));
+    (editor as unknown as DOMDialog).close();
+    await Promise.resolve();
+    assert.equal(focusedKey(window), 'sofa');
+    assert.equal(window.document.activeElement?.hasAttribute('data-furniture-edit-id'), true);
+  } finally {
+    cleanup();
+  }
+});
+
+test('Dupliquer inside the popup keeps focus inside the rebuilt popup', () => {
+  const { window, editor, cleanup } = setup(true);
+  try {
+    editor.querySelector<DOMForm>('form')!.reportValidity = () => true;
+    const button = editor.querySelector<DOMElement>('[data-furniture-action=duplicate]')!;
+    button.focus();
+    button.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.equal(focusedKey(window), 'duplicate');
+    assert.ok(editor.contains(window.document.activeElement));
+  } finally {
+    cleanup();
+  }
+});
+
+test('a shower panel length is a draft: exact when untouched, saved when edited', () => {
+  const { window, editor, panel, setItems, applied, cleanup } = setup(false);
+  try {
+    setItems([
+      createFurniture({
+        kind: 'shower',
+        id: 'sofa',
+        position: [3, 3],
+        width: 1.2,
+        showerPanels: ['front', 'left'],
+        // Sub-millimetre value: the displayed 80.5 cm must not overwrite it when untouched.
+        showerPanelSpans: { front: { length: 0.80449, from: 'right' } },
+      }),
+    ]);
+    panel.openEdit('sofa');
+    const field = (name: string) => editor.querySelector<DOMInput>(`[name=${name}]`)!;
+    assert.equal(field('showerPanelFrontLength').value, '80.4');
+    assert.equal(field('showerPanelFrontFrom').value, 'right');
+    assert.equal(field('showerPanelLeftLength').value, '');
+    // Back is not ticked: its length row is hidden and its field disabled.
+    assert.equal(editor.querySelector<DOMElement>('[data-shower-span=back]')!.hidden, true);
+    assert.equal(field('showerPanelBackLength').disabled, true);
+    const back = field('showerPanelBack');
+    back.checked = true;
+    back.dispatchEvent(new window.Event('change', { bubbles: true }));
+    assert.equal(editor.querySelector<DOMElement>('[data-shower-span=back]')!.hidden, false);
+    assert.equal(field('showerPanelBackLength').disabled, false);
+    back.checked = false;
+    back.dispatchEvent(new window.Event('change', { bubbles: true }));
+
+    const save = () => {
+      const form = editor.querySelector<DOMForm>('form')!;
+      form.reportValidity = () => true;
+      form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    };
+    save();
+    assert.equal(editor.querySelector('.furniture-edit-status')!.textContent, '');
+    assert.deepEqual(applied.at(-1)![0].showerPanelSpans, {
+      front: { length: 0.80449, from: 'right' },
+    });
+
+    panel.openEdit('sofa');
+    field('showerPanelLeftLength').value = '55';
+    field('showerPanelFrontFrom').value = 'left';
+    save();
+    assert.deepEqual(applied.at(-1)![0].showerPanelSpans, {
+      front: { length: 0.80449 },
+      left: { length: 0.55 },
+    });
   } finally {
     cleanup();
   }
