@@ -10,6 +10,7 @@ import {
 import { validateProject } from '../src/model/validate';
 import type { HouseProject, Point2 } from '../src/model/types';
 import {
+  crc32,
   LinkPackError,
   packShareDocument,
   unpackShareDocument,
@@ -488,4 +489,47 @@ test('shower panel lengths survive the link, and revision-2 links are still read
   const [shower] = validateFurnitureList(Object.values(old.document.furnishing!.levels)[0]);
   assert.deepEqual(shower.showerPanels, ['left', 'front']);
   assert.equal(shower.showerPanelSpans, undefined);
+});
+
+test('#125: a link altered by one character never decodes into another project', async () => {
+  const project = readPlan(PLANS[0]);
+  const doc = shareDocument(project, planFurnishing(project));
+  const hash = await encodeShareLinkHash(doc);
+  const original = (await decodeShareLinkHash(hash)).packed;
+  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_';
+  const start = '#p1:'.length;
+  // Deterministic generator: the run is reproducible.
+  let seed = 12345;
+  const next = (bound: number) => {
+    seed = (Math.imul(seed, 1103515245) + 12345) >>> 0;
+    return seed % bound;
+  };
+  let refused = 0;
+  for (let i = 0; i < 1500; i++) {
+    const at = start + next(hash.length - start);
+    const replacement = alphabet[next(alphabet.length)];
+    if (replacement === hash[at]) continue;
+    const altered = hash.slice(0, at) + replacement + hash.slice(at + 1);
+    try {
+      const decoded = await decodeShareLinkHash(altered);
+      // Same bytes (an unused trailing bit) is the same project: harmless.
+      assert.ok(samePackedState(decoded.packed, original), `altered link ${at} decoded elsewhere`);
+    } catch (error) {
+      if (!(error instanceof ShareLinkError)) throw error;
+      refused++;
+    }
+  }
+  assert.ok(refused > 1400, `only ${refused} refused`);
+});
+
+test('the pack closes with a CRC-32 that detects any flipped byte', () => {
+  const project = readPlan(PLANS[1]);
+  const packed = packShareDocument(shareDocument(project, planFurnishing(project)));
+  assert.equal(crc32(new Uint8Array([49, 50, 51, 52, 53, 54, 55, 56, 57])), 0xcbf43926);
+  assert.doesNotThrow(() => unpackShareDocument(packed));
+  for (const index of [1, Math.floor(packed.length / 2), packed.length - 5, packed.length - 1]) {
+    const damaged = Uint8Array.from(packed);
+    damaged[index] ^= 0x01;
+    assert.throws(() => unpackShareDocument(damaged), LinkPackError, `byte ${index}`);
+  }
 });
