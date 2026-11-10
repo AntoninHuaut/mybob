@@ -1,5 +1,7 @@
 import { WebXRExperienceHelper } from '@babylonjs/core/XR/webXRExperienceHelper';
 import type { WebXRCamera } from '@babylonjs/core/XR/webXRCamera';
+import type { Collider } from '@babylonjs/core/Collisions/collider';
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Ray } from '@babylonjs/core/Culling/ray';
@@ -25,6 +27,12 @@ import { VISITOR_RADIUS } from './walkCamera';
  *
  * Controller models are never downloaded: the session reads the gamepads directly
  * and draws its own pointers, so the visit keeps working without the network.
+ *
+ * The visitor is carried by a rig node, parent of the session camera: walking,
+ * turning, teleporting and following the floor move the rig, never the camera.
+ * Babylon would otherwise offset the XR reference space on every move, and an
+ * emulator that ignores offset spaces (Immersive Web Emulator 2.0) then leaves
+ * the visitor at the origin of the plan, outside the house.
  */
 
 /** Headset walking speed. Slower than the keyboard default: fast smooth motion makes people sick. */
@@ -79,9 +87,14 @@ export function stickDisplacement(
     .scaleInPlace(speed * seconds);
 }
 
-/** Height to add to the camera so the real floor matches the ground under the visitor. */
-export function floorCorrection(cameraY: number, realWorldHeight: number, ground: number): number {
-  return ground + realWorldHeight - cameraY;
+/** Rig position after a yaw turn around the head, so the visitor turns on the spot. */
+export function turnAround(rig: Vector3, head: Vector3, angle: number): Vector3 {
+  const dx = rig.x - head.x;
+  const dz = rig.z - head.z;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  // Rotation about +y in a right-handed frame: x' = x cos + z sin, z' = -x sin + z cos.
+  return new Vector3(head.x + dx * cos + dz * sin, rig.y, head.z - dx * sin + dz * cos);
 }
 
 /** Snap turn as a yaw delta, in radians. Right-handed y-up: turning right is negative. */
@@ -113,10 +126,14 @@ export interface ImmersiveHost {
   scene: Scene;
   level: Level;
   site?: ProjectSite;
+  /** Where the screen walk stands and looks when the headset takes over. */
+  start: { point: Point2; yaw: number };
   /** A floor point where the visitor may stand: inside a room or on the parcel. */
   isDestination(point: Point2): boolean;
   toggleDoor(id: string): void;
   toggleEffects(): void;
+  /** First headset frame: the framebuffer has its real size, post-processing can be built. */
+  onReady(walk: ImmersiveWalk): void;
   /** The session ended, whoever ended it: the headset menu, the page or an error. */
   onEnd(walk: ImmersiveWalk): void;
 }
@@ -142,14 +159,18 @@ export async function startImmersiveWalk(host: ImmersiveHost): Promise<Immersive
     walk.dispose();
     throw error;
   }
+  walk.placeCamera();
   return walk;
 }
 
 export class ImmersiveWalk {
   readonly camera: WebXRCamera;
+  /** Carries the visitor in the plan: the camera pose is local to it. */
+  readonly rig: TransformNode;
   private readonly pointers = new Map<XRInputSource, Pointer>();
   private readonly material: StandardMaterial;
   private readonly marker: Mesh;
+  private collider?: Collider;
   private turnArmed = true;
   private aiming = false;
   private target?: Point2;
@@ -161,16 +182,18 @@ export class ImmersiveWalk {
     private readonly host: ImmersiveHost,
     private readonly helper: WebXRExperienceHelper,
   ) {
+    const scene = host.scene;
     const camera = (this.camera = helper.camera);
     camera.minZ = 0.04;
     camera.maxZ = 300;
     camera.inertia = 0;
-    camera.checkCollisions = true;
+    // Collisions are resolved on the rig, see `walk`.
+    camera.checkCollisions = false;
     camera.applyGravity = false;
-    // FreeCamera puts the collider centre at position - ellipsoid.y + offset.
-    camera.ellipsoid.set(VISITOR_RADIUS, XR_BODY_HALF_HEIGHT, VISITOR_RADIUS);
-    camera.ellipsoidOffset.set(0, XR_BODY_HALF_HEIGHT - XR_BODY_DROP, 0);
-    const scene = host.scene;
+    this.rig = new TransformNode('xr-rig', scene);
+    this.rig.rotationQuaternion = Quaternion.RotationAxis(Vector3.Up(), host.start.yaw);
+    const [x, z] = host.start.point;
+    this.rig.position.set(x, groundElevationAt(host.level, host.site, [x, z]), z);
     this.material = new StandardMaterial('xr-pointer', scene);
     this.material.disableLighting = true;
     this.material.emissiveColor = READY;
@@ -182,13 +205,27 @@ export class ImmersiveWalk {
     helper.sessionManager.onXRSessionEnded.addOnce(() => this.end());
   }
 
-  /** Called once per frame by the viewer, before the camera applies its movement. */
+  /**
+   * Hands the camera to the rig. Babylon copied the screen camera into the session
+   * camera on entry; undone here, the camera starts at the rig and only follows the
+   * tracked pose from then on.
+   */
+  placeCamera() {
+    const camera = this.camera;
+    camera.parent = this.rig;
+    camera.position.setAll(0);
+    camera.rotationQuaternion.set(0, 0, 0, 1);
+    this.helper.sessionManager.onXRFrameObservable.addOnce(() => {
+      if (!this.ended) this.host.onReady(this);
+    });
+  }
+
+  /** Called once per frame by the viewer, inside the headset frame. */
   step(seconds: number) {
     const manager = this.helper.sessionManager;
     const frame = manager.currentFrame;
     const session = manager.session;
     if (!frame || !session || this.ended) return;
-    const camera = this.camera;
     let move: ControllerState | undefined;
     let aim: ControllerState | undefined;
     for (const source of session.inputSources) {
@@ -215,35 +252,22 @@ export class ImmersiveWalk {
     }
 
     if (move && (move.x || move.y)) {
-      const forward = camera.getDirection(Vector3.Forward(true));
-      camera.cameraDirection.addInPlace(
-        stickDisplacement(forward, move.x, move.y, XR_WALK_SPEED, seconds),
-      );
+      const forward = this.camera.getDirection(Vector3.Forward(true));
+      this.walk(stickDisplacement(forward, move.x, move.y, XR_WALK_SPEED, seconds));
     }
     if (aim) {
       const turn = snapTurn(this.aiming ? 0 : aim.x, this.turnArmed);
       this.turnArmed = turn.armed;
-      if (turn.turn) {
-        const rotation = Quaternion.RotationAxis(Vector3.Up(), snapTurnAngle(turn.turn));
-        camera.rotationQuaternion.copyFrom(rotation.multiply(camera.rotationQuaternion));
-      }
+      if (turn.turn) this.turn(snapTurnAngle(turn.turn));
       this.updateTeleport(aim);
     }
 
-    const point: Point2 = [camera.position.x, camera.position.z];
     // Room-scale walking is free, but the visit never leaves the modelled ground.
+    const head = this.head();
+    const point: Point2 = [head.x, head.z];
     if (isVisitArea(this.host.level, this.host.site, point)) this.lastValid = point;
-    else if (this.lastValid) {
-      camera.position.x = this.lastValid[0];
-      camera.position.z = this.lastValid[1];
-    }
-    const ground = groundElevationAt(this.host.level, this.host.site, [
-      camera.position.x,
-      camera.position.z,
-    ]);
-    const height = camera.realWorldHeight;
-    const correction = floorCorrection(camera.position.y, height, ground);
-    if (height > 0 && Math.abs(correction) > 0.002) camera.position.y += correction;
+    else if (this.lastValid) this.moveHeadTo(this.lastValid);
+    this.followFloor();
   }
 
   async exit() {
@@ -256,8 +280,10 @@ export class ImmersiveWalk {
     return !this.ended;
   }
 
+  /** Head position in the plan. */
   get position(): Point2 {
-    return [this.camera.position.x, this.camera.position.z];
+    const head = this.head();
+    return [head.x, head.z];
   }
 
   dispose() {
@@ -267,7 +293,65 @@ export class ImmersiveWalk {
     this.pointers.clear();
     this.marker.dispose();
     this.material.dispose();
+    this.camera.parent = null;
     this.helper.dispose();
+    this.rig.dispose();
+  }
+
+  /** World position of the head, the tracked pose carried by the rig. */
+  head(): Vector3 {
+    this.rig.computeWorldMatrix(true);
+    return Vector3.TransformCoordinates(this.camera.position, this.rig.getWorldMatrix());
+  }
+
+  /**
+   * Smooth walk with the walk camera's collisions: an ellipsoid hung under the head,
+   * so walls and doors stop the visitor and a 20 cm step does not.
+   */
+  walk(displacement: Vector3) {
+    const scene = this.host.scene;
+    const coordinator = scene.collisionCoordinator;
+    if (!scene.collisionsEnabled || !coordinator) {
+      this.rig.position.addInPlace(displacement);
+      return;
+    }
+    this.collider ??= coordinator.createCollider();
+    this.collider._radius = new Vector3(VISITOR_RADIUS, XR_BODY_HALF_HEIGHT, VISITOR_RADIUS);
+    const center = this.head().subtractFromFloats(0, XR_BODY_DROP, 0);
+    const reached = coordinator.getNewPosition(
+      center,
+      displacement,
+      this.collider,
+      3,
+      null,
+      () => undefined,
+      this.rig.uniqueId,
+    );
+    const moved = reached.subtract(center);
+    moved.y = 0;
+    this.rig.position.addInPlace(moved);
+  }
+
+  /** Snap turn on the spot: the rig rotates around the head. */
+  turn(angle: number) {
+    const head = this.head();
+    this.rig.position.copyFrom(turnAround(this.rig.position, head, angle));
+    const rotation = Quaternion.RotationAxis(Vector3.Up(), angle);
+    this.rig.rotationQuaternion = rotation.multiply(
+      this.rig.rotationQuaternion ?? Quaternion.Identity(),
+    );
+  }
+
+  private moveHeadTo(point: Point2) {
+    const head = this.head();
+    this.rig.position.x += point[0] - head.x;
+    this.rig.position.z += point[1] - head.z;
+  }
+
+  /** The real floor stays on the ground under the head: room floor, step or lawn. */
+  private followFloor() {
+    const head = this.head();
+    this.rig.position.y = groundElevationAt(this.host.level, this.host.site, [head.x, head.z]);
   }
 
   private end() {
@@ -300,19 +384,12 @@ export class ImmersiveWalk {
     this.aiming = false;
     this.marker.setEnabled(false);
     this.material.emissiveColor = READY;
-    if (aim.y < -0.2 || !this.target) {
-      this.target = undefined;
-      return;
-    }
-    const camera = this.camera;
-    const height = camera.realWorldHeight;
-    camera.position.set(
-      this.target[0],
-      groundElevationAt(this.host.level, this.host.site, this.target) + height,
-      this.target[1],
-    );
-    this.lastValid = this.target;
+    const target = this.target;
     this.target = undefined;
+    if (aim.y < -0.2 || !target) return;
+    this.moveHeadTo(target);
+    this.lastValid = target;
+    this.followFloor();
   }
 
   private pick(pointer: Pointer, length: number) {
@@ -337,6 +414,8 @@ export class ImmersiveWalk {
     root.bakeTransformIntoVertices(Matrix.Translation(0, 0, 0.04));
     root.material = this.material;
     root.isPickable = false;
+    // Controller poses are in the session space, like the camera: the rig carries both.
+    root.parent = this.rig;
     const ray = MeshBuilder.CreateBox(
       `xr-ray-${source.handedness}`,
       { width: 0.004, height: 0.004, depth: 1 },

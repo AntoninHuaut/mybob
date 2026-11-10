@@ -222,8 +222,12 @@ walk where the headset left the visitor and restores the camera of the current m
 
 - `scene/xrWalk.ts` is a separate chunk, imported on demand (`preloadImmersive` fetches it as
   soon as the browser says yes, so the click keeps its user gesture).
+- The visitor is carried by a **rig node**, parent of the session camera: walking, turning,
+  teleporting and following the floor move the rig, never the camera. Moving the camera would
+  make Babylon offset the XR reference space, which the Immersive Web Emulator 2.0 ignores — the
+  visitor then stood at the plan origin, outside the house, in an empty view.
 - Controls, xr-standard mapping: left stick walks where the head looks (1.6 m/s, walls collide
-  through the session camera's ellipsoid hung under the head, a 20 cm step does not); right
+  through an ellipsoid hung under the head, resolved on the rig, a 20 cm step does not); right
   stick sideways snaps 30°, pushed forward aims a teleport validated like a walk destination
   (`isSceneVisitDestination` or `isParcelDestination`); trigger on a door toggles it; B/Y
   switches the walk post-processing, to compare frame rates in the headset.
@@ -233,8 +237,14 @@ walk where the headset left the visitor and restores the camera of the current m
 - No controller model is downloaded: gamepads are read directly and the pointers are drawn
   locally.
 - In a session the render loop draws every frame (a skipped frame judders in a headset) and the
-  dynamic resolution is off. The walk pipelines (TAA, SSAO, bloom) are rebuilt on the session
-  camera; whether they hold the frame rate on a Quest 2 is still to be measured on the device.
+  dynamic resolution is off. TAA and SSAO are rebuilt on the session camera at its **first
+  frame**, once the framebuffer has its size. The bloom stays off in the headset: on the session
+  camera it renders into a zero-size target every frame (`INVALID_FRAMEBUFFER_OPERATION`) and
+  adds nothing. Whether TAA and SSAO hold the frame rate on a Quest 2 is still to be measured on
+  the device.
+- Without a headset: the Immersive Web Emulator extension (Chrome/Edge, enabled for the site)
+  emulates a Quest in the page, with its sticks and buttons in an overlay. It checks controls
+  and rendering, not the headset's frame rate.
 - Local test on a Quest: `adb reverse tcp:<port> tcp:<port>`, then `http://localhost:<port>` in
   the Quest browser (WebXR needs HTTPS or `localhost`; a LAN address over HTTP is refused).
   `dev:private` this way keeps a personal plan on the computer.
