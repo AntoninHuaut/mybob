@@ -41,8 +41,13 @@ export function walkMovement(camera: UniversalCamera, forward: number, side: num
   return ahead.scale(forward).add(right.scale(side));
 }
 
+/** Walk camera yaw (right-handed scene) that looks along a world direction, ignoring pitch. */
+export function yawFromDirection(direction: Vector3): number {
+  return Math.atan2(-direction.x, -direction.z);
+}
+
 /** SVG heading clockwise from the top of the reference plan. */
-export function planHeading(camera: UniversalCamera): number {
+export function planHeading(camera: Camera): number {
   const direction = camera.getDirection(Vector3.Forward(camera.getScene().useRightHandedSystem));
   return (Math.atan2(direction.x, -direction.z) * 180) / Math.PI;
 }

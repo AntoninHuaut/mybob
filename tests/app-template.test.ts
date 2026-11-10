@@ -55,3 +55,11 @@ test('the frame-rate counter lives in the scene footer and waits for its first m
   );
   assert.ok(counter.hasAttribute('hidden'), 'il n’affiche rien avant la première mesure');
 });
+
+test('the headset button waits for a supporting browser before showing', () => {
+  const document = render();
+  const button = document.querySelector('#enter-immersive');
+  assert.ok(button, 'le bouton casque existe');
+  assert.equal(button.hasAttribute('hidden'), true);
+  assert.equal(button.closest('.view-switch') !== null, true);
+});

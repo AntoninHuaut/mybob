@@ -60,7 +60,14 @@ import {
   isVisitArea,
   sectionPlane,
 } from './navigation';
-import { cameraYaw, planHeading, setPlanView, stopOrbit, usePlanCoordinates } from './coordinates';
+import {
+  cameraYaw,
+  planHeading,
+  setPlanView,
+  stopOrbit,
+  usePlanCoordinates,
+  yawFromDirection,
+} from './coordinates';
 import {
   createInteriorBloom,
   createOrbitBloom,
@@ -78,8 +85,23 @@ import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/Ren
 import type { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
 import type { TAARenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/taaRenderingPipeline';
 import type { OcclusionState } from './diagnostics';
+import type { ImmersiveWalk } from './xrWalk';
 
 export type ViewMode = 'overview' | 'plan' | 'walk';
+
+/** True when this browser can open a headset session (Quest browser, desktop VR). */
+export async function isImmersiveSupported(): Promise<boolean> {
+  try {
+    return (await navigator.xr?.isSessionSupported('immersive-vr')) ?? false;
+  } catch {
+    return false;
+  }
+}
+
+/** Fetches the headset code ahead of the click: a slow import would outlive the user gesture. */
+export function preloadImmersive() {
+  return import('./xrWalk');
+}
 export interface FrameInfo {
   position: Point2;
   headingDegrees: number;
@@ -155,7 +177,14 @@ export class HouseViewer {
   onDestination?: (point: Point2) => void;
   onDestinationRejected?: () => void;
   onEditFurniture?: (id: string) => void;
+  /** The headset session started (true) or ended (false). */
+  onImmersiveChange?: (active: boolean) => void;
   goToMode = false;
+  /** The visit in a headset, a state of the walk: `mode` stays `walk` meanwhile. */
+  private immersive?: ImmersiveWalk;
+  private immersiveStarting = false;
+  /** Walk post-processing in the headset; B or Y switches it to compare frame rates. */
+  private immersiveEffects = true;
   private eyeHeight = EYE_HEIGHT;
   private walkSpeed = DEFAULT_WALK_SPEED;
   private lookSensitivity = 1;
@@ -242,10 +271,12 @@ export class HouseViewer {
       this.stepOrbitTour();
       if (!this.scene) return;
       const now = performance.now();
-      const render = this.renderScheduler.shouldRender(now, this.cameraSignature(), () =>
-        this.busy(),
-      );
-      this.applyRenderScale(now, render);
+      // A headset shows the last image again on a skipped frame, which judders:
+      // in a session every frame is drawn, at the resolution the headset chose.
+      const render =
+        !!this.immersive ||
+        this.renderScheduler.shouldRender(now, this.cameraSignature(), () => this.busy());
+      if (!this.immersive) this.applyRenderScale(now, render);
       if (render) this.scene.render();
       this.lastRenderAt = render ? now : undefined;
     });
@@ -254,6 +285,9 @@ export class HouseViewer {
   load(project: HouseProject, levelId?: string) {
     this.requestRender();
     this.orbitTour = undefined;
+    // The session belongs to the scene about to be disposed.
+    this.immersive?.dispose();
+    this.immersive = undefined;
     this.wallCutaway?.dispose();
     this.wallCutaway = undefined;
     this.planOpenings?.dispose();
@@ -463,6 +497,11 @@ export class HouseViewer {
     this.requestRender();
     if (!this.scene) return;
     this.orbitTour = undefined;
+    if (this.immersive) {
+      if (mode === 'walk') return;
+      // The session ends asynchronously; `leaveImmersive` then restores this mode's camera.
+      void this.immersive.exit();
+    }
     if (mode === 'walk') {
       const current: Point2 = [this.walk.position.x, this.walk.position.z];
       // Coming back from the plan while standing on the parcel keeps that spot:
@@ -1071,16 +1110,18 @@ export class HouseViewer {
       // Built before the occlusion on purpose: Babylon appends each pipeline to the
       // end of the camera's chain, so the temporal pass has to exist first or it ends
       // up accumulating the AO noise instead of smoothing the scene.
-      this.interiorTaa ??= createInteriorTaa(this.scene, this.walk);
+      if (this.immersive && !this.immersiveEffects) return;
+      const camera = this.immersive?.camera ?? this.walk;
+      this.interiorTaa ??= createInteriorTaa(this.scene, camera);
       if (!this.occlusionUnavailable && !this.interiorOcclusion) {
-        this.interiorOcclusion = createInteriorOcclusion(this.scene, this.walk);
+        this.interiorOcclusion = createInteriorOcclusion(this.scene, camera);
         // A backend without multiple render targets refuses every time: remember it
         // rather than throwing again on each visit entry.
         this.occlusionUnavailable = !this.interiorOcclusion;
       }
       // Last in the chain, for the same reason the temporal pass is first: the glow
       // belongs on the finished image, not on the occlusion's half-resolution buffer.
-      this.interiorBloom ??= createInteriorBloom(this.scene, this.walk);
+      this.interiorBloom ??= createInteriorBloom(this.scene, camera);
       return;
     }
     if (this.interiorEnvironment && this.scene.environmentTexture === this.interiorEnvironment) {
@@ -1089,6 +1130,11 @@ export class HouseViewer {
     }
     this.previousEnvironment = undefined;
     this.previousEnvironmentIntensity = 1;
+    this.releaseWalkPipelines();
+  }
+
+  /** The walk pipelines are bound to one camera: switching camera rebuilds them. */
+  private releaseWalkPipelines() {
     this.interiorOcclusion?.dispose(true);
     this.interiorOcclusion = undefined;
     this.interiorTaa?.dispose();
@@ -1097,6 +1143,92 @@ export class HouseViewer {
     this.interiorBloom = undefined;
     // Both pipelines read the PrePass and nothing else does, so it goes with them.
     this.scene.disablePrePassRenderer();
+  }
+
+  private rebuildWalkPipelines() {
+    if (!this.scene) return;
+    this.releaseWalkPipelines();
+    try {
+      this.updateInteriorAmbience();
+    } catch (error) {
+      console.info(
+        `[visite] ambiance indisponible : ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    this.requestRender();
+  }
+
+  get immersiveActive(): boolean {
+    return !!this.immersive;
+  }
+
+  /**
+   * Opens the visit in a headset, from the walk only. Rejects with the browser's
+   * error when the session cannot start (no headset, permission refused).
+   */
+  async enterImmersive() {
+    if (this.immersive || this.immersiveStarting || this.mode !== 'walk' || !this.scene) return;
+    this.immersiveStarting = true;
+    try {
+      const { startImmersiveWalk } = await preloadImmersive();
+      this.clearKeys();
+      this.cancelCaptureRetry();
+      if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+      const scene = this.scene;
+      const walk = await startImmersiveWalk({
+        scene,
+        level: this.level,
+        site: this.site,
+        isDestination: (point) =>
+          isSceneVisitDestination(scene, this.level, point) ||
+          isParcelDestination(this.level, this.site, point),
+        toggleDoor: (id) => this.toggleDoor(id),
+        toggleEffects: () => {
+          this.immersiveEffects = !this.immersiveEffects;
+          this.rebuildWalkPipelines();
+        },
+        onEnd: (ended) => this.leaveImmersive(ended),
+      });
+      // A project load or a mode change may have happened while the session started.
+      if (this.scene !== scene || this.mode !== 'walk' || !walk.active) {
+        walk.dispose();
+        return;
+      }
+      this.immersive = walk;
+      this.rebuildWalkPipelines();
+      this.onImmersiveChange?.(true);
+    } finally {
+      this.immersiveStarting = false;
+    }
+  }
+
+  async exitImmersive() {
+    await this.immersive?.exit();
+  }
+
+  /** Back to the screen where the headset left the visitor, at the chosen eye height. */
+  private leaveImmersive(walk: ImmersiveWalk) {
+    if (this.immersive !== walk) return;
+    const [x, z] = walk.position;
+    const forward = walk.camera.getDirection(Vector3.Forward(true));
+    this.immersive = undefined;
+    walk.dispose();
+    if (!this.scene || !this.walk) return;
+    this.walk.position.set(x, groundElevationAt(this.level, this.site, [x, z]) + this.eyeHeight, z);
+    this.walk.rotation.set(0, yawFromDirection(forward), 0);
+    this.walk.cameraDirection.setAll(0);
+    // Babylon restored the camera that was active on entry; the mode may have changed since.
+    this.walk.detachControl();
+    this.orbit.detachControl();
+    if (this.mode === 'walk') {
+      this.scene.activeCamera = this.walk;
+      this.walk.attachControl(this.canvas, true);
+    } else {
+      this.scene.activeCamera = this.orbit;
+      this.orbit.attachControl(this.canvas, true);
+    }
+    this.rebuildWalkPipelines();
+    this.onImmersiveChange?.(false);
   }
 
   /**
@@ -1228,6 +1360,20 @@ export class HouseViewer {
       }
     }
     this.shadowRefresh?.step();
+    if (this.immersive) {
+      this.immersive.step(dt);
+      const camera = this.immersive.camera;
+      const p = camera.position;
+      this.onFrame?.({
+        position: [p.x, p.z],
+        headingDegrees: planHeading(camera),
+        planUpDegrees: this.planUpDegrees(),
+        roomId: this.level.rooms.find((r) => pointInPolygon([p.x, p.z], r.polygon))?.id,
+        nearDoor: false,
+        locked: true,
+      });
+      return;
+    }
     if (this.mode === 'walk') {
       const p = this.walk.position;
       // The visit may leave the house onto the parcel, but never the modeled ground:
@@ -1473,6 +1619,8 @@ export class HouseViewer {
 
   dispose() {
     this.cancelCaptureRetry();
+    this.immersive?.dispose();
+    this.immersive = undefined;
     this.wallCutaway?.dispose();
     this.planOpenings?.dispose();
     this.interiorOcclusion?.dispose(true);

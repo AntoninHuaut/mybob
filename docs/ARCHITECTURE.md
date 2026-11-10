@@ -38,6 +38,7 @@ reports back through callbacks (`onModeChange`, `onFrame`, `onSelectRoom`, `onDe
 | Framing                 | `src/scene/framing.ts`                                                       | `fitOverview`, `fitPlan`, UI margins                                                                                |
 | Navigation              | `src/scene/navigation.ts`                                                    | Walk destination, section plane, wall facing the camera                                                             |
 | Walk camera             | `src/scene/walkCamera.ts`                                                    | Eye height, visitor radius, speed, step                                                                             |
+| Headset visit           | `src/scene/xrWalk.ts`                                                        | WebXR session of the walk: sticks, snap turn, teleport, doors; loaded on demand                                     |
 | Orbit controls          | `src/scene/orbitNavigation.ts`, `orbitPointerInput.ts`                       | Keyboard pan in screen directions; one-finger pan and pinch zoom in Plan                                            |
 | Wall cutaway            | `src/scene/wallCutaway.ts`                                                   | `auto` / `full` / `low`, clipping planes per material                                                               |
 | Shadow map              | `src/scene/shadowRefresh.ts`                                                 | Sun map redrawn only when a shadow changes                                                                          |
@@ -209,6 +210,34 @@ viewer method that calls `setMode` (such as `goTo` and `focusRoom`).
   refusing the destination. The roof is visible during the walk: inside, the ceiling hides it;
   outside, it renders the whole house. Exterior walls keep their collisions, so you only leave
   through an open door.
+
+## The visit in a headset
+
+The **Casque** button (`#enter-immersive`) only shows when
+`navigator.xr.isSessionSupported('immersive-vr')` says yes (Quest browser, desktop VR). It is a
+state of the walk, **not a fourth view mode**: `viewer.mode` stays `walk`, and
+`viewer.enterImmersive()` swaps the camera for the session's. Leaving the walk (`setMode`) ends
+the session; the end, whoever caused it, goes through `leaveImmersive`, which puts the screen
+walk where the headset left the visitor and restores the camera of the current mode.
+
+- `scene/xrWalk.ts` is a separate chunk, imported on demand (`preloadImmersive` fetches it as
+  soon as the browser says yes, so the click keeps its user gesture).
+- Controls, xr-standard mapping: left stick walks where the head looks (1.6 m/s, walls collide
+  through the session camera's ellipsoid hung under the head, a 20 cm step does not); right
+  stick sideways snaps 30°, pushed forward aims a teleport validated like a walk destination
+  (`isSceneVisitDestination` or `isParcelDestination`); trigger on a door toggles it; B/Y
+  switches the walk post-processing, to compare frame rates in the headset.
+- `local-floor` reference space: the real head height replaces the eye-height setting, and the
+  real floor is kept on `groundElevationAt` every frame. Room-scale moves are free but never
+  leave `isVisitArea`.
+- No controller model is downloaded: gamepads are read directly and the pointers are drawn
+  locally.
+- In a session the render loop draws every frame (a skipped frame judders in a headset) and the
+  dynamic resolution is off. The walk pipelines (TAA, SSAO, bloom) are rebuilt on the session
+  camera; whether they hold the frame rate on a Quest 2 is still to be measured on the device.
+- Local test on a Quest: `adb reverse tcp:<port> tcp:<port>`, then `http://localhost:<port>` in
+  the Quest browser (WebXR needs HTTPS or `localhost`; a LAN address over HTTP is refused).
+  `dev:private` this way keeps a personal plan on the computer.
 
 ## The share link
 

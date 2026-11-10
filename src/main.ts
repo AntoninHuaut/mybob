@@ -13,7 +13,7 @@ import {
 } from './ui/onboarding';
 import { confirmImportReplacement } from './ui/confirmImport';
 import { solarPosition } from './scene/solar';
-import { HouseViewer, type ViewMode } from './scene/viewer';
+import { HouseViewer, isImmersiveSupported, preloadImmersive, type ViewMode } from './scene/viewer';
 import { createEngine } from './scene/engine';
 import { collectDiagnostics, installDiagnostics } from './scene/diagnostics';
 import { FrameRateMeter } from './ui/frameRate';
@@ -1750,6 +1750,27 @@ function wireProjectControls() {
       setMode(b.dataset.view as ViewMode);
     }),
   );
+  el('#enter-immersive').addEventListener('click', async () => {
+    if (viewer.immersiveActive) {
+      void viewer.exitImmersive();
+      return;
+    }
+    if (mode !== 'walk' && !setMode('walk')) return;
+    el('#walk-start').hidden = true;
+    try {
+      await viewer.enterImmersive();
+    } catch (error) {
+      console.info(
+        `[casque] session refusée : ${error instanceof Error ? error.message : String(error)}`,
+      );
+      toast('Le casque n’a pas pu ouvrir la visite. Vérifiez qu’il est allumé et autorisé.');
+    }
+  });
+  // Only a browser that can open a headset session shows the button.
+  void isImmersiveSupported().then((supported) => {
+    el('#enter-immersive').hidden = !supported;
+    if (supported) void preloadImmersive().catch(() => undefined);
+  });
   el('#view-exterior').addEventListener('click', () => {
     if (!current.site) return;
     setMode('overview');
@@ -2016,6 +2037,11 @@ async function start() {
     };
     viewer.onDestinationRejected = () =>
       toast('Choisissez un point libre, à distance des murs et des meubles.');
+    viewer.onImmersiveChange = (active) => {
+      el('#viewport').classList.toggle('immersive', active);
+      el('#enter-immersive').setAttribute('aria-pressed', String(active));
+      if (!active) toast('Retour à la visite à l’écran.');
+    };
     viewer.onSelectRoom = (id) => selectRoom(id, false);
     viewer.onEditFurniture = openFurnitureEditor;
     viewer.onPointerLockError = () => {
