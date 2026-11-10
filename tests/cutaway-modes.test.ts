@@ -408,6 +408,11 @@ test('a short return of a recessed entrance lowers with the facade it extends', 
   const front = cutaway.apply('auto', [4, 14]);
   assert.ok(front.has('retour-g') && front.has('retour-d'));
   assert.ok(!front.has('ouest') && !front.has('est'), 'long side walls keep their height');
+  // Camera low in front of the house, west of the recess: no facade the west return joins
+  // is lowered, so the return stays up with them instead of leaving a hole in the wall run.
+  const inside = cutaway.apply('auto', [2, 5.7]);
+  assert.ok(!inside.has('sud-ouest') && !inside.has('fond'));
+  assert.ok(!inside.has('retour-g'), 'a return never drops alone');
   cutaway.dispose();
   scene.dispose();
   engine.dispose();
