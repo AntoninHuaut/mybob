@@ -305,6 +305,9 @@ last call, and read back at start-up.
   Annuler (Cancel) discards it all.
 - Reactivity does not replace a native control while typing.
 - Walk and exterior keep full volumes; an explicit cutaway keeps priority.
+- Shader effects persist for the current scene: automatic cutaways switch wall materials as
+  the camera turns, and repeatedly linking their shaders can stall Firefox. The engine releases
+  the cached effects when the scene is replaced, so project switches do not accumulate them.
 - At rest the scene is no longer redrawn (`renderScheduler.ts`): one frame per second only,
   after 32 smoothing frames. An interaction in the page (pointer, keyboard, input), a camera
   movement, a swinging door or a compiling shader restarts drawing. A scene change that comes
