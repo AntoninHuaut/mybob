@@ -28,6 +28,26 @@ test('plan labels avoid furniture, distance tags and one another without leaving
   );
 });
 
+test('a zoomed-out plan label is hidden rather than nudged into the next room', () => {
+  // Zoomed out, the room is a 40 px strip: the next room starts right under it.
+  const room: [number, number][] = [
+    [100, 100],
+    [160, 100],
+    [160, 140],
+    [100, 140],
+  ];
+  const obstacle = { x: 100, y: 110, width: 60, height: 20 };
+  const box = { id: 'strip', x: 130, y: 120, width: 60, height: 20, room };
+  const view = { width: 500, height: 400 };
+  const [free] = layoutLabels([{ ...box, room: undefined }], [obstacle], view);
+  assert.equal(free.visible, true);
+  assert.ok(free.y < 100 || free.y > 140, 'unconfined, the nudge leaves the room');
+  const [confined] = layoutLabels([box], [obstacle], view);
+  assert.equal(confined.visible, false);
+  const [clear] = layoutLabels([box], [], view);
+  assert.deepEqual([clear.visible, clear.x, clear.y], [true, 130, 120]);
+});
+
 test('PNG sizing bounds memory and keeps scene aspect ratio; filenames remain portable', () => {
   assert.deepEqual(exportImageSize(1200, 800), { width: 1200, sceneHeight: 800, header: 64 });
   const size = exportImageSize(8000, 4000);

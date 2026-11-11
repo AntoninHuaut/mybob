@@ -1,5 +1,5 @@
-import type { Level } from '../model/types';
-import { bounds, floorElevationAt, polygonArea } from '../model/geometry';
+import type { Level, Point2 } from '../model/types';
+import { bounds, floorElevationAt, pointInPolygon, polygonArea } from '../model/geometry';
 import type { HouseViewer, FrameInfo } from '../scene/viewer';
 import { number } from './format';
 import { layoutLabels, type LabelBox, type LabelRect } from './labelLayout';
@@ -81,7 +81,13 @@ export class ViewportProjection {
     this.preferencesSignature = signature;
     this.projectedLevel = viewer.level;
     if (projectLabels) {
-      const planLabels: { id: string; label: HTMLElement; x: number; y: number }[] = [];
+      const planLabels: {
+        id: string;
+        label: HTMLElement;
+        x: number;
+        y: number;
+        room?: Point2[];
+      }[] = [];
       for (const room of viewer.level.rooms) {
         const label = this.roomLabelElement(room.id);
         if (!label) continue;
@@ -94,16 +100,30 @@ export class ViewportProjection {
               selectedRoomId !== room.id);
           label.style.left = `${p.x}px`;
           label.style.top = `${p.y}px`;
-          if (viewer.mode === 'plan' && !label.hidden)
-            planLabels.push({ id: room.id, label, x: p.x, y: p.y });
+          if (viewer.mode === 'plan' && !label.hidden) {
+            // The layout may nudge the label, never out of its own room on screen. A label
+            // anchored outside its polygon on purpose is not confined.
+            const outline = room.polygon.map((corner) => {
+              const c = viewer.project(corner, (room.floorOffset ?? 0) + 0.04);
+              return [c.x, c.y] as Point2;
+            });
+            planLabels.push({
+              id: room.id,
+              label,
+              x: p.x,
+              y: p.y,
+              room: pointInPolygon([p.x, p.y], outline) ? outline : undefined,
+            });
+          }
         }
       }
       // Sizes are read only once every label is written: one layout for the whole
       // frame, where a read after each write forced one layout per room.
-      const labelBoxes: LabelBox[] = planLabels.map(({ id, label, x, y }) => ({
+      const labelBoxes: LabelBox[] = planLabels.map(({ id, label, x, y, room }) => ({
         id,
         x,
         y,
+        room,
         width: label.offsetWidth,
         height: label.offsetHeight,
         priority: selectedRoomId === id ? 10 : 0,

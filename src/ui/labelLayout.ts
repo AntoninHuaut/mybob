@@ -1,3 +1,6 @@
+import { pointInPolygon } from '../model/geometry';
+import type { Point2 } from '../model/types';
+
 export interface LabelRect {
   x: number;
   y: number;
@@ -7,6 +10,8 @@ export interface LabelRect {
 export interface LabelBox extends LabelRect {
   id: string;
   priority?: number;
+  /** Projected outline of the room that owns the label: a nudge never leaves it. */
+  room?: Point2[];
 }
 export interface LabelPlacement {
   id: string;
@@ -24,7 +29,11 @@ export function rectanglesOverlap(a: LabelRect, b: LabelRect, gap = 5) {
   );
 }
 
-/** Label anchors are centres; obstacles use top-left rectangles. Never move labels across the plan. */
+/**
+ * Label anchors are centres; obstacles use top-left rectangles. Never move labels across the
+ * plan: a slot whose centre falls outside the label's own room is skipped, so a label that
+ * cannot fit is hidden rather than shown in a neighbouring room.
+ */
 export function layoutLabels(
   boxes: LabelBox[],
   obstacles: LabelRect[],
@@ -53,6 +62,7 @@ export function layoutLabels(
         height: box.height,
       };
       if (
+        (box.room && !pointInPolygon([box.x + dx, box.y + dy], box.room)) ||
         rect.x < 8 ||
         rect.y < 8 ||
         rect.x + rect.width > viewport.width - 8 ||
