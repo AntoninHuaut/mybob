@@ -738,3 +738,77 @@ test('validation refuses a roof window the renderer cannot place', () => {
   };
   assert.throws(() => validateProject(flat), /pan horizontal/);
 });
+
+/** Does a horizontal ray from outside hit one of the named meshes first? */
+function hits(
+  meshes: { name: string }[],
+  prefix: string,
+  origin: [number, number, number],
+  direction: [number, number, number],
+) {
+  const ray = new Ray(new Vector3(...origin), new Vector3(...direction), 50);
+  return (meshes as Parameters<Ray['intersectsMesh']>[0][]).some(
+    (mesh) => mesh.name.startsWith(prefix) && ray.intersectsMesh(mesh).hit,
+  );
+}
+
+test('a dormer front closes the back wall above the pan and opens for its window', () => {
+  const { built, scene, engine } = exterior(validateProject(dormerProject()));
+  const front = built.roofMeshes.find((mesh) => mesh.name === 'dormer-facade:toiture:lucarne-test');
+  assert.ok(front, 'the dormer front exists');
+  // From the pan 12 mm in front of the wall (y = 11 − 7.112) to the top of the
+  // back wall (combles floor 2.5 + 2), with one hole for the window.
+  const ys = Array.from(front.getVerticesData('position')!).filter((_, i) => i % 3 === 1);
+  near(Math.min(...ys), 3.888);
+  near(Math.max(...ys), 4.5);
+  assert.equal(ys.length, 8);
+  // Window 3.3–4.3 m high, x 3.05–3.95: seen from the street, glass where it
+  // rises above the pan, render above it.
+  assert.equal(hits(built.roofMeshes, 'dormer-facade:', [3.5, 4.1, 12], [0, 0, -1]), false);
+  assert.ok(
+    hits(built.roofMeshes, 'level-window-vitrage:combles:d-fenetre', [3.5, 4.1, 12], [0, 0, -1]),
+  );
+  assert.ok(hits(built.roofMeshes, 'dormer-facade:', [3.5, 4.4, 12], [0, 0, -1]));
+  assert.ok(built.roofMeshes.every((mesh) => !mesh.isEnabled()));
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
+});
+
+test('an attic window in the gable wall opens the band and the gable, a knee-wall window stays inside', () => {
+  const project = dormerProject();
+  const [rdc, combles] = project.levels;
+  rdc.walls.push({ id: 'ouest', start: [0.15, 0], end: [0.15, 8], thickness: 0.3, exterior: true });
+  // Gable wall of the attic, outer face on the gable plane x = 0. Its window
+  // (z 2.3–3.3, y 2.8–3.8) straddles the band top (3, the eaves) and the gable.
+  combles.walls.push({
+    id: 'h-ouest',
+    start: [0.15, 0.3],
+    end: [0.15, 5.5],
+    thickness: 0.3,
+    exterior: true,
+    openings: [{ id: 'g-fenetre', kind: 'window', offset: 2, width: 1, sill: 0.3, height: 1 }],
+  });
+  combles.walls[0].openings = [
+    { id: 'k-fenetre', kind: 'window', offset: 4, width: 0.8, sill: 0.2, height: 0.8 },
+  ];
+  const { built, scene, engine } = exterior(project);
+  const fromWest = (y: number, z: number, prefix: string) =>
+    hits(built.roofMeshes, prefix, [-3, y, z], [1, 0, 0]);
+  // The band stays whole below the window and beside it.
+  assert.ok(fromWest(2.6, 2.8, 'roof-wall-band:ouest'));
+  assert.ok(fromWest(2.9, 1.5, 'roof-wall-band:ouest'));
+  assert.equal(fromWest(2.9, 2.8, 'roof-wall-band:ouest'), false);
+  // The gable keeps its render around the window and opens over it.
+  assert.ok(fromWest(3.5, 1.5, 'gable:toiture:0'));
+  assert.equal(fromWest(3.5, 2.8, 'gable:toiture:0'), false);
+  for (const y of [2.9, 3.5]) assert.ok(fromWest(y, 2.8, 'level-window-vitrage:combles:g-fenetre'));
+  // The knee wall stands under the north pan: nothing opens for its window.
+  assert.equal(
+    built.roofMeshes.some((mesh) => mesh.name.includes(':combles:k-fenetre')),
+    false,
+  );
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
+});

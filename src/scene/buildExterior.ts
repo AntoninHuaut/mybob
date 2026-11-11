@@ -261,6 +261,109 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
   edge.isPickable = false;
   meshes.push(edge);
 
+  // The frame materials reuse those of the level's joinery
+  // (`src/scene/materials.ts`) and are only created at the first frame.
+  let chasisMaterials: { glass: PBRMaterial; joinery: PBRMaterial } | undefined;
+  const joineryMaterials = () => {
+    if (chasisMaterials) return chasisMaterials;
+    const pane = material('roof-window-glass', '#bfd7d0');
+    pane.alpha = 0.18;
+    pane.roughness = 0.14;
+    pane.metallic = 0.12;
+    pane.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
+    pane.backFaceCulling = false;
+    pane.twoSidedLighting = true;
+    const joinery = material('roof-window-joinery', project.finishes?.joineryColor ?? '#f3f2ec');
+    joinery.roughness = 0.42;
+    joinery.backFaceCulling = false;
+    joinery.twoSidedLighting = true;
+    return (chasisMaterials = { glass: pane, joinery });
+  };
+  // A frame in its own plane: an outer ring, a glazing set back 6 mm, a mullion.
+  // The profile keeps 4.5 cm like the level's joinery, except on a narrow opening
+  // where it shrinks to leave some glazing: never a zero quadrilateral.
+  const chasis = (
+    name: string,
+    width: number,
+    height: number,
+    point: (across: number, up: number, depth: number) => [number, number, number],
+  ) => {
+    const { glass, joinery } = joineryMaterials();
+    const profile = Math.min(0.045, width / 4, height / 4);
+    const ring = (halfAcross: number, halfUp: number, depth = 0) => [
+      point(-halfAcross, -halfUp, depth),
+      point(halfAcross, -halfUp, depth),
+      point(halfAcross, halfUp, depth),
+      point(-halfAcross, halfUp, depth),
+    ];
+    const part = (
+      kind: string,
+      mat: PBRMaterial,
+      outline: [number, number, number][],
+      inner?: [number, number, number][],
+    ) => {
+      const mesh = add(
+        faceMesh(
+          name.replace('*', kind),
+          outline,
+          outline.map((_, i) => i),
+          scene,
+          inner ? [inner] : [],
+        ),
+        mat,
+        'roof',
+      );
+      roofMeshes.push(mesh);
+      return mesh;
+    };
+    part(
+      'cadre',
+      joinery,
+      ring(width / 2, height / 2),
+      ring(width / 2 - profile, height / 2 - profile),
+    );
+    // The glazing sits back behind the frame: it never crosses the face it opens.
+    const pane = part(
+      'vitrage',
+      glass,
+      ring(width / 2 - profile - 0.005, height / 2 - profile - 0.005, -0.006),
+    );
+    pane.receiveShadows = false;
+    part('meneau', joinery, ring(profile / 2, height / 2 - profile - 0.01));
+  };
+
+  // The levels above the ground stay part of the building: their exterior
+  // openings exist from outside wherever the band, a gable or a dormer front
+  // would otherwise cover them. Each one only gets a frame once something
+  // opens for it; an opening under the slopes (a knee wall) stays inside.
+  const upperOpenings = project.levels
+    .filter((upper) => upper.elevation > level.elevation)
+    .flatMap((upper) =>
+      upper.walls
+        .filter((wall) => wall.exterior && wallLength(wall) > 1e-6)
+        .flatMap((wall) => {
+          const length = wallLength(wall);
+          const probe = alongWall(wall, length / 2, wall.thickness / 2 + 0.037);
+          const outward = pointInPolygon(probe, upper.outline) ? -1 : 1;
+          const base = upper.elevation - level.elevation + wallFloorSpan(wall, upper).openingBase;
+          return (wall.openings ?? []).map((opening) => ({
+            level: upper,
+            wall,
+            opening,
+            start: opening.offset,
+            end: opening.offset + opening.width,
+            bottom: base + (opening.sill ?? 0),
+            top: base + (opening.sill ?? 0) + opening.height,
+            /** A point of the wall's vertical plane, `depth` outward from its outer face. */
+            point: (along: number, y: number, depth = 0): [number, number, number] => {
+              const [x, z] = alongWall(wall, along, outward * (wall.thickness / 2 + depth));
+              return [x, y, z];
+            },
+            exposed: false,
+          }));
+        }),
+    );
+
   for (const wall of level.walls.filter((w) => w.exterior)) {
     const length = wallLength(wall),
       height = wall.height ?? level.ceilingHeight;
@@ -310,42 +413,129 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     const roofHeight = roofOverStrip(site.roofs ?? [], wall, -stretch.start, length + stretch.end);
     const bandTop = Number.isFinite(roofHeight) ? roofHeight : eaveHeight;
     if (Number.isFinite(bandTop) && bandTop > height) {
-      const [x, z] = alongWall(wall, length / 2 + (stretch.end - stretch.start) / 2);
-      const band = add(
-        MeshBuilder.CreateBox(
-          `roof-wall-band:${wall.id}`,
-          {
-            width: length + stretch.start + stretch.end,
-            height: bandTop - height,
-            depth: wall.thickness,
-          },
-          scene,
-        ),
-        plaster,
-        'roof',
-      );
-      band.position.set(x, (height + bandTop) / 2, z);
-      band.rotation.y = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0]);
-      roofMeshes.push(band);
+      const rotation = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0]);
+      const from = -stretch.start,
+        to = length + stretch.end;
+      // An opening of an upper level whose outer face stands within this wall's
+      // thickness is a window of the facade the band covers: the band opens for it.
+      const dx = (wall.end[0] - wall.start[0]) / length,
+        dz = (wall.end[1] - wall.start[1]) / length;
+      const cuts: { start: number; end: number; bottom: number; top: number }[] = [];
+      for (const upper of upperOpenings) {
+        const u = upper.wall,
+          uLength = wallLength(u);
+        const udx = (u.end[0] - u.start[0]) / uLength,
+          udz = (u.end[1] - u.start[1]) / uLength;
+        if (Math.abs(udx * dx + udz * dz) < 0.99) continue;
+        const along = ([x, , z]: [number, number, number]) =>
+          (x - wall.start[0]) * dx + (z - wall.start[1]) * dz;
+        const a = upper.point(upper.start, 0),
+          b = upper.point(upper.end, 0);
+        const across = (a[0] - wall.start[0]) * -dz + (a[2] - wall.start[1]) * dx;
+        if (Math.abs(across) > wall.thickness / 2 + 0.02) continue;
+        const start = Math.max(from, Math.min(along(a), along(b)));
+        const end = Math.min(to, Math.max(along(a), along(b)));
+        const bottom = Math.max(height, upper.bottom),
+          top = Math.min(bandTop, upper.top);
+        if (end - start < 0.01 || top - bottom < 0.01) continue;
+        upper.exposed = true;
+        cuts.push({ start, end, bottom, top });
+      }
+      // Overlapping cuts merge: the sections below need disjoint openings.
+      cuts.sort((p, q) => p.start - q.start);
+      const merged: typeof cuts = [];
+      for (const cut of cuts) {
+        const last = merged.at(-1);
+        if (last && cut.start <= last.end) {
+          last.end = Math.max(last.end, cut.end);
+          last.bottom = Math.min(last.bottom, cut.bottom);
+          last.top = Math.max(last.top, cut.top);
+        } else merged.push({ ...cut });
+      }
+      const sections = merged.length
+        ? wallSections(
+            {
+              ...wall,
+              start: alongWall(wall, from),
+              end: alongWall(wall, to),
+              openings: merged.map((cut, i) => ({
+                id: `band-cut-${i}`,
+                kind: 'window' as const,
+                offset: cut.start - from,
+                width: cut.end - cut.start,
+                sill: cut.bottom - height,
+                height: cut.top - cut.bottom,
+              })),
+            },
+            bandTop - height,
+          )
+        : [{ start: 0, end: to - from, bottom: 0, top: bandTop - height }];
+      for (const [i, section] of sections.entries()) {
+        if (section.end - section.start < 1e-4 || section.top - section.bottom < 1e-4) continue;
+        const [x, z] = alongWall(wall, from + (section.start + section.end) / 2);
+        const band = add(
+          MeshBuilder.CreateBox(
+            merged.length ? `roof-wall-band:${wall.id}:${i}` : `roof-wall-band:${wall.id}`,
+            {
+              width: section.end - section.start,
+              height: section.top - section.bottom,
+              depth: wall.thickness,
+            },
+            scene,
+          ),
+          plaster,
+          'roof',
+        );
+        band.position.set(x, height + (section.bottom + section.top) / 2, z);
+        band.rotation.y = rotation;
+        roofMeshes.push(band);
+      }
     }
   }
-  // The frame materials reuse those of the level's joinery
-  // (`src/scene/materials.ts`) and are only created at the first roof window.
-  let chasisMaterials: { glass: PBRMaterial; joinery: PBRMaterial } | undefined;
-  const roofWindowMaterials = () => {
-    if (chasisMaterials) return chasisMaterials;
-    const pane = material('roof-window-glass', '#bfd7d0');
-    pane.alpha = 0.18;
-    pane.roughness = 0.14;
-    pane.metallic = 0.12;
-    pane.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHABLEND;
-    pane.backFaceCulling = false;
-    pane.twoSidedLighting = true;
-    const joinery = material('roof-window-joinery', project.finishes?.joineryColor ?? '#f3f2ec');
-    joinery.roughness = 0.42;
-    joinery.backFaceCulling = false;
-    joinery.twoSidedLighting = true;
-    return (chasisMaterials = { glass: pane, joinery });
+  // A gable is opened for the upper-level openings lying in its plane. The
+  // part of an opening below the gable (in the band) is cut there instead; an
+  // opening crossing a sloped edge would also cross the roof and stays covered.
+  const gableHoles = (points: [number, number, number][]) => {
+    const normal = [0, 0, 0];
+    for (let i = 0; i < points.length; i++) {
+      const a = points[i],
+        b = points[(i + 1) % points.length];
+      normal[0] += (a[1] - b[1]) * (a[2] + b[2]);
+      normal[1] += (a[2] - b[2]) * (a[0] + b[0]);
+      normal[2] += (a[0] - b[0]) * (a[1] + b[1]);
+    }
+    const size = Math.hypot(...normal);
+    if (size < 1e-9) return [];
+    const [nx, ny, nz] = normal.map((value) => value / size);
+    if (Math.abs(ny) > 0.05) return [];
+    const offset = (p: [number, number, number]) =>
+      (p[0] - points[0][0]) * nx + (p[1] - points[0][1]) * ny + (p[2] - points[0][2]) * nz;
+    // In-plane coordinates: horizontal along the gable, then height.
+    const flat = (p: [number, number, number]): Point2 => [p[0] * -nz + p[2] * nx, p[1]];
+    const outline = points.map(flat);
+    const minY = Math.min(...points.map((p) => p[1]));
+    const result: [number, number, number][][] = [];
+    for (const upper of upperOpenings) {
+      const a = upper.point(upper.start, 0),
+        b = upper.point(upper.end, 0);
+      const length = Math.hypot(b[0] - a[0], b[2] - a[2]);
+      if (length < 1e-6 || Math.abs(((b[0] - a[0]) * nx + (b[2] - a[2]) * nz) / length) > 0.05)
+        continue;
+      if (Math.abs(offset(a)) > 0.05 || Math.abs(offset(b)) > 0.05) continue;
+      const y0 = Math.max(upper.bottom, minY + 0.002),
+        y1 = upper.top;
+      if (y1 - y0 < 0.01) continue;
+      // Corners projected onto the gable plane.
+      const onPlane = (p: [number, number, number], y: number): [number, number, number] => {
+        const d = offset([p[0], y, p[2]]);
+        return [p[0] - d * nx, y, p[2] - d * nz];
+      };
+      const ring = [onPlane(a, y0), onPlane(b, y0), onPlane(b, y1), onPlane(a, y1)];
+      if (!ring.every((corner) => pointInPolygon(flat(corner), outline))) continue;
+      upper.exposed = true;
+      result.push(ring);
+    }
+    return result;
   };
   for (const r of site.roofs ?? []) {
     // A dormer only exists if its footprint, its back wall and its roof face
@@ -411,6 +601,58 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
             'roof',
           ),
         );
+      // The dormer front: the back wall above the roof face, 12 mm proud of the
+      // wall like the facade skins, opened for the back wall's own openings.
+      const outward = Math.sign(frame.front - frame.meet);
+      const skin = frame.front + outward * 0.012;
+      const bottom = Math.max(panAt(frame.sideLow, skin)[1], panAt(frame.sideHigh, skin)[1]);
+      if (frame.frontTop - bottom > 0.005) {
+        const frontHoles: [number, number, number][][] = [];
+        for (const upper of upperOpenings) {
+          if (upper.wall.id !== frame.wall.id || upper.level.id !== frame.level.id) continue;
+          const sideOf = (along: number) => {
+            const [x, , z] = upper.point(along, 0);
+            return frame.acrossZ ? x : z;
+          };
+          const low = Math.max(
+            frame.sideLow + 0.002,
+            Math.min(sideOf(upper.start), sideOf(upper.end)),
+          );
+          const high = Math.min(
+            frame.sideHigh - 0.002,
+            Math.max(sideOf(upper.start), sideOf(upper.end)),
+          );
+          const y0 = Math.max(bottom + 0.002, upper.bottom),
+            y1 = Math.min(frame.frontTop - 0.002, upper.top);
+          if (high - low < 0.01 || y1 - y0 < 0.01) continue;
+          upper.exposed = true;
+          frontHoles.push([
+            topAt(low, skin, y0),
+            topAt(high, skin, y0),
+            topAt(high, skin, y1),
+            topAt(low, skin, y1),
+          ]);
+        }
+        const ring: [number, number, number][] = [
+          panAt(frame.sideLow, skin),
+          panAt(frame.sideHigh, skin),
+          topAt(frame.sideHigh, skin, frame.frontTop),
+          topAt(frame.sideLow, skin, frame.frontTop),
+        ];
+        roofMeshes.push(
+          add(
+            faceMesh(
+              `dormer-facade:${r.id}:${dormer.id}`,
+              ring,
+              ring.map((_, i) => i),
+              scene,
+              frontHoles,
+            ),
+            plaster,
+            'roof',
+          ),
+        );
+      }
       result.height = Math.max(result.height, frame.frontTop);
     }
     // A roof window lives on the roof face, not on a wall: the renderer opens the
@@ -425,52 +667,10 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       holes.set(frame.faceIndex, hole);
       // Frame, glazing and mullion are rectangles of the roof face plane:
       // the width stays horizontal, the height is measured along the rafter.
-      const ring = (halfAcross: number, halfUp: number, depth = 0) => [
-        roofWindowPoint(frame, -halfAcross, -halfUp, depth),
-        roofWindowPoint(frame, halfAcross, -halfUp, depth),
-        roofWindowPoint(frame, halfAcross, halfUp, depth),
-        roofWindowPoint(frame, -halfAcross, halfUp, depth),
-      ];
-      const { glass, joinery } = roofWindowMaterials();
-      // The frame keeps 4.5 cm like the level's joinery, except on a
-      // narrow window where it shrinks to leave some glazing: never a
-      // zero quadrilateral, even at the minimum size accepted at import.
-      const profile = Math.min(0.045, window.width / 4, window.height / 4);
-      const chasis = (
-        part: string,
-        mat: PBRMaterial,
-        outline: [number, number, number][],
-        inner?: [number, number, number][],
-      ) => {
-        const mesh = add(
-          faceMesh(
-            `roof-window-${part}:${r.id}:${window.id}`,
-            outline,
-            outline.map((_, i) => i),
-            scene,
-            inner ? [inner] : [],
-          ),
-          mat,
-          'roof',
-        );
-        roofMeshes.push(mesh);
-        return mesh;
-      };
-      chasis(
-        'cadre',
-        joinery,
-        frame.corners,
-        ring(window.width / 2 - profile, window.height / 2 - profile),
+      // The glazing sits back under the covering, so the rafter hides it.
+      chasis(`roof-window-*:${r.id}:${window.id}`, window.width, window.height, (a, u, d) =>
+        roofWindowPoint(frame, a, u, d),
       );
-      // The glazing sits back under the covering: the rafter hides it, and the
-      // frame never crosses the roof face.
-      const pane = chasis(
-        'vitrage',
-        glass,
-        ring(window.width / 2 - profile - 0.005, window.height / 2 - profile - 0.005, -0.006),
-      );
-      pane.receiveShadows = false;
-      chasis('meneau', joinery, ring(profile / 2, window.height / 2 - profile - 0.01));
     }
     for (const [i, face] of r.faces.entries())
       roofMeshes.push(
@@ -478,8 +678,30 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       );
     for (const [i, face] of (r.gables ?? []).entries())
       roofMeshes.push(
-        add(faceMesh(`gable:${r.id}:${i}`, r.vertices, face, scene), plaster, 'roof'),
+        add(
+          faceMesh(
+            `gable:${r.id}:${i}`,
+            r.vertices,
+            face,
+            scene,
+            gableHoles(face.map((index) => r.vertices[index])),
+          ),
+          plaster,
+          'roof',
+        ),
       );
+  }
+  // The frames of the upper levels sit 3 cm inside the outer face, behind
+  // whatever opened for them: the band, the gable or the dormer front.
+  for (const upper of upperOpenings.filter((candidate) => candidate.exposed)) {
+    const middle = (upper.start + upper.end) / 2,
+      centre = (upper.bottom + upper.top) / 2;
+    chasis(
+      `level-window-*:${upper.level.id}:${upper.opening.id}`,
+      upper.end - upper.start,
+      upper.top - upper.bottom,
+      (across, up, depth) => upper.point(middle + across, centre + up, depth - 0.03),
+    );
   }
   roofMeshes.forEach((mesh) => mesh.setEnabled(false));
   return result;
