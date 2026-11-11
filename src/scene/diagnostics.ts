@@ -173,13 +173,16 @@ export function collectDiagnostics(
  * every expression typed into it, so returning the report would show it twice.
  * `report()` is the copyable form, for `copy(mybob.report())`.
  */
-export function installDiagnostics(report: () => DiagnosticSnapshot): void {
+export function installDiagnostics(report: () => DiagnosticSnapshot, shaders?: () => string): void {
   const text = () => diagnosticLines(report()).join('\n');
   const api = {
     diag: () => {
       console.info(text());
     },
     report: text,
+    shaders: () => {
+      console.info(shaders?.() ?? '[shaders] indisponible');
+    },
   };
   (window as unknown as { mybob?: typeof api }).mybob = api;
   const first = report();

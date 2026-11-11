@@ -47,6 +47,8 @@ import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
 import { ShadowRefresh } from './shadowRefresh';
 import { furnitureRevision, furnitureObstaclesRevision } from '../furniture/layer';
 import { RenderScheduler, WAKE_EVENTS } from './renderScheduler';
+import { nextPaint, viewKey, ViewWarmth, warmFrames } from './shaderWarmup';
+import { shaderLog } from './shaderLog';
 import { AdaptiveResolution } from './adaptiveResolution';
 import {
   AUTO_CUT_HEIGHT,
@@ -199,6 +201,10 @@ export class HouseViewer {
   private walkRayDirty = true;
   private walkHit?: PickingInfo | null;
   private readonly renderScheduler = new RenderScheduler();
+  private readonly warmth = new ViewWarmth();
+  private preparing = false;
+  /** The host shows its overlay while shaders are linked; `first` is the start-up, not a switch. */
+  onPreparing?: (active: boolean, first: boolean) => void;
   private readonly adaptiveResolution = new AdaptiveResolution(
     Math.min(window.devicePixelRatio || 1, 1.6),
   );
@@ -255,6 +261,7 @@ export class HouseViewer {
   ) {
     this.engine = engine;
     this.engine.setHardwareScalingLevel(this.baseScaling);
+    shaderLog.attach(engine);
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas.parentElement!);
     window.addEventListener('keydown', this.keydown);
@@ -270,6 +277,13 @@ export class HouseViewer {
     this.engine.runRenderLoop(() => {
       this.stepOrbitTour();
       if (!this.scene) return;
+      // A view whose shaders are not linked yet is prepared behind the host's overlay
+      // instead of freezing the page for seconds while it draws.
+      if (this.preparing || (!this.immersive && this.warmth.isCold(this.currentViewKey()))) {
+        if (!this.preparing) void this.prepareView();
+        this.lastRenderAt = undefined;
+        return;
+      }
       const now = performance.now();
       // A headset shows the last image again on a skipped frame, which judders:
       // in a session every frame is drawn, at the resolution the headset chose.
@@ -320,6 +334,8 @@ export class HouseViewer {
   }
 
   load(project: HouseProject, levelId?: string) {
+    // Optional: scene tests build a viewer from its prototype, without the constructor.
+    this.warmth?.reset();
     this.requestRender();
     this.cancelOrbitTour();
     this.releaseScene();
@@ -595,6 +611,52 @@ export class HouseViewer {
     }
     this.onViewChange?.(mode);
     return true;
+  }
+
+  private currentViewKey(): string {
+    return viewKey(this.mode, this.exteriorView);
+  }
+
+  private async prepareView() {
+    const scene = this.scene;
+    const key = this.currentViewKey();
+    const first = this.warmth.untouched;
+    this.preparing = true;
+    shaderLog.mark(`préparation : ${key}`);
+    this.onPreparing?.(true, first);
+    try {
+      await nextPaint();
+      await warmFrames({
+        renderFrame: () => {
+          if (scene !== this.scene || scene.isDisposed) return;
+          scene.render();
+          this.updateOrbitBloom();
+        },
+        effectsReady: () => this.engine.areAllEffectsReady(),
+      });
+    } catch (error) {
+      console.info(
+        `[vue] préchauffage des shaders interrompu : ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      // A scene replaced meanwhile has released its effects: it stays cold.
+      if (scene === this.scene) this.warmth.markWarm(key);
+      shaderLog.mark(`prête : ${key}`);
+      this.preparing = false;
+      this.requestRender();
+      this.onPreparing?.(false, first);
+    }
+  }
+
+  /** Resolves once the current view is drawn for real; gives up after `timeoutMs`. */
+  async whenReady(timeoutMs = 20000): Promise<void> {
+    const end = performance.now() + timeoutMs;
+    while (
+      this.scene &&
+      (this.preparing || this.warmth.isCold(this.currentViewKey())) &&
+      performance.now() < end
+    )
+      await new Promise((resolve) => setTimeout(resolve, 16));
   }
 
   captureMouse() {
