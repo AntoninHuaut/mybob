@@ -291,7 +291,10 @@ export class HouseViewer {
     this.wallCutaway?.dispose();
     this.wallCutaway = undefined;
     this.planOpenings?.dispose();
-    this.scene?.dispose();
+    if (this.scene) {
+      this.scene.dispose();
+      this.engine.releaseEffects();
+    }
     this.planLighting = undefined;
     this.shadowsBeforeReadability = undefined;
     this.baseSun = undefined;

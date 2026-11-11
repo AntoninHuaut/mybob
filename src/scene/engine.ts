@@ -1,4 +1,5 @@
 import { Engine } from '@babylonjs/core/Engines/engine';
+import { Effect } from '@babylonjs/core/Materials/effect';
 
 /**
  * WebGL only, on purpose. The visit's ambient occlusion needs the geometry
@@ -8,6 +9,10 @@ import { Engine } from '@babylonjs/core/Engines/engine';
  */
 export function createEngine(canvas: HTMLCanvasElement): Engine {
   try {
+    // Orbit cutaways switch materials as facades turn towards the camera. Keep
+    // their shader variants alive instead of linking them again on every turn.
+    // The viewer releases the cache when it disposes the current scene.
+    Effect.PersistentMode = true;
     return new Engine(
       canvas,
       true,
