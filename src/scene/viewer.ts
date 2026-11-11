@@ -48,7 +48,7 @@ import { ShadowRefresh } from './shadowRefresh';
 import { furnitureRevision, furnitureObstaclesRevision } from '../furniture/layer';
 import { RenderScheduler, WAKE_EVENTS } from './renderScheduler';
 import { isSoftwareRenderer, nextPaint, viewKey, ViewWarmth, warmFrames } from './shaderWarmup';
-import { shaderLog } from './shaderLog';
+import { pluginSummary, shaderLog } from './shaderLog';
 import { AdaptiveResolution } from './adaptiveResolution';
 import {
   AUTO_CUT_HEIGHT,
@@ -641,7 +641,7 @@ export class HouseViewer {
     const key = this.currentViewKey();
     const first = this.warmth.untouched;
     this.preparing = true;
-    shaderLog.mark(`préparation : ${key}`);
+    shaderLog.mark(`préparation : ${key} · ${pluginSummary(scene.materials)}`);
     this.onPreparing?.(true, first);
     try {
       await nextPaint();
@@ -669,7 +669,7 @@ export class HouseViewer {
     } finally {
       // A scene replaced meanwhile has released its effects: it stays cold.
       if (scene === this.scene) this.warmth.markWarm(key);
-      shaderLog.mark(`prête : ${key}`);
+      shaderLog.mark(`prête : ${key} · ${pluginSummary(scene.materials)}`);
       this.preparing = false;
       this.requestRender();
       this.onPreparing?.(false, first);

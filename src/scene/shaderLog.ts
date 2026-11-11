@@ -99,6 +99,23 @@ export class ShaderLog {
   }
 }
 
+/**
+ * Plugins attached to the scene's first PBR material, with their enabled state: a
+ * plugin switching on or off changes the defines of every material, hence every
+ * program. Reads Babylon's private list, which is fine for a diagnostic.
+ */
+export function pluginSummary(
+  materials: ReadonlyArray<{ getClassName(): string; pluginManager?: unknown }>,
+): string {
+  const material = materials.find((candidate) => candidate.getClassName() === 'PBRMaterial');
+  const plugins = (
+    material?.pluginManager as
+      { _plugins?: Array<{ name: string; isEnabled?: boolean; _isEnabled?: boolean }> } | undefined
+  )?._plugins;
+  if (!plugins) return 'plugins ?';
+  return `plugins ${plugins.map((plugin) => `${plugin.name}${(plugin.isEnabled ?? plugin._isEnabled) ? '+' : '-'}`).join(' ')}`;
+}
+
 function shorten(key: string): string {
   const flat = key.replace(/\s+/g, ' ');
   return flat.length > 150 ? `${flat.slice(0, 150)}… (${flat.length})` : flat;

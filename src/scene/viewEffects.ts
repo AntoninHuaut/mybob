@@ -27,7 +27,8 @@ type OrbitTemporal = Pick<
   TAARenderingPipeline,
   'dispose' | 'samples' | 'isEnabled' | 'factor' | 'disableOnCameraMove'
 >;
-type Temporal = Pick<TAARenderingPipeline, 'dispose' | 'samples'>;
+type Temporal = Pick<TAARenderingPipeline, 'dispose' | 'samples'> &
+  Partial<Pick<TAARenderingPipeline, 'reprojectHistory'>>;
 interface EffectFactories {
   environment(scene: Scene): BaseTexture | undefined;
   taa(scene: Scene, camera: Camera): Temporal | undefined;
@@ -245,7 +246,13 @@ export class ViewEffects {
     this.occlusion?.dispose(true);
     this.occlusion = undefined;
     this.occlusionFade = undefined;
-    this.taa?.dispose();
+    if (this.taa) {
+      // Disposing the pipeline leaves the jitter material plugin it created attached
+      // and enabled: every material keeps different defines after the visit, and the
+      // other views relink all their programs. Reprojection off turns it back off.
+      if ('reprojectHistory' in this.taa) this.taa.reprojectHistory = false;
+      this.taa.dispose();
+    }
     this.taa = undefined;
     this.bloom?.dispose();
     this.bloom = undefined;

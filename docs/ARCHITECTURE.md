@@ -422,6 +422,10 @@ last call, and read back at start-up.
   The start-up is the same path with the landing view, so nothing else needs to call it. A new
   scene (project or level change) releases the cached effects and makes every view cold again.
   `mybob.shaders()` lists every link with its duration and the preparation marks.
+- Leaving the visit switches the temporal jitter material plugin off (`reprojectHistory = false`
+  before the pipeline is disposed, `ViewEffects.releaseWalkPipelines`): Babylon leaves that plugin
+  attached and enabled on every material, which changes their defines and made the plan, the
+  overview and the exterior relink all their programs after a visit.
 - The sun shadow map is only redrawn when its casters change (`shadowRefresh.ts`): mode,
   cutaway, roof, sun, animated door and furniture changes. A new moving shadow caster calls `invalidate()`.
 - The public build only contains the demonstration: `vite.config.ts` and
