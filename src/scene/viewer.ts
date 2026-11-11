@@ -626,11 +626,15 @@ export class HouseViewer {
     this.onPreparing?.(true, first);
     try {
       await nextPaint();
+      let image = 0;
       await warmFrames({
         renderFrame: () => {
           if (scene !== this.scene || scene.isDisposed) return;
           scene.render();
           this.updateOrbitBloom();
+          shaderLog.mark(
+            `  image ${++image} · effets ${shaderLog.effectCount} · prêts ${this.engine.areAllEffectsReady()} · ombre ${this.shadowRefresh?.settled ?? '-'} · attente ${scene.getWaitingItemsCount()} · actifs ${scene.getActiveMeshes().length}`,
+          );
         },
         // Not only the effects: a receiver relinks once the sun shadow map is ready,
         // which only happens after its own settling frames.

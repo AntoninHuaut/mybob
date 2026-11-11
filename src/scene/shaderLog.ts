@@ -31,12 +31,18 @@ export class ShaderLog {
   private readonly origin: number;
   private readonly started = new Map<unknown, { at: number; label: string }>();
   private readonly seen = new Set<string>();
+  private cacheSize = () => 0;
 
   constructor(private readonly now: () => number = () => performance.now()) {
     this.origin = now();
   }
 
   attach(engine: ShaderLogEngine): void {
+    this.cacheSize = () =>
+      Object.keys(
+        (engine as unknown as { _compiledEffects?: Record<string, unknown> })._compiledEffects ??
+          {},
+      ).length;
     const cache = () =>
       Object.keys(
         (engine as unknown as { _compiledEffects?: Record<string, unknown> })._compiledEffects ??
@@ -58,6 +64,11 @@ export class ShaderLog {
         label: start.label,
       });
     });
+  }
+
+  /** Programs the engine has created so far, linked or not. */
+  get effectCount(): number {
+    return this.cacheSize();
   }
 
   /** A named point in the timeline, such as the start of a warm-up view. */
