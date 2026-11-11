@@ -72,7 +72,7 @@ test('an empty-floor gesture restores detached orbit input but furniture and vis
     },
     orbit: camera,
     canvas,
-    mode: 'overview',
+    currentMode: 'overview',
     paused: false,
   }) as HouseViewer;
   camera.inputs.attachedToElement = false;
@@ -94,10 +94,10 @@ test('an empty-floor gesture restores detached orbit input but furniture and vis
   recover();
   assert.equal(attachments, 1, 'furniture owns its drag');
   kind = 'floor';
-  viewer.mode = 'walk';
+  Object.assign(viewer, { currentMode: 'walk' });
   recover();
   assert.equal(attachments, 1, 'first person input must remain separate');
-  viewer.mode = 'plan';
+  Object.assign(viewer, { currentMode: 'plan' });
   recover(2);
   assert.equal(attachments, 2, 'right pan can recover in plan mode too');
   camera.inputs.attachedToElement = false;

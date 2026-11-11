@@ -157,7 +157,10 @@ export class HouseViewer {
   walk!: UniversalCamera;
   house!: HouseScene;
   exterior?: ExteriorScene;
-  private exteriorView = false;
+  private currentExteriorView = false;
+  get exteriorView(): boolean {
+    return this.currentExteriorView;
+  }
   private exteriorFrame?: Level;
   /** Parcel corners the exterior framing must keep on screen, in world coordinates. */
   private parcelInView: Vector3[] | undefined;
@@ -166,14 +169,19 @@ export class HouseViewer {
   /** Parcel of the loaded project: the visit may walk on it, outside the house. */
   private site?: ProjectSite;
   level!: Level;
-  mode: ViewMode = 'overview';
+  private currentMode: ViewMode = 'overview';
+  get mode(): ViewMode {
+    return this.currentMode;
+  }
   measureMode = false;
   measurement?: Measurement;
   onSelectRoom?: (id: string) => void;
   onFrame?: (frame: FrameInfo) => void;
   onMeasure?: (measurement?: Measurement) => void;
   onPointerLockError?: () => void;
-  onModeChange?: (mode: ViewMode) => void;
+  /** Optional host policy, checked before any transition side effects. */
+  canChangeMode?: (mode: ViewMode) => boolean;
+  onViewChange?: (mode: ViewMode) => void;
   onDestination?: (point: Point2) => void;
   onDestinationRejected?: () => void;
   onEditFurniture?: (id: string) => void;
@@ -312,7 +320,7 @@ export class HouseViewer {
     this.exteriorFrame = undefined;
     this.parcelInView = undefined;
     this.exteriorSubject = [];
-    this.exteriorView = false;
+    this.currentExteriorView = false;
     this.keyState.clear();
     this.measurement = undefined;
     this.measureMode = false;
@@ -497,25 +505,23 @@ export class HouseViewer {
     this.resize();
   }
 
-  setMode(mode: ViewMode) {
-    this.requestRender();
-    if (!this.scene) return;
-    this.orbitTour = undefined;
-    if (this.immersive) {
-      if (mode === 'walk') return;
-      // The session ends asynchronously; `leaveImmersive` then restores this mode's camera.
-      void this.immersive.exit();
-    }
+  setMode(mode: ViewMode, exterior = false, destination?: Point2): boolean {
+    if (!this.scene || this.canChangeMode?.(mode) === false) return false;
+    if (this.immersive && mode === 'walk') return true;
     if (mode === 'walk') {
       const current: Point2 = [this.walk.position.x, this.walk.position.z];
       // Coming back from the plan while standing on the parcel keeps that spot:
       // the visit is not only an interior viewpoint any more.
       const point =
-        findVisitDestination(this.scene, this.level, current) ??
-        (isParcelDestination(this.level, this.site, current) ? current : undefined);
+        destination !== undefined
+          ? isSceneVisitDestination(this.scene, this.level, destination)
+            ? destination
+            : undefined
+          : (findVisitDestination(this.scene, this.level, current) ??
+            (isParcelDestination(this.level, this.site, current) ? current : undefined));
       if (!point) {
         this.onDestinationRejected?.();
-        return;
+        return false;
       }
       this.walk.position.set(
         point[0],
@@ -523,14 +529,20 @@ export class HouseViewer {
         point[1],
       );
     }
+    this.requestRender();
+    this.orbitTour = undefined;
+    if (this.immersive) {
+      // The session ends asynchronously; `leaveImmersive` then restores this mode's camera.
+      void this.immersive.exit();
+    }
     this.clearKeys();
     this.cancelCaptureRetry();
     stopOrbit(this.orbit);
     if (document.pointerLockElement === this.canvas) document.exitPointerLock();
     this.orbit.detachControl();
     this.walk.detachControl();
-    this.mode = mode;
-    if (mode !== 'overview') this.exteriorView = false;
+    this.currentMode = mode;
+    this.currentExteriorView = exterior && mode === 'overview' && !!this.exteriorFrame;
     this.exterior?.root.setEnabled(mode !== 'plan');
     this.updateRoofVisibility();
     this.setGoToMode(false);
@@ -570,7 +582,18 @@ export class HouseViewer {
     this.dimensions.forEach((mesh) => mesh.setEnabled(this.dimensionOn && mode !== 'walk'));
     this.updateSection();
     this.updateCutaway();
-    this.onModeChange?.(mode);
+    if (this.exteriorView && this.exteriorFrame) {
+      exteriorOverview(
+        this.orbit,
+        this.exteriorFrame,
+        this.exteriorSubject,
+        this.parcelInView,
+        this.canvas.clientWidth,
+        this.canvas.clientHeight,
+      );
+    }
+    this.onViewChange?.(mode);
+    return true;
   }
 
   captureMouse() {
@@ -633,6 +656,7 @@ export class HouseViewer {
         this.onDestinationRejected?.();
         return;
       }
+      if (enter && this.mode !== 'walk' && !this.setMode('walk', false, point)) return;
       this.walk.position.set(
         point[0],
         floorElevationAt(this.level, point) + this.eyeHeight,
@@ -644,7 +668,6 @@ export class HouseViewer {
         0,
       );
       this.walk.cameraDirection.setAll(0);
-      if (enter && this.mode !== 'walk') this.setMode('walk');
     }
     this.house.highlights.forEach((m, key) => m.setEnabled(this.mode !== 'walk' && key === id));
   }
@@ -777,13 +800,8 @@ export class HouseViewer {
   /** Start a visit at a clear floor point; this is a viewpoint change, not an automatic walk. */
   goTo(point: Point2) {
     if (!isSceneVisitDestination(this.scene, this.level, point)) return false;
-    this.walk.position.set(
-      point[0],
-      floorElevationAt(this.level, point) + this.eyeHeight,
-      point[1],
-    );
+    if (!this.setMode('walk', false, point)) return false;
     this.walk.cameraDirection.setAll(0);
-    this.setMode('walk');
     this.canvas.focus();
     const room = this.level.rooms.find((r) => pointInPolygon(point, r.polygon));
     if (room) this.onSelectRoom?.(room.id);
@@ -792,28 +810,7 @@ export class HouseViewer {
   }
 
   setExteriorView(enabled: boolean) {
-    this.requestRender();
-    this.exteriorView = enabled && !!this.exteriorFrame && this.mode === 'overview';
-    this.updateRoofVisibility();
-    this.setMeasureMode(false);
-    this.setGoToMode(false);
-    this.updateSection();
-    this.updateCutaway();
-    this.updateShadowPolicy();
-    if (this.mode !== 'overview') return;
-    if (this.exteriorView && this.exteriorFrame) {
-      // The exterior view is a composition: the azimuth is chosen with the framing.
-      exteriorOverview(
-        this.orbit,
-        this.exteriorFrame,
-        this.exteriorSubject,
-        this.parcelInView,
-        this.canvas.clientWidth,
-        this.canvas.clientHeight,
-      );
-    } else {
-      this.fitOverview();
-    }
+    return this.setMode('overview', enabled);
   }
 
   /**

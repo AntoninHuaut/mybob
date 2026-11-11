@@ -175,7 +175,7 @@ test('the visit guard keeps the visitor on the parcel and resets only outside it
     walk,
     canvas: { clientWidth: 800, clientHeight: 600 },
     site: project.site,
-    mode: 'walk',
+    currentMode: 'walk',
     paused: true,
     capturing: false,
     keyState: new Set<string>(),

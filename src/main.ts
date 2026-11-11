@@ -90,9 +90,7 @@ let showLabels = true;
 let showDimensions = false;
 let showCirculation = false;
 const measureBar = new MeasureBar();
-let exteriorView = false;
 let lights = true;
-let mode: ViewMode = 'overview';
 let toastTimer: ReturnType<typeof setTimeout>;
 let furnitureHistory = new FurnitureHistory();
 const furnitureClipboard = new FurnitureClipboard();
@@ -111,7 +109,6 @@ let furnitureContextMembers: FurnitureItem[] = [];
 let previewFurniture: FurnitureItem[] | undefined;
 let draggingFurniture = false;
 let overlays: FurnitureOverlays = { distances: true, clearances: false, openings: false };
-let syncingViewerMode = false;
 let onboarding: OnboardingState = parseOnboarding(null);
 // Share link: a project received through #p1: lives in memory only, read-only
 // until « Ajouter à mes projets ». The hash is rewritten (debounced) for every owned
@@ -374,7 +371,7 @@ function updateFurniture(item: FurnitureItem) {
 
 function rotateSelectedFurniture(degrees: number) {
   const item = currentFurniture().find((candidate) => candidate.id === selectedFurnitureId);
-  if (!item || item.locked || mode === 'walk' || exteriorView) return;
+  if (!item || item.locked || viewer.mode === 'walk' || viewer.exteriorView) return;
   updateFurniture({ ...item, rotation: item.rotation + (degrees * Math.PI) / 180 });
 }
 
@@ -520,8 +517,8 @@ function updateFurnitureContext() {
     readOnlyLink ||
     !selectedFurnitureId ||
     !item ||
-    mode === 'walk' ||
-    exteriorView ||
+    viewer.mode === 'walk' ||
+    viewer.exteriorView ||
     draggingFurniture ||
     viewer.measureMode ||
     viewer.goToMode ||
@@ -549,7 +546,7 @@ function updateFurnitureContext() {
 }
 
 function selectFurniture(id: string | undefined) {
-  if (id && exteriorView) setMode('overview');
+  if (id && viewer.exteriorView) setMode('overview');
   selectedFurnitureId = id;
   furnitureContextItem = id ? currentFurniture().find((item) => item.id === id) : undefined;
   furnitureContextMembers = furnitureContextItem?.groupId
@@ -605,7 +602,7 @@ function mountFurniture() {
   furnitureLayer.onDragState = (dragging) => {
     draggingFurniture = dragging;
     if (dragging) viewer.orbit.detachControl();
-    else if (mode !== 'walk') viewer.orbit.attachControl(viewer.canvas, true);
+    else if (viewer.mode !== 'walk') viewer.orbit.attachControl(viewer.canvas, true);
   };
   furnitureLayer.onChange = (next, final) => {
     if (final) commitFurniture(next);
@@ -624,7 +621,7 @@ function mountFurniture() {
       canUndo: () => furnitureHistory.canUndo,
       canRedo: () => furnitureHistory.canRedo,
       onAdd: (item, linkedTo) => {
-        if (exteriorView) setMode('overview');
+        if (viewer.exteriorView) setMode('overview');
         const room =
           viewer.level.rooms.find((room) => pointInPolygon(item.position, room.polygon)) ??
           selectedRoom;
@@ -785,15 +782,20 @@ function setSidebar(open: boolean) {
 function syncDisplayControls() {
   const measuring = viewer.measureMode;
   activeButton('#go-to', viewer.goToMode);
-  activeButton('#view-exterior', exteriorView);
+  activeButton('#view-exterior', viewer.exteriorView);
   const overviewButton = document.querySelector<HTMLButtonElement>('[data-view=overview]')!;
-  overviewButton.classList.toggle('active', mode === 'overview' && !exteriorView);
-  overviewButton.setAttribute('aria-pressed', String(mode === 'overview' && !exteriorView));
+  overviewButton.classList.toggle('active', viewer.mode === 'overview' && !viewer.exteriorView);
+  overviewButton.setAttribute(
+    'aria-pressed',
+    String(viewer.mode === 'overview' && !viewer.exteriorView),
+  );
   el('#scene-labels').hidden =
-    mode === 'walk' || exteriorView || !showLabels || measuring || viewer.goToMode;
-  el<HTMLButtonElement>('#go-to').disabled = mode === 'walk';
+    viewer.mode === 'walk' || viewer.exteriorView || !showLabels || measuring || viewer.goToMode;
+  el<HTMLButtonElement>('#go-to').disabled = viewer.mode === 'walk';
   furnitureLayer?.setMode(
-    readOnlyLink || mode === 'walk' || exteriorView || measuring || viewer.goToMode ? 'walk' : mode,
+    readOnlyLink || viewer.mode === 'walk' || viewer.exteriorView || measuring || viewer.goToMode
+      ? 'walk'
+      : viewer.mode,
   );
   measureBar.setActive(measuring);
   activeButton('#tool-measure', measuring);
@@ -801,7 +803,7 @@ function syncDisplayControls() {
   activeButton('#tool-circulation', showCirculation);
   for (const id of ['tool-measure', 'tool-labels', 'tool-dimensions', 'tool-circulation']) {
     el<HTMLButtonElement>(`#${id}`).disabled =
-      mode === 'walk' || exteriorView || (measuring && id === 'tool-labels');
+      viewer.mode === 'walk' || viewer.exteriorView || (measuring && id === 'tool-labels');
   }
 }
 
@@ -848,8 +850,6 @@ function loadProject(id: string, levelId?: string, override?: HouseProject) {
   viewer.load(p, levelId);
   solarPanel.load(p);
   selectedRoom = undefined;
-  mode = 'overview';
-  exteriorView = false;
   el<HTMLButtonElement>('#view-exterior').hidden = !p.site;
   viewer.setLights(lights);
   viewer.setDimensions(showDimensions);
@@ -925,7 +925,7 @@ function selectRoom(id: string, move = true) {
   selectedRoom = viewer.level.rooms.find((r) => r.id === id);
   if (!selectedRoom) return;
   if (move) setSidebarTab('house');
-  if (move && exteriorView) setMode('overview');
+  if (move && viewer.exteriorView) setMode('overview');
   if (move) viewer.focusRoom(id);
   syncSelection();
   renderRoomDetail();
@@ -984,7 +984,7 @@ function renderMinimap() {
   el('#mini-caption').textContent = viewer.level.name;
 }
 
-function setMode(next: ViewMode, fromViewer = false): boolean {
+function canChangeMode(next: ViewMode): boolean {
   if (
     next === 'walk' &&
     matchMedia('(pointer: coarse)').matches &&
@@ -996,27 +996,19 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
     );
     return false;
   }
-  mode = next;
-  if (exteriorView && (next !== 'overview' || !fromViewer)) {
-    exteriorView = false;
-    viewer.setExteriorView(false);
-  }
-  if (viewer.mode !== next) {
-    syncingViewerMode = true;
-    try {
-      viewer.setMode(next);
-    } finally {
-      // A throw inside the viewer must not leave the guard armed: every later
-      // mode change would then be ignored and the chrome would never follow.
-      syncingViewerMode = false;
-    }
-  }
-  if (viewer.mode !== next) {
-    mode = viewer.mode;
-    return false;
-  }
-  furnitureLayer?.setMode(next);
-  if (selectedRoom && !fromViewer) viewer.focusRoom(selectedRoom.id);
+  return true;
+}
+
+function setMode(next: ViewMode): boolean {
+  if (!viewer.setMode(next)) return false;
+  if (selectedRoom) viewer.focusRoom(selectedRoom.id);
+  if (next !== 'walk') viewer.canvas.focus({ preventScroll: true });
+  return true;
+}
+
+/** Called only after the viewer has accepted and applied a transition. */
+function syncViewChrome() {
+  const next = viewer.mode;
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {
     b.classList.toggle('active', b.dataset.view === next);
     b.setAttribute('aria-pressed', String(b.dataset.view === next));
@@ -1039,14 +1031,18 @@ function setMode(next: ViewMode, fromViewer = false): boolean {
   touchHint.className = 'touch-hint';
   touchHint.textContent = touchHintText(next);
   el('#control-hint').append(touchHint);
+  if (viewer.exteriorView) {
+    el('#view-eyebrow').textContent = 'LA MAISON SUR SON TERRAIN';
+    el('#view-title').textContent = 'Extérieur';
+    el('#view-subtitle').textContent =
+      'Toiture, façades et jardin. Les approximations figurent dans Plans & précision.';
+  }
   syncDisplayControls();
-  if (next !== 'walk' && !fromViewer) viewer.canvas.focus({ preventScroll: true });
   measureBar.hide();
   el('#width-label').hidden = !showDimensions || next === 'walk';
   el('#depth-label').hidden = !showDimensions || next === 'walk';
   el('#door-prompt').hidden = true;
   el('#furniture-edit-prompt').hidden = true;
-  return true;
 }
 
 function openDialog(title: string, content: string) {
@@ -1664,7 +1660,7 @@ function wireNavigationControls() {
   });
   el<HTMLSelectElement>('#eye-height').addEventListener('change', (event) => {
     const height = viewer.setEyeHeight(Number((event.target as HTMLSelectElement).value));
-    if (mode === 'walk')
+    if (viewer.mode === 'walk')
       el('#view-subtitle').textContent = `Une visite à ${number(height)} m du sol.`;
   });
   el<HTMLSelectElement>('#wall-display').addEventListener('change', (event) =>
@@ -1708,7 +1704,13 @@ function wireKeyboardShortcuts() {
         return;
       const modifier = event.ctrlKey || event.metaKey;
       const shortcut = event.key.toLowerCase();
-      if (modifier && !event.altKey && !event.shiftKey && mode !== 'walk' && !exteriorView) {
+      if (
+        modifier &&
+        !event.altKey &&
+        !event.shiftKey &&
+        viewer.mode !== 'walk' &&
+        !viewer.exteriorView
+      ) {
         if (shortcut === 'c') {
           const item = currentFurniture().find((item) => item.id === selectedFurnitureId);
           if (item && !window.getSelection()?.toString()) {
@@ -1741,7 +1743,7 @@ function wireKeyboardShortcuts() {
         selectFurniture(undefined);
         return;
       }
-      if (mode === 'walk' || exteriorView) return;
+      if (viewer.mode === 'walk' || viewer.exteriorView) return;
       const item = currentFurniture().find((candidate) => candidate.id === selectedFurnitureId);
       if (!item) return;
       if (event.key === 'Delete' || event.key === 'Backspace') {
@@ -1828,7 +1830,7 @@ function wireProjectControls() {
       void viewer.exitImmersive();
       return;
     }
-    if (mode !== 'walk' && !setMode('walk')) return;
+    if (viewer.mode !== 'walk' && !setMode('walk')) return;
     el('#walk-start').hidden = true;
     try {
       await viewer.enterImmersive();
@@ -1846,14 +1848,8 @@ function wireProjectControls() {
   });
   el('#view-exterior').addEventListener('click', () => {
     if (!current.site) return;
-    setMode('overview');
-    exteriorView = true;
     viewer.setExteriorView(true);
-    el('#view-eyebrow').textContent = 'LA MAISON SUR SON TERRAIN';
-    el('#view-title').textContent = 'Extérieur';
-    el('#view-subtitle').textContent =
-      'Toiture, façades et jardin. Les approximations figurent dans Plans & précision.';
-    syncDisplayControls();
+    viewer.canvas.focus({ preventScroll: true });
   });
   el<HTMLSelectElement>('#project-select').addEventListener('change', (event) =>
     loadProject((event.target as HTMLSelectElement).value),
@@ -1869,7 +1865,7 @@ function wireProjectControls() {
   el('#export-image').addEventListener('click', () => {
     openDialog(
       'EXPORTER UNE IMAGE',
-      `<h2>Garder cette vue</h2><p>Image PNG de la caméra actuelle, sans les panneaux de l’interface. Le fichier est généré sur cet ordinateur.</p><div class="image-export-options"><label><input id="image-labels" type="checkbox" ${showLabels && mode !== 'walk' ? 'checked' : ''}> Noms et surfaces des pièces</label><label><input id="image-dimensions" type="checkbox" ${showDimensions && mode !== 'walk' ? 'checked' : ''} ${mode === 'walk' ? 'disabled' : ''}> Dimensions extérieures</label><label><input id="image-transparent" type="checkbox"> Fond transparent</label><label><input id="image-header" type="checkbox" checked> Cartouche projet</label></div><p id="image-export-status" role="status"></p><button id="download-scene-image" class="primary-button">Télécharger le PNG</button>`,
+      `<h2>Garder cette vue</h2><p>Image PNG de la caméra actuelle, sans les panneaux de l’interface. Le fichier est généré sur cet ordinateur.</p><div class="image-export-options"><label><input id="image-labels" type="checkbox" ${showLabels && viewer.mode !== 'walk' ? 'checked' : ''}> Noms et surfaces des pièces</label><label><input id="image-dimensions" type="checkbox" ${showDimensions && viewer.mode !== 'walk' ? 'checked' : ''} ${viewer.mode === 'walk' ? 'disabled' : ''}> Dimensions extérieures</label><label><input id="image-transparent" type="checkbox"> Fond transparent</label><label><input id="image-header" type="checkbox" checked> Cartouche projet</label></div><p id="image-export-status" role="status"></p><button id="download-scene-image" class="primary-button">Télécharger le PNG</button>`,
     );
     el<HTMLButtonElement>('#download-scene-image').addEventListener('click', async (event) => {
       const button = event.currentTarget as HTMLButtonElement;
@@ -2099,9 +2095,8 @@ async function start() {
       },
     });
     solarPanel.mountTimeline(el('#viewport'));
-    viewer.onModeChange = (next) => {
-      if (!syncingViewerMode && current) setMode(next, true);
-    };
+    viewer.canChangeMode = canChangeMode;
+    viewer.onViewChange = syncViewChrome;
     viewer.onDestination = () => {
       activeButton('#go-to', false);
       el('#walk-start').hidden = true;
@@ -2128,7 +2123,7 @@ async function start() {
       if (!current) return;
       frameRate.update(performance.now(), viewer.engine.getFps());
       updateFurnitureContext();
-      const labelsVisible = mode !== 'walk' && showLabels && !viewer.measureMode;
+      const labelsVisible = viewer.mode !== 'walk' && showLabels && !viewer.measureMode;
       el('#orientation-arrow').style.transform =
         `rotate(${frame.planUpDegrees + (solarPanel.settings?.northAngleDeg ?? 0)}deg)`;
       const planLabels: { id: string; label: HTMLElement; x: number; y: number }[] = [];
@@ -2139,12 +2134,12 @@ async function start() {
           const p = viewer.project(room.label, (room.floorOffset ?? 0) + 0.04);
           label.hidden =
             !p.visible ||
-            (mode === 'overview' &&
+            (viewer.mode === 'overview' &&
               (room.planArea ?? polygonArea(room.polygon)) < 3 &&
               selectedRoom?.id !== room.id);
           label.style.left = `${p.x}px`;
           label.style.top = `${p.y}px`;
-          if (mode === 'plan' && !label.hidden)
+          if (viewer.mode === 'plan' && !label.hidden)
             planLabels.push({ id: room.id, label, x: p.x, y: p.y });
         }
       }
@@ -2158,7 +2153,7 @@ async function start() {
         height: label.offsetHeight,
         priority: selectedRoom?.id === id ? 10 : 0,
       }));
-      if (mode === 'plan' && labelBoxes.length) {
+      if (viewer.mode === 'plan' && labelBoxes.length) {
         const viewport = el('#viewport');
         const origin = viewport.getBoundingClientRect();
         const obstacles =
@@ -2192,7 +2187,7 @@ async function start() {
           label.style.top = `${placed.y}px`;
         }
       }
-      if (showDimensions && mode !== 'walk') {
+      if (showDimensions && viewer.mode !== 'walk') {
         const b = bounds(viewer.level.outline);
         for (const [id, point, value] of [
           ['width-label', [b.center[0], b.maxZ + 0.6], b.width],
@@ -2215,7 +2210,7 @@ async function start() {
         );
         measureBar.moveTo(p);
       }
-      if (mode === 'walk') {
+      if (viewer.mode === 'walk') {
         el('#door-prompt').hidden = !frame.nearDoor || !el('#walk-start').hidden;
         el('#furniture-edit-prompt').hidden =
           !frame.nearFurnitureId ||
@@ -2266,8 +2261,8 @@ async function start() {
     }
     installDiagnostics(() =>
       collectDiagnostics(viewer.engine, viewer.scene, {
-        mode,
-        exterior: exteriorView,
+        mode: viewer.mode,
+        exterior: viewer.exteriorView,
         environment: viewer.ambience.environment,
         occlusion: viewer.ambience.occlusion,
         idle: viewer.renderingIdle,

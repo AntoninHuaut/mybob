@@ -24,7 +24,8 @@ export/import, plan/PNG, measurements, welcome), `e2e/furniture-actions.spec.ts`
 table, TV link, dragging), `e2e/share-link.spec.ts` (link sharing: recipient read-only,
 adoption, silence for the owner, old link, corrupted hash), `e2e/first-steps.spec.ts`
 (« Premiers pas » card, help), `e2e/concurrent-tabs.spec.ts` (two tabs on the same storage),
-`e2e/orbit-shaders.spec.ts` (shader reuse during orbit and cleanup on project switch).
+`e2e/orbit-shaders.spec.ts` (shader reuse during orbit and cleanup on project switch),
+`e2e/view-state.spec.ts` (accepted view chrome, project/level resets and touch-only walk refusal).
 Pick the file first, the `--grep` second.
 
 `pnpm run test:e2e` (full build + personal-plan exclusion + every scenario) is not the local
