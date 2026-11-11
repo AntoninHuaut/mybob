@@ -22,6 +22,7 @@ import { FrameCounter, XrHud } from './xrHud';
  *
  * Controls, xr-standard gamepad mapping (Quest Touch):
  * - left stick: walk, relative to where the head looks, with wall collisions;
+ * - room-scale steps (the headset itself moving) meet the same walls;
  * - right stick sideways: snap turn; pushed forward then released: teleport;
  * - trigger, either hand: open or close the door the controller points at;
  * - B or Y: switch the walk post-processing on or off, to judge its cost.
@@ -49,6 +50,8 @@ export const XR_TELEPORT_REACH = 12;
 /** Body collider below the head: walls stop the visitor, a 20 cm step does not. */
 export const XR_BODY_HALF_HEIGHT = 0.5;
 export const XR_BODY_DROP = 0.6;
+/** A head move larger than this in one frame is a tracking reset, not a step: it is not collided. */
+export const XR_POSE_JUMP = 0.5;
 
 export function applyDeadzone(value: number, threshold = STICK_DEADZONE): number {
   if (!Number.isFinite(value)) return 0;
@@ -182,6 +185,8 @@ export class ImmersiveWalk {
   private aiming = false;
   private target?: Point2;
   private lastValid?: Point2;
+  /** Head position at the end of the previous frame, after every correction. */
+  private lastHead?: Vector3;
   private ended = false;
   private disposed = false;
 
@@ -234,6 +239,7 @@ export class ImmersiveWalk {
     const frame = manager.currentFrame;
     const session = manager.session;
     if (!frame || !session || this.ended) return;
+    this.followPose();
     const fps = this.counter.tick(performance.now());
     if (fps !== undefined) this.hud.show(fps, this.limitHits);
     let move: ControllerState | undefined;
@@ -272,7 +278,8 @@ export class ImmersiveWalk {
       this.updateTeleport(aim);
     }
 
-    // Room-scale walking is free, but the visit never leaves the modelled ground.
+    // Walls stop room-scale walking (`followPose`); the open edge of the modelled
+    // ground has no wall, so the visit is sent back inside it.
     const head = this.head();
     const point: Point2 = [head.x, head.z];
     if (isVisitArea(this.host.level, this.host.site, point)) this.lastValid = point;
@@ -281,6 +288,27 @@ export class ImmersiveWalk {
       this.moveHeadTo(this.lastValid);
     }
     this.followFloor();
+    this.lastHead = this.head();
+  }
+
+  /**
+   * Room-scale walking: the tracked head moved since the previous frame. That move goes
+   * through the same body collider as the stick, and the rig takes back what a wall
+   * refused, so the head stops at the wall instead of crossing it. Without this, only
+   * the terrain guard could react, and it threw the visitor back to the last valid point.
+   */
+  followPose() {
+    const head = this.head();
+    const previous = this.lastHead;
+    this.lastHead = head;
+    if (!previous) return;
+    const delta = new Vector3(head.x - previous.x, 0, head.z - previous.z);
+    const length = delta.length();
+    if (length < 1e-5 || length > XR_POSE_JUMP) return;
+    const allowed = this.collide(previous, delta);
+    this.rig.position.x += allowed.x - delta.x;
+    this.rig.position.z += allowed.z - delta.z;
+    this.lastHead = this.head();
   }
 
   async exit() {
@@ -323,15 +351,19 @@ export class ImmersiveWalk {
    * so walls and doors stop the visitor and a 20 cm step does not.
    */
   walk(displacement: Vector3) {
+    this.rig.position.addInPlace(this.collide(this.head(), displacement));
+    this.lastHead = this.head();
+  }
+
+  /** The horizontal part of `displacement` a body hung under `head` can travel. */
+  private collide(head: Vector3, displacement: Vector3): Vector3 {
     const scene = this.host.scene;
     const coordinator = scene.collisionCoordinator;
-    if (!scene.collisionsEnabled || !coordinator) {
-      this.rig.position.addInPlace(displacement);
-      return;
-    }
+    if (!scene.collisionsEnabled || !coordinator)
+      return new Vector3(displacement.x, 0, displacement.z);
     this.collider ??= coordinator.createCollider();
     this.collider._radius = new Vector3(VISITOR_RADIUS, XR_BODY_HALF_HEIGHT, VISITOR_RADIUS);
-    const center = this.head().subtractFromFloats(0, XR_BODY_DROP, 0);
+    const center = head.subtractFromFloats(0, XR_BODY_DROP, 0);
     const reached = coordinator.getNewPosition(
       center,
       displacement,
@@ -343,7 +375,7 @@ export class ImmersiveWalk {
     );
     const moved = reached.subtract(center);
     moved.y = 0;
-    this.rig.position.addInPlace(moved);
+    return moved;
   }
 
   /** Snap turn on the spot: the rig rotates around the head. */
@@ -360,6 +392,7 @@ export class ImmersiveWalk {
     const head = this.head();
     this.rig.position.x += point[0] - head.x;
     this.rig.position.z += point[1] - head.z;
+    this.lastHead = this.head();
   }
 
   /** The real floor stays on the ground under the head: room floor, step or lawn. */

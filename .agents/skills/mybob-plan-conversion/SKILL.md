@@ -732,6 +732,16 @@ than discovering them one by one:
   floor to an SH produces a residual that reads as a geometry error: a hall printed
   `SH 5.19 / SU 6.97` showed +2.08 against the SH and +0.30 against the SU, with nothing wrong
   in the model.
+- a polygon sized so that its area lands on the printed value is not evidence: on plan B the
+  WC (0.74 × 1.62) and the hall were both exact on their table area and both wrong against the
+  printed dimensions (the WC is 0.80 × 1.50, the "80" and the `1.30 | 18 | 2` chain). Read
+  the dimensions, then compare the area;
+- a thin line labelled `ht. muret` in a WC is the boxing of a wall-hung WC frame (2 cm panel,
+  18 cm behind), counted in the room's area: it is a fixture, not a wall. Modelled as a
+  full-height partition, it leaves a slit behind it that joins the neighbouring rooms;
+- a recessed entrance has its back wall **inside** the outline: on plan B the outline's recess
+  face is the wall's outer face (8.15), the inner face is 0.34 further in. A back wall placed
+  outside the outline moves the hall, the WC and the shower room with it.
 
 ## Verify
 
@@ -838,12 +848,19 @@ technical cupboard: the table gives it 0.19 m², the drawing 0.25.
 printed area, and write down the cause. A level under a slope therefore needs its own decision
 pass, like the ground floor — the chain does not guess it.
 
-Last approximation to declare: roof windows and dormers. The app does not model a roof, so a
-skylight is placed on the rafter, at the low edge, with the printed width and height: it is
-0.8 m off in depth. The roof schema only carries slopes and gables, so **a dormer's volume does
-not exist**: its floor is placed — it is real and the table counts it — but its back wall must
-stay under the covering, at 1.10 m instead of the drawn 2.15 m, and its window loses its sill. A
-dormer built at full height crosses the roof by 0.83 m and is visible from outside.
+Roof windows and dormers belong to the roof (`site.roofs[].windows` and `dormers`, see
+[EXTERIOR](../../../docs/EXTERIOR.md)). A roof window drawn on the attic plan is usually drawn
+at the knee wall: count **every** symbol on the plan and on the elevations — plan B has a third,
+0.55/0.78, on the south slope over the upstairs WC, missed by two conversions. A dormer's back
+wall is a wall of the attic level at its **full drawn height**: it pierces the covering, and
+validation allows it. Its height and its window sill are not on the plan: read them on the
+elevation that faces the dormer, calibrated on the ridge (the drawn gutter sits 15–20 cm above
+the dimensioned eave). On plan B, at 1/100: window 0.90 × 1.05 with its frame measuring exactly
+1.05 (the calibration check), sill 1.365 m above the attic floor, front top +5.41, so a 2.66 m
+back wall. The previous rule — cut the back wall to 1.10 m under the covering and drop the sill —
+dates from before dormers existed in the roof format, and it buried both windows under the
+eave. A dormer roof is flat or single-slope in the format: a two-pitch dormer roof is approximated
+flat at its front top, its footprint reaching back to where that height meets the slope.
 
 ### The roof and the terrain are read too
 
