@@ -25,7 +25,7 @@ Every change goes through a `<type>/<slug>` branch and a PR to `main`; commit co
 
 GitHub protection of `main`: PR required, check « Tests, types, build et confidentialité » required from GitHub Actions, branch up to date (`strict`), rules applied to administrators, force-push and deletion forbidden. Auto-merge waits for these checks and is not a bypass. These server settings are not contained in the Git diff. The CI job names stay in French because the required check is matched by name: renaming it breaks branch protection.
 
-The `.github/workflows/ci.yml` workflow runs on pushes to `main`, pull requests targeting `main` and on manual dispatch. It uses Node 26, pnpm 12.15.0 and `pnpm install --frozen-lockfile` with `pnpm-lock.yaml`.
+The `.github/workflows/ci.yml` workflow runs on pushes to `main`, pull requests targeting `main` and on manual dispatch. It uses Node 26, the pnpm version in `packageManager` and `pnpm install --frozen-lockfile` with `pnpm-lock.yaml`.
 
 Checks: formatting, tests, TypeScript check, public build, then artefact check. The public check rejects files outside the allowlist and original documents. In the JavaScript assets it looks for two things: the wall identifiers and title of every `public/projects/private-*.json` present on the machine, and the shape of an inlined project (`schemaVersion`, `"levels"` and `"outline"` together). The first only exists locally (after `build:private`): in CI no private file is present, the script says so in its output, and only the file allowlist and the project shape protect the deployment. This safeguard complements the explicit inclusion of the demonstration files only; it does not replace reviewing any new asset meant to be public.
 

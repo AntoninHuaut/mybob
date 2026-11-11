@@ -191,7 +191,9 @@ export class HouseViewer {
   private cutawaySelection = '';
   private shadowRefresh?: ShadowRefresh;
   private readonly renderScheduler = new RenderScheduler();
-  private readonly adaptiveResolution = new AdaptiveResolution();
+  private readonly adaptiveResolution = new AdaptiveResolution(
+    Math.min(window.devicePixelRatio || 1, 1.6),
+  );
   /** Hardware scaling at full resolution: the screen's pixel ratio, capped. */
   private readonly baseScaling = 1 / Math.min(window.devicePixelRatio || 1, 1.6);
   private renderScale = 1;

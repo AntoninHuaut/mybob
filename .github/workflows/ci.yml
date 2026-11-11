@@ -30,11 +30,9 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
       - name: pnpm
-        env:
-          NPM_CONFIG_PREFIX: ${{ runner.temp }}/npm-global
-        run: |
-          echo "$NPM_CONFIG_PREFIX/bin" >> "$GITHUB_PATH"
-          npm install --global pnpm@12.15.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - name: Show pnpm version
+        run: pnpm --version
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Verify formatting
@@ -106,7 +104,9 @@ jobs:
           node-version-file: .node-version
           package-manager-cache: false
       - name: pnpm
-        run: npm install --global pnpm@12.15.0
+        uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4
+      - name: Show pnpm version
+        run: pnpm --version
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       - name: Download verified public build

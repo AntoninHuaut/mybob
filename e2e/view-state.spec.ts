@@ -30,6 +30,8 @@ test.beforeEach(async ({ page }) => {
 test('view controls and project/level reload derive chrome from the accepted view', async ({
   page,
 }, testInfo) => {
+  // Three screenshots and repeated scene rebuilds exceed the normal budget on CI SwiftShader.
+  test.slow();
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await importHouse(page);

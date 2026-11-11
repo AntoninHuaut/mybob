@@ -399,6 +399,7 @@ export function createInteriorBloom(
   try {
     const pipeline = new DefaultRenderingPipeline('interior-bloom', false, scene, [camera]);
     configureInteriorBloom(pipeline);
+    pipeline.fxaaEnabled = true;
     return pipeline;
   } catch (error) {
     console.info(
@@ -422,6 +423,7 @@ export function createOrbitBloom(
   try {
     const pipeline = new DefaultRenderingPipeline('orbit-bloom', false, scene, [camera]);
     configureInteriorBloom(pipeline, ORBIT_BLOOM_THRESHOLD);
+    pipeline.samples = 4;
     return pipeline;
   } catch (error) {
     console.info(

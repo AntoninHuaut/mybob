@@ -193,7 +193,7 @@ are explicit, while project loading and share-link adoption keep their existing 
   switching project rebuilds the scene, not the noise.
 - The walk post-processing chain is ordered and the order matters: Babylon appends each
   pipeline at the end of the camera's chain, so `ViewEffects.updateWalk` builds the TAA first,
-  the occlusion next, the bloom last. It reads `TAA, TAAPass, SSAO…, ssaoCombine, bloom`. The
+  the occlusion next, the bloom last. It reads `TAA, TAAPass, SSAO…, ssaoCombine, bloom, fxaa`. The
   bloom is set to a threshold of 0.9 and a weight of 0.2: the values are displayed values (tone
   mapping has already run) and lit white walls sit between 0.6 and 0.9 — at 0.6 the whole room
   bloomed and read as a milky sheen on the walls. Only the lamp and the view through the bay
@@ -329,11 +329,12 @@ last call, and read back at start-up.
   from none of these signals (timer, loading, animation driven by `requestAnimationFrame`)
   calls `viewer.requestRender()`, otherwise it only appears with the next second's frame.
 - Dynamic resolution (`adaptiveResolution.ts`), the same at rest and in motion: if the median
-  frame time exceeds 25 ms (under 40 fps), rendering drops one step (100, 80, 67 %). The
+  frame time exceeds 25 ms (under 40 fps), rendering drops one step (100, 80, 67 %) without
+  going below one rendered pixel per CSS pixel. The
   scale only goes down and is kept for the session, because changing it resizes every render
   target, which hitches. The first 30 images and the 30 after each change are not measured.
-  Once at 67 % and still over budget, visit effects drop one tier per series: 1 lighter occlusion
-  (8 samples, cheap blur), 2 lighter temporal antialiasing (8 samples), 3 no occlusion; a
+  Once at the resolution floor and still over budget, visit effects drop one tier per series:
+  1 lighter occlusion (8 samples, cheap blur), 2 lighter temporal antialiasing (8 samples), 3 no occlusion; a
   tier is never lifted either. A PC that holds the frame rate never leaves 100 % nor tier 0.
   `mybob.diag()` shows the scale and the tier (`effets palier n/3`). The tier is not stored
   between sessions.

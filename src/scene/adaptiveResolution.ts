@@ -37,6 +37,8 @@ export class AdaptiveResolution {
   private samples: number[] = [];
   private warmup = WARMUP_FRAMES;
 
+  constructor(private readonly pixelRatio: number) {}
+
   /**
    * `frameMs` is the time since the previous image, when both were drawn in a row;
    * returns the render scale to use for this image (1 = full resolution).
@@ -53,7 +55,10 @@ export class AdaptiveResolution {
       const median = sorted[Math.floor(sorted.length / 2)];
       this.samples = [];
       if (median > FRAME_BUDGET_MS) {
-        if (this.level < RENDER_SCALES.length - 1) {
+        if (
+          this.level < RENDER_SCALES.length - 1 &&
+          RENDER_SCALES[this.level + 1] * this.pixelRatio >= 1
+        ) {
           this.level++;
           this.warmup = WARMUP_FRAMES;
         } else if (this.effectLevel < EFFECT_TIERS) {
