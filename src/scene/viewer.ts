@@ -224,7 +224,7 @@ export class HouseViewer {
   private captureRetry: number | undefined;
   private orbitTour: { from: number; to: number; start: number; duration: number } | undefined;
   private orbitPointerDown = (event: PointerEvent) => {
-    this.orbitTour = undefined;
+    this.cancelOrbitTour();
     // In walk mode without a locked pointer, a click in the view must take the
     // capture back: the toast after a failed capture sends the user here.
     if (
@@ -308,7 +308,7 @@ export class HouseViewer {
 
   load(project: HouseProject, levelId?: string) {
     this.requestRender();
-    this.orbitTour = undefined;
+    this.cancelOrbitTour();
     this.releaseScene();
     this.level = project.levels.find((l) => l.id === levelId) ?? project.levels[0];
     this.site = project.site;
@@ -516,7 +516,7 @@ export class HouseViewer {
       );
     }
     this.requestRender();
-    this.orbitTour = undefined;
+    this.cancelOrbitTour();
     if (this.immersive) {
       // The session ends asynchronously; `leaveImmersive` then restores this mode's camera.
       void this.immersive.exit();
@@ -666,31 +666,40 @@ export class HouseViewer {
     if (this.mode !== 'overview' || this.exteriorView || !this.orbit) return false;
     stopOrbit(this.orbit);
     // The motion is decorative: without animation, the rotation stays immediate.
-    if (globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches) {
-      this.orbit.alpha += radians;
-      this.orbitTour = undefined;
-      return true;
-    }
+    const immediate = globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     this.orbitTour = {
       from: this.orbit.alpha,
       to: this.orbit.alpha + radians,
       start: performance.now(),
-      duration,
+      duration: immediate ? 0 : duration,
     };
+    this.canvas.dataset.orbitTour = 'running';
+    this.canvas.dataset.orbitTourAngle = '0';
+    if (immediate) this.stepOrbitTour();
     return true;
+  }
+
+  private cancelOrbitTour() {
+    if (this.orbitTour) this.canvas.dataset.orbitTour = 'cancelled';
+    this.orbitTour = undefined;
   }
 
   private stepOrbitTour() {
     const tour = this.orbitTour;
     if (!tour || !this.orbit) return;
-    const progress = Math.min(1, (performance.now() - tour.start) / tour.duration);
+    const progress =
+      tour.duration <= 0 ? 1 : Math.min(1, (performance.now() - tour.start) / tour.duration);
     const eased = progress * progress * (3 - 2 * progress);
     this.orbit.alpha = tour.from + (tour.to - tour.from) * eased;
-    if (progress >= 1) this.orbitTour = undefined;
+    this.canvas.dataset.orbitTourAngle = String(this.orbit.alpha - tour.from);
+    if (progress >= 1) {
+      this.orbitTour = undefined;
+      this.canvas.dataset.orbitTour = 'complete';
+    }
   }
 
   reset() {
-    this.orbitTour = undefined;
+    this.cancelOrbitTour();
     stopOrbit(this.orbit);
     const destination = findVisitDestination(this.scene, this.level, this.level.spawn.position);
     if (!destination && this.mode === 'walk') {
