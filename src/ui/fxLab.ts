@@ -1,3 +1,6 @@
+import { createInteriorOcclusion } from '../scene/interiorAmbience';
+import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
+import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseViewer } from '../scene/viewer';
@@ -93,6 +96,42 @@ function slider(
 
 export function mountFxLab(viewer: HouseViewer): void {
   const box = panel('Banc d’essai — visite');
+  checkbox(box, 'Tons PBR neutres', (on) => {
+    viewer.scene.imageProcessingConfiguration.toneMappingType = on
+      ? ImageProcessingConfiguration.TONEMAPPING_KHR_PBR_NEUTRAL
+      : ImageProcessingConfiguration.TONEMAPPING_ACES;
+    viewer.requestRender();
+  });
+  checkbox(box, 'Ombres de contact (PCSS)', (on) => {
+    for (const light of viewer.scene.lights) {
+      const generator = light.getShadowGenerator();
+      if (generator instanceof ShadowGenerator) {
+        generator.useContactHardeningShadow = on;
+        if (!on) generator.usePercentageCloserFiltering = true;
+        generator.contactHardeningLightSizeUVRatio = 0.03;
+        generator.getShadowMap()?.resetRefreshCounter();
+      }
+    }
+    viewer.requestRender();
+  });
+  let orbitOcclusion: ReturnType<typeof createInteriorOcclusion>;
+  checkbox(box, 'Occlusion de vue 3D (essai)', (on) => {
+    orbitOcclusion?.dispose(true);
+    orbitOcclusion = undefined;
+    if (on && viewer.mode === 'overview') {
+      const camera = viewer.scene.activeCamera!;
+      const manager = viewer.scene.postProcessRenderPipelineManager;
+      manager.detachCamerasFromRenderPipeline('orbit-bloom', camera);
+      orbitOcclusion = createInteriorOcclusion(viewer.scene, camera);
+      if (orbitOcclusion) {
+        orbitOcclusion.radius = 0.5;
+        orbitOcclusion.maxZ = 100;
+        orbitOcclusion.expensiveBlur = true;
+      }
+      manager.attachCamerasToRenderPipeline('orbit-bloom', camera, true);
+    }
+    viewer.requestRender();
+  });
   // Seeded with the live scene: an undefined start would make the first `sync`
   // look like a project change and throw away whatever was already built.
   let scene: Scene | undefined = viewer.scene;

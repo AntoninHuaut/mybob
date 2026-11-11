@@ -172,10 +172,9 @@ are explicit, while project loading and share-link adoption keep their existing 
   is in **half floats**, hence linear and beyond white: the bay window and the light fitting
   are worth several times a wall in it, which gives reflections a hot spot instead of a grey
   smudge. It is generated at 128 px — a reflection resolves no more than that, and the six
-  faces cost about thirty milliseconds when entering the walk. Plan and 3D view keep their
-  lighting: the environment and the geometry buffer are only attached during the walk and
-  released on exit, and the previous environment is restored rather than cleared. With a
-  solar preview applied, the ambience follows the sun as elsewhere.
+  faces cost about thirty milliseconds when entering the walk. The geometry buffer is
+  attached during the walk and released on exit. Mode environment selection is described
+  below in Fixture ranges and exterior environment.
 - Walls are boxes with chamfered edges (`beveledBox.ts`, 4 mm): a sharp edge is the number-one
   marker of a computer-generated image, a chamfer catches the light. The wall/ceiling and
   wall/floor junctions carry one.
@@ -234,6 +233,29 @@ are explicit, while project loading and share-link adoption keep their existing 
   refusing the destination. The roof is visible during the walk: inside, the ceiling hides it;
   outside, it renders the whole house. Exterior walls keep their collisions, so you only leave
   through an open door.
+
+## Fixture ranges and exterior environment
+
+`scene/fixtureLights.ts` assigns fittings to world AABBs by sphere intersection. It runs
+at house/exterior construction, range changes (5.5 m overview, 7 m walk), furniture
+`setItems`, and a completed group drag position update. Materials retain their light
+limits. Door descendants use conservative swept bounds around both jambs, including
+handles and sectional travel; animated poses do not rebuild assignments. An empty
+intersection explicitly excludes receivers because Babylon treats an empty inclusion
+list as unrestricted. The eight-room test fixture has a clean floor-plane audit.
+
+`scene/exteriorAmbience.ts` generates a local half-float sky, sun lobe and ground bounce.
+`ViewEffects.updateEnvironment` explicitly selects sky in overview/exterior, no environment
+in Plan, and the existing interior bounce in walk. Sky intensity is 0.25 and overview
+hemispheric intensity is 0.45. Solar direction changes debounce regeneration by 150 ms;
+the previous texture is disposed after replacement. Scene disposal cancels pending work.
+No location is inferred. The walk environment and bloom calibration remain unchanged.
+
+The development bench offers ACES/PBR Neutral, PCF/PCSS (ratio 0.03), and experimental
+orbit SSAO (0.5 m radius, 100 m max depth, expensive blur). These are comparison controls;
+production retains ACES, medium PCF and no orbit SSAO. The orbit experiment is restricted
+to overview at activation and must be disabled before switching views; it is not the
+production effects lifecycle or an accepted adaptive-quality implementation.
 
 ## The visit in a headset
 

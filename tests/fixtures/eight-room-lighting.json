@@ -1,0 +1,421 @@
+{
+  "schemaVersion": 1,
+  "id": "eight-room-lighting",
+  "name": "Huit pi�ces fictives",
+  "description": "Studio de démonstration · modèle indépendant",
+  "units": "m",
+  "source": {
+    "title": "Exemple de projet paramétrique",
+    "status": "Démonstration",
+    "notes": [
+      "Ce studio fictif montre que le moteur accepte une autre géométrie sans modification du code.",
+      "Les projets sont importables et exportables au format JSON. Un PDF doit d’abord être transcrit dans ce format."
+    ]
+  },
+  "levels": [
+    {
+      "id": "studio-rdc",
+      "name": "Rez-de-chaussée",
+      "elevation": 0,
+      "ceilingHeight": 2.7,
+      "outline": [
+        [0, 0],
+        [64, 0],
+        [64, 6],
+        [0, 6]
+      ],
+      "spawn": {
+        "position": [4, 3],
+        "yaw": 0
+      },
+      "walls": [
+        {
+          "id": "n-0",
+          "start": [0, 0],
+          "end": [8, 0],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "s-0",
+          "start": [0, 6],
+          "end": [8, 6],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "n-1",
+          "start": [8, 0],
+          "end": [16, 0],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "s-1",
+          "start": [8, 6],
+          "end": [16, 6],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "n-2",
+          "start": [16, 0],
+          "end": [24, 0],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "s-2",
+          "start": [16, 6],
+          "end": [24, 6],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "n-3",
+          "start": [24, 0],
+          "end": [32, 0],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "s-3",
+          "start": [24, 6],
+          "end": [32, 6],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "n-4",
+          "start": [32, 0],
+          "end": [40, 0],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "s-4",
+          "start": [32, 6],
+          "end": [40, 6],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "n-5",
+          "start": [40, 0],
+          "end": [48, 0],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "s-5",
+          "start": [40, 6],
+          "end": [48, 6],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "n-6",
+          "start": [48, 0],
+          "end": [56, 0],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "s-6",
+          "start": [48, 6],
+          "end": [56, 6],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "n-7",
+          "start": [56, 0],
+          "end": [64, 0],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "s-7",
+          "start": [56, 6],
+          "end": [64, 6],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "partition-0",
+          "start": [0, 0],
+          "end": [0, 6],
+          "thickness": 0.3,
+          "exterior": true
+        },
+        {
+          "id": "partition-1",
+          "start": [8, 0],
+          "end": [8, 6],
+          "thickness": 0.3,
+          "exterior": false,
+          "openings": [
+            {
+              "id": "door-1",
+              "kind": "door",
+              "offset": 2.5,
+              "width": 1,
+              "height": 2.1
+            }
+          ]
+        },
+        {
+          "id": "partition-2",
+          "start": [16, 0],
+          "end": [16, 6],
+          "thickness": 0.3,
+          "exterior": false,
+          "openings": [
+            {
+              "id": "door-2",
+              "kind": "door",
+              "offset": 2.5,
+              "width": 1,
+              "height": 2.1
+            }
+          ]
+        },
+        {
+          "id": "partition-3",
+          "start": [24, 0],
+          "end": [24, 6],
+          "thickness": 0.3,
+          "exterior": false,
+          "openings": [
+            {
+              "id": "door-3",
+              "kind": "door",
+              "offset": 2.5,
+              "width": 1,
+              "height": 2.1
+            }
+          ]
+        },
+        {
+          "id": "partition-4",
+          "start": [32, 0],
+          "end": [32, 6],
+          "thickness": 0.3,
+          "exterior": false,
+          "openings": [
+            {
+              "id": "door-4",
+              "kind": "door",
+              "offset": 2.5,
+              "width": 1,
+              "height": 2.1
+            }
+          ]
+        },
+        {
+          "id": "partition-5",
+          "start": [40, 0],
+          "end": [40, 6],
+          "thickness": 0.3,
+          "exterior": false,
+          "openings": [
+            {
+              "id": "door-5",
+              "kind": "door",
+              "offset": 2.5,
+              "width": 1,
+              "height": 2.1
+            }
+          ]
+        },
+        {
+          "id": "partition-6",
+          "start": [48, 0],
+          "end": [48, 6],
+          "thickness": 0.3,
+          "exterior": false,
+          "openings": [
+            {
+              "id": "door-6",
+              "kind": "door",
+              "offset": 2.5,
+              "width": 1,
+              "height": 2.1
+            }
+          ]
+        },
+        {
+          "id": "partition-7",
+          "start": [56, 0],
+          "end": [56, 6],
+          "thickness": 0.3,
+          "exterior": false,
+          "openings": [
+            {
+              "id": "door-7",
+              "kind": "door",
+              "offset": 2.5,
+              "width": 1,
+              "height": 2.1
+            }
+          ]
+        },
+        {
+          "id": "partition-8",
+          "start": [64, 0],
+          "end": [64, 6],
+          "thickness": 0.3,
+          "exterior": true
+        }
+      ],
+      "rooms": [
+        {
+          "id": "room-0",
+          "name": "Pi�ce 1",
+          "kind": "living",
+          "polygon": [
+            [0.15, 0.15],
+            [7.85, 0.15],
+            [7.85, 5.85],
+            [0.15, 5.85]
+          ],
+          "label": [4, 3],
+          "viewpoint": [4, 3]
+        },
+        {
+          "id": "room-1",
+          "name": "Pi�ce 2",
+          "kind": "living",
+          "polygon": [
+            [8.15, 0.15],
+            [15.85, 0.15],
+            [15.85, 5.85],
+            [8.15, 5.85]
+          ],
+          "label": [12, 3],
+          "viewpoint": [12, 3]
+        },
+        {
+          "id": "room-2",
+          "name": "Pi�ce 3",
+          "kind": "living",
+          "polygon": [
+            [16.15, 0.15],
+            [23.85, 0.15],
+            [23.85, 5.85],
+            [16.15, 5.85]
+          ],
+          "label": [20, 3],
+          "viewpoint": [20, 3]
+        },
+        {
+          "id": "room-3",
+          "name": "Pi�ce 4",
+          "kind": "living",
+          "polygon": [
+            [24.15, 0.15],
+            [31.85, 0.15],
+            [31.85, 5.85],
+            [24.15, 5.85]
+          ],
+          "label": [28, 3],
+          "viewpoint": [28, 3]
+        },
+        {
+          "id": "room-4",
+          "name": "Pi�ce 5",
+          "kind": "living",
+          "polygon": [
+            [32.15, 0.15],
+            [39.85, 0.15],
+            [39.85, 5.85],
+            [32.15, 5.85]
+          ],
+          "label": [36, 3],
+          "viewpoint": [36, 3]
+        },
+        {
+          "id": "room-5",
+          "name": "Pi�ce 6",
+          "kind": "living",
+          "polygon": [
+            [40.15, 0.15],
+            [47.85, 0.15],
+            [47.85, 5.85],
+            [40.15, 5.85]
+          ],
+          "label": [44, 3],
+          "viewpoint": [44, 3]
+        },
+        {
+          "id": "room-6",
+          "name": "Pi�ce 7",
+          "kind": "living",
+          "polygon": [
+            [48.15, 0.15],
+            [55.85, 0.15],
+            [55.85, 5.85],
+            [48.15, 5.85]
+          ],
+          "label": [52, 3],
+          "viewpoint": [52, 3]
+        },
+        {
+          "id": "room-7",
+          "name": "Pi�ce 8",
+          "kind": "living",
+          "polygon": [
+            [56.15, 0.15],
+            [63.85, 0.15],
+            [63.85, 5.85],
+            [56.15, 5.85]
+          ],
+          "label": [60, 3],
+          "viewpoint": [60, 3]
+        }
+      ],
+      "lights": [
+        {
+          "id": "light-0",
+          "position": [4, 3],
+          "provisional": true
+        },
+        {
+          "id": "light-1",
+          "position": [12, 3],
+          "provisional": true
+        },
+        {
+          "id": "light-2",
+          "position": [20, 3],
+          "provisional": true
+        },
+        {
+          "id": "light-3",
+          "position": [28, 3],
+          "provisional": true
+        },
+        {
+          "id": "light-4",
+          "position": [36, 3],
+          "provisional": true
+        },
+        {
+          "id": "light-5",
+          "position": [44, 3],
+          "provisional": true
+        },
+        {
+          "id": "light-6",
+          "position": [52, 3],
+          "provisional": true
+        },
+        {
+          "id": "light-7",
+          "position": [60, 3],
+          "provisional": true
+        }
+      ]
+    }
+  ]
+}

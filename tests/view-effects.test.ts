@@ -100,7 +100,7 @@ function setup() {
   return { engine, scene, screen, headset, effects, state, environment, calls, resources };
 }
 
-test('walk effects preserve environment and intensity and restore them on each exit', () => {
+test('walk effects release their environment on exit and preserve a later owner', () => {
   const { engine, scene, effects, state, environment, calls } = setup();
   const original = new Texture(null, scene);
   scene.environmentTexture = original;
@@ -111,12 +111,12 @@ test('walk effects preserve environment and intensity and restore them on each e
     assert.equal(scene.environmentTexture, environment);
     assert.deepEqual(calls, ['environment', 'taa:screen', 'occlusion:screen', 'bloom:screen']);
     effects.updateWalk({ ...state, active: false });
-    assert.equal(scene.environmentTexture, original);
-    assert.equal(scene.environmentIntensity, 0.4);
+    assert.equal(scene.environmentTexture, null);
+    assert.equal(scene.environmentIntensity, 1);
     effects.updateWalk(state);
     effects.updateWalk({ ...state, active: false });
-    assert.equal(scene.environmentTexture, original);
-    assert.equal(scene.environmentIntensity, 0.4);
+    assert.equal(scene.environmentTexture, null);
+    assert.equal(scene.environmentIntensity, 1);
     assert.equal(calls.filter((call) => call === 'environment').length, 1);
     assert.deepEqual(effects.status(false), { environment: false, occlusion: 'idle' });
     effects.updateWalk(state);
@@ -215,6 +215,42 @@ test('unavailable environment and occlusion are remembered only for their scene'
     assert.equal(environments, 2);
     assert.equal(occlusions, 2);
   } finally {
+    engine.dispose();
+  }
+});
+
+test('mode environment selection reuses sky, removes it in Plan and disposes once', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  let builds = 0;
+  const sky = new Texture(null, scene);
+  const effects = new ViewEffects(
+    scene,
+    {
+      environment: () => undefined,
+      taa: () => undefined,
+      occlusion: () => undefined,
+      bloom: () => undefined,
+      orbitBloom: () => undefined,
+    },
+    () => {
+      builds++;
+      return sky;
+    },
+  );
+  try {
+    const direction = new Vector3(-1, -1, 0);
+    effects.updateEnvironment('overview', direction);
+    assert.equal(scene.environmentTexture, sky);
+    effects.updateEnvironment('plan', direction);
+    assert.equal(scene.environmentTexture, null);
+    effects.updateEnvironment('overview', direction);
+    assert.equal(scene.environmentTexture, sky);
+    assert.equal(builds, 1);
+    effects.dispose();
+    assert.equal(scene.environmentTexture, null);
+  } finally {
+    scene.dispose();
     engine.dispose();
   }
 });

@@ -170,12 +170,12 @@ export function toHalfFloat(value: number): number {
 }
 
 /** One face in linear light, as floats, ready for the irradiance integration. */
-function faceFloats(face: BounceFace): Float32Array {
+function faceFloats(face: BounceFace, radiance = interiorRadiance): Float32Array {
   const data = new Float32Array(FACE_SIZE * FACE_SIZE * 4);
   for (let y = 0; y < FACE_SIZE; y++) {
     for (let x = 0; x < FACE_SIZE; x++) {
       const [dx, dy, dz] = faceDirection(face, (x + 0.5) / FACE_SIZE, (y + 0.5) / FACE_SIZE);
-      const [r, g, b] = interiorRadiance(dx, dy, dz);
+      const [r, g, b] = radiance(dx, dy, dz);
       const offset = (y * FACE_SIZE + x) * 4;
       data[offset] = r;
       data[offset + 1] = g;
@@ -187,14 +187,14 @@ function faceFloats(face: BounceFace): Float32Array {
 }
 
 /** The six generated faces in linear light, named as Babylon's tooling expects them. */
-export function bounceFaces(): BounceFaces {
+export function bounceFaces(radiance = interiorRadiance): BounceFaces {
   return {
-    right: faceFloats('right'),
-    left: faceFloats('left'),
-    up: faceFloats('up'),
-    down: faceFloats('down'),
-    front: faceFloats('front'),
-    back: faceFloats('back'),
+    right: faceFloats('right', radiance),
+    left: faceFloats('left', radiance),
+    up: faceFloats('up', radiance),
+    down: faceFloats('down', radiance),
+    front: faceFloats('front', radiance),
+    back: faceFloats('back', radiance),
   };
 }
 
@@ -240,9 +240,12 @@ export function encodeHalfFloat(faces: BounceFaces): Record<BounceFace, Uint16Ar
  * self-contained. Returns undefined when the engine cannot create raw textures
  * (NullEngine in tests), leaving the previous lighting untouched.
  */
-export function createInteriorEnvironment(scene: Scene): RawCubeTexture | undefined {
+export function createInteriorEnvironment(
+  scene: Scene,
+  radiance = interiorRadiance,
+): RawCubeTexture | undefined {
   try {
-    const faces = bounceFaces();
+    const faces = bounceFaces(radiance);
     const half = encodeHalfFloat(faces);
     // Babylon uploads raw cube faces as +X, +Y, +Z, -X, -Y, -Z.
     const texture = new RawCubeTexture(

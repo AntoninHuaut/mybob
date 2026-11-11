@@ -1,3 +1,4 @@
+import { FixtureLights } from './fixtureLights';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
@@ -735,6 +736,7 @@ export function buildHouse(
     point.setEnabled(false);
     pointLights.push(point);
   }
+  new FixtureLights(scene, pointLights, doors).refresh();
   return { root, ceiling, fixtures, doors, pointLights, highlights };
 }
 
