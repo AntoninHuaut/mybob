@@ -78,7 +78,7 @@ test('a sliding window with a sill sits on its apron wall and slides sideways', 
   assert.ok(door, 'a silled sliding window is a door instance');
   const panel = scene.getMeshByName('sliding-panel:coulissante')!;
   const fixed = scene.getMeshByName('sliding-fixed:coulissante')!;
-  const apron = scene.getMeshByName('sill:coulissante')!;
+  const apron = scene.meshes.find((mesh) => mesh.name.startsWith('trim:wall:nord:'))!;
   assert.ok(panel && fixed && apron);
   const box = panel.getBoundingInfo().boundingBox;
   near(box.minimumWorld.y, 1.1 + 0.035, 0.03);
@@ -126,10 +126,8 @@ test('a glazed door swings open like a French window and keeps a glass pane', ()
     !scene.getMeshByName('door-leaf:porte-fenetre'),
     'a glazed door must not keep the solid slab under its glass',
   );
-  const opening = scene.getMeshByName('jamb:porte-fenetre:1')!;
   const paneBox = pane.getBoundingInfo().boundingBox;
-  const jambBox = opening.getBoundingInfo().boundingBox;
-  assert.ok(paneBox.maximumWorld.x < jambBox.maximumWorld.x);
+  assert.ok(paneBox.maximumWorld.x < 3.235);
   assert.deepEqual(pane.metadata, { kind: 'door', id: 'porte-fenetre' });
   const closed = door.pivot.rotation.y;
   near(closed, 0);
@@ -175,11 +173,10 @@ test('a two-leaf French window hangs on both jambs and swings mirrored', () => {
   );
   const boxA = paneA.getBoundingInfo().boundingBox;
   const boxB = paneB.getBoundingInfo().boundingBox;
-  const jambA = scene.getMeshByName('jamb:porte-fenetre-2:-1')!;
-  const jambB = scene.getMeshByName('jamb:porte-fenetre-2:1')!;
+
   // The leaves meet at the middle stile, each inside its half of the opening.
-  assert.ok(boxA.minimumWorld.x >= jambA.getBoundingInfo().boundingBox.maximumWorld.x);
-  assert.ok(boxB.maximumWorld.x <= jambB.getBoundingInfo().boundingBox.minimumWorld.x);
+  assert.ok(boxA.minimumWorld.x >= 2.035);
+  assert.ok(boxB.maximumWorld.x <= 3.165);
   near((boxA.maximumWorld.x + boxB.minimumWorld.x) / 2, 2 + 1.2 / 2, 0.05);
   door.progress = 1;
   poseDoor(door);

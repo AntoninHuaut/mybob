@@ -2,6 +2,10 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
+import { Window } from 'happy-dom';
+import { FurnitureLayer } from '../src/furniture/layer';
+import { createFurniture } from '../src/furniture/model';
+import { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
@@ -98,7 +102,7 @@ test('automatic display lowers only near exterior walls and preserves shared flo
   assert.ok(Math.abs(north.material!.clipPlane!.d + 3.65) < 1e-8);
   assert.ok(north.material!.clipPlane!.dotCoordinate(new Vector3(0, 3.6, 0)) < 0);
   assert.ok(north.material!.clipPlane!.dotCoordinate(new Vector3(0, 3.7, 0)) > 0);
-  const jamb = scene.getMeshByName('jamb:bay:1')!;
+  const jamb = scene.meshes.find((mesh) => mesh.name.startsWith('trim:wall:north:'))!;
   assert.notEqual(jamb.material, material, 'joinery follows the cut');
   assert.ok(
     jamb.material!.clipPlane!.d > north.material!.clipPlane!.d,
@@ -414,6 +418,85 @@ test('a short return of a recessed entrance lowers with the facade it extends', 
   assert.ok(!inside.has('sud-ouest') && !inside.has('fond'));
   assert.ok(!inside.has('retour-g'), 'a return never drops alone');
   cutaway.dispose();
+  scene.dispose();
+  engine.dispose();
+});
+
+test('settle frames skip cutaway application and movement applies it on that frame', (t) => {
+  const { engine, scene, viewer, cutaway } = fixture();
+  const scheduler = { cameraMoved: false };
+  Object.assign(viewer, {
+    engine,
+    renderScheduler: scheduler,
+    house: { doors: [] },
+    paused: true,
+    walk: new UniversalCamera('walk', new Vector3(1, 4.45, 1), scene),
+    furnitureRevision: 0,
+  });
+  const apply = t.mock.method(cutaway, 'apply');
+  const draw = () => (viewer as unknown as { beforeFrame(): void }).beforeFrame();
+  draw();
+  draw();
+  assert.equal(apply.mock.callCount(), 0);
+  scheduler.cameraMoved = true;
+  draw();
+  assert.equal(apply.mock.callCount(), 1);
+  scheduler.cameraMoved = false;
+  draw();
+  assert.equal(apply.mock.callCount(), 1);
+  scene.dispose();
+  engine.dispose();
+});
+
+test('walk aim reuses still hits and furniture changes refresh aim and shadow casters', (t) => {
+  const { engine, scene, viewer } = fixture();
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: new Window().document,
+  });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, 'document', previous);
+    else Reflect.deleteProperty(globalThis, 'document');
+  });
+  const scheduler = { cameraMoved: true };
+  const map = { renderList: [] as import('@babylonjs/core/Meshes/abstractMesh').AbstractMesh[] };
+  let invalidations = 0;
+  Object.assign(viewer, {
+    engine,
+    renderScheduler: scheduler,
+    house: { doors: [] },
+    paused: true,
+    currentMode: 'walk',
+    canvas: {},
+    keyState: new Set(),
+    planUpDegrees: () => 0,
+    walk: new UniversalCamera('walk', new Vector3(1, 4.45, 1), scene),
+    sun: { getShadowGenerator: () => ({ getShadowMap: () => map }) },
+    shadowRefresh: { invalidate: () => invalidations++, step() {} },
+  });
+  const pick = t.mock.method(scene, 'pickWithRay', () => null);
+  const draw = () => (viewer as unknown as { beforeFrame(): void }).beforeFrame();
+  draw();
+  assert.equal(pick.mock.callCount(), 1);
+  scheduler.cameraMoved = false;
+  draw();
+  draw();
+  assert.equal(pick.mock.callCount(), 1);
+  const layer = new FurnitureLayer(scene, level);
+  layer.setItems([createFurniture({ kind: 'table', position: [1, 1] })]);
+  draw();
+  assert.equal(pick.mock.callCount(), 2);
+  assert.ok(invalidations >= 2);
+  assert.equal(map.renderList.length, 2);
+  assert.ok(map.renderList.every((mesh) => mesh.metadata.kind === 'furniture'));
+  layer.setItems([]);
+  draw();
+  assert.equal(map.renderList.length, 0);
+  scheduler.cameraMoved = true;
+  draw();
+  assert.equal(pick.mock.callCount(), 4);
+  layer.dispose();
   scene.dispose();
   engine.dispose();
 });

@@ -704,5 +704,6 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     );
   }
   roofMeshes.forEach((mesh) => mesh.setEnabled(false));
+  for (const mesh of meshes) mesh.freezeWorldMatrix();
   return result;
 }

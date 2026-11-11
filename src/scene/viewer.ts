@@ -44,6 +44,7 @@ import { builtOutline, exteriorOverview, fitOverview, fitPlan, siteOverviewLevel
 import { panOrbitWithKeys } from './orbitNavigation';
 import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
 import { ShadowRefresh } from './shadowRefresh';
+import { furnitureRevision } from '../furniture/layer';
 import { RenderScheduler, WAKE_EVENTS } from './renderScheduler';
 import { AdaptiveResolution } from './adaptiveResolution';
 import {
@@ -94,6 +95,7 @@ export function preloadImmersive() {
   return import('./xrWalk');
 }
 export interface FrameInfo {
+  cameraMoved?: boolean;
   position: Point2;
   headingDegrees: number;
   planUpDegrees: number;
@@ -191,6 +193,9 @@ export class HouseViewer {
   private wallCutaway?: WallCutaway;
   private cutawaySelection = '';
   private shadowRefresh?: ShadowRefresh;
+  private furnitureRevision = -1;
+  private walkRayDirty = true;
+  private walkHit?: PickingInfo | null;
   private readonly renderScheduler = new RenderScheduler();
   private readonly adaptiveResolution = new AdaptiveResolution(
     Math.min(window.devicePixelRatio || 1, 1.6),
@@ -1230,6 +1235,7 @@ export class HouseViewer {
 
   /** Asks for images until the scene is still again; the loop skips them otherwise. */
   requestRender() {
+    this.walkRayDirty = true;
     // Optional: scene tests build a viewer from its prototype, without the constructor.
     this.renderScheduler?.request();
   }
@@ -1333,16 +1339,34 @@ export class HouseViewer {
 
   private beforeFrame() {
     if (this.capturing) return;
-    this.updateCutaway();
+    const revision = furnitureRevision(this.scene);
+    if (revision !== this.furnitureRevision) {
+      this.furnitureRevision = revision;
+      this.walkRayDirty = true;
+      const map = this.sun?.getShadowGenerator()?.getShadowMap();
+      if (map?.renderList) {
+        map.renderList = map.renderList.filter(
+          (mesh) => mesh.metadata?.kind !== 'furniture' && !mesh.isDisposed(),
+        );
+        map.renderList.push(
+          ...this.scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture'),
+        );
+      }
+      this.shadowRefresh?.invalidate();
+    }
+    const cameraMoved = this.renderScheduler.cameraMoved;
+    if (cameraMoved && this.mode === 'overview' && !this.exteriorView) this.updateCutaway();
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.045);
     // Match the collision displacement to frame time, including the garage step.
     this.scene.gravity.y = -15 * dt;
+    let doorsMoved = false;
     for (const door of this.house.doors) {
       if (Math.abs(door.progress - door.target) > 0.001) {
         door.progress +=
           Math.sign(door.target - door.progress) *
           Math.min(Math.abs(door.target - door.progress), dt * 2.5);
         poseDoor(door);
+        doorsMoved = true;
         this.shadowRefresh?.invalidate();
       }
     }
@@ -1351,6 +1375,7 @@ export class HouseViewer {
       this.immersive.step(dt);
       const position = this.immersive.position;
       this.onFrame?.({
+        cameraMoved,
         position,
         headingDegrees: planHeading(this.immersive.camera),
         planUpDegrees: this.planUpDegrees(),
@@ -1397,8 +1422,13 @@ export class HouseViewer {
       prepareWalkStep(this.walk, this.level, movement, this.site);
       this.walk.cameraDirection.addInPlace(movement);
       const room = this.level.rooms.find((r) => pointInPolygon([p.x, p.z], r.polygon));
-      const hit = this.scene.pickWithRay(this.walk.getForwardRay(3));
+      if (cameraMoved || doorsMoved || this.walkRayDirty) {
+        this.walkHit = this.scene.pickWithRay(this.walk.getForwardRay(3));
+        this.walkRayDirty = false;
+      }
+      const hit = this.walkHit;
       this.onFrame?.({
+        cameraMoved,
         position: [p.x, p.z],
         headingDegrees: planHeading(this.walk),
         planUpDegrees: this.planUpDegrees(),
@@ -1433,6 +1463,7 @@ export class HouseViewer {
         );
       }
       this.onFrame?.({
+        cameraMoved,
         position: [this.walk.position.x, this.walk.position.z],
         headingDegrees: planHeading(this.walk),
         planUpDegrees: this.planUpDegrees(),

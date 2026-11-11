@@ -47,6 +47,20 @@ const frame: FrameInfo = {
 };
 const preferences = { showLabels: true, showDimensions: true, northAngleDeg: 10 };
 
+test('still frames skip projection and camera movement restores it immediately', () => {
+  const { projection, view, heights } = setup();
+  const still = { ...frame, cameraMoved: false };
+  projection.update(view, still, preferences);
+  const count = heights.length;
+  projection.update(view, still, preferences);
+  assert.equal(heights.length, count);
+  projection.update(view, { ...frame, cameraMoved: true }, preferences);
+  assert.ok(heights.length > count);
+  const movedCount = heights.length;
+  projection.update(view, still, { ...preferences, selectedRoomId: 'small' });
+  assert.ok(heights.length > movedCount);
+});
+
 function setup() {
   const window = new Window();
   window.document.body.innerHTML = `<div id="viewport">
@@ -119,4 +133,16 @@ test('measurement projection uses the lowered floor, and the walk HUD respects d
   Object.assign(view, { mode: 'plan' });
   projection.update(view, frame, preferences);
   assert.equal(el('#map-marker').getAttribute('visibility'), 'hidden');
+});
+
+test('keyboard selection changes invalidate still-frame label obstacles', () => {
+  const { projection, view, heights, window } = setup();
+  const still = { ...frame, cameraMoved: false };
+  projection.update(view, still, preferences);
+  const count = heights.length;
+  projection.update(view, still, preferences);
+  assert.equal(heights.length, count);
+  window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
+  projection.update(view, still, preferences);
+  assert.ok(heights.length > count);
 });

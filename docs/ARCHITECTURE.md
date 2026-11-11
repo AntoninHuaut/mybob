@@ -59,6 +59,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onSelectRoom`, `onDe
 | Project storage         | `src/projectStorage.ts`                                                      | Reading imported projects, quarantine, 10-project limit                                                             |
 | Furniture — model       | `src/furniture/model.ts`                                                     | Types, identifiers, storage key, history                                                                            |
 | Furniture — rendering   | `src/furniture/layer.ts`                                                     | Meshes, selection, dragging, layers, plan clipping                                                                  |
+| Furniture contact       | `src/furniture/contactShadow.ts`                                             | Procedural alpha tile and non-pickable floor footprints                                                             |
 | Furniture — view policy | `src/furniture/viewState.ts`                                                 | Real camera mode and independent permission for scene interaction                                                   |
 | Furniture — placement   | `src/furniture/placement.ts`                                                 | Building constraints, free-spot search                                                                              |
 | Furniture — groups      | `src/furniture/groups.ts`                                                    | Linking, transforms, constrained dragging                                                                           |
@@ -367,8 +368,16 @@ last call, and read back at start-up.
   tier is never lifted either. A PC that holds the frame rate never leaves 100 % nor tier 0.
   `mybob.diag()` shows the scale and the tier (`effets palier n/3`). The tier is not stored
   between sessions.
+- Static house and exterior meshes freeze their world matrices after construction. Moving
+  door leaves and every descendant of a moving pivot stay unfrozen. House shell and trim
+  merge separately per wall, material, picking and collision policy; trim keeps a name outside
+  the `wall:<id>:` shell prefix. Merged shadow casters replace their disposed source entries.
+- Room/dimension projection skips still frames unless preferences, level, measurements or
+  page interactions invalidate it. Walk prompts still update each frame; their ray reuses its
+  hit until the camera, a door or furniture changes. Plan furniture labels cache camera and
+  overlay identity. Direct mode/cutaway changes still apply immediately.
 - The sun shadow map is only redrawn when its casters change (`shadowRefresh.ts`): mode,
-  cutaway, roof, sun, animated door. A new moving shadow caster calls `invalidate()`.
+  cutaway, roof, sun, animated door and furniture changes. A new moving shadow caster calls `invalidate()`.
 - The public build only contains the demonstration: `vite.config.ts` and
   `scripts/check-public-build.mjs` carry the allowlist.
 - No personal data in the repository: private plans are git-ignored

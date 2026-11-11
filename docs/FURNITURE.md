@@ -85,3 +85,36 @@ Modifier opens a modal window with Annuler and Enregistrer. Closing, Annuler or 
 The selection bar is now compact and docked at the bottom of the view; it no longer follows the piece and does not hide its movement. Navigation is a separate panel, next to the view tools, for camera settings.
 
 During the walk, aiming at a piece less than three metres away then pressing F opens its popup. Walls and doors stop the aim; E keeps control of doors. The walk is paused and the mouse released during editing. After closing, Reprendre la visite or a simple click in the view recaptures the mouse; a request refused during the cool-down window that follows Escape (Chromium) is retried automatically once, and only a second failure shows the message.
+
+## Rendering resources
+
+Furniture bodies merge into one triangle mesh per used finish, preserving their root,
+identifier, picking and collision shape. Materials are created only when used, shared by
+role and colour, reference counted, and released with the final owning visual. Moving or
+elevating an unchanged piece reuses its meshes; dimension/shape/colour edits rebuild it.
+Ghosts use the same finish cache and remain non-pickable.
+
+The 3D finishes use PBR: finish roughness 0.6, fabric 0.95 with fine plaster relief,
+wood feet 0.55, linen 0.9 and metallic handles 0.35. Plan uses a lazily shared StandardMaterial
+counterpart with the previous diffuse/specular palette. Counterparts are released on return
+to 3D. Box parts have a 4 mm chamfer, reduced to one fifth of the thinnest dimension for
+small parts; L-shaped upholstery keeps its closed continuous polygonal solids.
+
+One non-pickable contact mesh per piece follows its occupied convex footprints, including
+L-shaped voids. It shares a generated alpha tile, sits 2 mm above its room's finished floor,
+and follows translation/rotation without following the piece's optional vertical elevation.
+Plan disables it. Body meshes also enter the sun's caster list; furniture revisions invalidate
+the cached shadow pass and walk aim after setItems and live placement.
+
+Measured repository benchmarks, each with one default piece of every kind:
+
+| Fixture         | House meshes before / after | Furnished meshes before / after | Materials before / after | Vertices before / after |
+| --------------- | --------------------------- | ------------------------------- | ------------------------ | ----------------------- |
+| Large benchmark | 266 / 124                   | 438 / 238                       | 113 / 24                 | 14,565 / 23,425         |
+| studio-demo     | 70 / 38                     | 192 / 102                       | 107 / 18                 | 5,746 / 14,606          |
+
+Furniture bodies alone fall from 122 meshes/98 materials to 45 meshes/8 materials; contact
+footprints add 19 meshes and one material. Real chamfer strips and corner triangles add
+8,784 vertices; contact quads add 76. This deliberate appearance cost has an explicitly
+reviewed vertex budget with the same 10% headroom. Mesh/material ceilings are lowered to
+the final counts plus 10%. NullEngine resource counts do not measure GPU frame time.
