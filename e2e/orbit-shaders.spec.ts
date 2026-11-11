@@ -2,6 +2,8 @@ import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 
 test('repeated automatic cutaways reuse shader programs while orbiting', async ({ page }) => {
+  // Six software-rendered orbit sweeps sit at 55-90 s on CI against the 90 s default.
+  test.slow();
   await page.addInitScript(() => {
     const trackLinks = (prototype: typeof WebGLRenderingContext.prototype) => {
       const link = prototype.linkProgram;
