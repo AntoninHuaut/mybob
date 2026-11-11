@@ -1,5 +1,10 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+import { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
+import { Ray } from '@babylonjs/core/Culling/ray';
+import { PickingInfo } from '@babylonjs/core/Collisions/pickingInfo';
+import { PointerInfo, PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
@@ -189,6 +194,107 @@ test('swept assignment includes a mid-swing-only lamp for leaf and handle under 
       assert.ok(!mesh.lightSources.includes(outside), 'out-of-sweep lamp is excluded');
     }
   } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+test('merged PBR furniture refreshes exact fitting intersections on rebuild, live movement and final room drop', () => {
+  const project: HouseProject = JSON.parse(
+    readFileSync(new URL('./fixtures/eight-room-lighting.json', import.meta.url), 'utf8'),
+  );
+  const engine = new NullEngine(),
+    scene = new Scene(engine);
+  scene.useRightHandedSystem = true;
+  const layer = new FurnitureLayer(scene, project.levels[0]);
+  try {
+    const material = new StandardMaterial('test', scene);
+    const materials = Object.fromEntries(
+      ['plaster', 'wood', 'concrete', 'frame', 'glass', 'metal', 'slab', 'glow', 'selection'].map(
+        (key) => [key, material],
+      ),
+    ) as unknown as Materials;
+    const house = buildHouse(project.levels[0], scene, materials);
+    house.pointLights.forEach((light) => light.setEnabled(true));
+    const bodies = () => scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture');
+    const assertIntersections = () => {
+      assert.equal(bodies().length, 2, 'table has one merged mesh per finish');
+      for (const mesh of bodies()) {
+        assert.ok(mesh.material instanceof PBRMaterial);
+        mesh.computeWorldMatrix(true);
+        const box = mesh.getBoundingInfo().boundingBox;
+        const expected = house.pointLights.filter((light) => {
+          const point = light.getAbsolutePosition();
+          const closest = Vector3.Clamp(point, box.minimumWorld, box.maximumWorld);
+          return Vector3.DistanceSquared(point, closest) <= light.range ** 2;
+        });
+        assert.deepEqual(
+          mesh.lightSources.map((light) => light.id),
+          expected.map((light) => light.id),
+          mesh.name,
+        );
+      }
+    };
+    const item = createFurniture({ id: 'range-table', kind: 'table', position: [4, 3] });
+    layer.setItems([item]);
+    assertIntersections();
+    const first = [...bodies()];
+    item.width += 0.1;
+    layer.setItems([item]);
+    assertIntersections();
+    assert.ok(first.every((mesh) => mesh.isDisposed()));
+    assert.ok(
+      house.pointLights.every(
+        (light) => !light.includedOnlyMeshes.some((mesh) => first.includes(mesh)),
+      ),
+    );
+    scene.activeCamera = new UniversalCamera('test', new Vector3(0, 10, 0), scene);
+    let x = 4,
+      z = 3;
+    let dropped = false;
+    layer.onDroppedInRoom = () => {
+      dropped = true;
+    };
+    scene.createPickingRay = () => new Ray(new Vector3(x, 10, z), new Vector3(0, -1, 0));
+    const pick = new PickingInfo();
+    pick.hit = true;
+    pick.pickedMesh = bodies()[0];
+    const emit = (type: number) =>
+      scene.onPointerObservable.notifyObservers(
+        new PointerInfo(type, { button: 0 } as PointerEvent, pick),
+      );
+    emit(PointerEventTypes.POINTERDOWN);
+    x = 6.3;
+    emit(PointerEventTypes.POINTERMOVE);
+    assertIntersections();
+    assert.ok(bodies().some((mesh) => mesh.lightSources.includes(house.pointLights[1])));
+    house.pointLights[1].range = 0.25;
+    refreshFixtureLights(scene);
+    assertIntersections();
+    assert.ok(bodies().every((mesh) => !mesh.lightSources.includes(house.pointLights[1])));
+    // The room-move tests cover finding this valid landing. Exercise release
+    // independently, without an onChange handler rebuilding the layer afterwards.
+    Object.assign(layer, {
+      drag: {
+        id: item.id,
+        offset: [0, 0],
+        start: [4, 3],
+        moved: true,
+        floor: 0,
+        drop: {
+          room: project.levels[0].rooms[7],
+          target: [60, 3],
+          items: [{ ...item, position: [60, 3] }],
+        },
+      },
+    });
+    emit(PointerEventTypes.POINTERUP);
+    assert.equal(dropped, true);
+    assertIntersections();
+    assert.ok(bodies().every((mesh) => mesh.lightSources.includes(house.pointLights[7])));
+    assert.ok(bodies().every((mesh) => !mesh.lightSources.includes(house.pointLights[0])));
+  } finally {
+    layer.dispose();
     scene.dispose();
     engine.dispose();
   }

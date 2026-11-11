@@ -4,7 +4,12 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import earcut from 'earcut';
+import { RawTexture } from '@babylonjs/core/Materials/Textures/rawTexture';
+import { surfaceMapData } from '../scene/surfaceTextures';
+import { contactMaterial, contactShadow } from './contactShadow';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+import { beveledBox } from '../scene/beveledBox';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
@@ -30,6 +35,15 @@ import { dropFurnitureInRoom } from './roomMove';
 import { layoutLabels, type LabelRect } from '../ui/labelLayout';
 import type { FurnitureViewState } from './viewState';
 
+const revisions = new WeakMap<Scene, number>();
+const overlayRevisions = new WeakMap<Scene, number>();
+export const furnitureRevision = (scene: Scene): number => revisions.get(scene) ?? 0;
+export const furnitureObstaclesRevision = (scene: Scene): number =>
+  furnitureRevision(scene) + (overlayRevisions.get(scene) ?? 0);
+const overlaysChanged = (scene: Scene) =>
+  overlayRevisions.set(scene, (overlayRevisions.get(scene) ?? 0) + 1);
+const changed = (scene: Scene) => revisions.set(scene, furnitureRevision(scene) + 1);
+
 export interface FurnitureOverlays {
   distances: boolean;
   clearances: boolean;
@@ -38,7 +52,9 @@ export interface FurnitureOverlays {
 interface Visual {
   root: TransformNode;
   signature: string;
-  materials: StandardMaterial[];
+  contact?: Mesh;
+  finishes: Map<Mesh, PBRMaterial>;
+  materials: PBRMaterial[];
 }
 interface Drag {
   id: string;
@@ -68,6 +84,10 @@ export class FurnitureLayer {
   snapPlacement?: (item: FurnitureItem, items: FurnitureItem[]) => SnapResult;
   private items: FurnitureItem[] = [];
   private visuals = new Map<string, Visual>();
+  private planMaterials = new Map<PBRMaterial, StandardMaterial>();
+  private contactMaterial?: StandardMaterial;
+  private contactOwners = 0;
+  private materialCache = new Map<string, { material: PBRMaterial; owners: number }>();
   private ghosts = new Map<string, Visual>();
   private selected?: string;
   private mode: 'overview' | 'plan' | 'walk' = 'overview';
@@ -79,6 +99,8 @@ export class FurnitureLayer {
   private circulationMaterials: StandardMaterial[] = [];
   private overlayMaterials: StandardMaterial[] = [];
   private observer: Observer<PointerInfo>;
+  private labelSignature = '';
+  private labelRoot?: TransformNode;
   private labelObserver: Observer<Scene>;
   private drag?: Drag;
   private dragBlockReported = false;
@@ -100,6 +122,7 @@ export class FurnitureLayer {
   }
 
   setItems(items: FurnitureItem[]): void {
+    changed(this.scene);
     this.items = structuredClone(items);
     const ids = new Set(items.map((item) => item.id));
     for (const [id, visual] of this.visuals) {
@@ -128,16 +151,13 @@ export class FurnitureLayer {
         visual = this.build(item, signature);
         this.visuals.set(item.id, visual);
       }
-      for (const material of visual.materials)
-        material.clipPlane =
-          this.mode === 'plan' || this.scene.activeCamera?.mode === Camera.ORTHOGRAPHIC_CAMERA
-            ? new Plane(0, 1, 0, -10000)
-            : null;
+      this.applyViewMaterials(visual);
       visual.root.position.set(
         item.position[0],
         floorElevationAt(this.level, item.position) + (item.elevation ?? 0),
         item.position[1],
       );
+      if (visual.contact) visual.contact.position.y = 0.002 - (item.elevation ?? 0);
       visual.root.rotation.y = item.rotation;
       visual.root.computeWorldMatrix(true);
     }
@@ -161,12 +181,14 @@ export class FurnitureLayer {
     this.finishDrag(false);
     this.mode = mode;
     this.interactive = interactive && mode !== 'walk';
-    for (const visual of this.visuals.values())
-      for (const material of visual.materials)
-        material.clipPlane =
-          mode === 'plan' || this.scene.activeCamera?.mode === Camera.ORTHOGRAPHIC_CAMERA
-            ? new Plane(0, 1, 0, -10000)
-            : null;
+    for (const visual of this.visuals.values()) {
+      visual.contact?.setEnabled(mode !== 'plan');
+      this.applyViewMaterials(visual);
+    }
+    if (mode !== 'plan' && this.scene.activeCamera?.mode !== Camera.ORTHOGRAPHIC_CAMERA) {
+      for (const material of this.planMaterials.values()) material.dispose();
+      this.planMaterials.clear();
+    }
     this.drawOverlays();
     this.drawCirculation();
   }
@@ -297,6 +319,17 @@ export class FurnitureLayer {
     const width = engine.getRenderingCanvas()?.clientWidth || renderWidth;
     const height = engine.getRenderingCanvas()?.clientHeight || renderHeight;
     if (width <= 0 || height <= 0) return;
+    const signature = [
+      width,
+      height,
+      camera.orthoTop,
+      camera.orthoBottom,
+      ...camera.getViewMatrix().m,
+    ].join(',');
+    if (signature === this.labelSignature && this.labelRoot === this.overlayRoot) return;
+    overlaysChanged(this.scene);
+    this.labelSignature = signature;
+    this.labelRoot = this.overlayRoot;
     const span = Math.abs((camera.orthoTop ?? 1) - (camera.orthoBottom ?? -1));
     const meshes = this.overlayRoot
       .getChildMeshes()
@@ -350,22 +383,63 @@ export class FurnitureLayer {
   private build(item: FurnitureItem, signature: string): Visual {
     const root = new TransformNode(`furniture:${item.id}`, this.scene);
     root.metadata = { kind: 'furniture', id: item.id };
-    const materials: StandardMaterial[] = [];
+    const materials: PBRMaterial[] = [];
     const material = (name: string, color: Color3) => {
-      const mat = new StandardMaterial(`furniture:${item.id}:${name}`, this.scene);
-      mat.diffuseColor = color;
-      mat.specularColor = new Color3(0.08, 0.08, 0.08);
+      const key = JSON.stringify([name, color.r, color.g, color.b]);
+      const cached = this.materialCache.get(key);
+      if (cached) {
+        if (materials.includes(cached.material)) return cached.material;
+        cached.owners++;
+        materials.push(cached.material);
+        return cached.material;
+      }
+      const mat = new PBRMaterial(`furniture:${item.id}:${name}`, this.scene);
+      mat.albedoColor = color;
+      if (name === 'fabric' || name === 'feet') {
+        const maps = surfaceMapData();
+        const map = name === 'fabric' ? maps.plasterNormal : maps.woodNormal;
+        const texture = RawTexture.CreateRGBATexture(
+          map.data,
+          map.size,
+          map.size,
+          this.scene,
+          true,
+        );
+        texture.uScale = texture.vScale = name === 'fabric' ? 12 : 1;
+        mat.bumpTexture = texture;
+      }
+      mat.metallic = name === 'handles' ? 0.9 : 0;
+      mat.roughness =
+        (
+          { finish: 0.6, fabric: 0.95, feet: 0.55, linen: 0.9, handles: 0.35 } as Record<
+            string,
+            number
+          >
+        )[name] ?? 0.35;
       materials.push(mat);
+      this.materialCache.set(key, { material: mat, owners: 1 });
       return mat;
     };
-    const main = material(
-      'finish',
-      Color3.FromHexString(/^#[\da-f]{6}$/i.test(item.color) ? item.color : '#c4b39f'),
+    const baseColor = Color3.FromHexString(
+      /^#[\da-f]{6}$/i.test(item.color) ? item.color : '#c4b39f',
     );
-    const soft = material('fabric', main.diffuseColor.scale(1.13));
-    const wood = material('feet', new Color3(0.37, 0.28, 0.21));
-    const pale = material('linen', new Color3(0.91, 0.9, 0.85));
-    const metal = material('handles', new Color3(0.25, 0.27, 0.28));
+    const roles = {
+      get main() {
+        return material('finish', baseColor);
+      },
+      get soft() {
+        return material('fabric', baseColor.scale(1.13));
+      },
+      get wood() {
+        return material('feet', new Color3(0.37, 0.28, 0.21));
+      },
+      get pale() {
+        return material('linen', new Color3(0.91, 0.9, 0.85));
+      },
+      get metal() {
+        return material('handles', new Color3(0.25, 0.27, 0.28));
+      },
+    };
     const w = item.width,
       d = item.depth,
       h = item.height;
@@ -377,16 +451,15 @@ export class FurnitureLayer {
       x: number,
       y: number,
       z: number,
-      mat = main,
+      mat = roles.main,
       parent: TransformNode = root,
     ) => {
-      const mesh = MeshBuilder.CreateBox(
+      const mesh = beveledBox(
         `furniture:${item.id}:part:${part++}`,
-        {
-          width: Math.max(0.005, width),
-          height: Math.max(0.005, height),
-          depth: Math.max(0.005, depth),
-        },
+        Math.max(0.005, width),
+        Math.max(0.005, height),
+        Math.max(0.005, depth),
+        Math.min(0.004, width / 5, height / 5, depth / 5),
         this.scene,
       );
       mesh.parent = parent;
@@ -407,7 +480,7 @@ export class FurnitureLayer {
             x * (w / 2 - thickness),
             top / 2,
             z * (d / 2 - thickness),
-            wood,
+            roles.wood,
           );
     };
     if (item.kind === 'sofa' && item.sofa) {
@@ -421,7 +494,15 @@ export class FurnitureLayer {
         const t = Math.min(width, depth, h) * 0.08;
         for (const sx of [-1, 1])
           for (const sz of [-1, 1])
-            box(t, h * 0.12, t, x + sx * (width / 2 - t), h * 0.06, z + sz * (depth / 2 - t), wood);
+            box(
+              t,
+              h * 0.12,
+              t,
+              x + sx * (width / 2 - t),
+              h * 0.06,
+              z + sz * (depth / 2 - t),
+              roles.wood,
+            );
       };
       regionalLegs(w, seatDepth, 0, rowZ);
       regionalLegs(returnWidth, returnDepth, returnX, returnZ);
@@ -441,7 +522,7 @@ export class FurnitureLayer {
         polygon: Point2[],
         bottom: number,
         thickness: number,
-        mat: StandardMaterial,
+        mat: PBRMaterial,
       ) => {
         const positions: number[] = [],
           indices: number[] = [],
@@ -493,6 +574,17 @@ export class FurnitureLayer {
         data.positions = positions;
         data.indices = indices;
         data.normals = normals;
+        data.uvs = positions.flatMap((_, i) => {
+          if (i % 3 !== 0) return [];
+          const x = positions[i],
+            y = positions[i + 1],
+            z = positions[i + 2];
+          return Math.abs(normals[i]) > 0.5
+            ? [z, y]
+            : Math.abs(normals[i + 1]) > 0.5
+              ? [x, z]
+              : [x, y];
+        });
         const mesh = new Mesh(`furniture:${item.id}:${name}`, this.scene);
         data.applyToMesh(mesh);
         mesh.parent = root;
@@ -501,13 +593,13 @@ export class FurnitureLayer {
         mesh.receiveShadows = true;
         mesh.metadata = { kind: 'furniture', id: item.id };
       };
-      upholstery('continuous-base', outline(0), h * 0.12, h * 0.28, main);
+      upholstery('continuous-base', outline(0), h * 0.12, h * 0.28, roles.main);
       upholstery(
         'continuous-seat',
         outline(Math.min(0.015, seatDepth * 0.02, returnWidth * 0.02, returnDepth * 0.02)),
         h * 0.4,
         h * 0.16,
-        soft,
+        roles.soft,
       );
       box(w, h * 0.6, seatDepth * 0.18, 0, h * 0.7, -d / 2 + seatDepth * 0.09);
       const arm = Math.min(w * 0.08, returnWidth * 0.15);
@@ -534,7 +626,7 @@ export class FurnitureLayer {
     } else if (item.kind === 'sofa') {
       legs(h * 0.12);
       box(w, h * 0.28, d, 0, h * 0.26, 0);
-      box(w * 0.84, h * 0.16, d * 0.77, 0, h * 0.48, d * 0.06, soft);
+      box(w * 0.84, h * 0.16, d * 0.77, 0, h * 0.48, d * 0.06, roles.soft);
       box(w, h * 0.6, d * 0.18, 0, h * 0.7, -d * 0.41);
       for (const side of [-1, 1])
         box(w * 0.08, h * 0.37, d * 0.83, side * w * 0.46, h * 0.585, d * 0.085);
@@ -543,11 +635,11 @@ export class FurnitureLayer {
     } else if (item.kind === 'bed') {
       legs(h * 0.12);
       box(w, h * 0.28, d, 0, h * 0.26, 0);
-      box(w * 0.96, h * 0.27, d * 0.95, 0, h * 0.535, 0, pale);
+      box(w * 0.96, h * 0.27, d * 0.95, 0, h * 0.535, 0, roles.pale);
       box(w, h, d * 0.05, 0, h / 2, -d * 0.475);
-      box(w * 0.94, h * 0.035, d * 0.58, 0, h * 0.6875, d * 0.17, soft);
+      box(w * 0.94, h * 0.035, d * 0.58, 0, h * 0.6875, d * 0.17, roles.soft);
       for (const side of [-1, 1])
-        box(w * 0.38, h * 0.12, d * 0.17, side * w * 0.23, h * 0.73, -d * 0.3, pale);
+        box(w * 0.38, h * 0.12, d * 0.17, side * w * 0.23, h * 0.73, -d * 0.3, roles.pale);
     } else if (
       item.kind === 'table' ||
       item.kind === 'desk' ||
@@ -565,7 +657,7 @@ export class FurnitureLayer {
     } else if (item.kind === 'ottoman') {
       legs(h * 0.12);
       box(w, h * 0.63, d, 0, h * 0.435, 0);
-      box(w, h * 0.25, d, 0, h * 0.875, 0, soft);
+      box(w, h * 0.25, d, 0, h * 0.875, 0, roles.soft);
     } else if (item.kind === 'bookcase') {
       const panel = Math.min(w, d, h) * 0.06;
       box(w, h, panel, 0, h / 2, -d / 2 + panel / 2);
@@ -581,13 +673,13 @@ export class FurnitureLayer {
         box(panel, h * 0.88, d, x, h * 0.56, 0);
       for (const sx of [-1, 1]) {
         box(w * 0.32, h * 0.8, panel, (sx * w) / 3, h * 0.56, d / 2 - panel / 2);
-        box(w * 0.08, panel, panel, (sx * w) / 3, h * 0.7, d / 2 - panel / 2, metal);
+        box(w * 0.08, panel, panel, (sx * w) / 3, h * 0.7, d / 2 - panel / 2, roles.metal);
       }
       box(w / 3, panel, d, 0, h * 0.56, 0);
     } else if (item.kind === 'tv') {
       const frame = material('screen-frame', new Color3(0.055, 0.06, 0.065));
       const screen = material('screen', new Color3(0.1, 0.14, 0.18));
-      screen.specularColor = new Color3(0.25, 0.28, 0.3);
+      screen.reflectivityColor = new Color3(0.25, 0.28, 0.3);
       if (item.tvDiagonalInches !== undefined) {
         const display = televisionDimensions(item.tvDiagonalInches);
         // The quoted diagonal describes the visible 16:9 screen, excluding frame and feet.
@@ -632,7 +724,7 @@ export class FurnitureLayer {
           side * w * 0.055,
           h * 0.56,
           d * 0.485,
-          metal,
+          roles.metal,
         );
       }
     } else if (item.kind === 'dressing') {
@@ -664,40 +756,40 @@ export class FurnitureLayer {
           x: number,
           y: number,
           z: number,
-          mat = main,
+          mat = roles.main,
         ) => box(width, height, thickness, x, y, z, mat, run);
         part(length, h, panel, 0, h / 2, -depth / 2 + panel / 2);
         for (const sx of [-1, 1]) part(panel, h, depth, sx * (length / 2 - panel / 2), h / 2, 0);
         part(length, panel, depth, 0, h - panel / 2, 0);
         part(length, panel, depth, 0, panel / 2, 0);
-        part(length * 0.94, 0.025, 0.025, 0, h * 0.88, 0, metal);
+        part(length * 0.94, 0.025, 0.025, 0, h * 0.88, 0, roles.metal);
         part(length * 0.94, panel, depth * 0.9, 0, h * 0.55, 0);
       }
     } else if (item.kind === 'toilet') {
       box(w * 0.5, h * 0.3, d * 0.35, 0, h * 0.15, -d * 0.1);
       box(w, h * 0.22, d * 0.6, 0, h * 0.41, d * 0.1);
-      box(w * 0.98, h * 0.05, d * 0.55, 0, h * 0.545, d * 0.12, pale);
+      box(w * 0.98, h * 0.05, d * 0.55, 0, h * 0.545, d * 0.12, roles.pale);
       box(w, h * 0.42, d * 0.24, 0, h * 0.72, -d * 0.36);
-      box(w * 0.2, h * 0.02, d * 0.06, 0, h * 0.94, -d * 0.36, metal);
+      box(w * 0.2, h * 0.02, d * 0.06, 0, h * 0.94, -d * 0.36, roles.metal);
     } else if (item.kind === 'shower') {
       const tray = item.showerTray ?? 0.06;
       const glass = material('glass', new Color3(0.72, 0.84, 0.88));
       glass.alpha = 0.32;
       glass.backFaceCulling = false;
-      if (tray > 0) box(w, tray, d, 0, tray / 2, 0, pale);
-      box(w * 0.12, 0.004, w * 0.12, 0, tray + 0.002, 0, metal);
+      if (tray > 0) box(w, tray, d, 0, tray / 2, 0, roles.pale);
+      box(w * 0.12, 0.004, w * 0.12, 0, tray + 0.002, 0, roles.metal);
       const panelHeight = h - tray;
       const panelY = tray + panelHeight / 2;
       for (const rect of showerPanelRects(item))
         box(rect.sizeX, panelHeight, rect.sizeZ, rect.x, panelY, rect.z, glass);
-      box(0.04, h * 0.5, 0.04, 0, h * 0.65, -d / 2 + 0.05, metal);
-      box(w * 0.22, 0.03, w * 0.22, 0, h * 0.92, -d / 2 + 0.15, metal);
+      box(0.04, h * 0.5, 0.04, 0, h * 0.65, -d / 2 + 0.05, roles.metal);
+      box(w * 0.22, 0.03, w * 0.22, 0, h * 0.92, -d / 2 + 0.15, roles.metal);
     } else if (item.kind === 'bathtub') {
-      box(w * 0.9, h * 0.12, d * 0.8, 0, h * 0.06, 0, pale);
+      box(w * 0.9, h * 0.12, d * 0.8, 0, h * 0.06, 0, roles.pale);
       box(w, h, d * 0.1, 0, h / 2, -d * 0.45);
       box(w, h, d * 0.1, 0, h / 2, d * 0.45);
       for (const sx of [-1, 1]) box(w * 0.05, h, d * 0.8, sx * w * 0.475, h / 2, 0);
-      box(0.04, h * 0.18, 0.04, 0, h * 0.91, -d * 0.42, metal);
+      box(0.04, h * 0.18, 0.04, 0, h * 0.91, -d * 0.42, roles.metal);
     } else if (item.kind === 'vanity') {
       box(w, h * 0.82, d * 0.95, 0, h * 0.41, -d * 0.025);
       for (const side of [-1, 1]) {
@@ -709,13 +801,42 @@ export class FurnitureLayer {
           side * w * 0.06,
           h * 0.5,
           d * 0.475,
-          metal,
+          roles.metal,
         );
       }
-      box(w * 0.72, h * 0.1, d * 0.66, 0, h * 0.87, d * 0.02, pale);
-      box(0.035, h * 0.12, 0.035, 0, h * 0.93, -d * 0.18, metal);
+      box(w * 0.72, h * 0.1, d * 0.66, 0, h * 0.87, d * 0.02, roles.pale);
+      box(0.035, h * 0.12, 0.035, 0, h * 0.93, -d * 0.18, roles.metal);
     } else box(w, h, d, 0, h / 2, 0);
-    return { root, signature, materials };
+    // Bake child transforms (including dressing runs) while the piece root is
+    // still identity, then retain one collidable triangle mesh per finish.
+    const parts = root.getChildMeshes() as Mesh[];
+    const used = materials.filter((mat) => parts.some((mesh) => mesh.material === mat));
+    for (const mat of materials) if (!used.includes(mat)) this.releaseMaterial(mat);
+    for (const mat of used) {
+      const group = parts.filter((mesh) => mesh.material === mat);
+      if (group.length < 2) continue;
+      const name = group.find((mesh) => mesh.name.includes(':continuous-'))?.name ?? group[0].name;
+      const merged = Mesh.MergeMeshes(group, true, true);
+      if (!merged) throw new Error('Furniture part merge failed');
+      merged.parent = root;
+      merged.name = name;
+      merged.metadata = { kind: 'furniture', id: item.id };
+      merged.checkCollisions = true;
+      merged.receiveShadows = true;
+    }
+    let contact: Mesh | undefined;
+    if (signature !== 'ghost') {
+      this.contactMaterial ??= contactMaterial(this.scene);
+      contact = contactShadow(item, root, this.contactMaterial);
+      contact.setEnabled(this.mode !== 'plan');
+      this.contactOwners++;
+    }
+    const finishes = new Map(
+      (root.getChildMeshes() as Mesh[])
+        .filter((mesh) => mesh.metadata?.kind === 'furniture')
+        .map((mesh) => [mesh, mesh.material as PBRMaterial]),
+    );
+    return { root, signature, materials: used, contact, finishes };
   }
 
   private pointer(event: PointerInfo): void {
@@ -837,6 +958,7 @@ export class FurnitureLayer {
   }
 
   private placeVisual(visual: Visual, item: FurnitureItem) {
+    changed(this.scene);
     visual.root.position.set(
       item.position[0],
       floorElevationAt(this.level, item.position) + (item.elevation ?? 0),
@@ -935,6 +1057,7 @@ export class FurnitureLayer {
         const visual = this.visuals.get(member.id);
         if (visual) this.placeVisual(visual, member);
       }
+      refreshFixtureLights(this.scene);
       this.drawOverlays();
       moved = true;
     }
@@ -944,6 +1067,7 @@ export class FurnitureLayer {
   }
 
   private drawOverlays(): void {
+    overlaysChanged(this.scene);
     this.clearOverlays();
     const item = this.items.find((candidate) => candidate.id === this.selected);
     if (!item || !this.interactive) return;
@@ -1104,7 +1228,49 @@ export class FurnitureLayer {
 
   private destroyVisual(visual: Visual): void {
     visual.root.dispose();
-    for (const material of visual.materials) material.dispose();
+    if (visual.contact && --this.contactOwners === 0) {
+      this.contactMaterial?.dispose(false, true);
+      this.contactMaterial = undefined;
+    }
+    for (const material of visual.materials) this.releaseMaterial(material);
+  }
+
+  /** Plan keeps its neutral, pre-PBR palette; 3D uses the physical finish. */
+  private applyViewMaterials(visual: Visual): void {
+    const plan =
+      this.mode === 'plan' || this.scene.activeCamera?.mode === Camera.ORTHOGRAPHIC_CAMERA;
+    for (const [mesh, finish] of visual.finishes) {
+      let material: PBRMaterial | StandardMaterial = finish;
+      if (plan) {
+        let flat = this.planMaterials.get(finish);
+        if (!flat) {
+          flat = new StandardMaterial(`${finish.name}:plan`, this.scene);
+          flat.diffuseColor = finish.albedoColor.clone();
+          flat.specularColor = finish.name.endsWith(':screen')
+            ? new Color3(0.25, 0.28, 0.3)
+            : new Color3(0.08, 0.08, 0.08);
+          flat.alpha = finish.alpha;
+          flat.backFaceCulling = finish.backFaceCulling;
+          this.planMaterials.set(finish, flat);
+        }
+        material = flat;
+      }
+      material.clipPlane = plan ? new Plane(0, 1, 0, -10000) : null;
+      mesh.material = material;
+    }
+  }
+
+  private releaseMaterial(material: PBRMaterial): void {
+    for (const [key, entry] of this.materialCache) {
+      if (entry.material !== material) continue;
+      if (--entry.owners === 0) {
+        this.planMaterials.get(material)?.dispose();
+        this.planMaterials.delete(material);
+        material.dispose(false, true);
+        this.materialCache.delete(key);
+      }
+      return;
+    }
   }
 
   dispose(): void {

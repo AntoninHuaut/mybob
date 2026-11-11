@@ -1,5 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
@@ -7,7 +10,11 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Ray } from '@babylonjs/core/Culling/ray';
 import { PointerEventTypes, PointerInfo } from '@babylonjs/core/Events/pointerEvents';
 import { PickingInfo } from '@babylonjs/core/Collisions/pickingInfo';
-import { FurnitureLayer } from '../src/furniture/layer';
+import {
+  FurnitureLayer,
+  furnitureRevision,
+  furnitureObstaclesRevision,
+} from '../src/furniture/layer';
 import { furnitureViewState } from '../src/furniture/viewState';
 import type { FurnitureItem } from '../src/furniture/model';
 import type { Level } from '../src/model/types';
@@ -71,6 +78,23 @@ function setup() {
     },
   };
 }
+
+test('parts merge by material and shared materials survive until their last owner is removed', () => {
+  const { scene, layer, cleanup } = setup();
+  const a = item('table'),
+    b = { ...item('table'), id: 'second', position: [7, 7] as [number, number] };
+  layer.setItems([a, b]);
+  const parts = scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture');
+  assert.equal(parts.length, 4);
+  assert.equal(scene.materials.length, 3);
+  const shared = parts[0].material!;
+  layer.setItems([b]);
+  assert.ok(scene.materials.includes(shared));
+  assert.equal(scene.meshes.length, 3);
+  layer.setItems([]);
+  assert.equal(scene.materials.length, 0);
+  cleanup();
+});
 
 test('all parametric furniture stays inside its real dimensions and follows finished floor', () => {
   const { scene, layer, cleanup } = setup();
@@ -179,9 +203,20 @@ test('drag emits live positions and exactly one final commit, respecting lock an
   layer.onChange = (items, final) => changes.push({ position: items[0].position, final });
   layer.onDragState = (state) => states.push(state);
   emit(PointerEventTypes.POINTERDOWN);
+  const geometryBeforeMove = furnitureRevision(scene);
+  const obstaclesBeforeMove = furnitureObstaclesRevision(scene);
   x = 3;
   z = 4;
   emit(PointerEventTypes.POINTERMOVE);
+  assert.ok(furnitureRevision(scene) > geometryBeforeMove);
+  assert.ok(furnitureObstaclesRevision(scene) > obstaclesBeforeMove);
+  const afterMove = furnitureObstaclesRevision(scene);
+  scene.onBeforeRenderObservable.notifyObservers(scene);
+  assert.equal(
+    furnitureObstaclesRevision(scene),
+    afterMove,
+    'an idle overview frame does not invalidate label obstacles',
+  );
   x = 4;
   emit(PointerEventTypes.POINTERMOVE);
   emit(PointerEventTypes.POINTERUP);
@@ -338,4 +373,94 @@ test('editing restrictions block pointer actions while preserving the actual vie
       }
     }
   }
+});
+
+test('contact darkening follows the finished floor and disappears in Plan', () => {
+  const { scene, layer, cleanup } = setup();
+  const furniture = { ...item(), elevation: 0.6 };
+  layer.setItems([furniture]);
+  const contact = scene.getMeshByName('furniture-contact:f')!;
+  assert.ok(contact);
+  assert.equal(contact.parent?.name, 'furniture:f');
+  assert.equal(contact.isPickable, false);
+  assert.equal(contact.checkCollisions, false);
+  contact.computeWorldMatrix(true);
+  assert.ok(Math.abs(contact.getAbsolutePosition().y - 1.882) < 1e-6);
+  layer.setView({ mode: 'plan', interactive: true });
+  assert.equal(contact.isEnabled(), false);
+  layer.setView({ mode: 'walk', interactive: false });
+  assert.equal(contact.isEnabled(), true);
+  layer.setItems([{ ...furniture, position: [7, 7], rotation: Math.PI / 3 }]);
+  assert.equal(scene.getMeshByName('furniture-contact:f'), contact);
+  contact.computeWorldMatrix(true);
+  assert.ok(Math.abs(contact.getAbsolutePosition().y - 2.002) < 1e-6);
+  assert.equal(contact.getAbsolutePosition().x, 7);
+  cleanup();
+});
+
+test('furniture has PBR finishes and nondegenerate chamfer triangles inside exact bounds', () => {
+  const { scene, layer, cleanup } = setup();
+  layer.setItems([item('custom')]);
+  const mesh = scene.meshes.find((mesh) => mesh.metadata?.kind === 'furniture')!;
+  assert.ok(mesh.material instanceof PBRMaterial);
+  assert.equal(mesh.material.roughness, 0.6);
+  const normals = mesh.getVerticesData('normal')!;
+  assert.ok(normals.some((n) => Math.abs(n) > 0.1 && Math.abs(n) < 0.9));
+  const positions = mesh.getVerticesData('position')!,
+    indices = mesh.getIndices()!;
+  assert.equal(mesh.getTotalVertices(), 96);
+  for (let i = 0; i < indices.length; i += 3) {
+    const points = Array.from(indices.slice(i, i + 3)).map((index) =>
+      Vector3.FromArray(positions, index * 3),
+    );
+    const cross = Vector3.Cross(points[1].subtract(points[0]), points[2].subtract(points[0]));
+    assert.ok(cross.lengthSquared() > 1e-15);
+  }
+  cleanup();
+});
+
+test('bright fabric colours retain distinct exact channels and independent ownership', () => {
+  const { scene, layer, cleanup } = setup();
+  const a = { ...item(), id: 'bright-a', color: '#fefefe' };
+  const b = { ...item(), id: 'bright-b', color: '#ffffff' };
+  layer.setItems([a, b]);
+  const fabric = (id: string) =>
+    scene.meshes.find(
+      (mesh) => mesh.metadata?.id === id && mesh.material?.name.endsWith(':fabric'),
+    )!.material as PBRMaterial;
+  const first = fabric(a.id),
+    second = fabric(b.id);
+  assert.notEqual(first, second);
+  assert.deepEqual(
+    first.albedoColor.asArray(),
+    Color3.FromHexString(a.color).scale(1.13).asArray(),
+  );
+  assert.deepEqual(
+    second.albedoColor.asArray(),
+    Color3.FromHexString(b.color).scale(1.13).asArray(),
+  );
+  layer.setItems([b]);
+  assert.equal(fabric(b.id), second);
+  assert.ok(scene.materials.includes(second));
+  assert.deepEqual(
+    second.albedoColor.asArray(),
+    Color3.FromHexString(b.color).scale(1.13).asArray(),
+  );
+  cleanup();
+});
+
+test('Plan glass preserves two-sided rendering, alpha and exact diffuse channels', () => {
+  const { scene, layer, cleanup } = setup();
+  layer.setItems([item('shower')]);
+  const glass = scene.meshes.find((mesh) => mesh.material?.name.endsWith(':glass'))!;
+  const physical = glass.material as PBRMaterial;
+  layer.setView({ mode: 'plan', interactive: true });
+  assert.ok(glass.material instanceof StandardMaterial);
+  assert.equal(glass.material.backFaceCulling, false);
+  assert.equal(glass.material.alpha, physical.alpha);
+  assert.notEqual(glass.material.diffuseColor, physical.albedoColor);
+  assert.deepEqual(glass.material.diffuseColor.asArray(), physical.albedoColor.asArray());
+  layer.setView({ mode: 'overview', interactive: true });
+  assert.equal(glass.material, physical);
+  cleanup();
 });

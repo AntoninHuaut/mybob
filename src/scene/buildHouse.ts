@@ -736,6 +736,49 @@ export function buildHouse(
     point.setEnabled(false);
     pointLights.push(point);
   }
+  // Never bake a moving leaf or its handles into its wall.
+  const movingNodes = new Set(doors.flatMap((door) => [door.pivot, door.pivotB, ...door.leaves]));
+  const isMoving = (mesh: Mesh) => {
+    let node: typeof mesh.parent = mesh;
+    while (node && !movingNodes.has(node as TransformNode)) node = node.parent;
+    return !!node;
+  };
+  for (const wall of root
+    .getChildTransformNodes(true)
+    .filter((node) => node.name.startsWith('wall:'))) {
+    const groups = new Map<string, Mesh[]>();
+    for (const mesh of wall.getChildMeshes() as Mesh[]) {
+      const shell = mesh.name.startsWith(`${wall.name}:`);
+      if (isMoving(mesh) || (!shell && !/^(skirting|jamb|lintel|sill|mullion):/.test(mesh.name)))
+        continue;
+      const key = `${shell}:${mesh.material?.uniqueId}:${mesh.checkCollisions}:${mesh.isPickable}`;
+      const group = groups.get(key) ?? [];
+      group.push(mesh);
+      groups.set(key, group);
+    }
+    for (const group of groups.values()) {
+      if (group.length < 2) continue;
+      const first = group[0],
+        name = first.name.startsWith(`${wall.name}:`)
+          ? first.name
+          : `trim:${wall.name}:${first.material?.uniqueId}`;
+      const collision = first.checkCollisions,
+        pickable = first.isPickable;
+      const casters = shadow?.getShadowMap()?.renderList;
+      const casts = casters?.some((mesh) => group.includes(mesh as Mesh));
+      if (casters) for (const mesh of group) shadow?.removeShadowCaster(mesh);
+      const merged = Mesh.MergeMeshes(group, true, true)!;
+      merged.name = name;
+      merged.setParent(wall);
+      merged.checkCollisions = collision;
+      merged.isPickable = pickable;
+      merged.receiveShadows = true;
+      if (casts) shadow?.addShadowCaster(merged);
+    }
+  }
+  for (const mesh of root.getChildMeshes() as Mesh[]) {
+    if (!isMoving(mesh)) mesh.freezeWorldMatrix();
+  }
   new FixtureLights(scene, pointLights, doors).refresh();
   return { root, ceiling, fixtures, doors, pointLights, highlights };
 }
