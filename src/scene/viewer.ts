@@ -393,8 +393,9 @@ export class HouseViewer {
       above?.floorVoids ?? [],
     );
     // The exterior is the building's, not the displayed level's: the façades
-    // are those of the lowest level, and the roof covers the rest. Building from
-    // the attic only showed the roof, and put the lawn at its altitude.
+    // are those of the lowest level, the roof covers the rest, and the upper
+    // levels' openings are cut through it. Building from the attic only showed
+    // the roof, and put the lawn at its altitude.
     const ground = project.levels.reduce((low, candidate) =>
       candidate.elevation < low.elevation ? candidate : low,
     );
