@@ -16,6 +16,7 @@ import { solarPosition } from './scene/solar';
 import { HouseViewer, isImmersiveSupported, preloadImmersive, type ViewMode } from './scene/viewer';
 import { createEngine } from './scene/engine';
 import { collectDiagnostics, installDiagnostics } from './scene/diagnostics';
+import { shaderLog } from './scene/shaderLog';
 import { FrameRateMeter } from './ui/frameRate';
 import type { HouseProject, Room } from './model/types';
 import { validateProject } from './model/validate';
@@ -2155,18 +2156,27 @@ async function start() {
     if (import.meta.env.DEV) {
       void import('./ui/fxLab').then(({ mountFxLab }) => mountFxLab(viewer));
     }
-    installDiagnostics(() =>
-      collectDiagnostics(viewer.engine, viewer.scene, {
-        mode: viewer.mode,
-        exterior: viewer.exteriorView,
-        environment: viewer.ambience.environment,
-        occlusion: viewer.ambience.occlusion,
-        idle: viewer.renderingIdle,
-        renderScale: viewer.currentRenderScale,
-        effectTier: viewer.currentEffectTier,
-      }),
+    installDiagnostics(
+      () =>
+        collectDiagnostics(viewer.engine, viewer.scene, {
+          mode: viewer.mode,
+          exterior: viewer.exteriorView,
+          environment: viewer.ambience.environment,
+          occlusion: viewer.ambience.occlusion,
+          idle: viewer.renderingIdle,
+          renderScale: viewer.currentRenderScale,
+          effectTier: viewer.currentEffectTier,
+        }),
+      () => shaderLog.report(),
     );
     wireEvents();
+    // The first view links its shaders behind the loading overlay; the other views
+    // do the same, with a shorter message, the first time they are opened.
+    await viewer.whenReady();
+    viewer.onPreparing = (active) => {
+      el('#loading span').textContent = 'Préparation de la vue…';
+      el('#loading').hidden = !active;
+    };
     el('#loading').hidden = true;
     onboarding = readOnboarding();
     showStartCard();

@@ -43,6 +43,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onSelectRoom`, `onDe
 | Wall cutaway            | `src/scene/wallCutaway.ts`                                                   | `auto` / `full` / `low`, clipping planes per material                                                               |
 | Shadow map              | `src/scene/shadowRefresh.ts`                                                 | Sun map redrawn only when a shadow changes                                                                          |
 | Idle rendering          | `src/scene/renderScheduler.ts`                                               | Frame drawn only when the scene changes                                                                             |
+| Shader warm-up          | `src/scene/shaderWarmup.ts`, `shaderLog.ts`                                  | Links a view's shaders behind an overlay on first use; `mybob.shaders()` log of every link                          |
 | Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | Resolution steps while moving, driven by frame time                                                                 |
 | Openings in plan        | `src/scene/planOpenings.ts`                                                  | Windows and doors drawn in Plan view, cut faces                                                                     |
 | Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion, bloom (walk, 3D view and Exterior)                                                       |
@@ -411,6 +412,16 @@ last call, and read back at start-up.
   invalidate shadows or lighting. Walk prompts still update each frame; their ray reuses its
   hit until the camera, a door or furniture changes. Plan furniture labels cache camera and
   overlay identity. Direct mode/cutaway changes still apply immediately.
+- A view's shaders are linked behind an overlay, the first time the view is drawn
+  (`shaderWarmup.ts`, `viewer.prepareView`). Babylon links a material the first time it is drawn
+  with a given set of defines, and a view change alters them (sky, lights, prepass, temporal
+  pass); on ANGLE/D3D11 each program blocks the frame ~90 ms, so an unprepared first switch froze
+  the page for seconds. The render loop spots a view not yet in `ViewWarmth`, skips drawing,
+  tells the host (`onPreparing`: `#loading`) and draws until the engine reports every effect ready and the sun shadow map has settled, three frames in a row (receivers relink once their shadow is ready), for at most 20 s. Software renderers (SwiftShader, llvmpipe, WARP) skip it: they link slowly and
+  front-loading would only multiply their work, so CI e2e keeps the on-demand behaviour.
+  The start-up is the same path with the landing view, so nothing else needs to call it. A new
+  scene (project or level change) releases the cached effects and makes every view cold again.
+  `mybob.shaders()` lists every link with its duration and the preparation marks.
 - The sun shadow map is only redrawn when its casters change (`shadowRefresh.ts`): mode,
   cutaway, roof, sun, animated door and furniture changes. A new moving shadow caster calls `invalidate()`.
 - The public build only contains the demonstration: `vite.config.ts` and
