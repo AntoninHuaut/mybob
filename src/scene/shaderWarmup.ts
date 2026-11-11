@@ -11,7 +11,19 @@ export const WARM_UP_MIN_FRAMES = 4;
 export const WARM_UP_MAX_FRAMES = 24;
 export const READY_IN_A_ROW = 3;
 
-export const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
+/**
+ * Paces the warm-up like the normal loop: one image per browser frame. Chained timers
+ * left the page almost no chance to render or answer an event for as long as the
+ * links lasted (seconds on a software renderer); the timer only covers a hidden tab.
+ */
+export const nextFrame = () =>
+  new Promise<void>((resolve) => {
+    const fallback = setTimeout(resolve, 100);
+    requestAnimationFrame(() => {
+      clearTimeout(fallback);
+      resolve();
+    });
+  });
 
 /** Resolves after the browser painted, or soon anyway in a tab that does not paint. */
 export const nextPaint = () =>
@@ -41,7 +53,7 @@ export interface WarmTarget {
  */
 export async function warmFrames(
   target: WarmTarget,
-  yieldToBrowser: () => Promise<void> = nextTask,
+  yieldToBrowser: () => Promise<void> = nextFrame,
 ): Promise<number> {
   let ready = 0;
   let frames = 0;
