@@ -43,10 +43,12 @@ the engine's internal instance nor modifying `localStorage` directly. Assertions
 text match the French interface.
 
 `e2e/screen-lines.spec.ts` uses only the bundled studio. It probes exported Plan dimension
-coverage at DPR 1 and 2 and repeated settled overview exports after Plan round trips.
-Downloaded PNG data is decoded in memory, and only numeric summaries reach text logs;
-there are no image or trace attachments. These CI-only probes do not replace visual
-acceptance of thin window geometry or a measured motion-performance comparison.
+coverage at DPR 1 and 2 and repeated settled overview exports after Plan round trips. The
+overview scenario waits for the 32-image settle window, so its idle poll budgets for software
+frame times far slower than a GPU. Downloaded PNG data is decoded in memory, and only numeric
+summaries reach text logs; there are no image or trace attachments. These CI-only probes do
+not replace visual acceptance of thin window geometry or a measured motion-performance
+comparison.
 
 Configuration: `playwright.config.ts`.
 

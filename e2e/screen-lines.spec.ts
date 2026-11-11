@@ -1,5 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 
+/**
+ * The render loop draws 32 images after the last change before reporting an idle
+ * scene (`RENDER_SETTLE_FRAMES`). Software WebGL in CI runs around three images per
+ * second, so the default expect timeout cannot cover a settle window.
+ */
+const SETTLE_TIMEOUT_MS = 40_000;
+
 async function exportedPixels(page: Page, dimensions: boolean) {
   await page.locator('#export-image').click();
   await page.locator('#image-labels').uncheck();
@@ -85,8 +92,10 @@ test('overview temporal export is stable after settling and Plan round trips', a
   }
   await page.getByTitle('Recentrer la vue', { exact: true }).click();
   await expect
-    .poll(() =>
-      page.evaluate(() => (window as unknown as { mybob: { report(): string } }).mybob.report()),
+    .poll(
+      () =>
+        page.evaluate(() => (window as unknown as { mybob: { report(): string } }).mybob.report()),
+      { timeout: SETTLE_TIMEOUT_MS },
     )
     .toContain('au repos');
   const first = await exportedPixels(page, false),
