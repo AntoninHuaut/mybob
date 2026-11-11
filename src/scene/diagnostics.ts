@@ -1,3 +1,4 @@
+import { EFFECT_TIERS } from './adaptiveResolution';
 /**
  * A one-command performance report, meant to be read over the phone: the owner
  * asks for `mybob.diag()` and gets the engine, the GPU, the cadence and the
@@ -119,7 +120,7 @@ export function diagnosticLines(snapshot: DiagnosticSnapshot): string[] {
       ? '  cadence     au repos, image figée · bougez la vue pendant la mesure'
       : `  cadence     ${Math.round(snapshot.frameRate)} fps · ${decimal(snapshot.frameTimeMs)} ms par image`,
     `  vue         ${mode} · occlusion ${OCCLUSION_LABELS[view.occlusion]} · environnement ${view.environment ? 'actif' : 'inactif'}`,
-    `  rendu       ${snapshot.renderWidth} × ${snapshot.renderHeight} px · facteur ${decimal(snapshot.scaling)} · dpr ${decimal(snapshot.pixelRatio)} · échelle ${Math.round((view.renderScale ?? 1) * 100)} % · effets palier ${view.effectTier ?? 0}/3`,
+    `  rendu       ${snapshot.renderWidth} × ${snapshot.renderHeight} px · facteur ${decimal(snapshot.scaling)} · dpr ${decimal(snapshot.pixelRatio)} · échelle ${Math.round((view.renderScale ?? 1) * 100)} % · effets palier ${view.effectTier ?? 0}/${EFFECT_TIERS}`,
     `  scène       ${snapshot.meshes} maillages, ${snapshot.activeMeshes} actifs, ${snapshot.materials} matériaux, ${snapshot.lights} lumières`,
     `  machine     ${deviceLine(snapshot)}`,
     `  navigateur  ${snapshot.userAgent}`,
