@@ -43,6 +43,7 @@ export class ViewEffects {
   private occlusion?: Occlusion;
   private bloom?: Bloom;
   private orbitBloom?: Bloom;
+  private orbitAttached = false;
   private camera?: Camera;
   private disposed = false;
 
@@ -97,8 +98,17 @@ export class ViewEffects {
 
   updateOrbit(active: boolean, camera: Camera): void {
     if (this.disposed) return;
-    if (active) this.orbitBloom ??= this.create.orbitBloom(this.scene, camera);
-    if (this.orbitBloom) this.orbitBloom.bloomEnabled = active;
+    if (active && !this.orbitBloom) {
+      this.orbitBloom = this.create.orbitBloom(this.scene, camera);
+      this.orbitAttached = Boolean(this.orbitBloom);
+    }
+    if (!this.orbitBloom || active === this.orbitAttached) return;
+    // Detaching keeps post-processes and their targets alive. Changing bloomEnabled
+    // instead rebuilds the whole DefaultRenderingPipeline on every mode switch.
+    const manager = this.scene.postProcessRenderPipelineManager;
+    if (active) manager.attachCamerasToRenderPipeline('orbit-bloom', camera, true);
+    else manager.detachCamerasFromRenderPipeline('orbit-bloom', camera);
+    this.orbitAttached = active;
   }
 
   /** Returns whether a pipeline was removed and a new frame is needed. */

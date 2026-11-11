@@ -7,6 +7,47 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import type { Camera } from '@babylonjs/core/Cameras/camera';
 import { ViewEffects } from '../src/scene/viewEffects';
+import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
+import { createOrbitBloom } from '../src/scene/interiorAmbience';
+
+test('ten Plan round trips keep the orbit post-processes without rebuilding bloom', (t) => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const camera = new UniversalCamera('orbit', Vector3.Zero(), scene);
+  const build = t.mock.method(
+    DefaultRenderingPipeline.prototype as unknown as { _buildPipeline(): void },
+    '_buildPipeline',
+  );
+  const effects = new ViewEffects(scene, {
+    environment: () => undefined,
+    taa: () => undefined,
+    occlusion: () => undefined,
+    bloom: () => undefined,
+    orbitBloom: createOrbitBloom,
+  });
+  try {
+    effects.updateOrbit(true, camera);
+    const processes = camera._postProcesses.filter(Boolean);
+    const builds = build.mock.callCount();
+    assert.ok(processes.length > 0);
+    for (let i = 0; i < 10; i++) {
+      effects.updateOrbit(false, camera);
+      effects.updateOrbit(false, camera);
+      assert.equal(camera._postProcesses.filter(Boolean).length, 0, 'Plan has no bloom passes');
+      effects.updateOrbit(true, camera);
+      effects.updateOrbit(true, camera);
+      assert.deepEqual(camera._postProcesses.filter(Boolean), processes);
+    }
+    assert.equal(build.mock.callCount(), builds, 'no rebuild after initial configuration');
+    assert.ok(
+      processes.every((process) => process?.getEffect()),
+      'shaders remain owned',
+    );
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
 
 function setup() {
   const engine = new NullEngine();
@@ -110,7 +151,7 @@ test('camera switches dispose the old chain before rebuilding in order, with no 
     assert.deepEqual(calls.slice(-3), ['taa:screen', 'occlusion:screen', 'bloom:screen']);
     effects.updateOrbit(true, state.camera);
     effects.updateOrbit(false, state.camera);
-    assert.equal(resources.at(-1)!.bloomEnabled, false);
+    assert.equal(resources.at(-1)!.bloomEnabled, true, 'detaching does not rebuild bloom');
     effects.dispose();
     effects.dispose();
     assert.ok(resources.every((resource) => resource.disposals === 1));

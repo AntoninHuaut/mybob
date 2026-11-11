@@ -154,6 +154,13 @@ are explicit, while project loading and share-link adoption keep their existing 
 
 ## Walk and rendering
 
+- The orbit bloom pipeline stays allocated for the scene. Plan detaches its camera
+  without changing `bloomEnabled`; overview reattaches the same post-processes and
+  render targets. Changing that property would rebuild the pipeline on every switch.
+- The stable Babylon vendor chunk excludes WebXR modules: those live in `babylon-xr`,
+  reached through the lazy `xrWalk` entry. A public-build guard rejects WebXR in the
+  static import graph of an entry. Walk effects still load with the main engine.
+
 - Walking speed is 2.8 m/s by default, adjustable from 1 to 5 m/s; Shift multiplies it by 1.7.
   Look sensitivity ranges from 50 to 200 %. Both settings are local
   (`maison-atelier:navigation:v1`) and apply to every project.

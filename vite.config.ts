@@ -21,6 +21,8 @@ export default defineConfig(({ mode }) => {
           // invalidate the 2 MB of engine every visitor already cached.
           manualChunks(id) {
             if (!id.includes('/node_modules/@babylonjs/core/')) return undefined;
+            // Headset support is reached only through the lazy xrWalk entry.
+            if (id.includes('/XR/')) return 'babylon-xr';
             // Shaders stay lazy chunks: merging them would make every visit pay for all of them.
             return /\/Shaders(?:WGSL)?\//.test(id) ? undefined : 'babylon';
           },
@@ -33,6 +35,25 @@ export default defineConfig(({ mode }) => {
     },
     plugins: publicBuild
       ? [
+          {
+            name: 'keep-xr-lazy',
+            generateBundle(_, bundle) {
+              const visited = new Set<string>();
+              const visit = (file: string) => {
+                if (visited.has(file)) return;
+                visited.add(file);
+                const chunk = bundle[file];
+                if (chunk?.type !== 'chunk') return;
+                if (Object.keys(chunk.modules).some((id) => id.includes('/@babylonjs/core/XR/'))) {
+                  this.error(`WebXR code reached the initial download: ${file}`);
+                }
+                chunk.imports.forEach(visit);
+              };
+              for (const chunk of Object.values(bundle)) {
+                if (chunk.type === 'chunk' && chunk.isEntry) visit(chunk.fileName);
+              }
+            },
+          },
           {
             name: 'public-demo-only',
             generateBundle() {

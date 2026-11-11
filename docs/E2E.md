@@ -8,8 +8,8 @@ server: `playwright.config.ts`.
 
 ## Locally: target the feature, never the whole suite
 
-The full e2e suite belongs to the pipeline: CI runs it sharded in three
-(`test:e2e:built --shard=n/3`, `ci.yml`). Locally, an e2e scenario is only for iterating on
+The full e2e suite belongs to the pipeline: CI runs three duration-balanced shards
+(`node scripts/e2e-shard.mjs n/3`, `ci.yml`). Locally, an e2e scenario is only for iterating on
 the browser workflow touched by a change — by title with `--grep`, or by file:
 
 ```sh
@@ -40,6 +40,28 @@ the engine's internal instance nor modifying `localStorage` directly. Assertions
 text match the French interface.
 
 Configuration: `playwright.config.ts`.
+
+CI collects the current test list before assigning every test to exactly one shard,
+longest estimates first. `scripts/e2e-durations.json` records worker milliseconds from
+PR #218's successful Linux CI run (43061290688); new or renamed scenarios default to
+30 seconds. The split view-state scenarios and the pixel probe initially use estimates.
+Refresh estimates from the per-shard HTML reports when scenario durations change.
+`node scripts/e2e-shard.mjs n/3 --list` checks membership without running browsers.
+The static estimates balance expected work, not runner load; confirm the slowest shard
+stays within 25% of the fastest over three consecutive successful `main` runs.
+
+`e2e/antialias.spec.ts` exports the reset overview camera as a transparent PNG without
+labels or a header. The first opaque silhouette edge in each column must contain
+partially covered pixels. This tests raster coverage rather than material colours,
+and needs no platform-specific screenshot baseline. Setting orbit bloom samples to 1
+must make the scenario fail. It covers the overview silhouette, not Plan lines or walk TAA.
+
+`tests/scene-budget.test.ts` builds the ground level, real material factories, exterior
+and one default piece of every furniture kind on each public fixture using NullEngine.
+Its mesh, material and vertex limits are the measured counts plus 10%, rounded up.
+The canvas drawing API is stubbed; this measures resource counts, not texture appearance.
+Lower these limits when optimisations reduce the baseline; investigate increases before
+changing a limit.
 
 The first-steps rotation scenarios observe `data-orbit-tour` and `data-orbit-tour-angle`
 on the canvas. Completion is published only after the final camera angle is applied;

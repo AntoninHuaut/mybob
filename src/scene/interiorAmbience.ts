@@ -413,8 +413,8 @@ export function createInteriorBloom(
  * Bloom of the orbit camera, hence of the 3D view and the Exterior. Same weight
  * value as the walk, threshold above the flat sky (see
  * `ORBIT_BLOOM_THRESHOLD`). Plan reuses the same camera in orthographic mode:
- * `viewer` turns the bloom off in that mode rather than destroying the pipeline on
- * every switch.
+ * `ViewEffects` detaches the pipeline in that mode and reattaches it in overview,
+ * preserving its post-processes across switches.
  */
 export function createOrbitBloom(
   scene: Scene,

@@ -27,10 +27,8 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('#view-title')).toHaveText('Vue 3D');
 });
 
-test('view controls and project/level reload derive chrome from the accepted view', async ({
-  page,
-}, testInfo) => {
-  // Three screenshots and repeated scene rebuilds exceed the normal budget on CI SwiftShader.
+test('view controls derive chrome from the accepted view', async ({ page }, testInfo) => {
+  // Three rendered screenshots exceed the normal budget on CI SwiftShader.
   test.slow();
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -48,6 +46,16 @@ test('view controls and project/level reload derive chrome from the accepted vie
   await expect(page.locator('#view-title')).toHaveText('Visite intérieure');
   await expect(page.locator('#viewport')).toHaveClass(/walking/);
   await page.screenshot({ path: testInfo.outputPath('walk.png') });
+  expect(errors).toEqual([]);
+});
+
+test('project and level reload reset the accepted view and chrome', async ({ page }) => {
+  test.slow();
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await importHouse(page);
+  await page.locator('[data-view=walk]').click();
+  await expect(page.locator('#view-title')).toHaveText('Visite intérieure');
   for (const level of ['upper-test', 'atelier-rdc', 'upper-test']) {
     await page.locator('#level-select').selectOption(level);
     await expect(page.locator('#view-title')).toHaveText('Vue 3D');
