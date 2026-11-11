@@ -1,10 +1,21 @@
 import { expect, test, type Page } from '@playwright/test';
 
 // Two tabs on the same house: the second must never overwrite the first one's work.
+
+// A cold start of the app (bundle, Babylon scene) while the other tab keeps rendering:
+// on a busy CI runner it can take longer than the default 10 s of an assertion.
+const BOOT_TIMEOUT = 30_000;
+
+async function appReady(page: Page) {
+  await expect(page.getByRole('button', { name: 'Plan', exact: true })).toBeEnabled({
+    timeout: BOOT_TIMEOUT,
+  });
+}
+
 async function openTab(page: Page) {
   await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
-  await expect(page.getByRole('button', { name: 'Plan', exact: true })).toBeEnabled();
+  await appReady(page);
 }
 
 async function addFurniture(page: Page, name: string) {
@@ -52,7 +63,18 @@ test('the second tab is read-only and does not delete the first one’s sofa', a
   expect(after).toContain('Canapé onglet A');
   expect(after).not.toContain('Table onglet B');
 
+  // Tag the stale document: the checks below must run on the reloaded one, not pass
+  // on the old page before the reload has even started.
+  type Tagged = Window & { staleDocument?: boolean };
+  await b.evaluate(() => {
+    (window as Tagged).staleDocument = true;
+  });
   await b.getByRole('button', { name: 'Recharger' }).click();
-  await expect(b.getByRole('button', { name: 'Plan', exact: true })).toBeEnabled();
+  await expect
+    .poll(() => b.evaluate(() => !(window as Tagged).staleDocument).catch(() => false), {
+      timeout: BOOT_TIMEOUT,
+    })
+    .toBe(true);
+  await appReady(b);
   await expect(b.locator('#stale-banner')).toHaveCount(0);
 });
