@@ -40,3 +40,8 @@ the engine's internal instance nor modifying `localStorage` directly. Assertions
 text match the French interface.
 
 Configuration: `playwright.config.ts`.
+
+The first-steps rotation scenarios observe `data-orbit-tour` and `data-orbit-tour-angle`
+on the canvas. Completion is published only after the final camera angle is applied;
+reduced motion completes synchronously in the click handler. They assert the 60-degree
+preview angle (π/3 radians), without fixed sleeps.

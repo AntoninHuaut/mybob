@@ -34,7 +34,10 @@ test('orbiting around the house raises no error', async ({ page }) => {
   await expect(card).toBeVisible();
   await card.getByRole('button', { name: /Tourner autour de la maison/ }).click();
   await expect(card).toBeVisible();
-  await page.waitForTimeout(2200);
+  await expect(page.locator('#scene')).toHaveAttribute('data-orbit-tour', 'complete');
+  expect(Number(await page.locator('#scene').getAttribute('data-orbit-tour-angle'))).toBeCloseTo(
+    Math.PI / 3,
+  );
   expect(errors).toEqual([]);
 });
 
@@ -45,9 +48,16 @@ test('the preview rotation stays immediate when motion is reduced', async ({ pag
   await page.goto('/');
   const card = page.locator('#start-card');
   await expect(card).toBeVisible();
-  await card.getByRole('button', { name: /Tourner autour de la maison/ }).click();
+  const result = await card
+    .getByRole('button', { name: /Tourner autour de la maison/ })
+    .evaluate((button: HTMLButtonElement) => {
+      button.click();
+      const canvas = document.querySelector<HTMLCanvasElement>('#scene')!;
+      return { state: canvas.dataset.orbitTour, angle: Number(canvas.dataset.orbitTourAngle) };
+    });
+  expect(result.state).toBe('complete');
+  expect(result.angle).toBeCloseTo(Math.PI / 3);
   await expect(card).toBeVisible();
-  await page.waitForTimeout(600);
   expect(errors).toEqual([]);
 });
 
