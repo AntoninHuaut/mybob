@@ -138,3 +138,10 @@ test('the bench can pin a tier and hand it back', () => {
   resolution.force(undefined);
   assert.equal(resolution.effectTier, 0);
 });
+
+test('a slow but running machine, like software rendering at under 2 fps, is still measured', () => {
+  const resolution = new AdaptiveResolution(1.6);
+  feed(resolution, SERIES * 5, 800);
+  assert.equal(resolution.scale, RENDER_SCALES.at(-1));
+  assert.ok(resolution.effectTier > 0);
+});

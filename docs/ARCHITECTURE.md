@@ -385,7 +385,7 @@ last call, and read back at start-up.
   going below one rendered pixel per CSS pixel. The
   scale only goes down and is kept for the session, because changing it resizes every render
   target, which hitches. The first 30 images and the 30 after each change are not measured.
-  A gap over 500 ms between two images is a stall, never a measurement, and hiding the
+  A gap over 5 s between two images is a stall, never a measurement, and hiding the
   page, losing or regaining the focus restarts that warm-up and drops the half-measured
   series: the slow images after an alt-tab are not the machine, and a tier is never lifted.
   Once at the resolution floor and still over budget, visit effects drop one tier per series:

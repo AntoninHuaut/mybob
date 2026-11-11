@@ -30,7 +30,7 @@ export const WARMUP_FRAMES = 30;
  * A gap this long between two images is a stall (tab in the background, window
  * switch, debugger), not the speed of the machine: it is not measured.
  */
-export const STALL_MS = 500;
+export const STALL_MS = 5000;
 
 /**
  * Dynamic resolution, the same at rest and in motion. A machine that cannot hold 40 fps
