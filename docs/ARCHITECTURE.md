@@ -234,8 +234,11 @@ walk where the headset left the visitor and restores the camera of the current m
   (`isSceneVisitDestination` or `isParcelDestination`); trigger on a door toggles it; B/Y
   switches the walk post-processing, to compare frame rates in the headset.
 - `local-floor` reference space: the real head height replaces the eye-height setting, and the
-  real floor is kept on `groundElevationAt` every frame. Room-scale moves are free but never
-  leave `isVisitArea`.
+  real floor is kept on `groundElevationAt` every frame. Room-scale moves (the headset itself
+  moving, the emulator's ZQSD) go through the stick's collider every frame (`followPose`): the
+  rig takes back what a wall refused, so the head stops at the wall. A jump over 0.5 m in one
+  frame is a tracking reset and is not collided. The open edge of the modelled ground has no
+  wall: there, the `isVisitArea` guard sends the visitor back.
 - No controller model is downloaded: gamepads are read directly and the pointers are drawn
   locally.
 - In a session the render loop draws every frame (a skipped frame judders in a headset) and the

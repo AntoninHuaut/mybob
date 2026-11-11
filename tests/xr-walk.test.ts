@@ -18,6 +18,7 @@ import {
   snapTurnAngle,
   stickDisplacement,
   turnAround,
+  XR_POSE_JUMP,
   XR_WALK_SPEED,
 } from '../src/scene/xrWalk';
 import { createWalkCamera } from '../src/scene/walkCamera';
@@ -193,6 +194,50 @@ test('the headset visitor collides with walls but not with a step', () => {
   for (let i = 0; i < 80; i++) walk.walk(new Vector3(0, 0, 0.05));
   z = walk.position[1];
   assert.ok(z > 2.5, `crossed the step, z=${z}`);
+  session.dispose();
+});
+
+test('a headset moved by room-scale steps advances monotonically and stops at a wall', () => {
+  // The emulator's ZQSD translates the tracked pose, not the rig: each frame reads it.
+  const session = headsetWalk({ point: [0, 0], yaw: 0 });
+  const { scene, walk, camera } = session;
+  const wall = MeshBuilder.CreateBox('wall', { width: 4, height: 2.5, depth: 0.2 }, scene);
+  wall.position.set(0, 1.25, -2);
+  wall.checkCollisions = true;
+  wall.computeWorldMatrix(true);
+  walk.followPose();
+  let previous = walk.position[1];
+  for (let i = 0; i < 25; i++) {
+    camera.position.z -= 0.3 / 4;
+    walk.followPose();
+    const z = walk.position[1];
+    assert.ok(z <= previous + 1e-6, `frame ${i}: went back from z=${previous} to z=${z}`);
+    previous = z;
+  }
+  // 1.9 m of pose travel was asked for: the head stops in front of the wall face (-1.9).
+  assert.ok(previous > -1.9 + 0.1, `crossed the wall: z=${previous}`);
+  assert.ok(previous < -1.5, `stopped too early: z=${previous}`);
+  // Sideways along the wall, the head moves freely again.
+  const x = walk.position[0];
+  for (let i = 0; i < 10; i++) {
+    camera.position.x += 0.05;
+    walk.followPose();
+  }
+  assert.ok(Math.abs(walk.position[0] - x - 0.5) < 0.01, `slid ${walk.position[0] - x}`);
+  session.dispose();
+});
+
+test('a tracking reset is not collided: the head jumps with the pose', () => {
+  const session = headsetWalk({ point: [0, 0], yaw: 0 });
+  const { scene, walk, camera } = session;
+  const wall = MeshBuilder.CreateBox('wall', { width: 4, height: 2.5, depth: 0.2 }, scene);
+  wall.position.set(0, 1.25, -1);
+  wall.checkCollisions = true;
+  wall.computeWorldMatrix(true);
+  walk.followPose();
+  camera.position.z -= XR_POSE_JUMP + 1.5;
+  walk.followPose();
+  assert.ok(walk.position[1] < -1.9, `z=${walk.position[1]}`);
   session.dispose();
 });
 
