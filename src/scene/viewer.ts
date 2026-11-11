@@ -1,3 +1,4 @@
+import { refreshFixtureLights } from './fixtureLights';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Camera } from '@babylonjs/core/Cameras/camera';
 import { HouseOrbitPointersInput } from './orbitPointerInput';
@@ -394,6 +395,7 @@ export class HouseViewer {
       candidate.elevation < low.elevation ? candidate : low,
     );
     this.exterior = buildExterior(project, ground, scene);
+    refreshFixtureLights(scene);
     const exteriorScene = this.exterior;
     if (project.site && exteriorScene) {
       const site = project.site;
@@ -414,6 +416,7 @@ export class HouseViewer {
     this.planOpenings = buildPlanOpenings(scene, level);
     this.wallCutaway = buildWallCutaway(scene, level);
     this.buildDimensions();
+    refreshFixtureLights(scene);
     this.setMode('overview');
     this.attachSceneInput(scene, level);
     this.resize();
@@ -1021,12 +1024,16 @@ export class HouseViewer {
     this.updateShadowPolicy();
     this.house.ceiling.setEnabled(interior);
     this.house.fixtures.forEach((f) => f.setEnabled(interior));
+    let rangesChanged = false;
     this.house.pointLights.forEach((l) => {
       l.setEnabled(this.lightOn && !plan);
       // Written on every call: a per-fixture intensity from project data would be lost here.
       l.intensity = interior ? INTERIOR_FIXTURE_INTENSITY : FIXTURE_LIGHT_INTENSITY;
-      l.range = interior ? INTERIOR_FIXTURE_RANGE : FIXTURE_LIGHT_RANGE;
+      const range = interior ? INTERIOR_FIXTURE_RANGE : FIXTURE_LIGHT_RANGE;
+      rangesChanged ||= l.range !== range;
+      l.range = range;
     });
+    if (rangesChanged) refreshFixtureLights(this.scene);
     if (plan) {
       this.planLighting ??= {
         diffuse: this.hemispheric.diffuse?.clone() ?? Color3.White(),
@@ -1048,7 +1055,7 @@ export class HouseViewer {
       this.hemispheric.groundColor = interior
         ? INTERIOR_GROUND_COLOR.clone()
         : this.baseGround.clone();
-      this.hemispheric.intensity = interior ? 0.42 : 0.55;
+      this.hemispheric.intensity = interior ? 0.42 : 0.45;
       this.sun.intensity = 0.95;
       if (this.solarPosition) {
         const solar = this.solarPosition;
@@ -1080,6 +1087,10 @@ export class HouseViewer {
         this.sun.diffuse = this.baseSun.diffuse.clone();
       }
     }
+    this.viewEffects ??= new ViewEffects(this.scene, undefined, undefined, () =>
+      this.requestRender(),
+    );
+    this.viewEffects.updateEnvironment(this.mode, this.sun.direction);
     if (interior) this.house.highlights.forEach((m) => m.setEnabled(false));
   }
 
@@ -1090,7 +1101,9 @@ export class HouseViewer {
    */
   private updateInteriorAmbience() {
     if (!this.scene) return;
-    this.viewEffects ??= new ViewEffects(this.scene);
+    this.viewEffects ??= new ViewEffects(this.scene, undefined, undefined, () =>
+      this.requestRender(),
+    );
     this.viewEffects.updateWalk({
       active: this.mode === 'walk',
       camera: this.immersive?.camera ?? this.walk,
@@ -1098,6 +1111,7 @@ export class HouseViewer {
       effectsEnabled: this.immersiveEffects,
       effectTier: this.currentEffectTier,
     });
+    this.viewEffects.updateEnvironment(this.mode, this.sun.direction);
   }
 
   private rebuildWalkPipelines() {

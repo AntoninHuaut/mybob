@@ -82,14 +82,26 @@ These files replace reliance on any previous chat context.
 Use Node 26 and `pnpm install --frozen-lockfile`. Verify locally only what the change
 touches, never the whole suite as a reflex. Unit test files mirror the module they test
 (`tests/furniture.test.ts`, `tests/plan-openings.test.ts`): run the touched ones,
-`node --import tsx --test --test-isolation=none tests/<zone>.test.ts`. A browser workflow is
-verified by the e2e scenarios of that feature only, with a `--grep` on an already-built
-`dist/` — the recipe lives in [E2E](docs/E2E.md). Never run the full e2e suite on this
-machine: the CI pipeline runs all of it, sharded in three (`test:e2e:built --shard=n/3`).
-`pnpm run ci` (format, unit tests, build, public-build check) is the local release gate; it
-does not run e2e. Tests cover DOM behavior with Happy DOM and geometry with Babylon
-NullEngine. Neither proves visual correctness: use a real browser when available and record
-what was actually inspected.
+`node --import tsx --test --test-isolation=none tests/<zone>.test.ts`.
+`pnpm run ci` (format, unit tests, build, public-build check) is the local release gate;
+it does not run e2e. Happy DOM and Babylon NullEngine prove behavior, not visual correctness.
+
+### Local browser verification policy
+
+Browser e2e belongs to CI. Do not run routine local Playwright/e2e scenarios, including
+targeted feature batches, repeats, or concurrent browser captures/benchmarks: they make the
+owner's PC unusably slow. Only one or two exact failing tests may run locally to reproduce
+a concrete CI error, with one worker and no repeats. Stop only your own browser runs.
+Prefer focused unit/NullEngine/DOM checks and CI logs. Defer visual acceptance to existing
+permitted evidence or explicit later authorization; do not open a browser for optional
+evidence. CI execution recipes live in [E2E](docs/E2E.md).
+
+Agent-created visual evidence must stay local and ignored: never commit images or
+image-reference reports, or upload browser captures, HTML reports or traces to PRs, Actions
+or external services. Only `studio-demo` may be used for public-facing visual validation;
+never publish captures of other house fixtures. Text evidence must omit private identifying
+information and encoded image attachments. CI keeps its browser tests but uploads no browser
+image/report/trace artifacts; the verified public-build artifact exchange is preserved.
 
 Several agents share this machine. The e2e suite takes a free port on every run
 (`playwright.config.ts`): never hardcode a port, never add `--strictPort` on a known one, and

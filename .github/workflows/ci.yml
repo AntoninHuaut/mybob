@@ -160,16 +160,6 @@ jobs:
           fi
       - name: Test public build in desktop Chromium
         run: node scripts/e2e-shard.mjs ${{ matrix.shard }}/3
-      - name: Upload E2E report and failure traces
-        if: ${{ !cancelled() }}
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: playwright-report-${{ matrix.shard }}
-          path: |
-            playwright-report/
-            test-results/
-          retention-days: 7
-          if-no-files-found: ignore
 
   verify:
     # Preserve the exact branch-protection check name; every shard must succeed.

@@ -1,3 +1,4 @@
+import { refreshFixtureLights } from '../scene/fixtureLights';
 import type { Scene } from '@babylonjs/core/scene';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
@@ -148,6 +149,7 @@ export class FurnitureLayer {
     if (this.selected && !ids.has(this.selected)) this.selected = undefined;
     this.drawOverlays();
     this.drawCirculation();
+    refreshFixtureLights(this.scene);
   }
 
   select(id: string | undefined): void {
@@ -830,6 +832,7 @@ export class FurnitureLayer {
       if (visual) this.placeVisual(visual, member);
     }
     this.drawOverlays();
+    refreshFixtureLights(this.scene);
     this.onChange?.(structuredClone(this.items), false);
   }
 

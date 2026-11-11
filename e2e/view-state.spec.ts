@@ -27,8 +27,7 @@ test.beforeEach(async ({ page }) => {
   await expect(page.locator('#view-title')).toHaveText('Vue 3D');
 });
 
-test('view controls derive chrome from the accepted view', async ({ page }, testInfo) => {
-  // Three rendered screenshots exceed the normal budget on CI SwiftShader.
+test('view controls derive chrome from the accepted view', async ({ page }) => {
   test.slow();
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -37,15 +36,12 @@ test('view controls derive chrome from the accepted view', async ({ page }, test
   await expect(page.locator('#view-title')).toHaveText('Extérieur');
   await expect(page.locator('#view-exterior')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-view=overview]')).toHaveAttribute('aria-pressed', 'false');
-  await page.screenshot({ path: testInfo.outputPath('exterior.png') });
   await page.locator('[data-view=plan]').click();
   await expect(page.locator('#view-title')).toHaveText('Plan de la maison');
   await expect(page.locator('#view-exterior')).toHaveAttribute('aria-pressed', 'false');
-  await page.screenshot({ path: testInfo.outputPath('plan.png') });
   await page.locator('[data-view=walk]').click();
   await expect(page.locator('#view-title')).toHaveText('Visite intérieure');
   await expect(page.locator('#viewport')).toHaveClass(/walking/);
-  await page.screenshot({ path: testInfo.outputPath('walk.png') });
   expect(errors).toEqual([]);
 });
 

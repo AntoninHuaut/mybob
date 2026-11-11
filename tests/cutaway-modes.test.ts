@@ -214,7 +214,7 @@ test('plan lighting is neutral and shadow-free, then restores 3D and visit light
   viewer.setWallDisplay('full');
   update();
   assert.equal(sun.intensity, 0.95);
-  assert.equal(sky.intensity, 0.55);
+  assert.equal(sky.intensity, 0.45, 'overview uses reduced hemispheric fill alongside sky IBL');
   Object.assign(viewer, { currentMode: 'plan' });
   update();
   assert.equal(scene.shadowsEnabled, false);
@@ -229,7 +229,7 @@ test('plan lighting is neutral and shadow-free, then restores 3D and visit light
   update();
   assert.equal(scene.shadowsEnabled, true);
   assert.equal(sun.intensity, 0.95);
-  assert.equal(sky.intensity, 0.55);
+  assert.equal(sky.intensity, 0.45, 'overview uses reduced hemispheric fill alongside sky IBL');
   assert.deepEqual(sky.diffuse.asArray(), diffuse);
   assert.deepEqual(sky.groundColor.asArray(), ground);
   assert.equal(point.isEnabled(), true);
@@ -339,7 +339,7 @@ test('solar previews drive the directional light, preserve neutral plan and rest
   assert.equal(scene.shadowsEnabled, true);
   viewer.setSolar(undefined);
   assert.equal(sun.intensity, 0.95);
-  assert.equal(sky.intensity, 0.55);
+  assert.equal(sky.intensity, 0.45, 'overview uses reduced hemispheric fill alongside sky IBL');
   assert.ok(Vector3.Distance(sun.direction, initialDirection) < 1e-8);
   assert.ok(Vector3.Distance(sun.position, initialPosition) < 1e-8);
   assert.deepEqual(sun.diffuse.asArray(), initialColor);
