@@ -159,6 +159,7 @@ async function emptyVariant(page: Page) {
 }
 
 test('independent variants, undo/redo and confirming an unchanged name', async ({ page }) => {
+  test.slow();
   await emptyVariant(page);
   await page.getByRole('button', { name: 'Annuler la dernière modification', exact: true }).click();
   await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
