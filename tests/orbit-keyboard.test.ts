@@ -102,3 +102,24 @@ test('keyboard pan scales with visible area and Shift doubles its speed', () => 
     assert.ok(Math.abs(travel(20, true) / travel(20) - 2) < 1e-8);
   }
 });
+
+test('keyboard pan drops the temporal history on every moving frame, never when idle', () => {
+  for (const plan of [false, true]) {
+    const { engine, scene, camera } = fixture(plan);
+    const start = camera._viewHistoryResetId;
+    // An idle key returns before touching the camera, so the still image is not reset:
+    // its temporal samples must keep accumulating.
+    panOrbitWithKeys(camera, 0, 0, 1 / 30);
+    assert.equal(camera._viewHistoryResetId, start, `${plan ? 'plan' : '3D'} idle key`);
+    for (let frame = 1; frame <= 3; frame++) {
+      panOrbitWithKeys(camera, 1, 0, 1 / 30);
+      assert.equal(
+        camera._viewHistoryResetId,
+        start + frame,
+        `${plan ? 'plan' : '3D'} pan frame ${frame} must drop the history`,
+      );
+    }
+    scene.dispose();
+    engine.dispose();
+  }
+});
