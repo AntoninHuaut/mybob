@@ -12,8 +12,8 @@ import { Plane } from '@babylonjs/core/Maths/math.plane';
 import { Camera } from '@babylonjs/core/Cameras/camera';
 import { PointerEventTypes, type PointerInfo } from '@babylonjs/core/Events/pointerEvents';
 import type { Observer } from '@babylonjs/core/Misc/observable';
-import { floorElevationAt } from '../model/geometry';
-import type { Level, Point2 } from '../model/types';
+import { floorElevationAt, pointInPolygon } from '../model/geometry';
+import type { Level, Point2, Room } from '../model/types';
 import {
   dressingBounds,
   dressingPlacements,
@@ -25,6 +25,7 @@ import { furnitureDistances, type SnapGuide, type SnapResult } from './checks';
 import { circulationBands, CIRCULATION_TIGHT } from './circulation';
 import { constrainGroupDrag, groupMembers } from './groups';
 import { showerPanelRects } from './showerPanels';
+import { dropFurnitureInRoom } from './roomMove';
 import { layoutLabels, type LabelRect } from '../ui/labelLayout';
 
 export interface FurnitureOverlays {
@@ -44,7 +45,12 @@ interface Drag {
   moved: boolean;
   floor: number;
   guide?: SnapGuide;
+  /** The pointer is over a room the sweep cannot reach: where the release would land. */
+  drop?: { room: Room; target: Point2; items?: FurnitureItem[] };
 }
+
+/** How far the pointer moves before a pending drop searches its landing again. */
+const DROP_RESEARCH = 0.05;
 
 /** Metres throughout. Furniture front is local +Z; yaw follows Babylon rotation.y. */
 export class FurnitureLayer {
@@ -53,9 +59,14 @@ export class FurnitureLayer {
   onChange?: (items: FurnitureItem[], final: boolean) => void;
   onDragState?: (dragging: boolean) => void;
   onDragBlocked?: (reason: string) => void;
+  /** The pointer entered another room where the piece can land on release. */
+  onDropPreview?: (room: Room) => void;
+  /** A drag released over another room landed the piece there. */
+  onDroppedInRoom?: (room: Room) => void;
   snapPlacement?: (item: FurnitureItem, items: FurnitureItem[]) => SnapResult;
   private items: FurnitureItem[] = [];
   private visuals = new Map<string, Visual>();
+  private ghosts = new Map<string, Visual>();
   private selected?: string;
   private mode: 'overview' | 'plan' | 'walk' = 'overview';
   private overlays: FurnitureOverlays = { distances: false, clearances: false, openings: false };
@@ -70,6 +81,7 @@ export class FurnitureLayer {
   private dragBlockReported = false;
   private disposed = false;
   private readonly release = () => this.finishDrag();
+  private readonly cancel = () => this.finishDrag(false);
 
   constructor(
     private scene: Scene,
@@ -79,8 +91,8 @@ export class FurnitureLayer {
     this.labelObserver = scene.onBeforeRenderObservable.add(() => this.scalePlanLabels());
     if (typeof window !== 'undefined') {
       window.addEventListener('pointerup', this.release);
-      window.addEventListener('pointercancel', this.release);
-      window.addEventListener('blur', this.release);
+      window.addEventListener('pointercancel', this.cancel);
+      window.addEventListener('blur', this.cancel);
     }
   }
 
@@ -130,7 +142,7 @@ export class FurnitureLayer {
       this.drag &&
       (!ids.has(this.drag.id) || groupMembers(this.items, this.drag.id).some((item) => item.locked))
     )
-      this.finishDrag();
+      this.finishDrag(false);
     if (this.selected && !ids.has(this.selected)) this.selected = undefined;
     this.drawOverlays();
     this.drawCirculation();
@@ -142,7 +154,7 @@ export class FurnitureLayer {
   }
 
   setMode(mode: 'overview' | 'plan' | 'walk'): void {
-    this.finishDrag();
+    this.finishDrag(false);
     this.mode = mode;
     for (const visual of this.visuals.values())
       for (const material of visual.materials)
@@ -713,7 +725,7 @@ export class FurnitureLayer {
       return;
     }
     if (event.type === PointerEventTypes.POINTERDOWN && event.event.button === 0) {
-      this.finishDrag();
+      this.finishDrag(false);
       this.dragBlockReported = false;
       const picked = event.pickInfo?.pickedMesh;
       const id =
@@ -759,10 +771,22 @@ export class FurnitureLayer {
         this.reportBlockedDrag(
           `« ${locked.name} » est verrouillé. Déverrouillez-le pour déplacer cet ensemble.`,
         );
-        this.finishDrag();
+        this.finishDrag(false);
         return;
       }
       let constrained = constrainGroupDrag(this.items, item.id, position, this.level);
+      // The sweep stays the rule while the pointer is in a room the piece can reach. Over a
+      // room behind a wall, the piece waits at the wall and a ghost shows where it would land.
+      const reached = constrained.find((member) => member.id === item.id)!.position;
+      const pointerRoom = this.level.rooms.find((room) => pointInPolygon(position, room.polygon));
+      if (pointerRoom && !pointInPolygon(reached, pointerRoom.polygon)) {
+        this.previewDrop(item.id, pointerRoom, position);
+        this.drag.guide = undefined;
+        if (Math.hypot(reached[0] - item.position[0], reached[1] - item.position[1]) >= 0.00001)
+          this.applyDrag(constrained, item.id);
+        return;
+      }
+      this.clearDrop();
       const beforeSnap = constrained.find((member) => member.id === item.id)!;
       const movedBeforeSnap =
         Math.hypot(
@@ -791,20 +815,84 @@ export class FurnitureLayer {
           );
         return;
       }
-      this.drag.moved = true;
-      this.items = constrained;
-      for (const member of groupMembers(this.items, item.id)) {
-        const visual = this.visuals.get(member.id);
-        visual?.root.position.set(
-          member.position[0],
-          floorElevationAt(this.level, member.position) + (member.elevation ?? 0),
-          member.position[1],
-        );
-        visual?.root.computeWorldMatrix(true);
-      }
-      this.drawOverlays();
-      this.onChange?.(structuredClone(this.items), false);
+      this.applyDrag(constrained, item.id);
     }
+  }
+
+  private applyDrag(items: FurnitureItem[], id: string) {
+    this.drag!.moved = true;
+    this.items = items;
+    for (const member of groupMembers(this.items, id)) {
+      const visual = this.visuals.get(member.id);
+      if (visual) this.placeVisual(visual, member);
+    }
+    this.drawOverlays();
+    this.onChange?.(structuredClone(this.items), false);
+  }
+
+  private placeVisual(visual: Visual, item: FurnitureItem) {
+    visual.root.position.set(
+      item.position[0],
+      floorElevationAt(this.level, item.position) + (item.elevation ?? 0),
+      item.position[1],
+    );
+    visual.root.rotation.y = item.rotation;
+    visual.root.computeWorldMatrix(true);
+  }
+
+  /** Search (throttled) where a release over `room` would land, and show it as a ghost. */
+  private previewDrop(id: string, room: Room, target: Point2) {
+    const drag = this.drag!;
+    const previous = drag.drop;
+    if (
+      previous?.room.id === room.id &&
+      Math.hypot(target[0] - previous.target[0], target[1] - previous.target[1]) < DROP_RESEARCH
+    )
+      return;
+    const result = dropFurnitureInRoom(this.items, this.level, id, room.id, target);
+    drag.drop = { room, target, items: result.ok ? result.items : undefined };
+    if (!result.ok) {
+      this.clearGhosts();
+      // Said once per room entered, not on every pointer move.
+      if (previous?.room.id !== room.id || previous.items) this.onDragBlocked?.(result.reason);
+      return;
+    }
+    if (previous?.room.id !== room.id || !previous.items) this.onDropPreview?.(room);
+    const memberIds = new Set(groupMembers(result.items, id).map((member) => member.id));
+    for (const [ghostId, ghost] of this.ghosts)
+      if (!memberIds.has(ghostId)) {
+        this.destroyVisual(ghost);
+        this.ghosts.delete(ghostId);
+      }
+    for (const member of result.items.filter((candidate) => memberIds.has(candidate.id))) {
+      let ghost = this.ghosts.get(member.id);
+      if (!ghost) {
+        ghost = this.build(member, 'ghost');
+        ghost.root.name = `furniture-ghost:${member.id}`;
+        for (const mesh of ghost.root.getChildMeshes()) {
+          mesh.isPickable = false;
+          mesh.metadata = undefined;
+          mesh.visibility = 0.55;
+        }
+        for (const material of ghost.materials)
+          material.clipPlane =
+            this.mode === 'plan' || this.scene.activeCamera?.mode === Camera.ORTHOGRAPHIC_CAMERA
+              ? new Plane(0, 1, 0, -10000)
+              : null;
+        this.ghosts.set(member.id, ghost);
+      }
+      this.placeVisual(ghost, member);
+    }
+  }
+
+  private clearDrop() {
+    if (this.drag) this.drag.drop = undefined;
+    this.clearGhosts();
+  }
+
+  private clearGhosts() {
+    for (const ghost of this.ghosts.values()) this.destroyVisual(ghost);
+    this.ghosts.clear();
   }
 
   private reportBlockedDrag(reason: string) {
@@ -828,12 +916,25 @@ export class FurnitureLayer {
     return ray.origin.add(ray.direction.scale(t));
   }
 
-  private finishDrag(): void {
+  /** `land` is false when the drag is interrupted (blur, cancel, mode change): no drop. */
+  private finishDrag(land = true): void {
     if (!this.drag) return;
-    const moved = this.drag.moved;
+    const { id, drop } = this.drag;
+    let moved = this.drag.moved;
     this.drag = undefined;
+    this.clearGhosts();
+    if (land && drop?.items) {
+      this.items = drop.items;
+      for (const member of groupMembers(this.items, id)) {
+        const visual = this.visuals.get(member.id);
+        if (visual) this.placeVisual(visual, member);
+      }
+      this.drawOverlays();
+      moved = true;
+    }
     this.onDragState?.(false);
     if (moved) this.onChange?.(structuredClone(this.items), true);
+    if (land && drop?.items) this.onDroppedInRoom?.(drop.room);
   }
 
   private drawOverlays(): void {
@@ -1002,14 +1103,14 @@ export class FurnitureLayer {
 
   dispose(): void {
     if (this.disposed) return;
-    this.finishDrag();
+    this.finishDrag(false);
     this.disposed = true;
     this.scene.onPointerObservable.remove(this.observer);
     this.scene.onBeforeRenderObservable.remove(this.labelObserver);
     if (typeof window !== 'undefined') {
       window.removeEventListener('pointerup', this.release);
-      window.removeEventListener('pointercancel', this.release);
-      window.removeEventListener('blur', this.release);
+      window.removeEventListener('pointercancel', this.cancel);
+      window.removeEventListener('blur', this.cancel);
     }
     this.clearOverlays();
     this.circulationRoot?.dispose();

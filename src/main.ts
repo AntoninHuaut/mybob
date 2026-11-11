@@ -52,7 +52,7 @@ import {
 } from './furniture/model';
 import { checkFurniture } from './furniture/checks';
 import { findFurniturePlacement, getBuildingPlacementIssues } from './furniture/placement';
-import { moveFurnitureToRoom } from './furniture/roomMove';
+import { flipAgainstPartition, moveFurnitureToRoom, partitionBehind } from './furniture/roomMove';
 import {
   applyFurnitureTransform,
   constrainGroupDrag,
@@ -410,9 +410,14 @@ function openMoveToRoom(id: string) {
   const item = currentFurniture().find((candidate) => candidate.id === id);
   if (!item) return;
   const rooms = viewer.level.rooms;
+  const partition = partitionBehind(item, viewer.level);
   openDialog(
     'Déplacer le meuble',
-    `<h2>Déplacer « ${esc(item.name)} » vers…</h2><p>Le meuble garde ses dimensions et prend la place libre de la pièce la plus proche de sa position actuelle. Un meuble lié emmène son ensemble.</p>${
+    `<h2>Déplacer « ${esc(item.name)} » vers…</h2><p>Le meuble garde ses dimensions et prend la place libre de la pièce la plus proche de sa position actuelle. Un meuble lié emmène son ensemble. Vous pouvez aussi le glisser directement dans une autre pièce.</p>${
+      partition
+        ? '<button type="button" id="flip-partition" class="move-room">Retourner contre l’autre face de la cloison</button>'
+        : ''
+    }${
       rooms.length
         ? `<div class="move-room-list" role="group" aria-label="Pièces du niveau">${rooms
             .map(
@@ -426,6 +431,17 @@ function openMoveToRoom(id: string) {
   el('#cancel-move-room').addEventListener('click', () =>
     el<HTMLDialogElement>('#info-dialog').close(),
   );
+  document.querySelector('#flip-partition')?.addEventListener('click', () => {
+    const result = flipAgainstPartition(currentFurniture(), viewer.level, id);
+    if (!result.ok) {
+      el('#move-room-status').textContent = result.reason;
+      return;
+    }
+    if (!commitFurniture(result.items)) return;
+    el<HTMLDialogElement>('#info-dialog').close();
+    selectFurniture(id);
+    toast('Meuble retourné contre l’autre face de la cloison. Annulez avec Ctrl Z.');
+  });
   // The list is rebuilt with each dialog, so its listener never piles up.
   document.querySelector('.move-room-list')?.addEventListener('click', (event) => {
     const button = (event.target as HTMLElement).closest<HTMLElement>('[data-move-room]');
@@ -580,6 +596,10 @@ function mountFurniture() {
   furnitureLayer.onSelect = selectFurniture;
   furnitureLayer.onEdit = openFurnitureEditor;
   furnitureLayer.onDragBlocked = toast;
+  furnitureLayer.onDropPreview = (room) =>
+    toast(`Relâchez pour déposer le meuble dans « ${room.name} ».`);
+  furnitureLayer.onDroppedInRoom = (room) =>
+    toast(`Meuble déposé dans « ${room.name} ». Annulez avec Ctrl Z.`);
   furnitureLayer.snapPlacement = (item, candidates) =>
     snapDraggedFurniture(item, viewer.level, candidates, snapSettings, !magnetSuspended);
   furnitureLayer.onDragState = (dragging) => {

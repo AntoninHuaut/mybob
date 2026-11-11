@@ -27,12 +27,26 @@ const level: Level = {
   lights: [],
   spawn: { position: [2, 2], yaw: 0 },
 };
-function setup(items: FurnitureItem[], selectedId: string, withWall = false) {
+const room = (id: string, name: string, x0: number, x1: number): Level['rooms'][number] => ({
+  id,
+  name,
+  kind: 'living',
+  polygon: [
+    [x0, 0],
+    [x1, 0],
+    [x1, 10],
+    [x0, 10],
+  ],
+  label: [(x0 + x1) / 2, 5],
+  viewpoint: [(x0 + x1) / 2, 5],
+});
+function setup(items: FurnitureItem[], selectedId: string, withWall = false, withRooms = false) {
   const engine = new NullEngine();
   const scene = new Scene(engine);
   scene.useRightHandedSystem = true;
   const building = structuredClone(level);
   if (withWall) building.walls = [{ id: 'partition', start: [6, 0], end: [6, 10], thickness: 0.1 }];
+  if (withRooms) building.rooms = [room('ouest', 'Ouest', 0, 5.95), room('est', 'Est', 6.05, 12)];
   const layer = new FurnitureLayer(scene, building);
   layer.setItems(items);
   scene.activeCamera = new UniversalCamera('camera', new Vector3(0, 10, 0), scene);
@@ -259,5 +273,62 @@ test('snapping that holds an intended movement reports once without committing a
   assert.equal(messages.length, 1);
   assert.match(messages[0], /Accrochage actif/);
   assert.deepEqual(changes, []);
+  cleanup();
+});
+
+test('released over the room behind a partition, a piece lands there as one commit', () => {
+  const sofa = createFurniture({
+    id: 'sofa',
+    kind: 'cabinet',
+    width: 1,
+    depth: 0.5,
+    position: [3, 3],
+  });
+  const { scene, layer, changes, down, move, up, cleanup } = setup([sofa], 'sofa', true, true);
+  const dropped: string[] = [];
+  const previews: string[] = [];
+  layer.onDropPreview = (target) => previews.push(target.name);
+  layer.onDroppedInRoom = (target) => dropped.push(target.name);
+  down();
+  move(4, 3);
+  // Pointer behind the partition: the piece waits at the wall, a ghost shows the landing.
+  move(8, 3);
+  const waiting = changes.at(-1)!.items[0];
+  assert.ok(waiting.position[0] < 5.46, `crossed: ${waiting.position}`);
+  const ghost = scene.getTransformNodeByName('furniture-ghost:sofa');
+  assert.ok(ghost, 'no ghost shown');
+  assert.ok(Math.abs(ghost.position.x - 8) < 1e-6);
+  assert.ok(ghost.getChildMeshes().every((mesh) => !mesh.isPickable && mesh.visibility < 1));
+  up();
+  const final = changes.filter((change) => change.final);
+  assert.equal(final.length, 1);
+  assert.ok(Math.abs(final[0].items[0].position[0] - 8) < 1e-6);
+  assert.equal(final[0].items[0].width, 1);
+  assert.deepEqual(previews, ['Est']);
+  assert.deepEqual(dropped, ['Est']);
+  assert.equal(scene.getTransformNodeByName('furniture-ghost:sofa'), null);
+  cleanup();
+});
+
+test('a pointer back in the reachable room drops the ghost, and an interrupted drag never lands', () => {
+  const sofa = createFurniture({
+    id: 'sofa',
+    kind: 'cabinet',
+    width: 1,
+    depth: 0.5,
+    position: [3, 3],
+  });
+  const { scene, layer, changes, down, move, up, cleanup } = setup([sofa], 'sofa', true, true);
+  down();
+  move(8, 3);
+  move(4, 3);
+  assert.equal(scene.getTransformNodeByName('furniture-ghost:sofa'), null);
+  up();
+  assert.ok(Math.abs(changes.at(-1)!.items[0].position[0] - 4) < 1e-6);
+  down();
+  move(8, 4);
+  layer.setMode('overview'); // an interruption, like a blur or a cancelled pointer
+  assert.equal(scene.getTransformNodeByName('furniture-ghost:sofa'), null);
+  assert.ok(changes.at(-1)!.items[0].position[0] < 6);
   cleanup();
 });
