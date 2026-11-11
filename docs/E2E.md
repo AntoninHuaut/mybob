@@ -42,6 +42,12 @@ machine without a GPU. They go through the interface and downloaded files, witho
 the engine's internal instance nor modifying `localStorage` directly. Assertions on visible
 text match the French interface.
 
+`e2e/screen-lines.spec.ts` uses only the bundled studio. It probes exported Plan dimension
+coverage at DPR 1 and 2 and repeated settled overview exports after Plan round trips.
+Downloaded PNG data is decoded in memory, and only numeric summaries reach text logs;
+there are no image or trace attachments. These CI-only probes do not replace visual
+acceptance of thin window geometry or a measured motion-performance comparison.
+
 Configuration: `playwright.config.ts`.
 
 CI collects the current test list before assigning every test to exactly one shard,

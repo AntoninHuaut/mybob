@@ -336,3 +336,180 @@ test('Plan, walk and scene disposal cancel pending solar work', (t) => {
   }
   engine.dispose();
 });
+
+test('orbit temporal refinement waits for a rendered frame and precedes reused bloom', (t) => {
+  const engine = new NullEngine(),
+    scene = new Scene(engine),
+    camera = new UniversalCamera('orbit', Vector3.Zero(), scene);
+  let frame = 0;
+  t.mock.method(scene, 'getFrameId', () => frame);
+  const calls: string[] = [];
+  const temporal = {
+    samples: 16,
+    isEnabled: true,
+    factor: 0.05,
+    disableOnCameraMove: true,
+    dispose: () => calls.push('dispose:taa'),
+  };
+  const bloom = { bloomEnabled: true, dispose: () => calls.push('dispose:bloom') };
+  const factories = {
+    environment: () => undefined,
+    taa: () => undefined,
+    occlusion: () => undefined,
+    bloom: () => undefined,
+    orbitBloom: () => {
+      calls.push('bloom');
+      return bloom;
+    },
+    orbitTaa: () => {
+      calls.push('taa');
+      return temporal;
+    },
+  };
+  const effects = new ViewEffects(scene, factories);
+  try {
+    effects.updateOrbit(true, camera);
+    assert.deepEqual(
+      calls,
+      ['bloom'],
+      'initial frame can render without unsupported temporal setup',
+    );
+    frame = 1;
+    effects.updateOrbit(true, camera);
+    assert.deepEqual(
+      calls,
+      ['bloom', 'dispose:bloom', 'taa', 'bloom'],
+      'first supported temporal chain precedes bloom',
+    );
+    effects.updateOrbit(false, camera);
+    assert.equal(temporal.isEnabled, false, 'Plan detaches temporal refinement');
+    effects.updateOrbit(true, camera);
+    assert.equal(temporal.isEnabled, true);
+    effects.applyEffectTier(3);
+    assert.equal(temporal.samples, 16, 'orbit refinement is outside walk tiers');
+    effects.dispose();
+    effects.dispose();
+    assert.equal(calls.filter((c) => c === 'dispose:taa').length, 1);
+    assert.equal(
+      calls.filter((c) => c === 'bloom').length,
+      2,
+      'only the initial order correction rebuilds bloom',
+    );
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+import { createOrbitTaa } from '../src/scene/interiorAmbience';
+
+test('real orbit temporal chain keeps motion MSAA and precedes bloom across Plan round trips', (t) => {
+  const engine = new NullEngine(),
+    scene = new Scene(engine),
+    camera = new UniversalCamera('orbit', Vector3.Zero(), scene);
+  engine.getCaps().texelFetch = true;
+  t.mock.method(scene, 'getFrameId', () => 1);
+  let temporal: ReturnType<typeof createOrbitTaa>;
+  const effects = new ViewEffects(scene, {
+    environment: () => undefined,
+    taa: () => undefined,
+    occlusion: () => undefined,
+    bloom: () => undefined,
+    orbitTaa: (s, c) => (temporal = createOrbitTaa(s, c)),
+    orbitBloom: createOrbitBloom,
+  });
+  try {
+    effects.updateOrbit(true, camera);
+    assert.ok(temporal, 'capable engine creates temporal pipeline');
+    assert.equal(temporal.samples, 16);
+    assert.equal(temporal.msaaSamples, 4);
+    assert.equal(temporal.disableOnCameraMove, true);
+    assert.equal(temporal.reprojectHistory, false, 'orbit has no velocity pre-pass cost');
+    const chain = camera._postProcesses.filter(Boolean);
+    assert.deepEqual(
+      chain.slice(0, 2).map((p) => p!.name),
+      ['TAA', 'TAAPass'],
+    );
+    assert.ok(chain.length > 2);
+    for (let i = 0; i < 3; i++) {
+      effects.updateOrbit(false, camera);
+      assert.equal(camera._postProcesses.filter(Boolean).length, 0);
+      effects.updateOrbit(true, camera);
+      assert.deepEqual(camera._postProcesses.filter(Boolean), chain);
+    }
+    let count = 0;
+    const dispose = t.mock.method(temporal, 'dispose');
+    effects.renderCapture(() => {
+      count++;
+      assert.equal(temporal!.factor, 1 / count);
+      assert.equal(temporal!.disableOnCameraMove, false);
+    });
+    assert.equal(count, 16);
+    assert.equal(temporal.disableOnCameraMove, true);
+    const originalFactor = temporal.factor;
+    assert.throws(
+      () =>
+        effects.renderCapture(() => {
+          throw new Error('capture aborted');
+        }),
+      /capture aborted/,
+    );
+    assert.equal(temporal.factor, originalFactor);
+    assert.equal(temporal.disableOnCameraMove, true);
+    effects.dispose();
+    effects.dispose();
+    assert.equal(dispose.mock.callCount(), 1);
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+import { RenderScheduler } from '../src/scene/renderScheduler';
+test('orbit setup invalidates once and still reaches the scheduler idle state', () => {
+  const engine = new NullEngine(),
+    scene = new Scene(engine),
+    camera = new UniversalCamera('orbit', Vector3.Zero(), scene);
+  const scheduler = new RenderScheduler();
+  let invalidations = 0;
+  scene.getFrameId = () => 1;
+  const effects = new ViewEffects(
+    scene,
+    {
+      environment: () => undefined,
+      taa: () => undefined,
+      occlusion: () => undefined,
+      bloom: () => undefined,
+      orbitBloom: () => undefined,
+      orbitTaa: () => ({
+        samples: 16,
+        isEnabled: true,
+        factor: 0.05,
+        disableOnCameraMove: true,
+        dispose() {},
+      }),
+    },
+    undefined,
+    () => {
+      invalidations++;
+      scheduler.request();
+    },
+  );
+  try {
+    effects.updateOrbit(true, camera);
+    let rendered = 0;
+    for (let frame = 0; frame < 100; frame++) {
+      if (scheduler.shouldRender(frame * 8, 'same-camera', () => false)) {
+        rendered++;
+        effects.updateOrbit(true, camera);
+      }
+    }
+    assert.equal(invalidations, 1);
+    assert.equal(rendered, 32);
+    assert.equal(scheduler.idle, true);
+  } finally {
+    effects.dispose();
+    scene.dispose();
+    engine.dispose();
+  }
+});

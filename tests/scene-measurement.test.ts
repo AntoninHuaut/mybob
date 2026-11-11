@@ -79,3 +79,33 @@ test('measurement preview updates one line, commits the snapped end and resets c
   assert.equal(viewer.clearPinnedMeasurements(), false);
   engine.dispose();
 });
+
+test('overall dimensions group screen-width geometry into one non-pickable mesh', () => {
+  const engine = new NullEngine(),
+    scene = new Scene(engine);
+  const viewer = Object.assign(Object.create(HouseViewer.prototype), {
+    scene,
+    engine,
+    dimensions: [],
+    level: {
+      outline: [
+        [0, 0],
+        [8, 0],
+        [8, 6],
+        [0, 6],
+      ],
+      elevation: 0,
+    },
+  }) as HouseViewer;
+  try {
+    (viewer as unknown as { buildDimensions(): void }).buildDimensions();
+    const lines = scene.meshes;
+    assert.equal(lines.length, 1, 'dimension polylines share one draw mesh');
+    assert.equal(lines[0].getClassName(), 'GreasedLineMesh');
+    assert.equal(lines[0].isPickable, false);
+    assert.equal(lines[0].isEnabled(), false);
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
