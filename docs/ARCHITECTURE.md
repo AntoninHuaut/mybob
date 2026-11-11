@@ -162,6 +162,10 @@ are explicit, while project loading and share-link adoption keep their existing 
   subsequent Plan round trips detach/reuse both pipelines. Plan resets the projection
   matrix to discard jitter. Orbit TAA stays outside walk effect tiers and does not
   request frames after initial setup: the existing 32-frame settle budget owns idle work.
+  Screen overlays — room labels, dimension tags, the measure tag, export captions — project
+  through the camera's unjittered matrix, restored from a forced recompute so the geometry
+  pass keeps its sample; read through the jittered scene transform they tremble on every
+  settle frame.
 - Image export takes a fresh 16-sample average with frozen camera input when orbit TAA is
   active, so changed dimension/measurement visibility does not inherit old history.
   It restores blend/motion policy even on failure, resets camera history and requests

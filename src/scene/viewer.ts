@@ -963,6 +963,21 @@ export class HouseViewer {
     }
   }
 
+  /**
+   * Screen overlays project through the unjittered camera. The temporal pipeline writes
+   * its sample offset into the camera's cached projection matrix; the still image is the
+   * average of those offsets, so a label or a measure tag read through the jittered matrix
+   * trembles on every settle frame. The cached matrix is put back so the next geometry
+   * pass keeps its own sample.
+   */
+  private overlayTransform(): Matrix {
+    const camera = this.scene.activeCamera!;
+    const jittered = camera.getProjectionMatrix().clone();
+    const clean = camera.getProjectionMatrix(true).clone();
+    camera.getProjectionMatrix().copyFrom(jittered);
+    return camera.getViewMatrix().multiply(clean);
+  }
+
   project(point: Point2, height = 0.04) {
     const camera = this.scene.activeCamera!;
     const viewport = camera.viewport.toGlobal(
@@ -972,7 +987,7 @@ export class HouseViewer {
     const v = Vector3.Project(
       new Vector3(point[0], this.level.elevation + height, point[1]),
       Matrix.IdentityReadOnly,
-      this.scene.getTransformMatrix(),
+      this.overlayTransform(),
       viewport,
     );
     const x = (v.x / this.engine.getRenderWidth()) * this.canvas.clientWidth;
