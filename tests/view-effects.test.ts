@@ -568,6 +568,10 @@ test('the orbit refinement counts only while enabled, so Plan keeps its idle red
     assert.equal(effects.temporalActive, false);
   } finally {
     effects.dispose();
+    scene.dispose();
+    engine.dispose();
+  }
+});
 
 test('leaving the walk switches the temporal jitter plugin off before the pipeline is disposed', () => {
   const engine = new NullEngine();
