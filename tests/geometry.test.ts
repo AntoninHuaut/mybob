@@ -13,12 +13,21 @@ import {
   roofFaceHeightAt,
   roofFacePlanOutline,
   roofWindowPoint,
+  resolveRoofDormer,
   resolveRoofWindow,
   traversable,
   wallLength,
   wallSections,
 } from '../src/model/geometry';
-import type { Level, Opening, Point2, Room, Wall } from '../src/model/types';
+import type {
+  HouseProject,
+  Level,
+  Opening,
+  Point2,
+  RoofDormer,
+  Room,
+  Wall,
+} from '../src/model/types';
 
 const near = (actual: number, expected: number, tolerance = 1e-9) =>
   assert.ok(Math.abs(actual - expected) <= tolerance, `${actual} ≠ ${expected}`);
@@ -486,6 +495,17 @@ test('roofWindowPoint is the centre plus across, up and depth along their own ax
   near(x, 12);
   near(y, 20 + 3 - 0.8);
   near(z, 30 + 4 + 0.6);
+  // A rotated roof exercises every nonzero horizontal component of the basis.
+  const rotated = {
+    ...frame,
+    across: [0.8, 0, -0.6] as Vertex,
+    up: [0.36, 0.8, 0.48] as Vertex,
+    normal: [-0.48, 0.6, -0.64] as Vertex,
+  };
+  const point = roofWindowPoint(rotated, 2, 5, -1);
+  near(point[0], 13.88);
+  near(point[1], 23.4);
+  near(point[2], 31.84);
 });
 
 // Windows on the pitched face: across = +x, up climbs towards +z.
@@ -588,4 +608,197 @@ test('resolveRoofWindow refuses vertical and horizontal faces, and ignores the w
     resolveRoofWindow(line, [[0, 1, 2]], roofWindow({ center: [1, 0] })).error ?? '',
     /Aucun pan/,
   );
+});
+
+// A dormer case: level datum 1 m, back wall along x at z = 8 (0.3 thick, 3 m tall, so its
+// top is at 4), footprint 1 m wide and 1 m deep resting on its interior face (z = 7.85).
+// The pierced face rises 1 m per metre inwards from 3.5 at the outer face (z = 8.15); a
+// first face, on the other side of the ridge, carries nothing. `swap` exchanges x and z.
+function dormerCase(
+  edit: {
+    wall?: Partial<Wall>;
+    dormer?: Partial<RoofDormer>;
+    ceilingHeight?: number;
+    tilt?: number;
+    onlyDecoy?: boolean;
+  } = {},
+  swap = false,
+) {
+  const p = (x: number, z: number): Point2 => (swap ? [z, x] : [x, z]);
+  const v = (x: number, y: number, z: number): [number, number, number] =>
+    swap ? [z, y, x] : [x, y, z];
+  const height = (x: number, z: number) => 3.5 + (8.15 - z) + (edit.tilt ?? 0) * x;
+  const vertices = [
+    v(0, height(0, 4), 4),
+    v(10, height(10, 4), 4),
+    v(10, 3.65, 0),
+    v(0, 3.65, 0),
+    v(0, height(0, 9), 9),
+    v(10, height(10, 9), 9),
+    v(10, height(10, 4), 4),
+    v(0, height(0, 4), 4),
+  ];
+  const faces = edit.onlyDecoy
+    ? [[0, 1, 2, 3]]
+    : [
+        [0, 1, 2, 3],
+        [4, 5, 6, 7],
+      ];
+  const back: Wall = {
+    id: 'fond',
+    start: p(2, 8),
+    end: p(5, 8),
+    thickness: 0.3,
+    height: 3,
+    exterior: true,
+    ...edit.wall,
+  };
+  const level = {
+    id: 'combles',
+    name: 'Combles',
+    elevation: 1,
+    ceilingHeight: edit.ceilingHeight ?? 2.6,
+    outline: [p(0, 0), p(10, 0), p(10, 8.15), p(0, 8.15)],
+    walls: [back],
+    rooms: [],
+    lights: [],
+    spawn: { position: p(5, 4), yaw: 0 },
+  } as Level;
+  const dormer: RoofDormer = {
+    id: 'lucarne',
+    start: p(3, 7.85),
+    end: p(4, 6.85),
+    wallId: 'fond',
+    ...edit.dormer,
+  };
+  return resolveRoofDormer({ levels: [level] } as unknown as HouseProject, vertices, faces, dormer);
+}
+
+test('resolveRoofDormer: the frame of a dormer resting on its back wall, in either axis', () => {
+  for (const swap of [false, true]) {
+    const { frame, error } = dormerCase({}, swap);
+    assert.equal(error, undefined);
+    assert.ok(frame);
+    assert.equal(frame.acrossZ, !swap);
+    assert.equal(frame.faceIndex, 1);
+    assert.equal(frame.wall.id, 'fond');
+    assert.equal(frame.level.id, 'combles');
+    near(frame.front, 8.15);
+    // Without a slope, the dormer roof meets the face at the back of the footprint.
+    near(frame.meet, 6.85);
+    near(frame.sideLow, 3 - 0.003);
+    near(frame.sideHigh, 4 + 0.003);
+    near(frame.frontTop, 4);
+  }
+  // The corners may be given in any order; the wall height defaults to the ceiling.
+  const reversed = dormerCase({ dormer: { start: [4, 6.85], end: [3, 7.85] } });
+  near(reversed.frame!.front, 8.15);
+  near(reversed.frame!.sideLow, 2.997);
+  const ceiling = dormerCase({ wall: { height: undefined }, ceilingHeight: 3 });
+  near(ceiling.frame!.frontTop, 4);
+});
+
+test('resolveRoofDormer: a declared slope moves the join with the roof face inside the footprint', () => {
+  // Wall top 4, face 3.5 at the front and rising 1 per metre: a 0.25 slope joins it
+  // 0.5 / 0.75 m behind the outer face; a flat roof joins it 0.5 m behind.
+  for (const swap of [false, true]) {
+    near(dormerCase({ dormer: { slope: 0.25 } }, swap).frame!.meet, 8.15 - 0.5 / 0.75);
+    near(dormerCase({ dormer: { slope: 0 } }, swap).frame!.meet, 7.65);
+  }
+  // As steep as the face, or joining it past the back of the footprint: never meets it.
+  for (const slope of [1, 0.9])
+    assert.match(dormerCase({ dormer: { slope } }).error!, /éloigne son toit/);
+  for (const slope of [-0.1, 10.5, Number.NaN, Number.POSITIVE_INFINITY])
+    assert.match(dormerCase({ dormer: { slope } }).error!, /entre 0 et 10/);
+});
+
+test('resolveRoofDormer: each inconsistency of the data is refused with its reason', () => {
+  const refused = (edit: Parameters<typeof dormerCase>[0], reason: RegExp) => {
+    const { frame, error } = dormerCase(edit);
+    assert.equal(frame, undefined);
+    assert.match(error ?? '', reason);
+  };
+  refused({ dormer: { end: [4, 7.82] } }, /rectangle en plan/);
+  refused({ dormer: { end: [3.04, 6.85] } }, /rectangle en plan/);
+  refused({ dormer: { wallId: 'absent' } }, /ne trouve pas son mur de fond absent/);
+  refused({ dormer: { start: [20, 7.85], end: [21, 6.85] } }, /reposer sur le niveau/);
+  refused({ wall: { exterior: undefined } }, /doit être un mur extérieur/);
+  refused({ wall: { end: [5, 9] } }, /parallèle/);
+  refused({ wall: { start: [8, 2], end: [9, 5] } }, /parallèle/);
+  refused({ wall: { end: [5, 8.05] } }, /droit/);
+  refused({ dormer: { start: [3, 7.6], end: [4, 6.6] } }, /nu intérieur/);
+  refused(
+    { wall: { thickness: 0.02 }, dormer: { start: [3, 8.025], end: [4, 7.97] } },
+    /au moins 5 cm de profondeur/,
+  );
+  refused({ dormer: { start: [4.5, 7.85], end: [5.5, 6.85] } }, /ne couvre pas la largeur/);
+  refused({ onlyDecoy: true }, /Aucun pan ne porte l'emprise de la lucarne lucarne/);
+  refused({ tilt: 0.1 }, /s'incline le long de son emprise/);
+  refused({ wall: { height: 2.5 } }, /ne dépasse pas la couverture/);
+});
+
+test('resolveRoofDormer: the tolerances accept what lies just inside them', () => {
+  const accepted = (edit: Parameters<typeof dormerCase>[0]) => {
+    const { frame, error } = dormerCase(edit);
+    assert.equal(error, undefined);
+    assert.ok(frame);
+    return frame;
+  };
+  // 2.9 cm off the interior face (tolerance 3 cm); the wall covering 98 of 100 cm.
+  near(accepted({ dormer: { start: [3, 7.821], end: [4, 6.85] } }).front, 8.15);
+  accepted({ dormer: { start: [4.02, 7.85], end: [5.02, 6.85] } });
+  // A wall barely out of square, and its top 1 cm above the face at the front.
+  accepted({ wall: { end: [5, 8.005] } });
+  accepted({ wall: { height: 2.51 } });
+  // A tiny tilt along the wall, within a centimetre over the footprint width.
+  accepted({ tilt: 0.005 });
+});
+
+test('resolveRoofWindow on a face sloping along both axes keeps the frame in the plane, to size', () => {
+  // y = x / 4 + z / 2, wound either way; the window is read across and along the slope.
+  const tilted: Vertex[] = [
+    [0, 0, 0],
+    [8, 2, 0],
+    [8, 4, 4],
+    [0, 2, 4],
+  ];
+  for (const face of [
+    [0, 1, 2, 3],
+    [3, 2, 1, 0],
+  ]) {
+    const { frame, error } = resolveRoofWindow(
+      tilted,
+      [face],
+      roofWindow({ center: [4, 2], width: 1.2, height: 0.8 }),
+    );
+    assert.equal(error, undefined);
+    assert.ok(frame);
+    const dot = (a: Vertex, b: Vertex) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+    const length = (a: Vertex) => Math.sqrt(dot(a, a));
+    // The normal points above the roofing, perpendicular to y = x / 4 + z / 2.
+    const expected = [-0.25, 1, -0.5].map((c) => c / Math.hypot(0.25, 1, 0.5));
+    frame.normal.forEach((c, i) => near(c, expected[i]));
+    near(length(frame.up), 1);
+    near(length(frame.across), 1);
+    near(frame.across[1], 0);
+    near(dot(frame.up, frame.normal), 0);
+    near(dot(frame.across, frame.normal), 0);
+    near(dot(frame.up, frame.across), 0);
+    assert.ok(frame.up[1] > 0, 'up climbs the slope');
+    near(frame.center[1], 4 / 4 + 2 / 2);
+    for (const corner of frame.corners)
+      near(roofFaceHeightAt(tilted, face, corner[0], corner[2]), corner[1]);
+    const gap = (a: Vertex, b: Vertex) => length([b[0] - a[0], b[1] - a[1], b[2] - a[2]]);
+    near(gap(frame.corners[0], frame.corners[1]), 1.2);
+    near(gap(frame.corners[1], frame.corners[2]), 0.8);
+  }
+});
+
+test('resolveRoofWindow measures its edge margin even when the face repeats a vertex', () => {
+  const repeated: Vertex[] = [...pitch, pitch[1]];
+  // The face pitchFace with its second vertex given twice: a zero-length edge.
+  const face = [pitchFace[0], pitchFace[1], 4, ...pitchFace.slice(2)];
+  const at = (x: number) => resolveRoofWindow(repeated, [face], roofWindow({ center: [x, 1] }));
+  assert.match(at(0.504).error ?? '', /déborde/);
+  assert.ok(at(0.506).frame);
 });
