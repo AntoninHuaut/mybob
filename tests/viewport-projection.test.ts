@@ -61,7 +61,9 @@ test('still frames skip projection and camera movement restores it immediately',
   assert.ok(heights.length > movedCount);
 });
 
-function setup() {
+function setup(
+  getObstacles: () => { x: number; y: number; width: number; height: number }[] = () => [],
+) {
   const window = new Window();
   window.document.body.innerHTML = `<div id="viewport">
     <div id="orientation-arrow"></div><div id="scene-labels"><button data-label="small"></button></div>
@@ -75,7 +77,7 @@ function setup() {
   const projection = new ViewportProjection(
     viewport,
     { moveTo: (point) => moves.push(point) },
-    () => [],
+    getObstacles,
   );
   const heights: (number | undefined)[] = [];
   const view: Pick<HouseViewer, 'mode' | 'level' | 'measureMode' | 'measurement' | 'project'> = {
@@ -145,4 +147,28 @@ test('keyboard selection changes invalidate still-frame label obstacles', () => 
   window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key: 'Escape' }));
   projection.update(view, still, preferences);
   assert.ok(heights.length > count);
+});
+
+test('furniture revisions move labels away from changed obstacles without idle layout work', () => {
+  let obstacles = [{ x: 0, y: 0, width: 30, height: 30 }];
+  let queries = 0;
+  const { projection, view, el } = setup(() => {
+    queries++;
+    return obstacles;
+  });
+  Object.assign(view, { mode: 'plan' });
+  const label = el('[data-label]');
+  Object.defineProperties(label, { offsetWidth: { value: 100 }, offsetHeight: { value: 24 } });
+  const still = { ...frame, cameraMoved: false, furnitureObstaclesRevision: 1 };
+  projection.update(view, still, preferences);
+  const first = [label.style.left, label.style.top, label.hidden];
+  assert.equal(queries, 1);
+  projection.update(view, still, preferences);
+  assert.equal(queries, 1);
+  obstacles = [{ x: 140, y: 120, width: 120, height: 60 }];
+  projection.update(view, { ...still, furnitureObstaclesRevision: 2 }, preferences);
+  assert.equal(queries, 2);
+  assert.notDeepEqual([label.style.left, label.style.top, label.hidden], first);
+  projection.update(view, { ...still, furnitureObstaclesRevision: 2 }, preferences);
+  assert.equal(queries, 2);
 });

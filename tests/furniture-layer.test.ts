@@ -1,5 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { Color3 } from '@babylonjs/core/Maths/math.color';
+import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
@@ -8,7 +10,11 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Ray } from '@babylonjs/core/Culling/ray';
 import { PointerEventTypes, PointerInfo } from '@babylonjs/core/Events/pointerEvents';
 import { PickingInfo } from '@babylonjs/core/Collisions/pickingInfo';
-import { FurnitureLayer } from '../src/furniture/layer';
+import {
+  FurnitureLayer,
+  furnitureRevision,
+  furnitureObstaclesRevision,
+} from '../src/furniture/layer';
 import { furnitureViewState } from '../src/furniture/viewState';
 import type { FurnitureItem } from '../src/furniture/model';
 import type { Level } from '../src/model/types';
@@ -197,9 +203,20 @@ test('drag emits live positions and exactly one final commit, respecting lock an
   layer.onChange = (items, final) => changes.push({ position: items[0].position, final });
   layer.onDragState = (state) => states.push(state);
   emit(PointerEventTypes.POINTERDOWN);
+  const geometryBeforeMove = furnitureRevision(scene);
+  const obstaclesBeforeMove = furnitureObstaclesRevision(scene);
   x = 3;
   z = 4;
   emit(PointerEventTypes.POINTERMOVE);
+  assert.ok(furnitureRevision(scene) > geometryBeforeMove);
+  assert.ok(furnitureObstaclesRevision(scene) > obstaclesBeforeMove);
+  const afterMove = furnitureObstaclesRevision(scene);
+  scene.onBeforeRenderObservable.notifyObservers(scene);
+  assert.equal(
+    furnitureObstaclesRevision(scene),
+    afterMove,
+    'an idle overview frame does not invalidate label obstacles',
+  );
   x = 4;
   emit(PointerEventTypes.POINTERMOVE);
   emit(PointerEventTypes.POINTERUP);
@@ -399,5 +416,51 @@ test('furniture has PBR finishes and nondegenerate chamfer triangles inside exac
     const cross = Vector3.Cross(points[1].subtract(points[0]), points[2].subtract(points[0]));
     assert.ok(cross.lengthSquared() > 1e-15);
   }
+  cleanup();
+});
+
+test('bright fabric colours retain distinct exact channels and independent ownership', () => {
+  const { scene, layer, cleanup } = setup();
+  const a = { ...item(), id: 'bright-a', color: '#fefefe' };
+  const b = { ...item(), id: 'bright-b', color: '#ffffff' };
+  layer.setItems([a, b]);
+  const fabric = (id: string) =>
+    scene.meshes.find(
+      (mesh) => mesh.metadata?.id === id && mesh.material?.name.endsWith(':fabric'),
+    )!.material as PBRMaterial;
+  const first = fabric(a.id),
+    second = fabric(b.id);
+  assert.notEqual(first, second);
+  assert.deepEqual(
+    first.albedoColor.asArray(),
+    Color3.FromHexString(a.color).scale(1.13).asArray(),
+  );
+  assert.deepEqual(
+    second.albedoColor.asArray(),
+    Color3.FromHexString(b.color).scale(1.13).asArray(),
+  );
+  layer.setItems([b]);
+  assert.equal(fabric(b.id), second);
+  assert.ok(scene.materials.includes(second));
+  assert.deepEqual(
+    second.albedoColor.asArray(),
+    Color3.FromHexString(b.color).scale(1.13).asArray(),
+  );
+  cleanup();
+});
+
+test('Plan glass preserves two-sided rendering, alpha and exact diffuse channels', () => {
+  const { scene, layer, cleanup } = setup();
+  layer.setItems([item('shower')]);
+  const glass = scene.meshes.find((mesh) => mesh.material?.name.endsWith(':glass'))!;
+  const physical = glass.material as PBRMaterial;
+  layer.setView({ mode: 'plan', interactive: true });
+  assert.ok(glass.material instanceof StandardMaterial);
+  assert.equal(glass.material.backFaceCulling, false);
+  assert.equal(glass.material.alpha, physical.alpha);
+  assert.notEqual(glass.material.diffuseColor, physical.albedoColor);
+  assert.deepEqual(glass.material.diffuseColor.asArray(), physical.albedoColor.asArray());
+  layer.setView({ mode: 'overview', interactive: true });
+  assert.equal(glass.material, physical);
   cleanup();
 });

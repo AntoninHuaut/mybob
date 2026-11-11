@@ -44,7 +44,7 @@ import { builtOutline, exteriorOverview, fitOverview, fitPlan, siteOverviewLevel
 import { panOrbitWithKeys } from './orbitNavigation';
 import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
 import { ShadowRefresh } from './shadowRefresh';
-import { furnitureRevision } from '../furniture/layer';
+import { furnitureRevision, furnitureObstaclesRevision } from '../furniture/layer';
 import { RenderScheduler, WAKE_EVENTS } from './renderScheduler';
 import { AdaptiveResolution } from './adaptiveResolution';
 import {
@@ -96,6 +96,7 @@ export function preloadImmersive() {
 }
 export interface FrameInfo {
   cameraMoved?: boolean;
+  furnitureObstaclesRevision?: number;
   position: Point2;
   headingDegrees: number;
   planUpDegrees: number;
@@ -931,7 +932,7 @@ export class HouseViewer {
       active && !explicitSection ? (this.wallDisplay ?? 'auto') : 'full',
       camera,
     );
-    // Called on every image: only a different set of cut walls changes the casters.
+    // Only a different set of cut walls changes the casters.
     const selection = [...selected].join('|');
     if (selection !== this.cutawaySelection) {
       this.cutawaySelection = selection;
@@ -1376,6 +1377,7 @@ export class HouseViewer {
       const position = this.immersive.position;
       this.onFrame?.({
         cameraMoved,
+        furnitureObstaclesRevision: furnitureObstaclesRevision(this.scene),
         position,
         headingDegrees: planHeading(this.immersive.camera),
         planUpDegrees: this.planUpDegrees(),
@@ -1429,6 +1431,7 @@ export class HouseViewer {
       const hit = this.walkHit;
       this.onFrame?.({
         cameraMoved,
+        furnitureObstaclesRevision: furnitureObstaclesRevision(this.scene),
         position: [p.x, p.z],
         headingDegrees: planHeading(this.walk),
         planUpDegrees: this.planUpDegrees(),
@@ -1464,6 +1467,7 @@ export class HouseViewer {
       }
       this.onFrame?.({
         cameraMoved,
+        furnitureObstaclesRevision: furnitureObstaclesRevision(this.scene),
         position: [this.walk.position.x, this.walk.position.z],
         headingDegrees: planHeading(this.walk),
         planUpDegrees: this.planUpDegrees(),

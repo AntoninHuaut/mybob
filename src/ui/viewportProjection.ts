@@ -70,6 +70,7 @@ export class ViewportProjection {
       viewer.mode,
       viewer.measureMode,
       viewer.measurement,
+      frame.furnitureObstaclesRevision,
     ]);
     const projectLabels =
       frame.cameraMoved !== false ||

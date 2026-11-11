@@ -61,7 +61,7 @@ function fixture() {
       (key) => [key, material],
     ),
   ) as unknown as Materials;
-  buildHouse(level, scene, materials);
+  const house = buildHouse(level, scene, materials);
   const facade = MeshBuilder.CreateBox('facade', { width: 4, height: 2.5, depth: 0.02 }, scene);
   facade.material = material;
   facade.metadata = { kind: 'exterior', exteriorKind: 'facade', wallId: 'north' };
@@ -82,7 +82,7 @@ function fixture() {
     planOpenings: markers,
     wallCutaway: cutaway,
   }) as HouseViewer;
-  return { engine, scene, material, markers, cutaway, viewer, floor, furniture, facade };
+  return { engine, scene, material, markers, cutaway, viewer, floor, furniture, facade, house };
 }
 
 test('automatic display lowers only near exterior walls and preserves shared floor/furniture materials', () => {
@@ -424,7 +424,7 @@ test('a short return of a recessed entrance lowers with the facade it extends', 
 
 test('settle frames skip cutaway application and movement applies it on that frame', (t) => {
   const { engine, scene, viewer, cutaway } = fixture();
-  const scheduler = { cameraMoved: false };
+  const scheduler = { cameraMoved: false, request() {} };
   Object.assign(viewer, {
     engine,
     renderScheduler: scheduler,
@@ -444,12 +444,6 @@ test('settle frames skip cutaway application and movement applies it on that fra
   scheduler.cameraMoved = false;
   draw();
   assert.equal(apply.mock.callCount(), 1);
-  scene.dispose();
-  engine.dispose();
-});
-
-test('walk aim reuses still hits and furniture changes refresh aim and shadow casters', (t) => {
-  const { engine, scene, viewer } = fixture();
   const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
   Object.defineProperty(globalThis, 'document', {
     configurable: true,
@@ -459,7 +453,80 @@ test('walk aim reuses still hits and furniture changes refresh aim and shadow ca
     if (previous) Object.defineProperty(globalThis, 'document', previous);
     else Reflect.deleteProperty(globalThis, 'document');
   });
-  const scheduler = { cameraMoved: true };
+  Object.assign(viewer, {
+    canvas: {},
+    dimensions: [],
+    eyeHeight: 1.65,
+    ...Object.fromEntries(
+      [
+        'cancelOrbitTour',
+        'clearKeys',
+        'cancelCaptureRetry',
+        'updateRoofVisibility',
+        'setGoToMode',
+        'setMeasureMode',
+        'setOrthoSize',
+        'fitOverview',
+        'updateLighting',
+        'updateInteriorAmbience',
+        'updateOrbitBloom',
+      ].map((name) => [name, () => {}]),
+    ),
+  });
+  t.mock.method(viewer.orbit, 'attachControl', () => {});
+  t.mock.method(viewer.walk, 'attachControl', () => {});
+  assert.equal(viewer.setMode('plan'), true);
+  assert.equal(apply.mock.callCount(), 2, 'mode change applies full walls immediately');
+  scheduler.cameraMoved = true;
+  draw();
+  scheduler.cameraMoved = false;
+  draw();
+  draw();
+  assert.equal(apply.mock.callCount(), 2, 'Plan frames never reapply full walls');
+  assert.equal(viewer.setMode('overview'), true);
+  assert.equal(apply.mock.callCount(), 3, 'returning to overview restores cutaways immediately');
+  draw();
+  assert.equal(apply.mock.callCount(), 3);
+  Object.assign(viewer, {
+    level: {
+      ...level,
+      rooms: [
+        {
+          id: 'test-room',
+          name: 'Test room',
+          kind: 'living',
+          polygon: level.outline,
+          label: [1, 1],
+          viewpoint: [1, 1],
+        },
+      ],
+    },
+  });
+  assert.equal(viewer.setMode('walk', false, [1, 1]), true);
+  assert.equal(apply.mock.callCount(), 4, 'entering walk restores full walls immediately');
+  const ray = t.mock.method(scene, 'pickWithRay');
+  draw();
+  assert.equal(ray.mock.callCount(), 1, 'mode entry invalidates the walk aim with a still camera');
+  draw();
+  draw();
+  assert.equal(ray.mock.callCount(), 1);
+  assert.equal(apply.mock.callCount(), 4, 'stationary walk frames do not apply cutaways');
+  scene.dispose();
+  engine.dispose();
+});
+
+test('walk aim reuses still hits and furniture changes refresh aim and shadow casters', (t) => {
+  const { engine, scene, viewer, house } = fixture();
+  const previous = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', {
+    configurable: true,
+    value: new Window().document,
+  });
+  t.after(() => {
+    if (previous) Object.defineProperty(globalThis, 'document', previous);
+    else Reflect.deleteProperty(globalThis, 'document');
+  });
+  const scheduler = { cameraMoved: true, request() {} };
   const map = { renderList: [] as import('@babylonjs/core/Meshes/abstractMesh').AbstractMesh[] };
   let invalidations = 0;
   Object.assign(viewer, {
@@ -475,6 +542,11 @@ test('walk aim reuses still hits and furniture changes refresh aim and shadow ca
     sun: { getShadowGenerator: () => ({ getShadowMap: () => map }) },
     shadowRefresh: { invalidate: () => invalidations++, step() {} },
   });
+  t.mock.method(engine, 'getDeltaTime', () => 16);
+  let obstacleRevision = -1;
+  viewer.onFrame = (frame) => {
+    obstacleRevision = frame.furnitureObstaclesRevision ?? -1;
+  };
   const pick = t.mock.method(scene, 'pickWithRay', () => null);
   const draw = () => (viewer as unknown as { beforeFrame(): void }).beforeFrame();
   draw();
@@ -484,9 +556,11 @@ test('walk aim reuses still hits and furniture changes refresh aim and shadow ca
   draw();
   assert.equal(pick.mock.callCount(), 1);
   const layer = new FurnitureLayer(scene, level);
+  const oldRevision = obstacleRevision;
   layer.setItems([createFurniture({ kind: 'table', position: [1, 1] })]);
   draw();
   assert.equal(pick.mock.callCount(), 2);
+  assert.ok(obstacleRevision > oldRevision);
   assert.ok(invalidations >= 2);
   assert.equal(map.renderList.length, 2);
   assert.ok(map.renderList.every((mesh) => mesh.metadata.kind === 'furniture'));
@@ -496,6 +570,21 @@ test('walk aim reuses still hits and furniture changes refresh aim and shadow ca
   scheduler.cameraMoved = true;
   draw();
   assert.equal(pick.mock.callCount(), 4);
+  scheduler.cameraMoved = false;
+  Object.assign(viewer, { house });
+  const door = house.doors[0];
+  door.progress = 0;
+  door.target = 1;
+  draw();
+  draw();
+  assert.equal(pick.mock.callCount(), 6, 'every animated door pose invalidates the aim');
+  door.progress = door.target;
+  draw();
+  draw();
+  assert.equal(pick.mock.callCount(), 6, 'settled door stops invalidating the aim');
+  viewer.requestRender();
+  draw();
+  assert.equal(pick.mock.callCount(), 7, 'explicit mode/cutaway render invalidates the cached aim');
   layer.dispose();
   scene.dispose();
   engine.dispose();

@@ -36,7 +36,12 @@ import { layoutLabels, type LabelRect } from '../ui/labelLayout';
 import type { FurnitureViewState } from './viewState';
 
 const revisions = new WeakMap<Scene, number>();
+const overlayRevisions = new WeakMap<Scene, number>();
 export const furnitureRevision = (scene: Scene): number => revisions.get(scene) ?? 0;
+export const furnitureObstaclesRevision = (scene: Scene): number =>
+  furnitureRevision(scene) + (overlayRevisions.get(scene) ?? 0);
+const overlaysChanged = (scene: Scene) =>
+  overlayRevisions.set(scene, (overlayRevisions.get(scene) ?? 0) + 1);
 const changed = (scene: Scene) => revisions.set(scene, furnitureRevision(scene) + 1);
 
 export interface FurnitureOverlays {
@@ -322,6 +327,7 @@ export class FurnitureLayer {
       ...camera.getViewMatrix().m,
     ].join(',');
     if (signature === this.labelSignature && this.labelRoot === this.overlayRoot) return;
+    overlaysChanged(this.scene);
     this.labelSignature = signature;
     this.labelRoot = this.overlayRoot;
     const span = Math.abs((camera.orthoTop ?? 1) - (camera.orthoBottom ?? -1));
@@ -379,7 +385,7 @@ export class FurnitureLayer {
     root.metadata = { kind: 'furniture', id: item.id };
     const materials: PBRMaterial[] = [];
     const material = (name: string, color: Color3) => {
-      const key = `${name}:${color.toHexString()}`;
+      const key = JSON.stringify([name, color.r, color.g, color.b]);
       const cached = this.materialCache.get(key);
       if (cached) {
         if (materials.includes(cached.material)) return cached.material;
@@ -1060,6 +1066,7 @@ export class FurnitureLayer {
   }
 
   private drawOverlays(): void {
+    overlaysChanged(this.scene);
     this.clearOverlays();
     const item = this.items.find((candidate) => candidate.id === this.selected);
     if (!item || !this.interactive) return;
@@ -1242,6 +1249,7 @@ export class FurnitureLayer {
             ? new Color3(0.25, 0.28, 0.3)
             : new Color3(0.08, 0.08, 0.08);
           flat.alpha = finish.alpha;
+          flat.backFaceCulling = finish.backFaceCulling;
           this.planMaterials.set(finish, flat);
         }
         material = flat;

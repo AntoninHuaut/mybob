@@ -90,13 +90,13 @@ During the walk, aiming at a piece less than three metres away then pressing F o
 
 Furniture bodies merge into one triangle mesh per used finish, preserving their root,
 identifier, picking and collision shape. Materials are created only when used, shared by
-role and colour, reference counted, and released with the final owning visual. Moving or
+role and exact colour channels (without hex rounding), reference counted, and released with the final owning visual. Moving or
 elevating an unchanged piece reuses its meshes; dimension/shape/colour edits rebuild it.
 Ghosts use the same finish cache and remain non-pickable.
 
 The 3D finishes use PBR: finish roughness 0.6, fabric 0.95 with fine plaster relief,
 wood feet 0.55, linen 0.9 and metallic handles 0.35. Plan uses a lazily shared StandardMaterial
-counterpart with the previous diffuse/specular palette. Counterparts are released on return
+counterpart with the previous diffuse/specular palette, alpha and face-culling policy. Counterparts are released on return
 to 3D. Box parts have a 4 mm chamfer, reduced to one fifth of the thinnest dimension for
 small parts; L-shaped upholstery keeps its closed continuous polygonal solids.
 

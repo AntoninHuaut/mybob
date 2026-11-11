@@ -373,7 +373,9 @@ last call, and read back at start-up.
   merge separately per wall, material, picking and collision policy; trim keeps a name outside
   the `wall:<id>:` shell prefix. Merged shadow casters replace their disposed source entries.
 - Room/dimension projection skips still frames unless preferences, level, measurements or
-  page interactions invalidate it. Walk prompts still update each frame; their ray reuses its
+  page interactions invalidate it. A separate furniture-obstacle revision also invalidates labels
+  after live placement, selection/overlay rebuilding and final Plan label layout; it does not
+  invalidate shadows or lighting. Walk prompts still update each frame; their ray reuses its
   hit until the camera, a door or furniture changes. Plan furniture labels cache camera and
   overlay identity. Direct mode/cutaway changes still apply immediately.
 - The sun shadow map is only redrawn when its casters change (`shadowRefresh.ts`): mode,
