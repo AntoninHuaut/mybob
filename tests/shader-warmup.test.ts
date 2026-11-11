@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  READY_IN_A_ROW,
   ViewWarmth,
   WARM_UP_MAX_FRAMES,
   WARM_UP_MIN_FRAMES,
@@ -17,15 +18,16 @@ test('warm-up draws the minimum frames when effects are ready at once', async ()
   assert.equal(drawn, WARM_UP_MIN_FRAMES);
 });
 
-test('warm-up keeps drawing until effects are ready twice in a row', async () => {
-  // Ready on frames 5 and 7 only: the streak is broken by frame 6.
-  const readyAfterFrame = new Set([5, 7, 8]);
+test('warm-up keeps drawing until the view is ready several frames in a row', async () => {
+  assert.equal(READY_IN_A_ROW, 3);
+  // Ready after frames 5, 7, 8 and 9: the streak is broken by frame 6.
+  const readyAfterFrame = new Set([5, 7, 8, 9]);
   let drawn = 0;
   const frames = await warmFrames(
     { renderFrame: () => drawn++, effectsReady: () => readyAfterFrame.has(drawn) },
     noWait,
   );
-  assert.equal(frames, 8);
+  assert.equal(frames, 9);
 });
 
 test('warm-up never draws past the cap, even if a compile is stuck', async () => {

@@ -632,7 +632,12 @@ export class HouseViewer {
           scene.render();
           this.updateOrbitBloom();
         },
-        effectsReady: () => this.engine.areAllEffectsReady(),
+        // Not only the effects: a receiver relinks once the sun shadow map is ready,
+        // which only happens after its own settling frames.
+        effectsReady: () =>
+          this.engine.areAllEffectsReady() &&
+          (this.shadowRefresh?.settled ?? true) &&
+          scene.getWaitingItemsCount() === 0,
       });
     } catch (error) {
       console.info(

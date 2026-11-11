@@ -2,13 +2,14 @@ import type { ViewMode } from './viewer';
 
 /**
  * Frames drawn to link a view's shaders. The first links the materials; the next
- * ones let the temporal pass settle on a still image, which changes the materials'
- * defines once more. After the minimum, drawing goes on until the engine reports
- * every effect ready twice in a row; the cap keeps a stuck compile from hanging.
+ * ones let the sun shadow map and the temporal pass settle, which changes the
+ * materials' defines once more (every receiver relinks with its shadow). After the
+ * minimum, drawing goes on until the host reports everything ready three frames in
+ * a row; the cap keeps a stuck compile from hanging.
  */
 export const WARM_UP_MIN_FRAMES = 4;
-export const WARM_UP_MAX_FRAMES = 14;
-const READY_IN_A_ROW = 2;
+export const WARM_UP_MAX_FRAMES = 24;
+export const READY_IN_A_ROW = 3;
 
 export const nextTask = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 
@@ -24,7 +25,7 @@ export const nextPaint = () =>
     );
   });
 
-/** The drawing surface the warm-up needs: one image, and whether shaders are linked. */
+/** The drawing surface the warm-up needs: one image, and whether the view is settled. */
 export interface WarmTarget {
   renderFrame(): void;
   effectsReady(): boolean;
