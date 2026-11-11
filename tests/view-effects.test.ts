@@ -9,6 +9,8 @@ import type { Camera } from '@babylonjs/core/Cameras/camera';
 import { OCCLUSION_FADE_MS, ViewEffects } from '../src/scene/viewEffects';
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
 import { createOrbitBloom } from '../src/scene/interiorAmbience';
+import { TAAMaterialManager } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/taaMaterialManager';
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 
 test('ten Plan round trips keep the orbit post-processes without rebuilding bloom', (t) => {
   const engine = new NullEngine();
@@ -566,6 +568,56 @@ test('the orbit refinement counts only while enabled, so Plan keeps its idle red
     assert.equal(effects.temporalActive, false);
   } finally {
     effects.dispose();
+
+test('leaving the walk switches the temporal jitter plugin off before the pipeline is disposed', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const camera = new UniversalCamera('walk', Vector3.Zero(), scene);
+  const order: string[] = [];
+  const fake = {
+    samples: 16,
+    reprojectHistory: true,
+    dispose() {
+      order.push(`dispose:${this.reprojectHistory}`);
+    },
+  };
+  const effects = new ViewEffects(scene, {
+    environment: () => undefined,
+    taa: () => fake,
+    occlusion: () => undefined,
+    bloom: () => undefined,
+    orbitBloom: () => undefined,
+  });
+  try {
+    effects.updateWalk({
+      active: true,
+      camera,
+      headset: false,
+      effectsEnabled: true,
+      effectTier: 0,
+    });
+    effects.releaseWalkPipelines();
+    assert.deepEqual(order, ['dispose:false']);
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+test('the temporal jitter plugin only changes the materials while its manager is enabled', () => {
+  // NullEngine has no prepass, so the walk pipeline never builds its manager here:
+  // this pins the Babylon behaviour `reprojectHistory = false` relies on, in `releaseWalkPipelines`.
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const material = new PBRMaterial('wall', scene);
+  const manager = new TAAMaterialManager(scene);
+  const plugin = () => material.pluginManager?.getPlugin('TAAJitter') as { isEnabled: boolean };
+  try {
+    assert.equal(plugin().isEnabled, true, 'the walk jitters its materials');
+    manager.isEnabled = false;
+    assert.equal(plugin().isEnabled, false, 'switched off, the materials have their usual defines');
+  } finally {
+    manager.dispose();
     scene.dispose();
     engine.dispose();
   }
