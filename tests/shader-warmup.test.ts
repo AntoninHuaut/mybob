@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   READY_IN_A_ROW,
+  isSoftwareRenderer,
   ViewWarmth,
   WARM_UP_MAX_MS,
   WARM_UP_MIN_FRAMES,
@@ -78,4 +79,23 @@ test('a view is cold until marked, and a new scene makes every view cold again',
   warmth.reset();
   assert.ok(warmth.untouched);
   assert.ok(warmth.isCold('overview'));
+});
+
+test('software renderers skip the preparation, hardware ones keep it', () => {
+  assert.ok(
+    isSoftwareRenderer(
+      'ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)',
+    ),
+  );
+  assert.ok(isSoftwareRenderer('llvmpipe (LLVM 15.0.7, 256 bits)'));
+  assert.ok(
+    isSoftwareRenderer('ANGLE (Microsoft, Microsoft Basic Render Driver Direct3D11 vs_5_0 ps_5_0)'),
+  );
+  assert.ok(
+    !isSoftwareRenderer('ANGLE (AMD, Radeon R9 200 Series Direct3D11 vs_5_0 ps_5_0), or similar'),
+  );
+  assert.ok(
+    !isSoftwareRenderer('ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0)'),
+  );
+  assert.ok(!isSoftwareRenderer(undefined));
 });

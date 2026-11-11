@@ -74,6 +74,16 @@ export async function warmFrames(
   return frames;
 }
 
+/**
+ * A CPU renderer (SwiftShader, llvmpipe, WARP) links programs slowly and has no GPU
+ * driver stalling the page in the way this warm-up hides: front-loading every view
+ * there only multiplies the total work, since a view is otherwise linked in the state
+ * the user actually reaches. The warm-up is for hardware renderers.
+ */
+export function isSoftwareRenderer(renderer: string | undefined): boolean {
+  return /swiftshader|llvmpipe|softpipe|software|basic render|warp/i.test(renderer ?? '');
+}
+
 /** One entry per view whose shaders are linked for the current scene. */
 export function viewKey(mode: ViewMode, exterior: boolean): string {
   return exterior && mode === 'overview' ? 'overview+exterior' : mode;

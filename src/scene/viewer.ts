@@ -47,7 +47,7 @@ import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
 import { ShadowRefresh } from './shadowRefresh';
 import { furnitureRevision, furnitureObstaclesRevision } from '../furniture/layer';
 import { RenderScheduler, WAKE_EVENTS } from './renderScheduler';
-import { nextPaint, viewKey, ViewWarmth, warmFrames } from './shaderWarmup';
+import { isSoftwareRenderer, nextPaint, viewKey, ViewWarmth, warmFrames } from './shaderWarmup';
 import { shaderLog } from './shaderLog';
 import { AdaptiveResolution } from './adaptiveResolution';
 import {
@@ -203,6 +203,8 @@ export class HouseViewer {
   private readonly renderScheduler = new RenderScheduler();
   private readonly warmth = new ViewWarmth();
   private preparing = false;
+  /** Hardware renderers only: see `isSoftwareRenderer`. */
+  private readonly preparesViews: boolean;
   /** The host shows its overlay while shaders are linked; `first` is the start-up, not a switch. */
   onPreparing?: (active: boolean, first: boolean) => void;
   private readonly adaptiveResolution = new AdaptiveResolution(
@@ -262,6 +264,9 @@ export class HouseViewer {
     this.engine = engine;
     this.engine.setHardwareScalingLevel(this.baseScaling);
     shaderLog.attach(engine);
+    this.preparesViews = !isSoftwareRenderer(
+      (engine as { getGlInfo?(): { renderer?: string } }).getGlInfo?.().renderer,
+    );
     this.resizeObserver = new ResizeObserver(() => this.resize());
     this.resizeObserver.observe(canvas.parentElement!);
     window.addEventListener('keydown', this.keydown);
@@ -279,7 +284,10 @@ export class HouseViewer {
       if (!this.scene) return;
       // A view whose shaders are not linked yet is prepared behind the host's overlay
       // instead of freezing the page for seconds while it draws.
-      if (this.preparing || (!this.immersive && this.warmth.isCold(this.currentViewKey()))) {
+      if (
+        this.preparing ||
+        (this.preparesViews && !this.immersive && this.warmth.isCold(this.currentViewKey()))
+      ) {
         if (!this.preparing) void this.prepareView();
         this.lastRenderAt = undefined;
         return;
@@ -662,6 +670,7 @@ export class HouseViewer {
     const end = performance.now() + timeoutMs;
     while (
       this.scene &&
+      this.preparesViews &&
       (this.preparing || this.warmth.isCold(this.currentViewKey())) &&
       performance.now() < end
     )

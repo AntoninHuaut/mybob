@@ -406,7 +406,8 @@ last call, and read back at start-up.
   with a given set of defines, and a view change alters them (sky, lights, prepass, temporal
   pass); on ANGLE/D3D11 each program blocks the frame ~90 ms, so an unprepared first switch froze
   the page for seconds. The render loop spots a view not yet in `ViewWarmth`, skips drawing,
-  tells the host (`onPreparing`: `#loading`) and draws until the engine reports every effect ready and the sun shadow map has settled, three frames in a row (receivers relink once their shadow is ready), for at most 20 s.
+  tells the host (`onPreparing`: `#loading`) and draws until the engine reports every effect ready and the sun shadow map has settled, three frames in a row (receivers relink once their shadow is ready), for at most 20 s. Software renderers (SwiftShader, llvmpipe, WARP) skip it: they link slowly and
+  front-loading would only multiply their work, so CI e2e keeps the on-demand behaviour.
   The start-up is the same path with the landing view, so nothing else needs to call it. A new
   scene (project or level change) releases the cached effects and makes every view cold again.
   `mybob.shaders()` lists every link with its duration and the preparation marks.
