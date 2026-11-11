@@ -1057,6 +1057,7 @@ export class FurnitureLayer {
         const visual = this.visuals.get(member.id);
         if (visual) this.placeVisual(visual, member);
       }
+      refreshFixtureLights(this.scene);
       this.drawOverlays();
       moved = true;
     }
