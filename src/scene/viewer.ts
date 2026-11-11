@@ -270,6 +270,9 @@ export class HouseViewer {
     canvas.addEventListener('pointerdown', this.orbitPointerDown, true);
     for (const type of WAKE_EVENTS)
       window.addEventListener(type, this.wake, { capture: true, passive: true });
+    // A tab that comes back may have lost its drawing buffer, and the idle redraw that
+    // used to heal that does not run while a temporal effect is on screen.
+    document.addEventListener('visibilitychange', this.wake);
     this.engine.runRenderLoop(() => {
       this.stepOrbitTour();
       if (!this.scene) return;
@@ -278,7 +281,12 @@ export class HouseViewer {
       // in a session every frame is drawn, at the resolution the headset chose.
       const render =
         !!this.immersive ||
-        this.renderScheduler.shouldRender(now, this.cameraSignature(), () => this.busy());
+        this.renderScheduler.shouldRender(
+          now,
+          this.cameraSignature(),
+          () => this.busy(),
+          !this.viewEffects?.temporalActive,
+        );
       if (!this.immersive) this.applyRenderScale(now, render);
       if (render) {
         this.scene.render();
@@ -1696,6 +1704,7 @@ export class HouseViewer {
     this.engine.dispose();
     this.canvas.removeEventListener('wheel', this.planWheel);
     this.canvas.removeEventListener('pointerdown', this.orbitPointerDown, true);
+    document.removeEventListener('visibilitychange', this.wake);
     for (const type of WAKE_EVENTS) window.removeEventListener(type, this.wake, true);
   }
 }

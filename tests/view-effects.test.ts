@@ -523,3 +523,50 @@ test('orbit setup invalidates once and still reaches the scheduler idle state', 
     engine.dispose();
   }
 });
+
+test('temporal effects are reported while the visit chain or the orbit refinement is on screen', () => {
+  const { engine, scene, screen, effects, state } = setup();
+  try {
+    assert.equal(effects.temporalActive, false, 'nothing before the visit');
+    effects.updateWalk({ ...state, effectTier: 0 });
+    assert.equal(effects.temporalActive, true, 'the visit TAA and occlusion');
+    effects.updateWalk({ ...state, active: false });
+    assert.equal(effects.temporalActive, false, 'released with the visit');
+    void screen;
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+test('the orbit refinement counts only while enabled, so Plan keeps its idle redraw', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const camera = new UniversalCamera('orbit', new Vector3(), scene);
+  const temporal = {
+    samples: 16,
+    isEnabled: true,
+    factor: 0.1,
+    disableOnCameraMove: true,
+    dispose() {},
+  };
+  const effects = new ViewEffects(scene, {
+    environment: () => undefined,
+    taa: () => undefined,
+    occlusion: () => undefined,
+    bloom: () => undefined,
+    orbitBloom: () => undefined,
+    orbitTaa: () => temporal,
+  });
+  try {
+    scene.render();
+    effects.updateOrbit(true, camera);
+    assert.equal(effects.temporalActive, true);
+    effects.updateOrbit(false, camera);
+    assert.equal(effects.temporalActive, false);
+  } finally {
+    effects.dispose();
+    scene.dispose();
+    engine.dispose();
+  }
+});
