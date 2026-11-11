@@ -303,6 +303,21 @@ export function createInteriorTaa(scene: Scene, camera: Camera): TAARenderingPip
   }
 }
 
+/** Orbit refinement keeps MSAA in motion and uses projection jitter only at rest. */
+export function createOrbitTaa(scene: Scene, camera: Camera): TAARenderingPipeline | undefined {
+  if (!scene.getEngine().getCaps().texelFetch) return undefined;
+  try {
+    const pipeline = new TAARenderingPipeline('orbit-taa', scene, [camera]);
+    pipeline.samples = 16;
+    pipeline.msaaSamples = 4;
+    // Defaults deliberately retained: disableOnCameraMove=true, no velocity pre-pass.
+    return pipeline;
+  } catch (error) {
+    console.info(`[orbit] temporal antialiasing unavailable: ${String(error)}`);
+    return undefined;
+  }
+}
+
 /**
  * Screen-space ambient occlusion for the visit camera only. Half-resolution AO
  * keeps the cost down. It reads the PrePass rather than the legacy geometry buffer,

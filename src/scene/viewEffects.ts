@@ -13,17 +13,23 @@ import {
   createInteriorOcclusion,
   createInteriorTaa,
   createOrbitBloom,
+  createOrbitTaa,
   INTERIOR_ENVIRONMENT_INTENSITY,
 } from './interiorAmbience';
 
 type Bloom = Pick<DefaultRenderingPipeline, 'dispose' | 'bloomEnabled'>;
 type Occlusion = Pick<SSAO2RenderingPipeline, 'dispose' | 'samples' | 'expensiveBlur'>;
+type OrbitTemporal = Pick<
+  TAARenderingPipeline,
+  'dispose' | 'samples' | 'isEnabled' | 'factor' | 'disableOnCameraMove'
+>;
 type Temporal = Pick<TAARenderingPipeline, 'dispose' | 'samples'>;
 interface EffectFactories {
   environment(scene: Scene): BaseTexture | undefined;
   taa(scene: Scene, camera: Camera): Temporal | undefined;
   occlusion(scene: Scene, camera: Camera): Occlusion | undefined;
   bloom(scene: Scene, camera: Camera): Bloom | undefined;
+  orbitTaa?(scene: Scene, camera: Camera): OrbitTemporal | undefined;
   orbitBloom(scene: Scene, camera: Camera): Bloom | undefined;
 }
 const factories: EffectFactories = {
@@ -32,6 +38,7 @@ const factories: EffectFactories = {
   occlusion: createInteriorOcclusion,
   bloom: createInteriorBloom,
   orbitBloom: createOrbitBloom,
+  orbitTaa: createOrbitTaa,
 };
 
 /** All view effects belong to one scene; walk pipelines also belong to one camera. */
@@ -49,6 +56,8 @@ export class ViewEffects {
   private bloom?: Bloom;
   private orbitBloom?: Bloom;
   private orbitAttached = false;
+  private orbitTaa?: OrbitTemporal;
+  private orbitTaaAttempted = false;
   private camera?: Camera;
   private disposed = false;
 
@@ -143,6 +152,28 @@ export class ViewEffects {
 
   updateOrbit(active: boolean, camera: Camera): void {
     if (this.disposed) return;
+    if (active && !this.orbitTaaAttempted && this.create.orbitTaa && this.scene.getFrameId() > 0) {
+      this.orbitTaaAttempted = true;
+      // The first scene frame establishes capabilities. Replace the initial bloom
+      // once so temporal accumulation becomes the first stage on this camera.
+      this.orbitBloom?.dispose();
+      this.orbitBloom = undefined;
+      this.orbitAttached = false;
+      this.orbitTaa = this.create.orbitTaa(this.scene, camera);
+      this.invalidate();
+    }
+    if (this.orbitTaa && this.orbitTaa.isEnabled !== active) {
+      // Appending TAA behind an attached bloom would reverse the chain on reentry.
+      if (active && this.orbitAttached) {
+        this.scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline(
+          'orbit-bloom',
+          camera,
+        );
+        this.orbitAttached = false;
+      }
+      this.orbitTaa.isEnabled = active;
+      if (!active) camera.getProjectionMatrix(true);
+    }
     if (active && !this.orbitBloom) {
       this.orbitBloom = this.create.orbitBloom(this.scene, camera);
       this.orbitAttached = Boolean(this.orbitBloom);
@@ -154,6 +185,27 @@ export class ViewEffects {
     if (active) manager.attachCamerasToRenderPipeline('orbit-bloom', camera, true);
     else manager.detachCamerasFromRenderPipeline('orbit-bloom', camera);
     this.orbitAttached = active;
+  }
+
+  /** Fresh temporal samples prevent export overlay toggles from inheriting old pixels. */
+  renderCapture(render: () => void): void {
+    const temporal = this.orbitTaa;
+    if (!temporal?.isEnabled) {
+      render();
+      return;
+    }
+    const factor = temporal.factor;
+    const disableOnCameraMove = temporal.disableOnCameraMove;
+    try {
+      temporal.disableOnCameraMove = false;
+      for (let sample = 0; sample < temporal.samples; sample++) {
+        temporal.factor = 1 / (sample + 1);
+        render();
+      }
+    } finally {
+      temporal.factor = factor;
+      temporal.disableOnCameraMove = disableOnCameraMove;
+    }
   }
 
   /** Returns whether a pipeline was removed and a new frame is needed. */
@@ -217,5 +269,7 @@ export class ViewEffects {
     this.environment = undefined;
     this.orbitBloom?.dispose();
     this.orbitBloom = undefined;
+    this.orbitTaa?.dispose();
+    this.orbitTaa = undefined;
   }
 }

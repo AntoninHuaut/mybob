@@ -1,3 +1,4 @@
+import { createScreenLines } from './screenLines';
 import { refreshFixtureLights } from './fixtureLights';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Camera } from '@babylonjs/core/Cameras/camera';
@@ -15,7 +16,7 @@ import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imagePro
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
-import type { LinesMesh } from '@babylonjs/core/Meshes/linesMesh';
+import type { GreasedLineMesh } from '@babylonjs/core/Meshes/GreasedLine/greasedLineMesh';
 import type { PickingInfo } from '@babylonjs/core/Collisions/pickingInfo';
 // Side effects required for picking, shadows, and collision coordination.
 import '@babylonjs/core/Culling/ray';
@@ -209,10 +210,10 @@ export class HouseViewer {
   private wake = () => this.renderScheduler.request();
   private sectionHeight?: number;
   private planOpenings?: PlanOpenings;
-  private dimensions: LinesMesh[] = [];
+  private dimensions: GreasedLineMesh[] = [];
   private measureMeshes: AbstractMesh[] = [];
   private pinnedMeasurements: AbstractMesh[] = [];
-  private measureLine?: LinesMesh;
+  private measureLine?: GreasedLineMesh;
   private measureCursor?: Point2;
   private keyState = new Set<string>();
   private hemispheric!: HemisphericLight;
@@ -276,7 +277,10 @@ export class HouseViewer {
         !!this.immersive ||
         this.renderScheduler.shouldRender(now, this.cameraSignature(), () => this.busy());
       if (!this.immersive) this.applyRenderScale(now, render);
-      if (render) this.scene.render();
+      if (render) {
+        this.scene.render();
+        this.updateOrbitBloom();
+      }
       this.lastRenderAt = render ? now : undefined;
     });
   }
@@ -965,6 +969,21 @@ export class HouseViewer {
     }
   }
 
+  /**
+   * Screen overlays project through the unjittered camera. The temporal pipeline writes
+   * its sample offset into the camera's cached projection matrix; the still image is the
+   * average of those offsets, so a label or a measure tag read through the jittered matrix
+   * trembles on every settle frame. The cached matrix is put back so the next geometry
+   * pass keeps its own sample.
+   */
+  private overlayTransform(): Matrix {
+    const camera = this.scene.activeCamera!;
+    const jittered = camera.getProjectionMatrix().clone();
+    const clean = camera.getProjectionMatrix(true).clone();
+    camera.getProjectionMatrix().copyFrom(jittered);
+    return camera.getViewMatrix().multiply(clean);
+  }
+
   project(point: Point2, height = 0.04) {
     const camera = this.scene.activeCamera!;
     const viewport = camera.viewport.toGlobal(
@@ -974,7 +993,7 @@ export class HouseViewer {
     const v = Vector3.Project(
       new Vector3(point[0], this.level.elevation + height, point[1]),
       Matrix.IdentityReadOnly,
-      this.scene.getTransformMatrix(),
+      this.overlayTransform(),
       viewport,
     );
     const x = (v.x / this.engine.getRenderWidth()) * this.canvas.clientWidth;
@@ -1015,12 +1034,16 @@ export class HouseViewer {
         set(mesh, dimensions && dimension);
       }
       // Freeze camera input and animations for this extra render: exporting is not navigation.
-      this.scene.render(false, true);
+      const render = () => this.scene.render(false, true);
+      if (this.viewEffects) this.viewEffects.renderCapture(render);
+      else render();
       context.drawImage(this.canvas, 0, 0);
       return output;
     } finally {
       for (const [mesh, enabled] of changed) if (!mesh.isDisposed()) mesh.setEnabled(enabled);
       this.capturing = false;
+      this.scene.activeCamera?.resetViewHistory?.();
+      this.requestRender();
     }
   }
 
@@ -1558,18 +1581,17 @@ export class HouseViewer {
     const points = [this.measurement.a, snapped.point].map(
       (p) => new Vector3(p[0], floorElevationAt(this.level, p) + 0.04, p[1]),
     );
-    if (this.measureLine)
-      MeshBuilder.CreateLines('measurement', { points, instance: this.measureLine }, this.scene);
+    if (this.measureLine) this.measureLine.setPoints([points]);
     else {
-      this.measureLine = MeshBuilder.CreateLines(
+      this.measureLine = createScreenLines(
         'measurement',
-        { points, updatable: true },
+        [points],
         this.scene,
+        Color3.FromHexString('#5e9377'),
       );
-      this.measureLine.isPickable = false;
       this.measureMeshes.push(this.measureLine);
     }
-    this.measureLine.color = Color3.FromHexString('#5e9377');
+    this.measureLine.greasedLineMaterial!.color = Color3.FromHexString('#5e9377');
     this.onMeasure?.(this.measurement);
   }
 
@@ -1584,7 +1606,8 @@ export class HouseViewer {
       this.previewMeasurement(point, forceAxis, free);
       point = this.measurement.b!;
       this.measurement.preview = false;
-      if (this.measureLine) this.measureLine.color = Color3.FromHexString('#27634e');
+      if (this.measureLine)
+        this.measureLine.greasedLineMaterial!.color = Color3.FromHexString('#27634e');
       this.measureCursor = undefined;
     }
     const dot = MeshBuilder.CreateSphere(
@@ -1615,28 +1638,28 @@ export class HouseViewer {
   private buildDimensions() {
     const b = bounds(this.level.outline);
     const y = this.level.elevation + 0.02;
-    const line = (name: string, points: Point2[]) => {
-      const mesh = MeshBuilder.CreateLines(
-        name,
-        { points: points.map(([x, z]) => new Vector3(x, y, z)) },
+    const polylines: Point2[][] = [
+      [
+        [b.minX, b.maxZ + 0.25],
+        [b.minX, b.maxZ + 0.6],
+        [b.maxX, b.maxZ + 0.6],
+        [b.maxX, b.maxZ + 0.25],
+      ],
+      [
+        [b.maxX + 0.25, b.minZ],
+        [b.maxX + 0.6, b.minZ],
+        [b.maxX + 0.6, b.maxZ],
+        [b.maxX + 0.25, b.maxZ],
+      ],
+    ];
+    this.dimensions.push(
+      createScreenLines(
+        'overall-dimensions',
+        polylines.map((points) => points.map(([x, z]) => new Vector3(x, y, z))),
         this.scene,
-      );
-      mesh.color = Color3.FromHexString('#88938a');
-      mesh.isPickable = false;
-      this.dimensions.push(mesh);
-    };
-    line('width-dimension', [
-      [b.minX, b.maxZ + 0.25],
-      [b.minX, b.maxZ + 0.6],
-      [b.maxX, b.maxZ + 0.6],
-      [b.maxX, b.maxZ + 0.25],
-    ]);
-    line('depth-dimension', [
-      [b.maxX + 0.25, b.minZ],
-      [b.maxX + 0.6, b.minZ],
-      [b.maxX + 0.6, b.maxZ],
-      [b.maxX + 0.25, b.maxZ],
-    ]);
+        Color3.FromHexString('#88938a'),
+      ),
+    );
     this.dimensions.forEach((m) => m.setEnabled(false));
   }
 

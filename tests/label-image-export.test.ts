@@ -71,13 +71,16 @@ test('capture restores dimensions, furniture overlays and animation guard after 
     selection = mesh('furniture:selection', true),
     distance = mesh('furniture:dimension-label', true, '1 m');
   let fail = false;
-  const camera = {};
+  let historyResets = 0,
+    requestedFrames = 0;
+  const camera = { resetViewHistory: () => historyResets++ };
   const viewer = Object.assign(Object.create(HouseViewer.prototype), {
     canvas: {},
     engine: { getRenderWidth: () => 1200, getRenderHeight: () => 800 },
     dimensions: [dimension],
     measureMeshes: [],
     pinnedMeasurements: [],
+    requestRender: () => requestedFrames++,
     paused: false,
     capturing: false,
     currentMode: 'plan',
@@ -104,6 +107,8 @@ test('capture restores dimensions, furniture overlays and animation guard after 
     assert.equal(distance.isEnabled(), true);
     assert.equal((viewer as unknown as { capturing: boolean }).capturing, false);
     assert.equal(viewer.scene.activeCamera, camera);
+    assert.equal(historyResets, 2, 'both success and failure discard capture history');
+    assert.equal(requestedFrames, 2, 'restored overlays settle again on screen');
   } finally {
     if (descriptor) Object.defineProperty(globalThis, 'document', descriptor);
     else Reflect.deleteProperty(globalThis, 'document');

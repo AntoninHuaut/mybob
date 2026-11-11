@@ -48,6 +48,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onSelectRoom`, `onDe
 | Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion, bloom (walk, 3D view and Exterior)                                                       |
 | View effect lifecycle   | `src/scene/viewEffects.ts`                                                   | Scene-owned environment and pipelines, camera replacement, effect tiers and disposal                                |
 | Diagnostics             | `src/scene/diagnostics.ts`                                                   | `mybob.diag()`: engine, GPU, frame rate, resolution, scene                                                          |
+| Screen-width lines      | `src/scene/screenLines.ts`                                                   | CSS-width dimension/measurement polylines, resize and material ownership                                            |
 | Measurement             | `src/scene/measurement.ts`                                                   | Snapping to the plan axes                                                                                           |
 | Sun                     | `src/scene/solar.ts`                                                         | NOAA equations, IANA time zones                                                                                     |
 | Solar settings          | `src/model/solarSettings.ts`                                                 | Validation of explicit settings: no geolocation, no default place                                                   |
@@ -155,9 +156,30 @@ are explicit, while project loading and share-link adoption keep their existing 
 
 ## Walk and rendering
 
-- The orbit bloom pipeline stays allocated for the scene. Plan detaches its camera
-  without changing `bloomEnabled`; overview reattaches the same post-processes and
-  render targets. Changing that property would rebuild the pipeline on every switch.
+- Orbit temporal refinement is initialized only after a rendered scene frame establishes
+  texture-fetch support. Its 16-sample TAA precedes bloom, retains 4x MSAA on its first
+  target for motion and uses Babylon's default bypass while the camera moves. It needs
+  no velocity pre-pass. The initial bloom is replaced once to establish this order;
+  subsequent Plan round trips detach/reuse both pipelines. Plan resets the projection
+  matrix to discard jitter. Orbit TAA stays outside walk effect tiers and does not
+  request frames after initial setup: the existing 32-frame settle budget owns idle work.
+  Screen overlays — room labels, dimension tags, the measure tag, export captions — project
+  through the camera's unjittered matrix, restored from a forced recompute so the geometry
+  pass keeps its sample; read through the jittered scene transform they tremble on every
+  settle frame.
+- Image export takes a fresh 16-sample average with frozen camera input when orbit TAA is
+  active, so changed dimension/measurement visibility does not inherit old history.
+  It restores blend/motion policy even on failure, resets camera history and requests
+  settling after restoring overlays. Without orbit TAA, export retains its single render.
+  This synchronous export cost and visual fidelity remain unverified on a real renderer.
+- Overall dimensions share one GreasedLine mesh; each live/pinned measurement keeps its
+  existing toggle/disposal group. Their unlit StandardMaterial retains scene clip planes.
+  Width follows rendered pixels per CSS pixel on resize, including adaptive scaling;
+  the requested raster width is 1.5 CSS pixels. Babylon 9.35's camera-facing shader needs
+  twice that value in its material width because of its half-width NDC offset.
+  Plan openings, furniture overlays and the plot boundary still use LinesMesh: migration
+  stops at this first stage pending clipping and real raster review. DPR coverage and
+  repeated-export stability have CI-only numeric probes, without visual attachments.
 - The stable Babylon vendor chunk excludes WebXR modules: those live in `babylon-xr`,
   reached through the lazy `xrWalk` entry. A public-build guard rejects WebXR in the
   static import graph of an entry. Walk effects still load with the main engine.
