@@ -86,7 +86,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onSelectRoom`, `onDe
 | Help and welcome        | `src/ui/firstSteps.ts`, `onboarding.ts`                                      | "Premiers pas" card, short and full help                                                                            |
 | Image export            | `src/ui/imageExport.ts`                                                      | PNG of the camera, title block, options                                                                             |
 | UI helpers              | `src/ui/format.ts`, `icons.ts`                                               | HTML escaping, number/area formatting, inline icons                                                                 |
-| Test bench (dev)        | `src/ui/fxLab.ts`                                                            | Unsettled rendering questions — never in a build                                                                    |
+| Test bench (dev)        | `src/ui/fxLab.ts`, `src/ui/fxLabEffect.ts`                                   | Unsettled rendering questions — never in a build                                                                    |
 | Build constants         | `src/build-env.d.ts`                                                         | Vite-injected public/private build flags                                                                            |
 | Styles                  | `src/style.css` + `src/style/*.css`                                          | `chrome`, `scene`, `feedback`; panel CSS next to `furniture/panel.ts`, `ui/arrangementPanel.ts`, `ui/solarPanel.ts` |
 
@@ -248,14 +248,14 @@ list as unrestricted. The eight-room test fixture has a clean floor-plane audit.
 `ViewEffects.updateEnvironment` explicitly selects sky in overview/exterior, no environment
 in Plan, and the existing interior bounce in walk. Sky intensity is 0.25 and overview
 hemispheric intensity is 0.45. Solar direction changes debounce regeneration by 150 ms;
-the previous texture is disposed after replacement. Scene disposal cancels pending work.
+the previous texture is disposed after replacement. Scene disposal cancels pending work. Each request snapshots its direction; completed sky
+rebuilds explicitly request a render, and diagnostics report either active owned environment.
 No location is inferred. The walk environment and bloom calibration remain unchanged.
 
 The development bench offers ACES/PBR Neutral, PCF/PCSS (ratio 0.03), and experimental
 orbit SSAO (0.5 m radius, 100 m max depth, expensive blur). These are comparison controls;
-production retains ACES, medium PCF and no orbit SSAO. The orbit experiment is restricted
-to overview at activation and must be disabled before switching views; it is not the
-production effects lifecycle or an accepted adaptive-quality implementation.
+production retains ACES, medium PCF and no orbit SSAO. The orbit experiment releases on mode exit and resets its controls on scene replacement.
+It remains outside production adaptive-quality policy.
 
 ## The visit in a headset
 
@@ -402,12 +402,9 @@ node --import tsx --test --test-isolation=none tests/<area>.test.ts   # a single
 pnpm run ci        # format, tests, build, public-build check (no e2e)
 ```
 
-A browser workflow is verified locally by the e2e scenarios of the touched feature only —
-`--grep` or file, never the whole suite: the recipe and commands are in [E2E.md](E2E.md), the
-full suite belongs to CI.
-
-DOM tests use Happy DOM and scene tests a `NullEngine`: they prove behaviour, not rendering. To
-judge a rendering, open a real browser and say what was looked at.
+Browser verification follows the [local policy in AGENTS.md](../AGENTS.md#local-browser-verification-policy).
+CI recipes are in [E2E.md](E2E.md). DOM and NullEngine tests prove behavior, not rendering;
+leave visual acceptance unproven when the policy prevents further inspection.
 
 A useful browser recipe when a bug depends on a multi-level project, without ever creating a
 private file in the repository: run `pnpm run dev`, then inject a test project into

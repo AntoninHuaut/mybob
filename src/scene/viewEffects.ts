@@ -59,6 +59,7 @@ export class ViewEffects {
       scene: Scene,
       direction: Vector3,
     ) => BaseTexture | undefined = createExteriorEnvironment,
+    private readonly invalidate: () => void = () => {},
   ) {
     scene.onDisposeObservable.addOnce(() => this.dispose());
   }
@@ -76,6 +77,8 @@ export class ViewEffects {
       this.releaseWalkPipelines();
       return;
     }
+    this.cancelExteriorRebuild();
+    this.exteriorActive = false;
     if (!this.environmentUnavailable) {
       this.environment ??= this.create.environment(this.scene);
       this.environmentUnavailable = !this.environment;
@@ -105,17 +108,19 @@ export class ViewEffects {
   updateEnvironment(mode: 'overview' | 'plan' | 'walk', direction: Vector3): void {
     if (this.disposed) return;
     this.exteriorActive = mode === 'overview';
-    if (this.exteriorTimer) clearTimeout(this.exteriorTimer);
+    this.cancelExteriorRebuild();
     if (mode === 'walk') return;
     if (mode === 'plan') {
       this.scene.environmentTexture = null;
       return;
     }
     if (this.exteriorUnavailable) return;
-    const key = direction.asArray().join(',');
+    const snapshot = direction.clone();
+    const key = snapshot.asArray().join(',');
     const rebuild = () => {
       if (this.disposed || !this.exteriorActive) return;
-      const next = this.createExterior(this.scene, direction);
+      this.exteriorTimer = undefined;
+      const next = this.createExterior(this.scene, snapshot);
       if (!next) {
         this.exteriorUnavailable = true;
         return;
@@ -126,6 +131,7 @@ export class ViewEffects {
       this.scene.environmentTexture = next;
       this.scene.environmentIntensity = 0.25;
       previous?.dispose();
+      this.invalidate();
     };
     if (!this.exteriorEnvironment) rebuild();
     else {
@@ -176,9 +182,18 @@ export class ViewEffects {
 
   status(walking: boolean): { environment: boolean; occlusion: OcclusionState } {
     return {
-      environment: Boolean(this.environment && this.scene.environmentTexture === this.environment),
+      environment: Boolean(
+        this.scene.environmentTexture &&
+        (this.scene.environmentTexture === this.environment ||
+          this.scene.environmentTexture === this.exteriorEnvironment),
+      ),
       occlusion: !walking ? 'idle' : this.occlusion ? 'active' : 'unavailable',
     };
+  }
+
+  private cancelExteriorRebuild(): void {
+    if (this.exteriorTimer !== undefined) clearTimeout(this.exteriorTimer);
+    this.exteriorTimer = undefined;
   }
 
   private restoreEnvironment(): void {
@@ -193,7 +208,7 @@ export class ViewEffects {
     this.disposed = true;
     this.restoreEnvironment();
     this.releaseWalkPipelines();
-    if (this.exteriorTimer) clearTimeout(this.exteriorTimer);
+    this.cancelExteriorRebuild();
     if (this.scene.environmentTexture === this.exteriorEnvironment)
       this.scene.environmentTexture = null;
     this.exteriorEnvironment?.dispose();

@@ -1,3 +1,4 @@
+import { FxLabEffect } from './fxLabEffect';
 import { createInteriorOcclusion } from '../scene/interiorAmbience';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
 import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
@@ -96,13 +97,13 @@ function slider(
 
 export function mountFxLab(viewer: HouseViewer): void {
   const box = panel('Banc d’essai — visite');
-  checkbox(box, 'Tons PBR neutres', (on) => {
+  const neutralToggle = checkbox(box, 'Tons PBR neutres', (on) => {
     viewer.scene.imageProcessingConfiguration.toneMappingType = on
       ? ImageProcessingConfiguration.TONEMAPPING_KHR_PBR_NEUTRAL
       : ImageProcessingConfiguration.TONEMAPPING_ACES;
     viewer.requestRender();
   });
-  checkbox(box, 'Ombres de contact (PCSS)', (on) => {
+  const shadowToggle = checkbox(box, 'Ombres de contact (PCSS)', (on) => {
     for (const light of viewer.scene.lights) {
       const generator = light.getShadowGenerator();
       if (generator instanceof ShadowGenerator) {
@@ -114,22 +115,26 @@ export function mountFxLab(viewer: HouseViewer): void {
     }
     viewer.requestRender();
   });
-  let orbitOcclusion: ReturnType<typeof createInteriorOcclusion>;
-  checkbox(box, 'Occlusion de vue 3D (essai)', (on) => {
-    orbitOcclusion?.dispose(true);
-    orbitOcclusion = undefined;
-    if (on && viewer.mode === 'overview') {
+  const experiment = new FxLabEffect(() => {
+    occlusionToggle.checked = false;
+  });
+  const occlusionToggle = checkbox(box, 'Occlusion de vue 3D (essai)', (on) => {
+    sync();
+    const allowed = viewer.mode === 'overview' && !viewer.exteriorView;
+    occlusionToggle.checked = on && allowed;
+    experiment.toggle(on && allowed, () => {
       const camera = viewer.scene.activeCamera!;
       const manager = viewer.scene.postProcessRenderPipelineManager;
       manager.detachCamerasFromRenderPipeline('orbit-bloom', camera);
-      orbitOcclusion = createInteriorOcclusion(viewer.scene, camera);
-      if (orbitOcclusion) {
-        orbitOcclusion.radius = 0.5;
-        orbitOcclusion.maxZ = 100;
-        orbitOcclusion.expensiveBlur = true;
+      const pipeline = createInteriorOcclusion(viewer.scene, camera);
+      if (pipeline) {
+        pipeline.radius = 0.5;
+        pipeline.maxZ = 100;
+        pipeline.expensiveBlur = true;
       }
       manager.attachCamerasToRenderPipeline('orbit-bloom', camera, true);
-    }
+      return pipeline;
+    });
     viewer.requestRender();
   });
   // Seeded with the live scene: an undefined start would make the first `sync`
@@ -145,10 +150,13 @@ export function mountFxLab(viewer: HouseViewer): void {
   const forget = () => {
     beads = undefined;
     scene = viewer.scene;
+    cornerOn = false;
+    cornerToggle.checked = neutralToggle.checked = shadowToggle.checked = false;
   };
 
   const sync = () => {
     if (scene !== viewer.scene) forget();
+    experiment.sync(viewer.scene, viewer.mode === 'overview' && !viewer.exteriorView);
     if (cornerOn && !beads)
       beads = cornerBeadMesh(
         viewer.scene,
@@ -162,7 +170,7 @@ export function mountFxLab(viewer: HouseViewer): void {
     }
   };
 
-  checkbox(box, 'Chanfrein d’angle', (on) => {
+  const cornerToggle = checkbox(box, 'Chanfrein d’angle', (on) => {
     cornerOn = on;
     sync();
   });
@@ -179,6 +187,13 @@ export function mountFxLab(viewer: HouseViewer): void {
   note.textContent = 'Entrez en visite pour juger.';
   note.style.cssText = 'margin-top:8px;color:#9aa79a';
   box.append(note);
+
+  const previousViewChange = viewer.onViewChange;
+  viewer.onViewChange = (mode) => {
+    sync();
+    previousViewChange?.(mode);
+  };
+  sync();
 
   // Dev-only handle so a script can drive the bench without clicking through it.
   (window as unknown as { __fxLab?: unknown }).__fxLab = {

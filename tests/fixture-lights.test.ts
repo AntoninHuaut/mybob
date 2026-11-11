@@ -117,3 +117,79 @@ test('audited eight-room house assigns every static receiver and rebuilt furnitu
     engine.dispose();
   }
 });
+
+import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
+import type { DoorInstance } from '../src/scene/buildHouse';
+
+test('swept assignment includes a mid-swing-only lamp for leaf and handle under scaled parents', () => {
+  const engine = new NullEngine(),
+    scene = new Scene(engine);
+  try {
+    const parent = new TransformNode('transformed-house', scene);
+    parent.position.set(10, 3, 5);
+    parent.rotation.y = 0.31;
+    parent.scaling.setAll(2);
+    const pivot = new TransformNode('jamb', scene);
+    pivot.parent = parent;
+    const leaf = MeshBuilder.CreateBox('leaf', { width: 2, height: 2, depth: 0.04 }, scene);
+    leaf.parent = pivot;
+    leaf.position.set(1, 1, 0);
+    const handle = MeshBuilder.CreateBox('handle', { size: 0.1 }, scene);
+    handle.parent = leaf;
+    handle.position.set(0.95, 0, 0);
+    const door: DoorInstance = {
+      id: 'swept',
+      exterior: false,
+      pivot,
+      leaf,
+      leaves: [leaf, handle],
+      opening: { id: 'opening', kind: 'door', offset: 0, width: 2, height: 2, swing: 1 },
+      baseElevation: 0,
+      center: Vector3.Zero(),
+      open: false,
+      progress: 0,
+      target: 0,
+      fold: 1,
+    };
+    door.progress = 0.5;
+    poseDoor(door);
+    handle.computeWorldMatrix(true);
+    const lamp = new PointLight('intermediate-only', handle.getAbsolutePosition().clone(), scene);
+    lamp.range = 0.15;
+    const outside = new PointLight('outside-sweep', new Vector3(100, 100, 100), scene);
+    outside.range = 0.15;
+    const reaches = (mesh: typeof leaf) => {
+      mesh.computeWorldMatrix(true);
+      const box = mesh.getBoundingInfo().boundingBox;
+      const p = lamp.getAbsolutePosition();
+      const deltas = ['x', 'y', 'z'].map((axis) => {
+        const a = axis as 'x' | 'y' | 'z';
+        return Math.max(box.minimumWorld[a] - p[a], 0, p[a] - box.maximumWorld[a]);
+      });
+      return deltas.reduce((sum, d) => sum + d * d, 0) <= lamp.range ** 2;
+    };
+    for (const endpoint of [0, 1]) {
+      door.progress = endpoint;
+      poseDoor(door);
+      assert.equal(reaches(leaf), false, 'lamp misses endpoint leaf bounds');
+      assert.equal(reaches(handle), false, 'lamp misses endpoint handle bounds');
+    }
+    door.progress = 0.5;
+    poseDoor(door);
+    assert.equal(reaches(leaf), true);
+    assert.equal(reaches(handle), true);
+    door.progress = 0;
+    poseDoor(door);
+    new FixtureLights(scene, [lamp, outside], [door]).refresh();
+    for (const mesh of [leaf, handle]) {
+      assert.ok(
+        mesh.lightSources.includes(lamp),
+        'closed-pose assignment covers intermediate swing',
+      );
+      assert.ok(!mesh.lightSources.includes(outside), 'out-of-sweep lamp is excluded');
+    }
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});

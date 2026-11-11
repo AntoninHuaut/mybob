@@ -254,3 +254,85 @@ test('mode environment selection reuses sky, removes it in Plan and disposes onc
     engine.dispose();
   }
 });
+
+test('solar rebuilds coalesce snapshots, invalidate rendering and dispose replaced textures once', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const directions: number[][] = [];
+  const textures: Texture[] = [];
+  const disposals: ReturnType<typeof t.mock.method>[] = [];
+  let invalidations = 0;
+  const effects = new ViewEffects(
+    scene,
+    undefined,
+    (_scene, direction) => {
+      directions.push(direction.asArray());
+      const texture = new Texture(null, scene);
+      textures.push(texture);
+      disposals.push(t.mock.method(texture, 'dispose'));
+      return texture;
+    },
+    () => invalidations++,
+  );
+  try {
+    effects.updateEnvironment('overview', new Vector3(0, -1, 0));
+    assert.equal(effects.status(false).environment, true);
+    const latest = new Vector3(1, -1, 0);
+    effects.updateEnvironment('overview', new Vector3(-1, -1, 0));
+    t.mock.timers.tick(100);
+    effects.updateEnvironment('overview', latest);
+    latest.set(99, 99, 99);
+    t.mock.timers.tick(149);
+    assert.equal(textures.length, 1);
+    t.mock.timers.tick(1);
+    assert.deepEqual(directions, [
+      [0, -1, 0],
+      [1, -1, 0],
+    ]);
+    assert.equal(invalidations, 2, 'async replacement requests a frame');
+    assert.equal(disposals[0].mock.callCount(), 1);
+    effects.updateEnvironment('overview', new Vector3(1, -1, 0));
+    t.mock.timers.tick(1000);
+    assert.equal(textures.length, 2, 'snapshot key agrees with generated texture');
+    effects.dispose();
+    effects.dispose();
+    assert.equal(disposals[0].mock.callCount(), 1);
+    assert.equal(disposals[1].mock.callCount(), 1);
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+test('Plan, walk and scene disposal cancel pending solar work', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const engine = new NullEngine();
+  for (const exit of ['plan', 'walk', 'dispose'] as const) {
+    const scene = new Scene(engine);
+    let builds = 0,
+      invalidations = 0;
+    const effects = new ViewEffects(
+      scene,
+      undefined,
+      () => {
+        builds++;
+        return new Texture(null, scene);
+      },
+      () => invalidations++,
+    );
+    effects.updateEnvironment('overview', new Vector3(0, -1, 0));
+    effects.updateEnvironment('overview', new Vector3(1, -1, 0));
+    if (exit === 'dispose') scene.dispose();
+    else effects.updateEnvironment(exit, new Vector3(1, -1, 0));
+    const selected = scene.environmentTexture;
+    t.mock.timers.tick(1000);
+    assert.equal(builds, 1, exit);
+    assert.equal(invalidations, 1, exit);
+    assert.equal(scene.environmentTexture, selected, exit);
+    if (exit === 'plan') assert.equal(effects.status(false).environment, false);
+    effects.dispose();
+    scene.dispose();
+  }
+  engine.dispose();
+});

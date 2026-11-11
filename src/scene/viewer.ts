@@ -1087,7 +1087,9 @@ export class HouseViewer {
         this.sun.diffuse = this.baseSun.diffuse.clone();
       }
     }
-    this.viewEffects ??= new ViewEffects(this.scene);
+    this.viewEffects ??= new ViewEffects(this.scene, undefined, undefined, () =>
+      this.requestRender(),
+    );
     this.viewEffects.updateEnvironment(this.mode, this.sun.direction);
     if (interior) this.house.highlights.forEach((m) => m.setEnabled(false));
   }
@@ -1099,7 +1101,9 @@ export class HouseViewer {
    */
   private updateInteriorAmbience() {
     if (!this.scene) return;
-    this.viewEffects ??= new ViewEffects(this.scene);
+    this.viewEffects ??= new ViewEffects(this.scene, undefined, undefined, () =>
+      this.requestRender(),
+    );
     this.viewEffects.updateWalk({
       active: this.mode === 'walk',
       camera: this.immersive?.camera ?? this.walk,

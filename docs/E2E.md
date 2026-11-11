@@ -6,17 +6,22 @@ One-time prerequisite: `pnpm exec playwright install chromium` (on Linux,
 `pnpm exec playwright install --with-deps chromium` on first install). Port choice and
 server: `playwright.config.ts`.
 
-## Locally: target the feature, never the whole suite
+## Execution policy and CI recipes
 
-The full e2e suite belongs to the pipeline: CI runs three duration-balanced shards
-(`node scripts/e2e-shard.mjs n/3`, `ci.yml`). Locally, an e2e scenario is only for iterating on
-the browser workflow touched by a change — by title with `--grep`, or by file:
+[AGENTS.md: Local browser verification policy](../AGENTS.md#local-browser-verification-policy)
+is the single source of truth for local runs and permitted evidence. Follow it before any
+local browser command. Routine browser workflows run in CI, sharded in three:
 
 ```sh
-pnpm run build                                   # once, freezes dist/
-pnpm exec playwright test --grep "measure"       # scenarios whose title contains "measure"
-pnpm exec playwright test --grep "link"          # URL sharing (e2e/share-link.spec.ts)
-pnpm exec playwright test e2e/furniture-actions.spec.ts   # every scenario of a file
+pnpm run build
+pnpm run check:public
+node scripts/e2e-shard.mjs n/3
+```
+
+For the narrowly allowed reproduction of a concrete CI failure on an already-built `dist/`:
+
+```sh
+pnpm exec playwright test e2e/<failing-file>.spec.ts --grep "^exact failing test title$" --workers=1 --repeat-each=1
 ```
 
 Scenarios: `e2e/workflows.spec.ts` (sofa against a wall, draft, variants, JSON
@@ -26,13 +31,11 @@ adoption, silence for the owner, old link, corrupted hash), `e2e/first-steps.spe
 (« Premiers pas » card, help), `e2e/concurrent-tabs.spec.ts` (two tabs on the same storage),
 `e2e/orbit-shaders.spec.ts` (shader reuse during orbit and cleanup on project switch),
 `e2e/view-state.spec.ts` (accepted view chrome, project/level resets and touch-only walk refusal).
-Pick the file first, the `--grep` second.
-
-`pnpm run test:e2e` (full build + personal-plan exclusion + every scenario) is not the local
-loop: it only exists for CI, which replays everything on the verified build. After an already
-verified public build, `pnpm run test:e2e:built` runs the scenarios alone — it is the one that
-takes the `--grep` or the file. `pnpm run test:e2e:report` opens the local HTML report.
-`--headed` shows the browser.
+`pnpm run test:e2e` builds and checks the public output before running all scenarios in CI.
+`pnpm run test:e2e:built` runs scenarios on the already verified build. Browser HTML reports,
+screenshots, test-results and traces are not uploaded by CI. The public-build artifact is
+still exchanged between build and browser jobs. Inspect text logs for failures and follow
+the linked local policy before reproducing a failure.
 
 Scenarios run in desktop Chromium, on the SwiftShader software renderer, to stay runnable on a
 machine without a GPU. They go through the interface and downloaded files, without accessing
@@ -45,7 +48,7 @@ CI collects the current test list before assigning every test to exactly one sha
 longest estimates first. `scripts/e2e-durations.json` records worker milliseconds from
 PR #218's successful Linux CI run (43061290688); new or renamed scenarios default to
 30 seconds. The split view-state scenarios and the pixel probe initially use estimates.
-Refresh estimates from the per-shard HTML reports when scenario durations change.
+Refresh estimates from text-only shard timings when scenario durations change.
 `node scripts/e2e-shard.mjs n/3 --list` checks membership without running browsers.
 The static estimates balance expected work, not runner load; confirm the slowest shard
 stays within 25% of the fastest over three consecutive successful `main` runs.
