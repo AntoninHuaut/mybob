@@ -2,7 +2,12 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 import { createFurniture } from '../src/furniture/model';
-import { moveFurnitureToRoom } from '../src/furniture/roomMove';
+import {
+  dropFurnitureInRoom,
+  flipAgainstPartition,
+  moveFurnitureToRoom,
+  partitionBehind,
+} from '../src/furniture/roomMove';
 import { pointInPolygon } from '../src/model/geometry';
 import { validateProject } from '../src/model/validate';
 
@@ -105,4 +110,56 @@ test('a linked set whose follower would hit a wall is refused, saying the set do
     !result.ok ? result.reason : '',
     /ensemble lié à ce meuble ne tient pas dans « Salle d’eau »/,
   );
+});
+
+test('a drop lands on the valid spot of the room nearest to the pointer, ignoring other pieces', () => {
+  const piece = cabinet();
+  // A piece already sits where the pointer is: a drop, like a drag, may overlap it.
+  const there = cabinet({ id: 'la', position: [1.3, 1.3] });
+  const result = dropFurnitureInRoom([piece, there], level, 'commode', bathroom.id, [1.3, 1.3]);
+  assert.ok(result.ok, result.ok ? '' : result.reason);
+  const dropped = result.items.find((item) => item.id === 'commode')!.position;
+  assert.ok(Math.hypot(dropped[0] - 1.3, dropped[1] - 1.3) < 1e-9, `${dropped}`);
+  // Pointer in the partition's reach: the piece lands inside the room, as close as possible.
+  const near = dropFurnitureInRoom([piece], level, 'commode', bathroom.id, [2.25, 1.3]);
+  assert.ok(near.ok, near.ok ? '' : near.reason);
+  const landed = near.items[0];
+  assert.ok(pointInPolygon(landed.position, bathroom.polygon));
+  assert.ok(landed.position[0] < 2.3 - 0.4 + 0.2, `${landed.position}`);
+  assert.equal(landed.width, piece.width);
+});
+
+// Back against the partition at x = 2.35 (faces 2.30 and 2.40), front towards +x.
+const dressing = (extra: Partial<Parameters<typeof createFurniture>[0]> = {}) =>
+  cabinet({ id: 'dressing', rotation: Math.PI / 2, position: [2.4 + 0.225 + 0.01, 1.4], ...extra });
+
+test('a piece against a partition flips to the other face with the same gap and dimensions', () => {
+  const piece = dressing();
+  assert.equal(partitionBehind(piece, level)?.id, 'studio-sdb-e');
+  const result = flipAgainstPartition([piece], level, 'dressing');
+  assert.ok(result.ok, result.ok ? '' : result.reason);
+  const flipped = result.items[0];
+  assert.ok(Math.abs(flipped.position[0] - (2.3 - 0.225 - 0.01)) < 1e-9, `${flipped.position}`);
+  assert.equal(flipped.position[1], 1.4);
+  assert.ok(Math.abs(flipped.rotation - (3 * Math.PI) / 2) < 1e-9);
+  assert.ok(pointInPolygon(flipped.position, bathroom.polygon));
+  for (const key of ['width', 'depth', 'height'] as const) assert.equal(flipped[key], piece[key]);
+  // And back again.
+  const back = flipAgainstPartition(result.items, level, 'dressing');
+  assert.ok(back.ok);
+  assert.ok(Math.abs(back.items[0].position[0] - piece.position[0]) < 1e-9);
+});
+
+test('no flip for a piece away from a partition, against an exterior wall, or blocked behind', () => {
+  // Facing the partition, or 30 cm away from it: not against it.
+  assert.equal(partitionBehind(dressing({ rotation: -Math.PI / 2 }), level), undefined);
+  assert.equal(partitionBehind(dressing({ position: [2.95, 1.4] }), level), undefined);
+  const outside = flipAgainstPartition([dressing({ position: [2.95, 1.4] })], level, 'dressing');
+  assert.match(!outside.ok ? outside.reason : '', /pas adossé à une cloison/);
+  // Back against the north exterior wall (inner face z = 0.30), front towards +z.
+  assert.equal(partitionBehind(cabinet({ position: [5, 0.3 + 0.225 + 0.01] }), level), undefined);
+  // A piece wider than the bathroom is deep: on the other side it would cross the wall.
+  const long = dressing({ width: 2.6, position: [2.635, 1.6] });
+  const blocked = flipAgainstPartition([long], level, 'dressing');
+  assert.match(!blocked.ok ? blocked.reason : '', /De l’autre côté de la cloison/);
 });

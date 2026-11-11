@@ -26,7 +26,8 @@ async function importItems(page: Page, items: FurnitureItem[], twoRooms = false)
       [10, 8],
       [0, 8],
     ],
-    walls: [],
+    // Two rooms are split by a partition: a piece can stand against either face.
+    walls: twoRooms ? [{ id: 'cloison', start: [5, 0], end: [5, 8], thickness: 0.1 }] : [],
     lights: [],
     rooms: twoRooms
       ? [
@@ -328,4 +329,89 @@ test('a piece created in the wrong room moves to the right one in one action, un
   await page.keyboard.press('ControlOrMeta+z');
   const back = (await exportedItems(page))[0];
   expect(back.position).toEqual([2, 3]);
+});
+
+test('a wardrobe against a partition flips to its other face, dimensions kept, undone by Ctrl Z', async ({
+  page,
+}) => {
+  // Back against the face x = 4.95, front towards the bedroom (-x), 1 cm off the wall.
+  const start: [number, number] = [4.95 - 0.3 - 0.01, 3];
+  await importItems(
+    page,
+    [
+      createFurniture({
+        id: 'penderie',
+        name: 'Penderie test',
+        kind: 'wardrobe',
+        width: 1.234,
+        depth: 0.6,
+        height: 2.1,
+        rotation: -Math.PI / 2,
+        position: start,
+      }),
+    ],
+    true,
+  );
+  await page.locator('[data-furniture-select]').click();
+  await closePanel(page);
+  await page.getByRole('button', { name: 'Déplacer le meuble vers une autre pièce' }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByRole('button', { name: 'Retourner contre l’autre face de la cloison' }).click();
+  await expect(dialog).not.toBeVisible();
+  const flipped = (await exportedItems(page))[0];
+  expect(flipped.position[0]).toBeCloseTo(5.05 + 0.3 + 0.01, 6);
+  expect(flipped.position[1]).toBe(3);
+  expect(flipped.width).toBe(1.234);
+  await page.keyboard.press('ControlOrMeta+z');
+  expect((await exportedItems(page))[0].position).toEqual(start);
+});
+
+test('a piece dragged over the room behind the partition lands there, undone by Ctrl Z', async ({
+  page,
+}, info) => {
+  // Under the bedroom label, so the label gives its screen position in plan.
+  const start: [number, number] = [2, 3];
+  await importItems(
+    page,
+    [
+      createFurniture({
+        id: 'commode',
+        name: 'Commode test',
+        kind: 'cabinet',
+        width: 0.8,
+        depth: 0.45,
+        height: 0.9,
+        position: start,
+      }),
+    ],
+    true,
+  );
+  await closePanel(page);
+  await page.getByRole('button', { name: 'Plan', exact: true }).click();
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+  const centre = async (name: string) => {
+    const label = page.locator('[data-label]').filter({ hasText: name });
+    await expect(label).toBeVisible();
+    const box = (await label.boundingBox())!;
+    return [box.x + box.width / 2, box.y + box.height / 2] as const;
+  };
+  const from = await centre('Chambre test');
+  const to = await centre('Dressing test');
+  await page.locator('#tool-labels').click();
+  await page.mouse.move(...from);
+  await page.mouse.down();
+  await page.mouse.move(...to, { steps: 12 });
+  await page.screenshot({ path: info.outputPath('drop-ghost.png') });
+  await page.mouse.up();
+  await expect(page.locator('#toast')).toContainText('déposé dans « Dressing test »');
+  const dropped = (await exportedItems(page))[0];
+  expect(dropped.position[0]).toBeGreaterThan(5.05);
+  expect(dropped.width).toBe(0.8);
+  await page.keyboard.press('ControlOrMeta+z');
+  expect((await exportedItems(page))[0].position).toEqual(start);
 });
