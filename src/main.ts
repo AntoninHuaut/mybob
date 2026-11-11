@@ -20,11 +20,12 @@ import { FrameRateMeter } from './ui/frameRate';
 import type { HouseProject, Room } from './model/types';
 import { validateProject } from './model/validate';
 import { quarantineExport, restoreProjects } from './projectStorage';
-import { bounds, floorElevationAt, pointInPolygon, polygonArea } from './model/geometry';
+import { pointInPolygon } from './model/geometry';
 import { icon } from './ui/icons';
 import { escapeHtml as esc, number } from './ui/format';
 import { minimap } from './ui/minimap';
 import { FurnitureLayer, type FurnitureOverlays } from './furniture/layer';
+import { furnitureViewState } from './furniture/viewState';
 import { FurniturePanel } from './furniture/panel';
 import { VariantSession, STALE_MESSAGE, variantsStorageKey } from './furniture/variants';
 import { VariantsPanel } from './ui/variantsPanel';
@@ -42,7 +43,7 @@ import {
   roomSummaryHtml,
   sceneLabelsHtml,
 } from './ui/roomPanels';
-import { layoutLabels, type LabelBox } from './ui/labelLayout';
+import { ViewportProjection } from './ui/viewportProjection';
 import { exportSceneImage } from './ui/imageExport';
 import {
   FurnitureHistory,
@@ -79,7 +80,6 @@ const el = <T extends HTMLElement = HTMLElement>(selector: string) =>
   document.querySelector<T>(selector)!;
 let viewer: HouseViewer;
 let solarPanel: SolarPanel;
-let frameRate: FrameRateMeter;
 let projects: HouseProject[] = [];
 let imported: HouseProject[] = [];
 let projectsRaw: string | null = null;
@@ -498,18 +498,6 @@ function openTableChairs() {
   });
 }
 
-/** Room labels by id, looked up again only once the label left the page. */
-const roomLabels = new Map<string, HTMLElement>();
-function roomLabelElement(id: string): HTMLElement | undefined {
-  const cached = roomLabels.get(id);
-  if (cached?.isConnected) return cached;
-  const found =
-    document.querySelector<HTMLElement>(`[data-label="${CSS.escape(id)}"]`) ?? undefined;
-  if (found) roomLabels.set(id, found);
-  else roomLabels.delete(id);
-  return found;
-}
-
 function updateFurnitureContext() {
   const toolbar = el('#furniture-context-toolbar');
   const item = furnitureContextItem;
@@ -792,10 +780,14 @@ function syncDisplayControls() {
   el('#scene-labels').hidden =
     viewer.mode === 'walk' || viewer.exteriorView || !showLabels || measuring || viewer.goToMode;
   el<HTMLButtonElement>('#go-to').disabled = viewer.mode === 'walk';
-  furnitureLayer?.setMode(
-    readOnlyLink || viewer.mode === 'walk' || viewer.exteriorView || measuring || viewer.goToMode
-      ? 'walk'
-      : viewer.mode,
+  furnitureLayer?.setView(
+    furnitureViewState({
+      mode: viewer.mode,
+      exterior: viewer.exteriorView,
+      readOnly: readOnlyLink,
+      measuring,
+      pickingDestination: viewer.goToMode,
+    }),
   );
   measureBar.setActive(measuring);
   activeButton('#tool-measure', measuring);
@@ -2079,7 +2071,7 @@ async function start() {
     const unreadableProjects = restored.unreadable;
     const sceneEngine = createEngine(el<HTMLCanvasElement>('#scene'));
     viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'), sceneEngine);
-    frameRate = new FrameRateMeter(el('#frame-rate'));
+    const frameRate = new FrameRateMeter(el('#frame-rate'));
     solarPanel = new SolarPanel({
       onApply: (settings, instant) => {
         viewer.setSolar(settings ? solarPosition(settings, instant) : undefined);
@@ -2119,118 +2111,22 @@ async function start() {
       el<HTMLCanvasElement>('#scene').focus();
     };
     viewer.onMeasure = (measurement) => measureBar.sync(measurement);
+    const viewportProjection = new ViewportProjection(
+      el('#viewport'),
+      measureBar,
+      () =>
+        furnitureLayer?.getLabelObstacles((point, height) => viewer.project(point, height)) ?? [],
+    );
     viewer.onFrame = (frame) => {
       if (!current) return;
       frameRate.update(performance.now(), viewer.engine.getFps());
       updateFurnitureContext();
-      const labelsVisible = viewer.mode !== 'walk' && showLabels && !viewer.measureMode;
-      el('#orientation-arrow').style.transform =
-        `rotate(${frame.planUpDegrees + (solarPanel.settings?.northAngleDeg ?? 0)}deg)`;
-      const planLabels: { id: string; label: HTMLElement; x: number; y: number }[] = [];
-      for (const room of viewer.level.rooms) {
-        const label = roomLabelElement(room.id);
-        if (!label) continue;
-        if (labelsVisible) {
-          const p = viewer.project(room.label, (room.floorOffset ?? 0) + 0.04);
-          label.hidden =
-            !p.visible ||
-            (viewer.mode === 'overview' &&
-              (room.planArea ?? polygonArea(room.polygon)) < 3 &&
-              selectedRoom?.id !== room.id);
-          label.style.left = `${p.x}px`;
-          label.style.top = `${p.y}px`;
-          if (viewer.mode === 'plan' && !label.hidden)
-            planLabels.push({ id: room.id, label, x: p.x, y: p.y });
-        }
-      }
-      // Sizes are read only once every label is written: one layout for the whole
-      // frame, where a read after each write forced one layout per room.
-      const labelBoxes: LabelBox[] = planLabels.map(({ id, label, x, y }) => ({
-        id,
-        x,
-        y,
-        width: label.offsetWidth,
-        height: label.offsetHeight,
-        priority: selectedRoom?.id === id ? 10 : 0,
-      }));
-      if (viewer.mode === 'plan' && labelBoxes.length) {
-        const viewport = el('#viewport');
-        const origin = viewport.getBoundingClientRect();
-        const obstacles =
-          furnitureLayer?.getLabelObstacles((point, height) => viewer.project(point, height)) ?? [];
-        for (const selector of [
-          '.viewport-top',
-          '.floating-tools',
-          '.mini-card',
-          '.bottom-controls',
-          '.solar-timeline',
-          '#furniture-context-toolbar',
-          '#navigation-panel',
-        ]) {
-          const element = viewport.querySelector<HTMLElement>(selector);
-          if (!element || element.hidden || !element.offsetWidth || !element.offsetHeight) continue;
-          const rect = element.getBoundingClientRect();
-          obstacles.push({
-            x: rect.left - origin.left,
-            y: rect.top - origin.top,
-            width: rect.width,
-            height: rect.height,
-          });
-        }
-        for (const placed of layoutLabels(labelBoxes, obstacles, {
-          width: viewport.clientWidth,
-          height: viewport.clientHeight,
-        })) {
-          const label = roomLabelElement(placed.id)!;
-          label.hidden = !placed.visible;
-          label.style.left = `${placed.x}px`;
-          label.style.top = `${placed.y}px`;
-        }
-      }
-      if (showDimensions && viewer.mode !== 'walk') {
-        const b = bounds(viewer.level.outline);
-        for (const [id, point, value] of [
-          ['width-label', [b.center[0], b.maxZ + 0.6], b.width],
-          ['depth-label', [b.maxX + 0.6, b.center[1]], b.depth],
-        ] as [string, [number, number], number][]) {
-          const pos = viewer.project(point);
-          const element = el(`#${id}`);
-          element.textContent = `${number(value)} m`;
-          element.hidden = !pos.visible;
-          element.style.left = `${pos.x}px`;
-          element.style.top = `${pos.y}px`;
-        }
-      }
-      if (viewer.measurement?.b) {
-        const { a, b } = viewer.measurement;
-        const midpoint: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-        const p = viewer.project(
-          midpoint,
-          floorElevationAt(viewer.level, midpoint) - viewer.level.elevation + 0.1,
-        );
-        measureBar.moveTo(p);
-      }
-      if (viewer.mode === 'walk') {
-        el('#door-prompt').hidden = !frame.nearDoor || !el('#walk-start').hidden;
-        el('#furniture-edit-prompt').hidden =
-          !frame.nearFurnitureId ||
-          !el('#walk-start').hidden ||
-          !!document.querySelector('dialog[open]');
-        el('#resume-walk').hidden = frame.locked || !el('#walk-start').hidden;
-        const marker = document.querySelector<SVGGElement>('#map-marker');
-        if (marker) {
-          marker.setAttribute('visibility', 'visible');
-          marker.setAttribute(
-            'transform',
-            `translate(${frame.position[0]} ${frame.position[1]}) rotate(${frame.headingDegrees})`,
-          );
-        }
-        const name =
-          viewer.level.rooms.find((r) => r.id === frame.roomId)?.name ?? viewer.level.name;
-        if (el('#mini-caption').textContent !== name) el('#mini-caption').textContent = name;
-      } else {
-        document.querySelector('#map-marker')?.setAttribute('visibility', 'hidden');
-      }
+      viewportProjection.update(viewer, frame, {
+        showLabels,
+        showDimensions,
+        selectedRoomId: selectedRoom?.id,
+        northAngleDeg: solarPanel.settings?.northAngleDeg ?? 0,
+      });
     };
     renderProjectOptions();
     let initial = builtins[0].id;

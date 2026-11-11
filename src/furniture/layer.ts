@@ -27,6 +27,7 @@ import { constrainGroupDrag, groupMembers } from './groups';
 import { showerPanelRects } from './showerPanels';
 import { dropFurnitureInRoom } from './roomMove';
 import { layoutLabels, type LabelRect } from '../ui/labelLayout';
+import type { FurnitureViewState } from './viewState';
 
 export interface FurnitureOverlays {
   distances: boolean;
@@ -69,6 +70,7 @@ export class FurnitureLayer {
   private ghosts = new Map<string, Visual>();
   private selected?: string;
   private mode: 'overview' | 'plan' | 'walk' = 'overview';
+  private interactive = true;
   private overlays: FurnitureOverlays = { distances: false, clearances: false, openings: false };
   private overlayRoot?: TransformNode;
   private circulation = false;
@@ -153,9 +155,10 @@ export class FurnitureLayer {
     this.drawOverlays();
   }
 
-  setMode(mode: 'overview' | 'plan' | 'walk'): void {
+  setView({ mode, interactive }: FurnitureViewState): void {
     this.finishDrag(false);
     this.mode = mode;
+    this.interactive = interactive && mode !== 'walk';
     for (const visual of this.visuals.values())
       for (const material of visual.materials)
         material.clipPlane =
@@ -182,7 +185,7 @@ export class FurnitureLayer {
     this.circulationRoot = undefined;
     for (const material of this.circulationMaterials) material.dispose(false, true);
     this.circulationMaterials = [];
-    if (!this.circulation || this.mode === 'walk') return;
+    if (!this.circulation || !this.interactive) return;
     this.circulationRoot = new TransformNode('furniture:circulation', this.scene);
     for (const band of circulationBands(this.items, this.level)) {
       const item = this.items.find((candidate) => candidate.id === band.itemId);
@@ -714,7 +717,7 @@ export class FurnitureLayer {
   }
 
   private pointer(event: PointerInfo): void {
-    if (this.mode === 'walk' || this.disposed) return;
+    if (!this.interactive || this.disposed) return;
     if (event.type === PointerEventTypes.POINTERDOUBLETAP) {
       const mesh = event.pickInfo?.pickedMesh;
       if (mesh?.metadata?.kind === 'furniture') this.onEdit?.(mesh.metadata.id);
@@ -940,7 +943,7 @@ export class FurnitureLayer {
   private drawOverlays(): void {
     this.clearOverlays();
     const item = this.items.find((candidate) => candidate.id === this.selected);
-    if (!item || this.mode === 'walk') return;
+    if (!item || !this.interactive) return;
     this.overlayRoot = new TransformNode('furniture:overlays', this.scene);
     const root = this.overlayRoot;
     const y = floorElevationAt(this.level, item.position) + 0.035;

@@ -8,6 +8,7 @@ import { Ray } from '@babylonjs/core/Culling/ray';
 import { PointerEventTypes, PointerInfo } from '@babylonjs/core/Events/pointerEvents';
 import { PickingInfo } from '@babylonjs/core/Collisions/pickingInfo';
 import { FurnitureLayer } from '../src/furniture/layer';
+import { furnitureViewState } from '../src/furniture/viewState';
 import type { FurnitureItem } from '../src/furniture/model';
 import type { Level } from '../src/model/types';
 
@@ -133,7 +134,7 @@ test('overlays are non-pickable, do not allocate a canvas headlessly, and dispos
   const count = scene.materials.length;
   for (let i = 0; i < 5; i++) layer.setItems([item()]);
   assert.ok(scene.materials.length <= count);
-  layer.setMode('walk');
+  layer.setView({ mode: 'walk', interactive: false });
   assert.equal(scene.getMeshByName('furniture:selection'), null);
   layer.dispose();
   assert.equal(scene.meshes.length, 0);
@@ -196,7 +197,7 @@ test('drag emits live positions and exactly one final commit, respecting lock an
   emit(PointerEventTypes.POINTERMOVE);
   emit(PointerEventTypes.POINTERUP);
   layer.setItems([item()]);
-  layer.setMode('walk');
+  layer.setView({ mode: 'walk', interactive: false });
   emit(PointerEventTypes.POINTERDOWN);
   emit(PointerEventTypes.POINTERMOVE);
   emit(PointerEventTypes.POINTERUP);
@@ -218,7 +219,7 @@ test('drag stops a sofa at a thin wall in plan and overview even after a large p
     let x = 2;
     scene.createPickingRay = () => new Ray(new Vector3(x, 10, 5), new Vector3(0, -1, 0));
     layer.setItems([{ ...item(), position: [2, 5] }]);
-    layer.setMode(mode);
+    layer.setView({ mode, interactive: true });
     const pick = new PickingInfo();
     pick.pickedMesh = scene.meshes.find((mesh) => mesh.metadata?.kind === 'furniture')!;
     pick.hit = true;
@@ -258,7 +259,7 @@ test('double-click on a furniture item requests its editor in plan and overview'
   const edited: string[] = [];
   layer.onEdit = (id) => edited.push(id);
   for (const mode of ['plan', 'overview', 'walk'] as const) {
-    layer.setMode(mode);
+    layer.setView({ mode, interactive: mode !== 'walk' });
     scene.onPointerObservable.notifyObservers(
       new PointerInfo(PointerEventTypes.POINTERDOUBLETAP, { button: 0 } as PointerEvent, pick),
     );
@@ -270,17 +271,71 @@ test('double-click on a furniture item requests its editor in plan and overview'
 test('plan wall cut keeps the tops of tall furniture visible and restores section clipping in 3D', () => {
   const { scene, layer, cleanup } = setup();
   layer.setItems([{ ...item('wardrobe'), height: 2 }]);
-  layer.setMode('plan');
+  layer.setView({ mode: 'plan', interactive: true });
   for (const mesh of scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture')) {
     const mat = mesh.material!;
     assert.ok(mat.clipPlane);
     assert.ok(mat.clipPlane.signedDistanceTo(new Vector3(2, 4, 2)) < 0);
   }
-  layer.setMode('overview');
+  layer.setView({ mode: 'overview', interactive: true });
   assert.ok(
     scene.meshes
       .filter((mesh) => mesh.metadata?.kind === 'furniture')
       .every((mesh) => mesh.material!.clipPlane === null),
   );
   cleanup();
+});
+
+test('editing restrictions block pointer actions while preserving the actual view clipping', () => {
+  const enabled = {
+    exterior: false,
+    readOnly: false,
+    measuring: false,
+    pickingDestination: false,
+  };
+  for (const mode of ['plan', 'overview'] as const) {
+    for (const restriction of Object.keys(enabled) as (keyof typeof enabled)[]) {
+      const { scene, layer, cleanup } = setup();
+      try {
+        scene.activeCamera = new UniversalCamera('test', new Vector3(0, 10, 0), scene);
+        let x = 2;
+        scene.createPickingRay = () => new Ray(new Vector3(x, 10, 2), new Vector3(0, -1, 0));
+        layer.setItems([item()]);
+        layer.select('f');
+        layer.setCirculation(true);
+        const pick = new PickingInfo();
+        pick.pickedMesh = scene.meshes.find((mesh) => mesh.metadata?.kind === 'furniture')!;
+        const actions: string[] = [];
+        layer.onSelect = () => actions.push('select');
+        layer.onEdit = () => actions.push('edit');
+        layer.onChange = () => actions.push('change');
+        const emit = (type: number) =>
+          scene.onPointerObservable.notifyObservers(
+            new PointerInfo(type, { button: 0 } as PointerEvent, pick),
+          );
+        layer.setView(furnitureViewState({ mode, ...enabled, [restriction]: true }));
+        emit(PointerEventTypes.POINTERDOWN);
+        x = 3;
+        emit(PointerEventTypes.POINTERMOVE);
+        emit(PointerEventTypes.POINTERUP);
+        emit(PointerEventTypes.POINTERDOUBLETAP);
+        assert.deepEqual(actions, [], `${mode}/${restriction}: editing stays disabled`);
+        assert.equal(scene.getMeshByName('furniture:selection'), null);
+        assert.equal(scene.getTransformNodeByName('furniture:circulation'), null);
+        for (const mesh of scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture'))
+          assert.equal(Boolean(mesh.material!.clipPlane), mode === 'plan');
+        // Rebuilding a mesh must also keep the real mode, independent of permission.
+        layer.setItems([{ ...item(), width: 2.1 }]);
+        for (const mesh of scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture'))
+          assert.equal(Boolean(mesh.material!.clipPlane), mode === 'plan');
+        pick.pickedMesh = scene.meshes.find((mesh) => mesh.metadata?.kind === 'furniture')!;
+        layer.setView(furnitureViewState({ mode, ...enabled }));
+        assert.ok(scene.getMeshByName('furniture:selection'));
+        emit(PointerEventTypes.POINTERDOUBLETAP);
+        assert.deepEqual(actions, ['edit']);
+      } finally {
+        cleanup();
+      }
+    }
+  }
 });
