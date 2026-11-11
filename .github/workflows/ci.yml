@@ -39,23 +39,48 @@ jobs:
         run: npm run format:check
       - name: Test geometry, navigation, furniture and imports
         run: npm test
+      - name: Check types and build public application
+        run: npm run build
+      - name: Ensure personal house data is absent from publication
+        run: npm run check:public
+      - name: Share verified public build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: public-build
+          path: dist/
+          retention-days: 1
+          if-no-files-found: error
+
+  plan-scripts:
+    name: Tests des scripts de plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - name: Python
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: scripts/requirements.txt
+      - name: Install plan script dependencies once
+        run: |
+          python3 -m pip install --quiet -r scripts/requirements.txt
+          python3 -m pip freeze | grep -iE "^(pillow|pymupdf)=="
       - name: Test the plan comparison helper
         run: |
-          python3 -m pip install --quiet -r scripts/requirements.txt && python3 -m pip freeze | grep -iE "^(pillow|pymupdf)=="
           python3 scripts/compare_plan.py --self-test
       - name: Test the plan decision layer on the reference plan
         run: python3 scripts/derive_plan_decisions.py --self-test
       - name: Test the plan geometry extractor
         run: |
-          python3 -m pip install --quiet -r scripts/requirements.txt && python3 -m pip freeze | grep -iE "^(pillow|pymupdf)=="
           python3 scripts/extract_plan.py --self-test
       - name: Test the derived level outline
         run: |
-          python3 -m pip install --quiet -r scripts/requirements.txt && python3 -m pip freeze | grep -iE "^(pillow|pymupdf)=="
           python3 scripts/derive_outline.py --self-test
       - name: Test the interior doors read from swing arcs
         run: |
-          python3 -m pip install --quiet -r scripts/requirements.txt && python3 -m pip freeze | grep -iE "^(pillow|pymupdf)=="
           python3 scripts/extract_doors.py --self-test
       - name: Test the dimension registry
         run: python3 scripts/extract_plan_evidence.py --self-test
@@ -69,22 +94,10 @@ jobs:
         run: python3 scripts/check_site.py --self-test
       - name: Test the plan page tools
         run: |
-          python3 -m pip install --quiet -r scripts/requirements.txt && python3 -m pip freeze | grep -iE "^(pillow|pymupdf)=="
           python3 scripts/grid_page.py --self-test
           python3 scripts/overlay_page.py --self-test
           python3 scripts/model_plan.py --self-test
           python3 scripts/wall_joins.py --self-test
-      - name: Check types and build public application
-        run: npm run build
-      - name: Ensure personal house data is absent from publication
-        run: npm run check:public
-      - name: Share verified public build
-        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
-        with:
-          name: public-build
-          path: dist/
-          retention-days: 1
-          if-no-files-found: error
 
   e2e:
     name: E2E shard ${{ matrix.shard }}/3
@@ -146,7 +159,7 @@ jobs:
             echo "Chromium system libraries are already available"
           fi
       - name: Test public build in desktop Chromium
-        run: pnpm run test:e2e:built --shard=${{ matrix.shard }}/3
+        run: node scripts/e2e-shard.mjs ${{ matrix.shard }}/3
       - name: Upload E2E report and failure traces
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
@@ -162,12 +175,13 @@ jobs:
     # Preserve the exact branch-protection check name; every shard must succeed.
     name: Tests, types, build et confidentialité
     if: ${{ always() }}
-    needs: [build, e2e]
+    needs: [build, plan-scripts, e2e]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:
-      - name: Require build and all E2E shards
+      - name: Require build, plan scripts and all E2E shards
         env:
           BUILD_RESULT: ${{ needs.build.result }}
+          PLAN_SCRIPTS_RESULT: ${{ needs.plan-scripts.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
-        run: test "$BUILD_RESULT" = success && test "$E2E_RESULT" = success
+        run: test "$BUILD_RESULT" = success && test "$PLAN_SCRIPTS_RESULT" = success && test "$E2E_RESULT" = success

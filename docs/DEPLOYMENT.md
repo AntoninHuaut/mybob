@@ -31,7 +31,15 @@ Checks: formatting, tests, TypeScript check, public build, then artefact check. 
 
 Actions only have `contents: read`, no Cloudflare secret, a 15-minute limit, and cancel runs made obsolete on the same branch.
 
-After the public check, GitHub shares the build with three runners that run the E2E tests in parallel (`--shard`), in desktop Chromium. Chromium headless shell is cached per version. The required check « Tests, types, build et confidentialité » aggregates the build and the three shards: any failure or skipped shard blocks it and blocks auto-merge. Failure reports and traces are archived for seven days. See `docs/E2E.md`. This step is not part of `npm run ci` on the Cloudflare side: the two pipelines stay independent.
+Python plan-script self-tests run in a separate job, parallel with the public build.
+That job uses Python 3.12, a requirements-keyed pip cache and one dependency installation.
+After the public check, GitHub shares the build with three runners that run the E2E tests
+in desktop Chromium. Chromium headless shell is cached per version. The required check
+« Tests, types, build et confidentialité » aggregates the build, plan scripts and the
+three shards: any failure or skipped job blocks it and blocks auto-merge. Failure reports
+and traces are archived for seven days. Shard scheduling and test verification are described
+in [E2E](E2E.md). Browser and Python checks are not part of `npm run ci` on the Cloudflare
+side: the two pipelines stay independent.
 
 ## Cloudflare Pages connection
 
