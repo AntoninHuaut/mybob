@@ -19,13 +19,13 @@ function feed(resolution: AdaptiveResolution, count: number, frameMs: number) {
 }
 
 test('a machine holding 60 fps always stays at full resolution', () => {
-  const resolution = new AdaptiveResolution();
+  const resolution = new AdaptiveResolution(1.5);
   assert.equal(feed(resolution, SERIES * 20, 16.7), 1);
   assert.equal(resolution.scale, 1);
 });
 
 test('a slow machine lowers resolution one step per series, down to the floor', () => {
-  const resolution = new AdaptiveResolution();
+  const resolution = new AdaptiveResolution(1.5);
   assert.equal(feed(resolution, SERIES - 1, 45), 1);
   assert.equal(feed(resolution, 1, 45), RENDER_SCALES[1]);
   assert.equal(feed(resolution, SERIES * 10, 45), RENDER_SCALES.at(-1));
@@ -33,7 +33,7 @@ test('a slow machine lowers resolution one step per series, down to the floor', 
 });
 
 test('the scale never goes back up: resizing again would hitch', () => {
-  const resolution = new AdaptiveResolution();
+  const resolution = new AdaptiveResolution(1.5);
   feed(resolution, SERIES, 45);
   const reduced = resolution.scale;
   assert.ok(reduced < 1);
@@ -41,19 +41,19 @@ test('the scale never goes back up: resizing again would hitch', () => {
 });
 
 test('images that were not drawn in a row are not measured', () => {
-  const resolution = new AdaptiveResolution();
+  const resolution = new AdaptiveResolution(1.5);
   for (let frame = 0; frame < SERIES * 5; frame++) resolution.update(undefined);
   assert.equal(resolution.scale, 1);
 });
 
 test('the hitches of the start are ignored', () => {
-  const resolution = new AdaptiveResolution();
+  const resolution = new AdaptiveResolution(1.5);
   assert.equal(feed(resolution, WARMUP_FRAMES, 400), 1);
   assert.equal(feed(resolution, FRAME_SAMPLES * 3, 16.7), 1);
 });
 
 test('the hitch of a resolution change is ignored too', () => {
-  const resolution = new AdaptiveResolution();
+  const resolution = new AdaptiveResolution(1.5);
   feed(resolution, SERIES, 45);
   assert.equal(resolution.scale, RENDER_SCALES[1]);
   feed(resolution, WARMUP_FRAMES, 400);
@@ -61,7 +61,7 @@ test('the hitch of a resolution change is ignored too', () => {
 });
 
 test('a single slow frame does not lower the resolution', () => {
-  const resolution = new AdaptiveResolution();
+  const resolution = new AdaptiveResolution(1.5);
   let scale = 1;
   for (let frame = 0; frame < SERIES * 5; frame++)
     scale = resolution.update(frame % SERIES === 0 ? 300 : 16.7);
@@ -69,7 +69,7 @@ test('a single slow frame does not lower the resolution', () => {
 });
 
 test('effects are lowered one tier per series, only once the resolution is at its floor', () => {
-  const resolution = new AdaptiveResolution();
+  const resolution = new AdaptiveResolution(1.5);
   feed(resolution, SERIES * (RENDER_SCALES.length - 1), 45);
   assert.equal(resolution.scale, RENDER_SCALES.at(-1));
   assert.equal(resolution.effectTier, 0, 'the scale went first');
@@ -82,7 +82,20 @@ test('effects are lowered one tier per series, only once the resolution is at it
 });
 
 test('a machine holding the frame rate never leaves tier 0', () => {
-  const resolution = new AdaptiveResolution();
+  const resolution = new AdaptiveResolution(1.5);
   feed(resolution, SERIES * 20, 20);
   assert.equal(resolution.effectTier, 0);
+});
+
+test('resolution never falls below one pixel per CSS pixel', () => {
+  for (const [ratio, expected] of [
+    [1, 1],
+    [1.25, 0.8],
+    [1.5, 0.67],
+  ] as const) {
+    const resolution = new AdaptiveResolution(ratio);
+    feed(resolution, SERIES * 10, 40);
+    assert.equal(resolution.scale, expected);
+    assert.equal(resolution.effectTier, EFFECT_TIERS);
+  }
 });

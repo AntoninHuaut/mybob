@@ -232,12 +232,13 @@ test('the bloom sub-effects are configured before the pass is switched off', () 
   assert.equal(pipeline.bloomWeight, INTERIOR_BLOOM_WEIGHT);
 });
 
-test('the visit bloom is a bloom-only chain on the walk camera', () => {
+test('the visit bloom and FXAA are applied on the walk camera', () => {
   const { engine, scene, camera } = fixture();
   try {
     const pipeline = createInteriorBloom(scene, camera);
     assert.ok(pipeline, 'a backend that builds post-processes gets the bloom');
     assert.equal(pipeline.bloomEnabled, true);
+    assert.equal(pipeline.fxaaEnabled, true);
     assert.equal(
       pipeline.bloomThreshold,
       0.9,
@@ -253,6 +254,7 @@ test('the visit bloom is a bloom-only chain on the walk camera', () => {
       ._postProcesses;
     const names = chain.filter((pass) => pass !== null).map((pass) => pass.name);
     assert.ok(names.includes('bloomMerge'), `the glow must reach the camera, got ${names}`);
+    assert.ok(names.indexOf('fxaa') > names.indexOf('bloomMerge'));
     assert.ok(
       !names.includes('imageProcessing'),
       'no image-processing pass may be added to the visit chain',
@@ -269,6 +271,10 @@ test('the orbit bloom shares the visit weight, above the flat sky, for the 3D an
     const pipeline = createOrbitBloom(scene, camera);
     assert.ok(pipeline, 'a backend that builds post-processes gets the bloom');
     assert.equal(pipeline.bloomEnabled, true);
+    assert.equal(pipeline.samples, 4);
+    pipeline.bloomEnabled = false;
+    pipeline.bloomEnabled = true;
+    assert.equal(pipeline.samples, 4);
     assert.equal(pipeline.bloomWeight, INTERIOR_BLOOM_WEIGHT);
     assert.equal(
       pipeline.bloomThreshold,
