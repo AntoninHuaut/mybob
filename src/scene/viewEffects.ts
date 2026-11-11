@@ -16,9 +16,13 @@ import {
   createOrbitTaa,
   INTERIOR_ENVIRONMENT_INTENSITY,
 } from './interiorAmbience';
+import { EFFECT_TIERS } from './adaptiveResolution';
+
+/** The occlusion fades out over this long instead of disappearing in one image. */
+export const OCCLUSION_FADE_MS = 800;
 
 type Bloom = Pick<DefaultRenderingPipeline, 'dispose' | 'bloomEnabled'>;
-type Occlusion = Pick<SSAO2RenderingPipeline, 'dispose' | 'samples' | 'expensiveBlur'>;
+type Occlusion = Pick<SSAO2RenderingPipeline, 'dispose' | 'totalStrength'>;
 type OrbitTemporal = Pick<
   TAARenderingPipeline,
   'dispose' | 'samples' | 'isEnabled' | 'factor' | 'disableOnCameraMove'
@@ -53,6 +57,7 @@ export class ViewEffects {
   private occlusionUnavailable = false;
   private taa?: Temporal;
   private occlusion?: Occlusion;
+  private occlusionFade?: { from: number; since: number };
   private bloom?: Bloom;
   private orbitBloom?: Bloom;
   private orbitAttached = false;
@@ -104,7 +109,7 @@ export class ViewEffects {
     }
     // Babylon appends pipelines to the camera: temporal, occlusion, then bloom.
     this.taa ??= this.create.taa(this.scene, state.camera);
-    if (!this.occlusionUnavailable && !this.occlusion && state.effectTier < 3) {
+    if (!this.occlusionUnavailable && !this.occlusion && state.effectTier < EFFECT_TIERS) {
       this.occlusion = this.create.occlusion(this.scene, state.camera);
       this.occlusionUnavailable = !this.occlusion;
     }
@@ -208,22 +213,29 @@ export class ViewEffects {
     }
   }
 
-  /** Returns whether a pipeline was removed and a new frame is needed. */
-  applyEffectTier(tier: number): boolean {
-    if (tier >= 1 && this.occlusion) {
-      this.occlusion.samples = 8;
-      this.occlusion.expensiveBlur = false;
+  /**
+   * Returns whether a new frame is needed. A tier never leaves a degraded look on screen:
+   * the occlusion is either whole or gone, and it fades out rather than blinking off.
+   */
+  applyEffectTier(tier: number, now: number = performance.now()): boolean {
+    if (tier >= 1 && this.taa) this.taa.samples = 8;
+    if (tier < EFFECT_TIERS || !this.occlusion) return false;
+    this.occlusionFade ??= { from: this.occlusion.totalStrength, since: now };
+    const progress = Math.max(0, (now - this.occlusionFade.since) / OCCLUSION_FADE_MS);
+    if (progress < 1) {
+      this.occlusion.totalStrength = this.occlusionFade.from * (1 - progress);
+      return true;
     }
-    if (tier >= 2 && this.taa) this.taa.samples = 8;
-    if (tier < 3 || !this.occlusion) return false;
     this.occlusion.dispose(true);
     this.occlusion = undefined;
+    this.occlusionFade = undefined;
     return true;
   }
 
   releaseWalkPipelines(): void {
     this.occlusion?.dispose(true);
     this.occlusion = undefined;
+    this.occlusionFade = undefined;
     this.taa?.dispose();
     this.taa = undefined;
     this.bloom?.dispose();

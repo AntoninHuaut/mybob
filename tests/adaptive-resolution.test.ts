@@ -99,3 +99,42 @@ test('resolution never falls below one pixel per CSS pixel', () => {
     assert.equal(resolution.effectTier, EFFECT_TIERS);
   }
 });
+
+test('a stall is not the speed of the machine: it is never measured', () => {
+  const resolution = new AdaptiveResolution(1.6);
+  feed(resolution, SERIES * 10, 30_000);
+  assert.equal(resolution.scale, 1);
+  assert.equal(resolution.effectTier, 0);
+});
+
+test('returning to the page restarts the warm-up, so slow first images cost no effect', () => {
+  const resolution = new AdaptiveResolution(1.6);
+  feed(resolution, SERIES * 5, 45);
+  assert.equal(resolution.scale, RENDER_SCALES.at(-1));
+  const tier = resolution.effectTier;
+  resolution.resume();
+  feed(resolution, WARMUP_FRAMES + FRAME_SAMPLES - 1, 45);
+  assert.equal(resolution.effectTier, tier);
+  feed(resolution, WARMUP_FRAMES, 16.7);
+  feed(resolution, FRAME_SAMPLES * 3, 16.7);
+  assert.equal(resolution.effectTier, tier);
+});
+
+test('resume discards a half-measured series', () => {
+  const resolution = new AdaptiveResolution(1.6);
+  feed(resolution, WARMUP_FRAMES + FRAME_SAMPLES - 1, 45);
+  resolution.resume();
+  feed(resolution, WARMUP_FRAMES, 16.7);
+  feed(resolution, 1, 45);
+  assert.equal(resolution.scale, 1);
+});
+
+test('the bench can pin a tier and hand it back', () => {
+  const resolution = new AdaptiveResolution(1.6);
+  resolution.force(2);
+  assert.equal(resolution.effectTier, 2);
+  resolution.force(99);
+  assert.equal(resolution.effectTier, EFFECT_TIERS);
+  resolution.force(undefined);
+  assert.equal(resolution.effectTier, 0);
+});

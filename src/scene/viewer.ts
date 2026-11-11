@@ -260,6 +260,9 @@ export class HouseViewer {
     window.addEventListener('keydown', this.keydown);
     window.addEventListener('keyup', this.keyup);
     window.addEventListener('blur', this.clearKeys);
+    window.addEventListener('blur', this.pauseMeasure);
+    window.addEventListener('focus', this.pauseMeasure);
+    document.addEventListener('visibilitychange', this.pauseMeasure);
     document.addEventListener('pointerlockchange', this.clearKeys);
     document.addEventListener('pointerlockerror', this.pointerLockError);
     canvas.addEventListener('blur', this.clearKeys);
@@ -1292,6 +1295,15 @@ export class HouseViewer {
     if (this.viewEffects?.applyEffectTier(this.currentEffectTier)) this.requestRender();
   }
 
+  /**
+   * Development bench only: pins the effect tier and rebuilds the visit pipelines, which
+   * is the one way to go back down (a real tier is never lifted).
+   */
+  forceEffectTier(tier?: number): void {
+    this.adaptiveResolution.force(tier);
+    this.rebuildWalkPipelines();
+  }
+
   /** Effect tier in use on this machine (0 = full quality), for the diagnostic. */
   get currentEffectTier(): number {
     return this.adaptiveResolution?.effectTier ?? 0;
@@ -1552,6 +1564,11 @@ export class HouseViewer {
     )
       this.previewMeasurement(this.measureCursor, event.shiftKey, event.altKey);
   };
+  /** Leaving or returning to the page: the next images say nothing about the machine. */
+  private pauseMeasure = () => {
+    this.adaptiveResolution.resume();
+    this.lastRenderAt = undefined;
+  };
   private clearKeys = () => {
     this.keyState.clear();
     this.walk?.cameraDirection.setAll(0);
@@ -1669,6 +1686,9 @@ export class HouseViewer {
     window.removeEventListener('keydown', this.keydown);
     window.removeEventListener('keyup', this.keyup);
     window.removeEventListener('blur', this.clearKeys);
+    window.removeEventListener('blur', this.pauseMeasure);
+    window.removeEventListener('focus', this.pauseMeasure);
+    document.removeEventListener('visibilitychange', this.pauseMeasure);
     document.removeEventListener('pointerlockchange', this.clearKeys);
     document.removeEventListener('pointerlockerror', this.pointerLockError);
     this.canvas.removeEventListener('blur', this.clearKeys);

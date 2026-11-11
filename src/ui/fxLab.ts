@@ -1,3 +1,4 @@
+import { EFFECT_TIERS } from '../scene/adaptiveResolution';
 import { FxLabEffect } from './fxLabEffect';
 import { createInteriorOcclusion } from '../scene/interiorAmbience';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
@@ -15,9 +16,10 @@ import { cornerBeadMesh, roomCorners } from '../scene/cornerBead';
  * The bench exists to try a rendering idea on the real house before deciding
  * whether it ships. Dust motes were tried here and removed: a real mote is
  * tens of microns — under a pixel at any distance — and a sprite big enough to
- * be seen reads as snow. The ambient occlusion has nothing left to force since
- * it stopped being dropped. What is left:
+ * be seen reads as snow. What is left:
  *
+ * - the visit's effect tier, pinned by hand (0 = full, 1 = lighter TAA, 2 = no
+ *   occlusion) to judge each state without waiting for a slow machine;
  * - a chamfer on the concave vertical corner between two walls, the one place
  *   the wall bevel cannot reach.
  *
@@ -183,6 +185,27 @@ export function mountFxLab(viewer: HouseViewer): void {
     }
   });
 
+  const tierRow = document.createElement('label');
+  tierRow.style.cssText = 'display:flex;gap:6px;align-items:center;margin-top:4px';
+  const tierSelect = document.createElement('select');
+  for (const [value, text] of [
+    ['auto', 'auto'],
+    ...Array.from({ length: EFFECT_TIERS + 1 }, (_, tier) => [
+      String(tier),
+      `palier ${tier}/${EFFECT_TIERS}`,
+    ]),
+  ])
+    tierSelect.append(new Option(text, value));
+  const setTier = (tier?: number) => {
+    viewer.forceEffectTier(tier);
+    tierSelect.value = tier === undefined ? 'auto' : String(tier);
+  };
+  tierSelect.addEventListener('change', () =>
+    setTier(tierSelect.value === 'auto' ? undefined : Number(tierSelect.value)),
+  );
+  tierRow.append('Effets de la visite', tierSelect);
+  box.append(tierRow);
+
   const note = document.createElement('div');
   note.textContent = 'Entrez en visite pour juger.';
   note.style.cssText = 'margin-top:8px;color:#9aa79a';
@@ -199,6 +222,7 @@ export function mountFxLab(viewer: HouseViewer): void {
   (window as unknown as { __fxLab?: unknown }).__fxLab = {
     viewer,
     sync,
+    forceTier: setTier,
     corners: () => roomCorners(viewer.level),
     setCorner: (on: boolean, size = beadSize) => {
       cornerOn = on;

@@ -5,11 +5,12 @@
 export const RENDER_SCALES = [1, 0.8, 0.67] as const;
 
 /**
- * Effect tiers, tried once the resolution is at its floor (it costs the least to the eye),
- * from the cheapest to the most visible: 1 lighter occlusion (8 samples, cheap blur),
- * 2 lighter temporal antialiasing (8 samples), 3 no occlusion.
+ * Effect tiers, tried once the resolution is at its floor (it costs the least to the eye):
+ * 1 lighter temporal antialiasing (8 samples), 2 no occlusion. The occlusion is never
+ * degraded on the way: a grainy cheap-blur version is the ugliest of the states, and a
+ * look that changes by itself reads as a bug.
  */
-export const EFFECT_TIERS = 3;
+export const EFFECT_TIERS = 2;
 
 /** Above this median frame time (under 40 fps), the next render scale is tried. */
 export const FRAME_BUDGET_MS = 25;
@@ -26,6 +27,12 @@ export const FRAME_SAMPLES = 6;
 export const WARMUP_FRAMES = 30;
 
 /**
+ * A gap this long between two images is a stall (tab in the background, window
+ * switch, debugger), not the speed of the machine: it is not measured.
+ */
+export const STALL_MS = 500;
+
+/**
  * Dynamic resolution, the same at rest and in motion. A machine that cannot hold 40 fps
  * renders fewer pixels, one step at a time; a machine that can never leaves full
  * resolution. The scale only goes down, and is kept for the session: changing it resizes
@@ -34,6 +41,7 @@ export const WARMUP_FRAMES = 30;
 export class AdaptiveResolution {
   private level = 0;
   private effectLevel = 0;
+  private forcedTier?: number;
   private samples: number[] = [];
   private warmup = WARMUP_FRAMES;
 
@@ -44,7 +52,8 @@ export class AdaptiveResolution {
    * returns the render scale to use for this image (1 = full resolution).
    */
   update(frameMs?: number): number {
-    if (frameMs === undefined || !Number.isFinite(frameMs)) return RENDER_SCALES[this.level];
+    if (frameMs === undefined || !Number.isFinite(frameMs) || frameMs > STALL_MS)
+      return RENDER_SCALES[this.level];
     if (this.warmup > 0) {
       this.warmup--;
       return RENDER_SCALES[this.level];
@@ -70,9 +79,25 @@ export class AdaptiveResolution {
     return RENDER_SCALES[this.level];
   }
 
+  /**
+   * The page was hidden or lost the focus. The GPU is shared and clocked down, the
+   * browser throttled the tab: the first images after the return are not the speed of
+   * the machine, and a tier taken for them would never be given back.
+   */
+  resume(): void {
+    this.samples = [];
+    this.warmup = WARMUP_FRAMES;
+  }
+
   /** Effect tier in use (0 = every effect at full quality), for the diagnostic. */
   get effectTier(): number {
-    return this.effectLevel;
+    return this.forcedTier ?? this.effectLevel;
+  }
+
+  /** Development bench only: pins the tier (or hands it back with undefined). */
+  force(tier?: number): void {
+    this.forcedTier =
+      tier === undefined ? undefined : Math.max(0, Math.min(EFFECT_TIERS, Math.round(tier)));
   }
 
   /** The scale in use on this machine, for the diagnostic. */
