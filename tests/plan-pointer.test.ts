@@ -36,7 +36,7 @@ function fixture(fps = 60) {
     engine,
     scene,
     orbit: camera,
-    mode: 'plan',
+    currentMode: 'plan',
     planZoom: 1,
     level,
     canvas: { clientWidth: 390, clientHeight: 788 },

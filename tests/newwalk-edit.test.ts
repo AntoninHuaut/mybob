@@ -64,7 +64,7 @@ test('F routes once only during an active unpaused visit and keeps E for doors',
     canvas,
     scene,
     walk: camera,
-    mode: 'walk',
+    currentMode: 'walk',
     paused: false,
     keyState: new Set<string>(),
     onEditFurniture: (id: string) => edits.push(id),
@@ -84,9 +84,9 @@ test('F routes once only during an active unpaused visit and keeps E for doors',
     Object.assign(viewer, { paused: true });
     key('KeyF');
     Object.assign(viewer, { paused: false });
-    viewer.mode = 'overview';
+    Object.assign(viewer, { currentMode: 'overview' });
     key('KeyF');
-    viewer.mode = 'walk';
+    Object.assign(viewer, { currentMode: 'walk' });
     documentStub.activeElement = {};
     key('KeyF');
     documentStub.activeElement = canvas;
@@ -125,7 +125,7 @@ test('walk HUD exposes furniture at three metres while keeping the shorter door 
     engine,
     scene,
     walk: camera,
-    mode: 'walk',
+    currentMode: 'walk',
     paused: false,
     keyState: new Set(),
     house: { doors: [] },
@@ -211,7 +211,7 @@ test('a capture refused in the rebind window retries once; a refused retry is re
   const errors: string[] = [];
   const viewer = Object.assign(Object.create(HouseViewer.prototype), {
     canvas,
-    mode: 'walk',
+    currentMode: 'walk',
     paused: false,
     onPointerLockError: () => errors.push('capture'),
   }) as HouseViewer;

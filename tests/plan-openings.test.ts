@@ -93,9 +93,9 @@ test('plan uses an opening-height cut by default and restores normal overview, v
   const viewer = Object.assign(Object.create(HouseViewer.prototype), {
     scene,
     level,
-    mode: 'plan',
+    currentMode: 'plan',
     sectionHeight: undefined,
-    exteriorView: false,
+    currentExteriorView: false,
     planOpenings: markers,
   }) as HouseViewer;
   const update = () => (viewer as unknown as { updateSection(): void }).updateSection();
@@ -103,21 +103,21 @@ test('plan uses an opening-height cut by default and restores normal overview, v
   near(scene.clipPlane!.d, -4);
   assert.ok(markers.meshes.every((mesh) => mesh.isEnabled()));
   assert.ok(scene.clipPlane!.dotCoordinate(new Vector3(0, markers.meshes[0].position.y, 0)) < 0);
-  viewer.mode = 'walk';
+  Object.assign(viewer, { currentMode: 'walk' });
   update();
   assert.equal(scene.clipPlane, null);
   assert.ok(markers.meshes.every((mesh) => !mesh.isEnabled()));
-  viewer.mode = 'overview';
+  Object.assign(viewer, { currentMode: 'overview' });
   update();
   assert.equal(scene.clipPlane, null);
   Object.assign(viewer, { sectionHeight: 0.6 });
   update();
   near(scene.clipPlane!.d, -3.4);
-  viewer.mode = 'plan';
+  Object.assign(viewer, { currentMode: 'plan' });
   update();
   near(scene.clipPlane!.d, -3.4);
   near(markers.meshes[0].position.y, 3.388);
-  Object.assign(viewer, { exteriorView: true });
+  Object.assign(viewer, { currentExteriorView: true });
   update();
   assert.equal(scene.clipPlane, null);
   assert.ok(markers.meshes.every((mesh) => !mesh.isEnabled()));

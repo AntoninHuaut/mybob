@@ -347,13 +347,13 @@ test('a failing ambience never leaves the visit half-applied', () => {
     orbit,
     walk,
     canvas,
-    mode: 'plan',
+    currentMode: 'plan',
     eyeHeight: 1.65,
     dimensions: [],
     measureMeshes: [],
     measureMode: false,
     goToMode: false,
-    exteriorView: false,
+    currentExteriorView: false,
     sectionHeight: undefined,
     clearKeys() {},
     updateLighting() {
@@ -368,7 +368,7 @@ test('a failing ambience never leaves the visit half-applied', () => {
     updateCutaway() {
       calls.push('cutaway');
     },
-    onModeChange: (mode: string) => calls.push(`mode:${mode}`),
+    onViewChange: (mode: string) => calls.push(`mode:${mode}`),
   }) as HouseViewer;
   const camera = walk as unknown as { attachControl: () => void; detachControl: () => void };
   camera.attachControl = () => {};
@@ -415,13 +415,13 @@ test('a backend that refuses occlusion is not asked again on every visit', () =>
     orbit,
     walk,
     canvas,
-    mode: 'plan',
+    currentMode: 'plan',
     eyeHeight: 1.65,
     dimensions: [],
     measureMeshes: [],
     measureMode: false,
     goToMode: false,
-    exteriorView: false,
+    currentExteriorView: false,
     sectionHeight: undefined,
     clearKeys() {},
     updateLighting() {},

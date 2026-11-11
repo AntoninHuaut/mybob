@@ -72,8 +72,8 @@ function fixture() {
     scene,
     level,
     orbit,
-    mode: 'overview',
-    exteriorView: false,
+    currentMode: 'overview',
+    currentExteriorView: false,
     sectionHeight: undefined,
     planOpenings: markers,
     wallCutaway: cutaway,
@@ -162,23 +162,23 @@ test('plan, first person, exterior and explicit height cuts take priority over a
   const { engine, scene, material, cutaway, markers, viewer } = fixture();
   const north = scene.getMeshByName('wall:north:0')!;
   viewer.setWallDisplay('auto');
-  viewer.mode = 'plan';
+  Object.assign(viewer, { currentMode: 'plan' });
   viewer.setSectionHeight(undefined);
   assert.equal(north.material, material);
   assert.ok(Math.abs(scene.clipPlane!.d + 4) < 1e-8);
   assert.ok(markers.meshes.every((mesh) => mesh.isEnabled()));
-  viewer.mode = 'walk';
+  Object.assign(viewer, { currentMode: 'walk' });
   viewer.setSectionHeight(undefined);
   assert.equal(scene.clipPlane, null);
   assert.equal(north.material, material);
   assert.equal(north.isPickable, true);
   assert.ok(markers.wallCaps.every((mesh) => !mesh.isEnabled()));
-  viewer.mode = 'overview';
-  Object.assign(viewer, { exteriorView: true });
+  Object.assign(viewer, { currentMode: 'overview' });
+  Object.assign(viewer, { currentExteriorView: true });
   viewer.setSectionHeight(undefined);
   assert.equal(north.material, material);
   assert.equal(scene.clipPlane, null);
-  Object.assign(viewer, { exteriorView: false });
+  Object.assign(viewer, { currentExteriorView: false });
   viewer.setSectionHeight(0.8);
   assert.equal(north.material, material, 'explicit global cut takes priority');
   assert.ok(Math.abs(scene.clipPlane!.d + 3.6) < 1e-8);
@@ -215,7 +215,7 @@ test('plan lighting is neutral and shadow-free, then restores 3D and visit light
   update();
   assert.equal(sun.intensity, 0.95);
   assert.equal(sky.intensity, 0.55);
-  viewer.mode = 'plan';
+  Object.assign(viewer, { currentMode: 'plan' });
   update();
   assert.equal(scene.shadowsEnabled, false);
   assert.equal(sun.intensity, 0);
@@ -225,7 +225,7 @@ test('plan lighting is neutral and shadow-free, then restores 3D and visit light
   viewer.setLights(false);
   viewer.setLights(true);
   assert.equal(point.isEnabled(), false, 'plan keeps point-light hotspots disabled');
-  viewer.mode = 'overview';
+  Object.assign(viewer, { currentMode: 'overview' });
   update();
   assert.equal(scene.shadowsEnabled, true);
   assert.equal(sun.intensity, 0.95);
@@ -234,9 +234,9 @@ test('plan lighting is neutral and shadow-free, then restores 3D and visit light
   assert.deepEqual(sky.groundColor.asArray(), ground);
   assert.equal(point.isEnabled(), true);
   scene.shadowsEnabled = false;
-  viewer.mode = 'plan';
+  Object.assign(viewer, { currentMode: 'plan' });
   update();
-  viewer.mode = 'walk';
+  Object.assign(viewer, { currentMode: 'walk' });
   update();
   assert.equal(
     scene.shadowsEnabled,
@@ -250,7 +250,7 @@ test('plan lighting is neutral and shadow-free, then restores 3D and visit light
     sky.groundColor.r < ground[0] && sky.groundColor.g < ground[1] && sky.groundColor.b < ground[2],
     'the visit darkens the ground bounce so the interior reads top-to-bottom',
   );
-  viewer.mode = 'overview';
+  Object.assign(viewer, { currentMode: 'overview' });
   update();
   assert.deepEqual(sky.groundColor.asArray(), ground, 'the editor keeps its original bounce');
   cutaway.dispose();
@@ -275,9 +275,9 @@ test('entering the plan straight from the visit snapshots the editor bounce, not
   });
   const update = () => (viewer as unknown as { updateLighting(): void }).updateLighting();
   viewer.setWallDisplay('full');
-  viewer.mode = 'walk';
+  Object.assign(viewer, { currentMode: 'walk' });
   update();
-  viewer.mode = 'plan';
+  Object.assign(viewer, { currentMode: 'plan' });
   update();
   const snapshot = (viewer as unknown as { planLighting?: { ground: Color3 } }).planLighting;
   assert.deepEqual(
@@ -285,7 +285,7 @@ test('entering the plan straight from the visit snapshots the editor bounce, not
     ground,
     'the plan must not inherit the darker visit bounce',
   );
-  viewer.mode = 'overview';
+  Object.assign(viewer, { currentMode: 'overview' });
   update();
   assert.deepEqual(sky.groundColor.asArray(), ground);
   cutaway.dispose();
@@ -327,12 +327,12 @@ test('solar previews drive the directional light, preserve neutral plan and rest
   assert.ok(Vector3.Distance(sun.direction, new Vector3(0, -0.5, -Math.sqrt(0.75))) < 1e-8);
   const centre = new Vector3(2, level.elevation + level.ceilingHeight / 2, 2);
   assert.ok(Vector3.Distance(sun.position, centre.subtract(sun.direction.scale(30))) < 1e-8);
-  viewer.mode = 'plan';
+  Object.assign(viewer, { currentMode: 'plan' });
   viewer.setSolar(solar);
   assert.equal(sun.intensity, 0);
   assert.equal(sky.intensity, 0.9);
   assert.equal(scene.shadowsEnabled, false);
-  viewer.mode = 'overview';
+  Object.assign(viewer, { currentMode: 'overview' });
   viewer.setSolar({ ...solar, altitudeDeg: -12, daylight: false });
   assert.equal(sun.intensity, 0);
   assert.equal(sky.intensity, 0.1);
@@ -349,7 +349,7 @@ test('solar previews drive the directional light, preserve neutral plan and rest
     false,
     'lowered-wall editing remains readable without shadow artifacts',
   );
-  Object.assign(viewer, { exteriorView: true });
+  Object.assign(viewer, { currentExteriorView: true });
   viewer.setWallDisplay('auto');
   assert.equal(scene.shadowsEnabled, true, 'complete exterior restores real shadows');
   cutaway.dispose();

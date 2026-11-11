@@ -80,7 +80,7 @@ test('capture restores dimensions, furniture overlays and animation guard after 
     pinnedMeasurements: [],
     paused: false,
     capturing: false,
-    mode: 'plan',
+    currentMode: 'plan',
     scene: {
       activeCamera: camera,
       meshes: [selection, distance],

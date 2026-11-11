@@ -9,7 +9,7 @@ page, then only the files of the area concerned. Product rules and delivery cons
 Static Vite + TypeScript + Babylon.js 9 application. No backend, no account: all persistent
 state lives in the browser's `localStorage`.
 
-- `src/main.ts` — UI composition and **screen state**: current mode, selection, preferences,
+- `src/main.ts` — UI composition and **screen state**: selection, preferences,
   projects. It owns the DOM.
 - `src/scene/viewer.ts` — the Babylon scene: cameras, modes, cutaway, lighting, measurements,
   collisions. It owns rendering.
@@ -18,7 +18,7 @@ state lives in the browser's `localStorage`.
 - `src/ui/` — pure HTML fragments and self-contained panels.
 
 The two worlds talk in one direction at a time: `main.ts` calls viewer methods, and the viewer
-reports back through callbacks (`onModeChange`, `onFrame`, `onSelectRoom`, `onDestination`,
+reports back through callbacks (`onViewChange`, `onFrame`, `onSelectRoom`, `onDestination`,
 `onMeasure`, `onEditFurniture`).
 
 ## Module map
@@ -118,24 +118,25 @@ with a migration.
 
 ## The three modes and their state — the most fragile point
 
-`overview`, `plan` and `walk` exist **twice**: `mode` in `src/main.ts` (what the interface
-shows) and `viewer.mode` in `src/scene/viewer.ts` (what the scene renders).
+`HouseViewer` owns the accepted `overview`, `plan` or `walk` mode and exterior status.
+`viewer.mode` and `viewer.exteriorView` are read-only; the UI reads them directly.
 
-- `main.setMode(next, fromViewer)` is the interface's only entry point. It sets `mode`, calls
-  `viewer.setMode(next)` if needed, then updates the buttons, titles, help and
-  `syncDisplayControls()`.
-- `viewer.setMode()` may **refuse**: without a valid walk destination it calls
-  `onDestinationRejected` and returns without changing `viewer.mode`. `main.setMode` then
-  re-reads `viewer.mode` and returns `false`: that is why `setMode` returns a boolean.
-- `viewer.onModeChange` reports back to `main.setMode(next, true)`. The `syncingViewerMode`
-  flag prevents recursion when `main` triggered the change.
-- Never write `viewer.mode` directly, nor switch the active camera outside `viewer.setMode`:
-  the section (`updateSection`), the cutaways (`updateCutaway`), the shadows
-  (`updateShadowPolicy`) and the ambience are all derived from `viewer.mode`.
+- Every transition uses `viewer.setMode`, including load, room entry and destinations.
+  `setExteriorView` requests an overview transition through the same path. Exterior remains
+  an overview state; a headset session remains a walk state.
+- Before changing state or cameras, `setMode` checks the host's `canChangeMode` policy
+  (the UI explains refused touch-only walking) and resolves a valid walk destination.
+  Refusal returns `false`, preserving the accepted mode, exterior, camera and active tools.
+- After applying the camera, roof, section, cutaway and ambience, the viewer calls
+  `onViewChange`. `main.syncViewChrome` derives buttons, titles, help and furniture policy
+  from the accepted state. It never requests another transition. Ambience failures still
+  allow the rest of the transition and notification to complete.
+- `main.setMode` adds UI-request conveniences after acceptance: focus the selected room
+  and return keyboard focus to the canvas. Viewer-originated transitions do not refocus it.
+- Headset exit restores the camera of the currently accepted mode, even when an asynchronous
+  session end follows a transition out of the walk.
 
-Symptom of a desynchronisation: the interface still shows "Plan" while the camera walks, or
-the reverse. Any new way of entering the walk must go through `main.setMode` or through a
-viewer method that calls `setMode` (such as `goTo` and `focusRoom`).
+Do not switch the active camera outside the viewer's transition/headset lifecycle.
 
 ## Walk and rendering
 
