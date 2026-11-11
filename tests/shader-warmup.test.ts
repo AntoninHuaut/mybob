@@ -3,7 +3,7 @@ import test from 'node:test';
 import {
   READY_IN_A_ROW,
   ViewWarmth,
-  WARM_UP_MAX_FRAMES,
+  WARM_UP_MAX_MS,
   WARM_UP_MIN_FRAMES,
   viewKey,
   warmFrames,
@@ -30,13 +30,25 @@ test('warm-up keeps drawing until the view is ready several frames in a row', as
   assert.equal(frames, 9);
 });
 
-test('warm-up never draws past the cap, even if a compile is stuck', async () => {
+test('warm-up keeps waiting for a slow compile, and gives up after its time budget', async () => {
+  let clock = 0;
   let drawn = 0;
+  // A frame every 100 ms: the view only becomes ready after 8 s, far past 24 frames.
   const frames = await warmFrames(
-    { renderFrame: () => drawn++, effectsReady: () => false },
-    noWait,
+    { renderFrame: () => drawn++, effectsReady: () => clock >= 8_000 },
+    async () => void (clock += 100),
+    () => clock,
   );
-  assert.equal(frames, WARM_UP_MAX_FRAMES);
+  assert.ok(frames > 24, 'not capped by a frame count');
+  assert.ok(clock < WARM_UP_MAX_MS);
+
+  clock = 0;
+  const stuck = await warmFrames(
+    { renderFrame: () => drawn++, effectsReady: () => false },
+    async () => void (clock += 100),
+    () => clock,
+  );
+  assert.equal(stuck, WARM_UP_MAX_MS / 100);
 });
 
 test('warm-up lets the browser breathe between frames', async () => {

@@ -5,10 +5,15 @@ import type { ViewMode } from './viewer';
  * ones let the sun shadow map and the temporal pass settle, which changes the
  * materials' defines once more (every receiver relinks with its shadow). After the
  * minimum, drawing goes on until the host reports everything ready three frames in
- * a row; the cap keeps a stuck compile from hanging.
+ * a row; the time budget keeps a stuck compile from hanging.
  */
 export const WARM_UP_MIN_FRAMES = 4;
-export const WARM_UP_MAX_FRAMES = 24;
+/**
+ * Babylon builds a program through an asynchronous chain (shader modules, then the
+ * link), so the number of frames drawn says nothing about when it is done: wait for
+ * readiness, and only give up after this long.
+ */
+export const WARM_UP_MAX_MS = 20_000;
 export const READY_IN_A_ROW = 3;
 
 /**
@@ -54,10 +59,12 @@ export interface WarmTarget {
 export async function warmFrames(
   target: WarmTarget,
   yieldToBrowser: () => Promise<void> = nextFrame,
+  now: () => number = () => performance.now(),
 ): Promise<number> {
+  const deadline = now() + WARM_UP_MAX_MS;
   let ready = 0;
   let frames = 0;
-  while (frames < WARM_UP_MAX_FRAMES) {
+  while (now() < deadline) {
     target.renderFrame();
     frames++;
     await yieldToBrowser();
