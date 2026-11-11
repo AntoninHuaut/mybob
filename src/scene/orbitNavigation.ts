@@ -23,4 +23,10 @@ export function panOrbitWithKeys(
   const speed = Math.max(0.4, Math.min(20, span * 0.25)) * (fast ? 2 : 1);
   const delta = direction.normalize().scale(speed * Math.max(0, Math.min(seconds, 0.05)));
   camera.setTarget(camera.target.add(delta), false, true, true);
+  // A pan applied here does not pass through the camera's own inputs, and the temporal
+  // antialiasing only notices motion through them: left alone it blends the previous
+  // camera view into the new one, which smears the image while the key is held. Dropping
+  // its history is the documented cut for a view that jumps outside the input path, and
+  // costs nothing at rest because an idle key returns above.
+  camera.resetViewHistory();
 }

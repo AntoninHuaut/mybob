@@ -391,10 +391,15 @@ last call, and read back at start-up.
   going below one rendered pixel per CSS pixel. The
   scale only goes down and is kept for the session, because changing it resizes every render
   target, which hitches. The first 30 images and the 30 after each change are not measured.
+  A gap over 5 s between two images is a stall, never a measurement, and hiding the
+  page, losing or regaining the focus restarts that warm-up and drops the half-measured
+  series: the slow images after an alt-tab are not the machine, and a tier is never lifted.
   Once at the resolution floor and still over budget, visit effects drop one tier per series:
-  1 lighter occlusion (8 samples, cheap blur), 2 lighter temporal antialiasing (8 samples), 3 no occlusion; a
-  tier is never lifted either. A PC that holds the frame rate never leaves 100 % nor tier 0.
-  `mybob.diag()` shows the scale and the tier (`effets palier n/3`). The tier is not stored
+  1 lighter temporal antialiasing (8 samples), 2 no occlusion, which fades out over 0.8 s
+  rather than blinking off. The occlusion is never degraded on the way (fewer samples, cheap
+  blur): a look that changes by itself reads as a bug. A tier is never lifted. A PC that holds
+  the frame rate never leaves 100 % nor tier 0.
+  `mybob.diag()` shows the scale and the tier (`effets palier n/2`). The tier is not stored
   between sessions.
 - Static house and exterior meshes freeze their world matrices after construction. Moving
   door leaves and every descendant of a moving pivot stay unfrozen. House shell and trim
