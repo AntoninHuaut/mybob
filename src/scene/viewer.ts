@@ -1355,7 +1355,9 @@ export class HouseViewer {
       }
       this.shadowRefresh?.invalidate();
     }
-    const cameraMoved = this.renderScheduler.cameraMoved;
+    // Prototype-based scene tests have no scheduler; treat their explicit frames
+    // as fresh observations rather than reusing an untracked camera signature.
+    const cameraMoved = this.renderScheduler?.cameraMoved ?? true;
     if (cameraMoved && this.mode === 'overview' && !this.exteriorView) this.updateCutaway();
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.045);
     // Match the collision displacement to frame time, including the garage step.

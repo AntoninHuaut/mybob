@@ -428,6 +428,9 @@ wrong geometry does not tell the correct from the incorrect.
 
 ## Known traps
 
+- Merged wall bounds span empty doorways. Collision/reachability checks must use occupied
+  triangles or actual visitor movement, not treat an entire mesh AABB as solid.
+
 - `public/projects/maison-atelier.json` is a **synthetic test template**, not the owner's
   house; `studio-demo.json` is the public demonstration. Both may be edited.
 - `planArea` must match the polygon to within one square centimetre (`tests/model.test.ts`).

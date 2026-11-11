@@ -221,6 +221,46 @@ test('threshold assistance preserves closed-door collisions and restores gravity
   engine.dispose();
 });
 
+test('a merged frozen doorway passes the 34 cm visitor while its adjacent solid wall blocks', () => {
+  const { engine, scene, level, house } = garageScene();
+  try {
+    const wall = scene.meshes.find((mesh) => mesh.name.startsWith('wall:garage-nord:'))!;
+    assert.ok(wall.checkCollisions && wall.isWorldMatrixFrozen);
+    assert.ok(
+      wall.getBoundingInfo().boundingBox.intersectsPoint(new Vector3(5.545, 1.3, 3.05)),
+      'the merged broad-phase box spans the empty doorway',
+    );
+    const service = house.doors.find((door) => door.id === 'porte-service')!;
+    service.progress = 1;
+    poseDoor(service);
+    const step = 0.0175;
+    scene.gravity.y = (-15 * step) / 2.1;
+    for (const x of [5.545, 4]) {
+      const camera = createWalkCamera(scene, level);
+      try {
+        assert.equal(camera.ellipsoid.x, 0.17);
+        assert.equal(camera.ellipsoid.z, 0.17);
+        camera.position.set(x, EYE_HEIGHT - 0.12, 2.2);
+        const collider = camera as unknown as { _collideWithWorld(displacement: Vector3): void };
+        for (let i = 0; i < 80; i++) {
+          const movement = new Vector3(0, 0, step);
+          prepareWalkStep(camera, level, movement);
+          collider._collideWithWorld(movement);
+        }
+        if (x === 5.545)
+          assert.ok(camera.position.z > 3.4, 'actual collision triangles leave the doorway open');
+        else
+          assert.ok(camera.position.z < 2.9, 'adjacent solid wall still blocks the same visitor');
+      } finally {
+        camera.dispose();
+      }
+    }
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
 test('the visitor climbs the parcel step back into the house', () => {
   const engine = new NullEngine();
   const scene = new Scene(engine);

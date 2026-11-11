@@ -233,19 +233,52 @@ test('every room is reachable from the living room with a 34 cm wide visitor', (
   update();
   const level = main.levels[0],
     step = 0.06,
-    radius = 0.17;
+    radius = 0.17,
+    height = 1.3;
   const b = bounds(level.outline),
     cols = Math.ceil(b.width / step) + 1,
     rows = Math.ceil(b.depth / step) + 1;
+  // A merged wall's AABB spans its openings. Slice its actual collision triangles
+  // at the same visitor height instead of filling those empty doorways with boxes.
+  const segments: [Vector3, Vector3][] = [];
   const obstacles = scene.meshes
     .filter((m) => m.checkCollisions)
-    .map((m) => m.getBoundingInfo().boundingBox)
-    .filter((box) => box.minimumWorld.y < 1.3 && box.maximumWorld.y > 1.3);
+    .filter((m) => {
+      const box = m.getBoundingInfo().boundingBox;
+      return box.minimumWorld.y < height && box.maximumWorld.y > height;
+    });
+  for (const mesh of obstacles) {
+    const positions = mesh.getVerticesData('position')!,
+      indices = mesh.getIndices()!;
+    const vertices = Array.from({ length: positions.length / 3 }, (_, index) =>
+      Vector3.TransformCoordinates(Vector3.FromArray(positions, index * 3), mesh.getWorldMatrix()),
+    );
+    for (let i = 0; i < indices.length; i += 3) {
+      const points: Vector3[] = [];
+      const triangle = [vertices[indices[i]], vertices[indices[i + 1]], vertices[indices[i + 2]]];
+      for (let j = 0; j < 3; j++) {
+        const a = triangle[j],
+          b = triangle[(j + 1) % 3];
+        if ((a.y - height) * (b.y - height) > 0) continue;
+        if (Math.abs(b.y - a.y) < 1e-10) {
+          if (Math.abs(a.y - height) < 1e-10) points.push(a, b);
+        } else points.push(Vector3.Lerp(a, b, (height - a.y) / (b.y - a.y)));
+      }
+      for (let a = 0; a < points.length; a++)
+        for (let b = a + 1; b < points.length; b++) segments.push([points[a], points[b]]);
+    }
+  }
   const free = (x: number, z: number) =>
     pointInPolygon([x, z], level.outline) &&
-    !obstacles.some((box) => {
-      const dx = x - Math.max(box.minimumWorld.x, Math.min(x, box.maximumWorld.x));
-      const dz = z - Math.max(box.minimumWorld.z, Math.min(z, box.maximumWorld.z));
+    !segments.some(([a, b]) => {
+      const sx = b.x - a.x,
+        sz = b.z - a.z;
+      const lengthSquared = sx * sx + sz * sz;
+      const t = lengthSquared
+        ? Math.max(0, Math.min(1, ((x - a.x) * sx + (z - a.z) * sz) / lengthSquared))
+        : 0;
+      const dx = x - a.x - t * sx,
+        dz = z - a.z - t * sz;
       return dx * dx + dz * dz < radius * radius;
     });
   const startX = Math.round(level.spawn.position[0] / step),
