@@ -29,7 +29,7 @@ test.beforeEach(async ({ page }) => {
 
 test('view controls and project/level reload derive chrome from the accepted view', async ({
   page,
-}) => {
+}, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await importHouse(page);
@@ -37,16 +37,23 @@ test('view controls and project/level reload derive chrome from the accepted vie
   await expect(page.locator('#view-title')).toHaveText('Extérieur');
   await expect(page.locator('#view-exterior')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('[data-view=overview]')).toHaveAttribute('aria-pressed', 'false');
+  await page.screenshot({ path: testInfo.outputPath('exterior.png') });
   await page.locator('[data-view=plan]').click();
   await expect(page.locator('#view-title')).toHaveText('Plan de la maison');
   await expect(page.locator('#view-exterior')).toHaveAttribute('aria-pressed', 'false');
+  await page.screenshot({ path: testInfo.outputPath('plan.png') });
   await page.locator('[data-view=walk]').click();
   await expect(page.locator('#view-title')).toHaveText('Visite intérieure');
   await expect(page.locator('#viewport')).toHaveClass(/walking/);
-  await page.locator('#level-select').selectOption('upper-test');
-  await expect(page.locator('#view-title')).toHaveText('Vue 3D');
-  await expect(page.locator('#viewport')).not.toHaveClass(/walking/);
-  await expect(page.locator('[data-view=overview]')).toHaveAttribute('aria-pressed', 'true');
+  await page.screenshot({ path: testInfo.outputPath('walk.png') });
+  for (const level of ['upper-test', 'atelier-rdc', 'upper-test']) {
+    await page.locator('#level-select').selectOption(level);
+    await expect(page.locator('#view-title')).toHaveText('Vue 3D');
+    await expect(page.locator('#viewport')).not.toHaveClass(/walking/);
+    await expect(page.locator('[data-view=overview]')).toHaveAttribute('aria-pressed', 'true');
+    await page.locator('[data-view=walk]').click();
+    await expect(page.locator('#view-title')).toHaveText('Visite intérieure');
+  }
   await page.locator('#view-exterior').click();
   await page.locator('#project-select').selectOption('studio-demo');
   await expect(page.locator('#view-title')).toHaveText('Vue 3D');

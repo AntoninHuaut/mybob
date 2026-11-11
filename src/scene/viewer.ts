@@ -69,21 +69,11 @@ import {
   yawFromDirection,
 } from './coordinates';
 import {
-  createInteriorBloom,
-  createOrbitBloom,
-  createInteriorEnvironment,
-  createInteriorOcclusion,
-  createInteriorTaa,
-  INTERIOR_ENVIRONMENT_INTENSITY,
   INTERIOR_FIXTURE_INTENSITY,
   INTERIOR_FIXTURE_RANGE,
   INTERIOR_GROUND_COLOR,
 } from './interiorAmbience';
-import type { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture';
-import type { RawCubeTexture } from '@babylonjs/core/Materials/Textures/rawCubeTexture';
-import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
-import type { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
-import type { TAARenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/taaRenderingPipeline';
+import { ViewEffects } from './viewEffects';
 import type { OcclusionState } from './diagnostics';
 import type { ImmersiveWalk } from './xrWalk';
 
@@ -220,15 +210,7 @@ export class HouseViewer {
   private sun!: DirectionalLight;
   private planLighting?: { diffuse: Color3; ground: Color3 };
   private baseGround?: Color3;
-  private interiorEnvironment?: RawCubeTexture;
-  private interiorOcclusion?: SSAO2RenderingPipeline;
-  private interiorTaa?: TAARenderingPipeline;
-  private interiorBloom?: DefaultRenderingPipeline;
-  private orbitBloom?: DefaultRenderingPipeline;
-  private interiorAmbienceUnavailable = false;
-  private occlusionUnavailable = false;
-  private previousEnvironment?: BaseTexture | null;
-  private previousEnvironmentIntensity = 1;
+  private viewEffects?: ViewEffects;
   private shadowsBeforeReadability?: boolean;
   private solarPosition?: SolarPosition;
   private baseSun?: { direction: Vector3; position: Vector3; diffuse: Color3 };
@@ -290,15 +272,17 @@ export class HouseViewer {
     });
   }
 
-  load(project: HouseProject, levelId?: string) {
-    this.requestRender();
-    this.orbitTour = undefined;
+  /** Release scene-owned resources before replacing the scene or disposing the viewer. */
+  private releaseScene() {
     // The session belongs to the scene about to be disposed.
     this.immersive?.dispose();
     this.immersive = undefined;
     this.wallCutaway?.dispose();
     this.wallCutaway = undefined;
     this.planOpenings?.dispose();
+    this.planOpenings = undefined;
+    this.viewEffects?.dispose();
+    this.viewEffects = undefined;
     if (this.scene) {
       this.scene.dispose();
       this.engine.releaseEffects();
@@ -307,15 +291,6 @@ export class HouseViewer {
     this.shadowsBeforeReadability = undefined;
     this.baseSun = undefined;
     this.baseGround = undefined;
-    this.interiorEnvironment = undefined;
-    this.interiorOcclusion = undefined;
-    this.interiorTaa = undefined;
-    this.interiorBloom = undefined;
-    this.orbitBloom = undefined;
-    this.interiorAmbienceUnavailable = false;
-    this.occlusionUnavailable = false;
-    this.previousEnvironment = undefined;
-    this.previousEnvironmentIntensity = 1;
     this.exterior = undefined;
     this.exteriorFrame = undefined;
     this.parcelInView = undefined;
@@ -329,6 +304,12 @@ export class HouseViewer {
     this.measureLine = undefined;
     this.measureCursor = undefined;
     this.dimensions = [];
+  }
+
+  load(project: HouseProject, levelId?: string) {
+    this.requestRender();
+    this.orbitTour = undefined;
+    this.releaseScene();
     this.level = project.levels.find((l) => l.id === levelId) ?? project.levels[0];
     this.site = project.site;
     const level = this.level;
@@ -432,6 +413,12 @@ export class HouseViewer {
     this.wallCutaway = buildWallCutaway(scene, level);
     this.buildDimensions();
     this.setMode('overview');
+    this.attachSceneInput(scene, level);
+    this.resize();
+  }
+
+  /** Babylon clears both observers when this scene is disposed. */
+  private attachSceneInput(scene: Scene, level: Level) {
     scene.onPointerObservable.add((event) => {
       if (
         this.measureMode &&
@@ -502,7 +489,6 @@ export class HouseViewer {
     });
     // Input must be prepared before Babylon updates its active camera, not after rendering starts.
     scene.onBeforeAnimationsObservable.add(() => this.beforeFrame());
-    this.resize();
   }
 
   setMode(mode: ViewMode, exterior = false, destination?: Point2): boolean {
@@ -830,12 +816,12 @@ export class HouseViewer {
    * visit means "not asked for", not "failed".
    */
   get ambience(): { environment: boolean; occlusion: OcclusionState } {
-    return {
-      environment: Boolean(
-        this.interiorEnvironment && this.scene?.environmentTexture === this.interiorEnvironment,
-      ),
-      occlusion: this.mode !== 'walk' ? 'idle' : this.interiorOcclusion ? 'active' : 'unavailable',
-    };
+    return (
+      this.viewEffects?.status(this.mode === 'walk') ?? {
+        environment: false,
+        occlusion: this.mode === 'walk' ? 'unavailable' : 'idle',
+      }
+    );
   }
 
   private fitOverview() {
@@ -1093,69 +1079,19 @@ export class HouseViewer {
    */
   private updateInteriorAmbience() {
     if (!this.scene) return;
-    if (this.mode === 'walk') {
-      if (!this.interiorAmbienceUnavailable) {
-        this.interiorEnvironment ??= createInteriorEnvironment(this.scene);
-        if (!this.interiorEnvironment) this.interiorAmbienceUnavailable = true;
-      }
-      if (this.interiorEnvironment) {
-        // Remember what was there, so leaving the visit restores it instead of
-        // clearing an environment another feature may have installed.
-        if (this.previousEnvironment === undefined) {
-          this.previousEnvironment = this.scene.environmentTexture;
-          this.previousEnvironmentIntensity = this.scene.environmentIntensity;
-        }
-        this.scene.environmentTexture = this.interiorEnvironment;
-        this.scene.environmentIntensity = INTERIOR_ENVIRONMENT_INTENSITY;
-      }
-      // Built before the occlusion on purpose: Babylon appends each pipeline to the
-      // end of the camera's chain, so the temporal pass has to exist first or it ends
-      // up accumulating the AO noise instead of smoothing the scene.
-      if (this.immersive && !this.immersiveEffects) return;
-      const camera = this.immersive?.camera ?? this.walk;
-      this.interiorTaa ??= createInteriorTaa(this.scene, camera);
-      if (
-        !this.occlusionUnavailable &&
-        !this.interiorOcclusion &&
-        this.adaptiveResolution.effectTier < 3
-      ) {
-        this.interiorOcclusion = createInteriorOcclusion(this.scene, camera);
-        // A backend without multiple render targets refuses every time: remember it
-        // rather than throwing again on each visit entry.
-        this.occlusionUnavailable = !this.interiorOcclusion;
-      }
-      this.applyEffectTier();
-      // Last in the chain, for the same reason the temporal pass is first: the glow
-      // belongs on the finished image, not on the occlusion's half-resolution buffer.
-      // Not in the headset: on the session camera the bloom renders into a zero-size
-      // target every frame (WebGL INVALID_FRAMEBUFFER_OPERATION) and adds nothing.
-      if (!this.immersive) this.interiorBloom ??= createInteriorBloom(this.scene, camera);
-      return;
-    }
-    if (this.interiorEnvironment && this.scene.environmentTexture === this.interiorEnvironment) {
-      this.scene.environmentTexture = this.previousEnvironment ?? null;
-      this.scene.environmentIntensity = this.previousEnvironmentIntensity;
-    }
-    this.previousEnvironment = undefined;
-    this.previousEnvironmentIntensity = 1;
-    this.releaseWalkPipelines();
-  }
-
-  /** The walk pipelines are bound to one camera: switching camera rebuilds them. */
-  private releaseWalkPipelines() {
-    this.interiorOcclusion?.dispose(true);
-    this.interiorOcclusion = undefined;
-    this.interiorTaa?.dispose();
-    this.interiorTaa = undefined;
-    this.interiorBloom?.dispose();
-    this.interiorBloom = undefined;
-    // Both pipelines read the PrePass and nothing else does, so it goes with them.
-    this.scene.disablePrePassRenderer();
+    this.viewEffects ??= new ViewEffects(this.scene);
+    this.viewEffects.updateWalk({
+      active: this.mode === 'walk',
+      camera: this.immersive?.camera ?? this.walk,
+      headset: Boolean(this.immersive),
+      effectsEnabled: this.immersiveEffects,
+      effectTier: this.currentEffectTier,
+    });
   }
 
   private rebuildWalkPipelines() {
     if (!this.scene) return;
-    this.releaseWalkPipelines();
+    this.viewEffects?.releaseWalkPipelines();
     try {
       this.updateInteriorAmbience();
     } catch (error) {
@@ -1210,7 +1146,7 @@ export class HouseViewer {
       }
       this.immersive = walk;
       // The screen walk's pipelines are bound to its camera: dropped until the headset is ready.
-      this.releaseWalkPipelines();
+      this.viewEffects?.releaseWalkPipelines();
       this.onImmersiveChange?.(true);
     } finally {
       this.immersiveStarting = false;
@@ -1254,9 +1190,7 @@ export class HouseViewer {
    */
   private updateOrbitBloom() {
     if (!this.scene || !this.orbit) return;
-    const active = this.mode === 'overview';
-    if (active && !this.orbitBloom) this.orbitBloom = createOrbitBloom(this.scene, this.orbit);
-    if (this.orbitBloom) this.orbitBloom.bloomEnabled = active;
+    this.viewEffects?.updateOrbit(this.mode === 'overview', this.orbit);
   }
 
   private setOrthoSize() {
@@ -1300,19 +1234,7 @@ export class HouseViewer {
    * under 40 fps (`adaptiveResolution.ts`). Idempotent: also called as the pipelines are built.
    */
   private applyEffectTier() {
-    const tier = this.adaptiveResolution.effectTier;
-    if (tier >= 1 && this.interiorOcclusion) {
-      this.interiorOcclusion.samples = 8;
-      this.interiorOcclusion.expensiveBlur = false;
-    }
-    if (tier >= 2 && this.interiorTaa) this.interiorTaa.samples = 8;
-    if (tier >= 3 && this.interiorOcclusion) {
-      // The temporal pass stays after the occlusion in the chain; removing the occlusion
-      // leaves it last, which is where it belongs.
-      this.interiorOcclusion.dispose(true);
-      this.interiorOcclusion = undefined;
-      this.renderScheduler.request();
-    }
+    if (this.viewEffects?.applyEffectTier(this.currentEffectTier)) this.requestRender();
   }
 
   /** Effect tier in use on this machine (0 = full quality), for the diagnostic. */
@@ -1658,18 +1580,7 @@ export class HouseViewer {
 
   dispose() {
     this.cancelCaptureRetry();
-    this.immersive?.dispose();
-    this.immersive = undefined;
-    this.wallCutaway?.dispose();
-    this.planOpenings?.dispose();
-    this.interiorOcclusion?.dispose(true);
-    this.interiorOcclusion = undefined;
-    this.interiorTaa?.dispose();
-    this.interiorTaa = undefined;
-    this.interiorBloom?.dispose();
-    this.interiorBloom = undefined;
-    this.orbitBloom?.dispose();
-    this.orbitBloom = undefined;
+    this.releaseScene();
     window.removeEventListener('keydown', this.keydown);
     window.removeEventListener('keyup', this.keyup);
     window.removeEventListener('blur', this.clearKeys);
@@ -1677,7 +1588,6 @@ export class HouseViewer {
     document.removeEventListener('pointerlockerror', this.pointerLockError);
     this.canvas.removeEventListener('blur', this.clearKeys);
     this.resizeObserver.disconnect();
-    this.scene?.dispose();
     this.engine.dispose();
     this.canvas.removeEventListener('wheel', this.planWheel);
     this.canvas.removeEventListener('pointerdown', this.orbitPointerDown, true);

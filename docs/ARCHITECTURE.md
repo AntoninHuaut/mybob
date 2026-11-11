@@ -46,6 +46,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onSelectRoom`, `onDe
 | Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | Resolution steps while moving, driven by frame time                                                                 |
 | Openings in plan        | `src/scene/planOpenings.ts`                                                  | Windows and doors drawn in Plan view, cut faces                                                                     |
 | Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion, bloom (walk, 3D view and Exterior)                                                       |
+| View effect lifecycle   | `src/scene/viewEffects.ts`                                                   | Scene-owned environment and pipelines, camera replacement, effect tiers and disposal                                |
 | Diagnostics             | `src/scene/diagnostics.ts`                                                   | `mybob.diag()`: engine, GPU, frame rate, resolution, scene                                                          |
 | Measurement             | `src/scene/measurement.ts`                                                   | Snapping to the plan axes                                                                                           |
 | Sun                     | `src/scene/solar.ts`                                                         | NOAA equations, IANA time zones                                                                                     |
@@ -58,6 +59,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onSelectRoom`, `onDe
 | Project storage         | `src/projectStorage.ts`                                                      | Reading imported projects, quarantine, 10-project limit                                                             |
 | Furniture — model       | `src/furniture/model.ts`                                                     | Types, identifiers, storage key, history                                                                            |
 | Furniture — rendering   | `src/furniture/layer.ts`                                                     | Meshes, selection, dragging, layers, plan clipping                                                                  |
+| Furniture — view policy | `src/furniture/viewState.ts`                                                 | Real camera mode and independent permission for scene interaction                                                   |
 | Furniture — placement   | `src/furniture/placement.ts`                                                 | Building constraints, free-spot search                                                                              |
 | Furniture — groups      | `src/furniture/groups.ts`                                                    | Linking, transforms, constrained dragging                                                                           |
 | Furniture — editing     | `src/furniture/editorDraft.ts`                                               | Transactional draft of the popup                                                                                    |
@@ -69,6 +71,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onSelectRoom`, `onDe
 | Furniture — helpers     | `src/furniture/clipboard.ts`, `resize.ts`, `tableChairs.ts`, `television.ts` | Session clipboard, local resize, chairs around a table, 16:9 screen                                                 |
 | Interface               | `src/ui/appTemplate.ts`                                                      | Static application template                                                                                         |
 | Mode texts              | `src/ui/modeChrome.ts`                                                       | Titles, keyboard and touch help per mode                                                                            |
+| Viewport projection     | `src/ui/viewportProjection.ts`                                               | Frame-to-DOM projection: room labels, obstacle layout, dimensions, measurement position and walk HUD                |
 | Frame-rate counter      | `src/ui/frameRate.ts`                                                        | fps display, written at most four times per second                                                                  |
 | Panels                  | `src/ui/roomPanels.ts`, `minimap.ts`                                         | Room list, room card, mini-map                                                                                      |
 | Variants panel          | `src/ui/variantsPanel.ts`, `variantThumbnail.ts`                             | Variant list, plan preview per variant                                                                              |
@@ -138,6 +141,17 @@ with a migration.
 
 Do not switch the active camera outside the viewer's transition/headset lifecycle.
 
+Furniture interaction permission is derived from accepted view, active tools and read-only
+status. `FurnitureLayer.setView` keeps the actual camera mode for clipping and label scaling;
+disabling selection, dragging and overlays never substitutes a different camera mode.
+
+`HouseViewer.load` releases the previous scene through `releaseScene`, then builds its
+replacement and attaches scene-scoped input observers. Viewer disposal uses the same teardown;
+Babylon clears those observers with their scene. `ViewEffects` owns effect creation and
+disposal together, releases walk pipelines when their camera changes, and also cleans up on
+scene disposal. Bootstrap composes the viewer and `ViewportProjection`; per-frame UI inputs
+are explicit, while project loading and share-link adoption keep their existing boundaries.
+
 ## Walk and rendering
 
 - Walking speed is 2.8 m/s by default, adjustable from 1 to 5 m/s; Shift multiplies it by 1.7.
@@ -178,7 +192,7 @@ Do not switch the active camera outside the viewer's transition/headset lifecycl
   roughness varies plank by plank. Pixel data is computed once per session and cached:
   switching project rebuilds the scene, not the noise.
 - The walk post-processing chain is ordered and the order matters: Babylon appends each
-  pipeline at the end of the camera's chain, so `updateInteriorAmbience` builds the TAA first,
+  pipeline at the end of the camera's chain, so `ViewEffects.updateWalk` builds the TAA first,
   the occlusion next, the bloom last. It reads `TAA, TAAPass, SSAO…, ssaoCombine, bloom`. The
   bloom is set to a threshold of 0.9 and a weight of 0.2: the values are displayed values (tone
   mapping has already run) and lit white walls sit between 0.6 and 0.9 — at 0.6 the whole room

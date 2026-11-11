@@ -327,7 +327,7 @@ test('a pointer back in the reachable room drops the ghost, and an interrupted d
   assert.ok(Math.abs(changes.at(-1)!.items[0].position[0] - 4) < 1e-6);
   down();
   move(8, 4);
-  layer.setMode('overview'); // an interruption, like a blur or a cancelled pointer
+  layer.setView({ mode: 'overview', interactive: true }); // an interruption, like a blur or a cancelled pointer
   assert.equal(scene.getTransformNodeByName('furniture-ghost:sofa'), null);
   assert.ok(changes.at(-1)!.items[0].position[0] < 6);
   cleanup();

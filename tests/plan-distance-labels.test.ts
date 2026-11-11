@@ -39,7 +39,7 @@ test('plan distance tags separate in screen space, keep nearest anchor, and hide
   camera.orthoLeft = -10;
   camera.orthoRight = 10;
   const layer = new FurnitureLayer(scene, level);
-  layer.setMode('plan');
+  layer.setView({ mode: 'plan', interactive: true });
   const root = new TransformNode('furniture:overlays', scene);
   Object.assign(layer, { overlayRoot: root });
   const tag = (text: string, x: number, priority: number) => {
