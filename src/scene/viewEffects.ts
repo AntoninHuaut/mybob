@@ -208,6 +208,15 @@ export class ViewEffects {
     }
   }
 
+  /**
+   * True while an effect that varies from one image to the next is on screen: the temporal
+   * antialiasing (walk, or orbit in 3D view) and the visit's occlusion, which reads the
+   * jittered depth. A still view must not be redrawn then (`renderScheduler.ts`).
+   */
+  get temporalActive(): boolean {
+    return Boolean(this.taa || this.occlusion || this.orbitTaa?.isEnabled);
+  }
+
   /** Returns whether a pipeline was removed and a new frame is needed. */
   applyEffectTier(tier: number): boolean {
     if (tier >= 1 && this.occlusion) {

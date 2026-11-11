@@ -78,3 +78,26 @@ test('the busy state is only consulted once the scene is set', () => {
   });
   assert.equal(asked, 0);
 });
+
+test('with a temporal effect on screen, a still view is never redrawn by itself', () => {
+  const scheduler = new RenderScheduler();
+  for (let frame = 0; frame < RENDER_SETTLE_FRAMES; frame++)
+    scheduler.shouldRender(frame * 16, 'camera', still, false);
+  let drawn = 0;
+  for (let frame = 0; frame < Math.ceil((10 * IDLE_REFRESH_MS) / 16); frame++)
+    if (scheduler.shouldRender(1000 + frame * 16, 'camera', still, false)) drawn++;
+  assert.equal(drawn, 0, 'ten seconds of rest draw nothing');
+  scheduler.request();
+  assert.equal(scheduler.shouldRender(20_000, 'camera', still, false), true);
+});
+
+test('a busy scene and a moved camera still draw with a temporal effect', () => {
+  const scheduler = new RenderScheduler();
+  for (let frame = 0; frame < RENDER_SETTLE_FRAMES; frame++)
+    scheduler.shouldRender(frame * 16, 'camera', still, false);
+  assert.equal(
+    scheduler.shouldRender(2000, 'camera', () => true, false),
+    true,
+  );
+  assert.equal(scheduler.shouldRender(2016, 'elsewhere', still, false), true);
+});

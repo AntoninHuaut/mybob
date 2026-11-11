@@ -7,6 +7,9 @@ export const RENDER_SETTLE_FRAMES = 32;
 /**
  * At rest, one image this often anyway. A change that forgot to ask for an image
  * (a timer, an asynchronous load) shows up within this delay instead of never.
+ * Not while a temporal effect is on screen (`refreshIdle` false): every image it draws
+ * jitters the camera and re-reads the depth, so the occlusion and the accumulated
+ * antialiasing shift a little at each one, and a still view would change by itself.
  */
 export const IDLE_REFRESH_MS = 1000;
 
@@ -26,6 +29,7 @@ export const WAKE_EVENTS = [
   'change',
   'click',
   'pointerlockchange',
+  'focus',
 ] as const;
 
 /**
@@ -49,7 +53,12 @@ export class RenderScheduler {
    * `signature` describes the camera; `busy` is asked only once the scene is
    * otherwise settled, so a costly check never runs while images are drawn anyway.
    */
-  shouldRender(now: number, signature: string, busy: () => boolean): boolean {
+  shouldRender(
+    now: number,
+    signature: string,
+    busy: () => boolean,
+    refreshIdle: boolean = true,
+  ): boolean {
     this.moved = signature !== this.signature;
     if (this.moved) {
       this.signature = signature;
@@ -61,7 +70,7 @@ export class RenderScheduler {
       this.lastRender = now;
       return true;
     }
-    if (now - this.lastRender >= IDLE_REFRESH_MS) {
+    if (refreshIdle && now - this.lastRender >= IDLE_REFRESH_MS) {
       this.lastRender = now;
       return true;
     }

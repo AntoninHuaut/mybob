@@ -375,11 +375,17 @@ last call, and read back at start-up.
 - Shader effects persist for the current scene: automatic cutaways switch wall materials as
   the camera turns, and repeatedly linking their shaders can stall Firefox. The engine releases
   the cached effects when the scene is replaced, so project switches do not accumulate them.
-- At rest the scene is no longer redrawn (`renderScheduler.ts`): one frame per second only,
-  after 32 smoothing frames. An interaction in the page (pointer, keyboard, input), a camera
-  movement, a swinging door or a compiling shader restarts drawing. A scene change that comes
-  from none of these signals (timer, loading, animation driven by `requestAnimationFrame`)
-  calls `viewer.requestRender()`, otherwise it only appears with the next second's frame.
+- At rest the scene is no longer redrawn (`renderScheduler.ts`) after 32 smoothing frames.
+  An interaction in the page (pointer, keyboard, input), the window regaining focus or the
+  tab becoming visible, a camera movement, a swinging door or a compiling shader restarts
+  drawing. A scene change that comes from none of these signals (timer, loading, animation
+  driven by `requestAnimationFrame`) calls `viewer.requestRender()`.
+  Where no temporal effect is on screen (Plan) one frame per second still catches a change
+  nobody announced. Walk (TAA and occlusion) and the 3D view (orbit TAA) have no such
+  refresh: each image jitters the camera and re-reads the depth, so the occlusion and the
+  accumulated antialiasing shift at every one and a still view changed by itself (measured
+  on the demo, mean 1.5-3/255 within 25 s; 0 with the refresh off). `ViewEffects.temporalActive`
+  tells the scheduler.
 - Dynamic resolution (`adaptiveResolution.ts`), the same at rest and in motion: if the median
   frame time exceeds 25 ms (under 40 fps), rendering drops one step (100, 80, 67 %) without
   going below one rendered pixel per CSS pixel. The
