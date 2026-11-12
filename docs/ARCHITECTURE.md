@@ -281,9 +281,11 @@ the previous texture is disposed after replacement. Scene disposal cancels pendi
 rebuilds explicitly request a render, and diagnostics report either active owned environment.
 No location is inferred. The walk environment and bloom calibration remain unchanged.
 
-The development bench offers ACES/PBR Neutral, PCF/PCSS (ratio 0.03), and experimental
-orbit SSAO (0.5 m radius, 100 m max depth, expensive blur). These are comparison controls;
-production retains ACES, medium PCF and no orbit SSAO. The orbit experiment releases on mode exit and resets its controls on scene replacement.
+The development bench offers ACES/PBR Neutral and experimental orbit SSAO (0.5 m radius,
+100 m max depth, expensive blur). These are comparison controls; production retains ACES
+and no orbit SSAO. Sun shadows stay on medium PCF: contact-hardening shadows (PCSS, light
+size ratio 0.03) were compared in Extérieur with a solar preview and showed no visible
+difference on the reference PC (#204), so the bench no longer offers them. The orbit experiment releases on mode exit and resets its controls on scene replacement.
 It remains outside production adaptive-quality policy.
 
 ## The visit in a headset
