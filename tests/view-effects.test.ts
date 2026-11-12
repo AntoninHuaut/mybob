@@ -630,3 +630,89 @@ test('the temporal jitter plugin only changes the materials while its manager is
     engine.dispose();
   }
 });
+
+test('Vue 3D occlusion sits between the orbit refinement and the bloom, leaves with Vue 3D and fades at the last tier', (t) => {
+  const engine = new NullEngine(),
+    scene = new Scene(engine),
+    camera = new UniversalCamera('orbit', Vector3.Zero(), scene);
+  t.mock.method(scene, 'getFrameId', () => 1);
+  const calls: string[] = [];
+  const manager = scene.postProcessRenderPipelineManager;
+  t.mock.method(manager, 'attachCamerasToRenderPipeline', (name: string) =>
+    calls.push(`attach:${name}`),
+  );
+  t.mock.method(manager, 'detachCamerasFromRenderPipeline', (name: string) =>
+    calls.push(`detach:${name}`),
+  );
+  t.mock.method(scene, 'disablePrePassRenderer', () => calls.push('prepass:off'));
+  const temporal = {
+    samples: 16,
+    isEnabled: true,
+    factor: 0.05,
+    disableOnCameraMove: true,
+    dispose: () => calls.push('dispose:taa'),
+  };
+  let occlusions = 0;
+  const effects = new ViewEffects(scene, {
+    environment: () => undefined,
+    taa: () => undefined,
+    occlusion: () => undefined,
+    bloom: () => undefined,
+    orbitTaa: () => {
+      calls.push('taa');
+      return temporal;
+    },
+    orbitBloom: () => {
+      calls.push('bloom');
+      return { bloomEnabled: true, dispose: () => calls.push('dispose:bloom') };
+    },
+    orbitOcclusion: () => {
+      calls.push('occlusion');
+      occlusions++;
+      return { totalStrength: 0.6, dispose: () => calls.push('dispose:occlusion') };
+    },
+  });
+  const vue3d = { occlusion: true, effectTier: 0 };
+  try {
+    effects.updateOrbit(true, camera, vue3d);
+    assert.deepEqual(calls, ['taa', 'occlusion', 'bloom'], 'refinement, occlusion, then bloom');
+    assert.equal(effects.status(false).occlusion, 'active', 'reported outside the visit');
+    calls.length = 0;
+    effects.updateOrbit(true, camera, vue3d);
+    assert.equal(calls.length, 0, 'every frame calls it: nothing is rebuilt');
+
+    effects.updateOrbit(true, camera, { occlusion: false, effectTier: 0 });
+    assert.deepEqual(calls, ['dispose:occlusion', 'prepass:off'], 'Extérieur has none');
+    calls.length = 0;
+    effects.updateOrbit(true, camera, vue3d);
+    assert.deepEqual(
+      calls,
+      ['detach:orbit-bloom', 'occlusion', 'attach:orbit-bloom'],
+      'back in Vue 3D, the bloom is attached again after the occlusion',
+    );
+
+    calls.length = 0;
+    effects.releaseWalkPipelines();
+    assert.ok(!calls.includes('prepass:off'), 'leaving the walk keeps the prepass Vue 3D reads');
+
+    calls.length = 0;
+    effects.updateOrbit(false, camera, vue3d);
+    assert.ok(calls.includes('dispose:occlusion'), 'the plan has none');
+    assert.equal(effects.status(false).occlusion, 'idle');
+
+    effects.updateOrbit(true, camera, vue3d);
+    assert.equal(occlusions, 3);
+    assert.ok(effects.applyEffectTier(1, 0), 'the last tier starts a fade');
+    effects.applyEffectTier(1, OCCLUSION_FADE_MS / 2);
+    calls.length = 0;
+    assert.ok(effects.applyEffectTier(1, OCCLUSION_FADE_MS));
+    assert.ok(calls.includes('dispose:occlusion'), 'gone at the end of the fade');
+    effects.updateOrbit(true, camera, { occlusion: true, effectTier: 1 });
+    assert.equal(occlusions, 3, 'never rebuilt once the tier removed it');
+    assert.equal(effects.applyEffectTier(1, OCCLUSION_FADE_MS * 2), false);
+  } finally {
+    effects.dispose();
+    scene.dispose();
+    engine.dispose();
+  }
+});
