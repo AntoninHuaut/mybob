@@ -1,6 +1,7 @@
 import { refreshFixtureLights } from '../scene/fixtureLights';
 import type { Scene } from '@babylonjs/core/scene';
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { CreateLines } from '@babylonjs/core/Meshes/Builders/linesBuilder';
+import { CreatePlane } from '@babylonjs/core/Meshes/Builders/planeBuilder';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import earcut from 'earcut';
@@ -217,7 +218,7 @@ export class FurnitureLayer {
       const y = floorElevationAt(this.level, item.position) + 0.03;
       const tight = band.distance < CIRCULATION_TIGHT;
       const color = tight ? new Color3(0.8, 0.24, 0.18) : new Color3(0.91, 0.56, 0.15);
-      const strip = MeshBuilder.CreatePlane(
+      const strip = CreatePlane(
         'furniture:circulation-strip',
         {
           width: Math.max(0.04, band.rect.maxX - band.rect.minX),
@@ -263,7 +264,7 @@ export class FurnitureLayer {
       labelMaterial.disableLighting = true;
       labelMaterial.backFaceCulling = false;
       this.circulationMaterials.push(labelMaterial);
-      const label = MeshBuilder.CreatePlane(
+      const label = CreatePlane(
         'furniture:circulation-label',
         { width: 0.72, height: 0.18 },
         this.scene,
@@ -1084,7 +1085,7 @@ export class FurnitureLayer {
       color = new Color3(0.12, 0.58, 0.45),
       label?: string,
     ) => {
-      const mesh = MeshBuilder.CreateLines(name, { points }, this.scene);
+      const mesh = CreateLines(name, { points }, this.scene);
       mesh.parent = root;
       mesh.color = color;
       mesh.isPickable = false;
@@ -1198,7 +1199,7 @@ export class FurnitureLayer {
     material.disableLighting = true;
     material.backFaceCulling = false;
     this.overlayMaterials.push(material);
-    const label = MeshBuilder.CreatePlane(
+    const label = CreatePlane(
       'furniture:dimension-label',
       { width: 0.72, height: 0.18 },
       this.scene,

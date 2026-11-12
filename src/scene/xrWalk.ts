@@ -5,7 +5,8 @@ import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { Matrix, Quaternion, Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Ray } from '@babylonjs/core/Culling/ray';
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
+import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { Scene } from '@babylonjs/core/scene';
@@ -209,7 +210,7 @@ export class ImmersiveWalk {
     this.material = new StandardMaterial('xr-pointer', scene);
     this.material.disableLighting = true;
     this.material.emissiveColor = READY;
-    this.marker = MeshBuilder.CreateDisc('xr-target', { radius: 0.25, tessellation: 32 }, scene);
+    this.marker = CreateDisc('xr-target', { radius: 0.25, tessellation: 32 }, scene);
     this.marker.rotation.x = Math.PI / 2;
     this.marker.material = this.material;
     this.marker.isPickable = false;
@@ -453,7 +454,7 @@ export class ImmersiveWalk {
     const existing = this.pointers.get(source);
     if (existing) return existing;
     const scene = this.host.scene;
-    const root = MeshBuilder.CreateBox(
+    const root = CreateBox(
       `xr-controller-${source.handedness}`,
       { width: 0.035, height: 0.025, depth: 0.1 },
       scene,
@@ -463,7 +464,7 @@ export class ImmersiveWalk {
     root.isPickable = false;
     // Controller poses are in the session space, like the camera: the rig carries both.
     root.parent = this.rig;
-    const ray = MeshBuilder.CreateBox(
+    const ray = CreateBox(
       `xr-ray-${source.handedness}`,
       { width: 0.004, height: 0.004, depth: 1 },
       scene,

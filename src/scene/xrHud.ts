@@ -3,7 +3,7 @@ import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTextur
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import type { Camera } from '@babylonjs/core/Cameras/camera';
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { CreatePlane } from '@babylonjs/core/Meshes/Builders/planeBuilder';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import { frameRateIsLow, frameRateText } from '../ui/frameRate';
@@ -61,7 +61,7 @@ export class XrHud {
 
   /** `camera` carries the plane: it follows the head, in the lower left of the view. */
   constructor(scene: Scene, camera: Camera) {
-    this.plane = MeshBuilder.CreatePlane('xr-hud', { width: 0.16, height: 0.06 }, scene);
+    this.plane = CreatePlane('xr-hud', { width: 0.16, height: 0.06 }, scene);
     this.material = new StandardMaterial('xr-hud', scene);
     this.material.disableLighting = true;
     this.material.emissiveColor = Color3.White();

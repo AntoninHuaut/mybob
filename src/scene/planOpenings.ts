@@ -1,6 +1,7 @@
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
+import { CreateLineSystem } from '@babylonjs/core/Meshes/Builders/linesBuilder';
 import type { LinesMesh } from '@babylonjs/core/Meshes/linesMesh';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
@@ -41,7 +42,7 @@ export function buildPlanOpenings(scene: Scene, level: Level): PlanOpenings {
     ).entries()) {
       if (section.end - section.start <= 0.00001 || section.top - section.bottom <= 0.00001)
         continue;
-      const mesh = MeshBuilder.CreateBox(
+      const mesh = CreateBox(
         `plan-wall-cap:${wall.id}:${index}`,
         {
           width: section.end - section.start,
@@ -71,7 +72,7 @@ export function buildPlanOpenings(scene: Scene, level: Level): PlanOpenings {
     }
     // One continuous face per wall: the automatic cutaway fills openings instead of
     // leaving a notch where a bay or a door crosses the plane.
-    const full = MeshBuilder.CreateBox(
+    const full = CreateBox(
       `plan-wall-cap-full:${wall.id}`,
       { width: wallLength(wall), height: CAP_THICKNESS, depth: wall.thickness },
       scene,
@@ -110,7 +111,7 @@ export function buildPlanOpenings(scene: Scene, level: Level): PlanOpenings {
           [point(middle, -halfGap), point(middle, halfGap)],
         );
       } else lines.push([point(middle, -halfGap), point(middle, halfGap)]);
-      const mesh = MeshBuilder.CreateLineSystem(`plan-opening:${opening.id}`, { lines }, scene);
+      const mesh = CreateLineSystem(`plan-opening:${opening.id}`, { lines }, scene);
       mesh.color = Color3.FromHexString('#0e7490');
       mesh.isPickable = false;
       mesh.checkCollisions = false;

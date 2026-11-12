@@ -16,7 +16,7 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { GreasedLineMesh } from '@babylonjs/core/Meshes/GreasedLine/greasedLineMesh';
@@ -1775,11 +1775,7 @@ export class HouseViewer {
         this.measureLine.greasedLineMaterial!.color = Color3.FromHexString('#27634e');
       this.measureCursor = undefined;
     }
-    const dot = MeshBuilder.CreateSphere(
-      'measure-point',
-      { diameter: 0.07, segments: 12 },
-      this.scene,
-    );
+    const dot = CreateSphere('measure-point', { diameter: 0.07, segments: 12 }, this.scene);
     dot.position.set(point[0], floorElevationAt(this.level, point) + 0.045, point[1]);
     dot.material = this.house.highlights.values().next().value?.material ?? null;
     dot.isPickable = false;
