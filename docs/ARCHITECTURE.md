@@ -512,6 +512,14 @@ the studio's level with `elevation: 2.8`.
 On a fixture you are about to use in a test, run `scripts/audit-plan.ts`: a green suite on
 wrong geometry does not tell the correct from the incorrect.
 
+Spatial upscaling (AMD FSR 1) was examined and not adopted. Babylon 9.35 ships it
+(`FSR1RenderingPipeline`), but it only shrinks the image that enters its own first pass: the
+prepass that feeds the TAA and the occlusion is sized from the engine's render size, so in
+front of them it changes nothing, and behind them it would upscale an image already rendered
+in full. A lower render scale therefore stays hardware scaling (`adaptiveResolution.ts`),
+stretched by the browser. Doing better needs the whole chain in one reduced-size target, which
+is what Babylon's Frame Graph provides, not the pipelines this app uses.
+
 ## Known traps
 
 - Merged wall bounds span empty doorways. Collision/reachability checks must use occupied
@@ -532,6 +540,10 @@ wrong geometry does not tell the correct from the incorrect.
   re-slices every window.
 - The e2e suite takes a free port: never `--strictPort` on a known port, and never stop another
   agent's server.
-- The engine is **WebGL only**. Walk occlusion goes through the geometry buffer, which Babylon
-  does not implement in WebGPU: a WebGPU engine would render the walk flatter without reporting
-  anything. Do not reintroduce a fallback.
+- The engine is **WebGL only**. Occlusion needs multiple render targets for its prepass; on
+  WebGPU, Babylon provides them only through a side-effect module
+  (`Engines/WebGPU/Extensions/engine.multiRender`) the app never imports, so a WebGPU engine
+  refuses the occlusion and renders the walk flatter without reporting anything. Importing it
+  would not settle the question either: it is a second implementation of every pass (WGSL
+  shaders, a different prepass path) that CI's SwiftShader e2e never runs. One backend, one
+  path to keep correct. Do not reintroduce a fallback.
