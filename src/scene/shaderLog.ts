@@ -13,6 +13,8 @@ export interface ShaderLogEngine {
   onAfterShaderCompilationObservable: {
     add(callback: (engine: unknown, state: { target?: unknown }) => void): unknown;
   };
+  /** `parallelShaderCompile` is the `KHR_parallel_shader_compile` extension, when present. */
+  getCaps?(): { parallelShaderCompile?: unknown };
 }
 
 export interface ShaderLogEntry {
@@ -22,6 +24,8 @@ export interface ShaderLogEntry {
   /** Time the link blocked, for a link. */
   ms: number;
   label: string;
+  /** For a mark, the view whose preparation it starts or ends. */
+  view?: { key: string; edge: 'start' | 'end' };
 }
 
 const MAX_ENTRIES = 600;
@@ -32,12 +36,16 @@ export class ShaderLog {
   private readonly started = new Map<unknown, { at: number; label: string }>();
   private readonly seen = new Set<string>();
   private cacheSize = () => 0;
+  /** Whether the engine links in the background; unknown until attached. */
+  private parallel: boolean | undefined;
 
   constructor(private readonly now: () => number = () => performance.now()) {
     this.origin = now();
   }
 
   attach(engine: ShaderLogEngine): void {
+    // Without the extension every link blocks the page until the driver is done.
+    this.parallel = engine.getCaps ? Boolean(engine.getCaps().parallelShaderCompile) : undefined;
     this.cacheSize = () =>
       Object.keys(
         (engine as unknown as { _compiledEffects?: Record<string, unknown> })._compiledEffects ??
@@ -76,6 +84,51 @@ export class ShaderLog {
     this.push({ kind: 'mark', at: this.now() - this.origin, ms: 0, label });
   }
 
+  /** Start (`start`) or end (`end`) of a view's preparation behind the overlay. */
+  markView(key: string, edge: 'start' | 'end', detail: string): void {
+    const label = `${edge === 'start' ? 'préparation' : 'prête'} : ${key} · ${detail}`;
+    this.push({ kind: 'mark', at: this.now() - this.origin, ms: 0, label, view: { key, edge } });
+  }
+
+  /**
+   * The figures to check first, before the truncated timeline: the blocking time
+   * under each preparation, and every link that came after a view was declared ready.
+   */
+  summary(): string[] {
+    const views: Array<{ key: string; links: number; ms: number }> = [];
+    let current: { key: string; links: number; ms: number } | undefined;
+    let late = { links: 0, ms: 0 };
+    for (const entry of this.entries) {
+      if (entry.view?.edge === 'start') {
+        current = { key: entry.view.key, links: 0, ms: 0 };
+        views.push(current);
+      } else if (entry.view?.edge === 'end') {
+        current = undefined;
+      } else if (entry.kind === 'link') {
+        const bucket = current ?? late;
+        bucket.links++;
+        bucket.ms += entry.ms;
+      }
+    }
+    const parallel =
+      this.parallel === undefined
+        ? 'inconnue'
+        : this.parallel
+          ? 'oui'
+          : 'non (chaque liaison bloque)';
+    const ready = this.entries.some((entry) => entry.view?.edge === 'end')
+      ? `${late.links} programmes · ${Math.round(late.ms)} ms hors préparation`
+      : 'aucune vue préparée';
+    return [
+      `[shaders] compilation parallèle (KHR_parallel_shader_compile) : ${parallel}`,
+      ...views.map(
+        (view) =>
+          `[shaders] préparation ${view.key} : ${view.links} programmes · ${Math.round(view.ms)} ms`,
+      ),
+      `[shaders] ${ready}`,
+    ];
+  }
+
   private push(entry: ShaderLogEntry): void {
     this.entries.push(entry);
     if (this.entries.length > MAX_ENTRIES) this.entries.shift();
@@ -86,6 +139,7 @@ export class ShaderLog {
     const total = links.reduce((sum, entry) => sum + entry.ms, 0);
     const lines = [
       `[shaders] ${links.length} programmes liés · ${Math.round(total)} ms bloquants au total`,
+      ...this.summary(),
     ];
     for (const entry of this.entries) {
       const at = `${(entry.at / 1000).toFixed(2)} s`.padStart(8);

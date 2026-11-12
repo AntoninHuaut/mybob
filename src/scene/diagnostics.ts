@@ -172,18 +172,33 @@ export function collectDiagnostics(
  *
  * `diag()` prints and returns nothing on purpose: the console echoes the value of
  * every expression typed into it, so returning the report would show it twice.
- * `report()` is the copyable form, for `copy(mybob.report())`.
+ * `report()` is the copyable form, for `copy(mybob.report())`; `shaderReport()` is the
+ * same for `shaders()`.
  */
 export function installDiagnostics(report: () => DiagnosticSnapshot, shaders?: () => string): void {
   const text = () => diagnosticLines(report()).join('\n');
+  const shaderText = () => shaders?.() ?? '[shaders] indisponible';
   const api = {
     diag: () => {
       console.info(text());
     },
     report: text,
-    shaders: () => {
-      console.info(shaders?.() ?? '[shaders] indisponible');
+    /** `shaders(true)` also copies the report: the console truncates its long output. */
+    shaders: (copy = false) => {
+      const text = shaderText();
+      console.info(text);
+      if (!copy) return;
+      const fallback = () =>
+        console.info('[shaders] copie refusée : tapez copy(mybob.shaderReport())');
+      try {
+        navigator.clipboard
+          .writeText(text)
+          .then(() => console.info('[shaders] rapport copié dans le presse-papiers'), fallback);
+      } catch {
+        fallback();
+      }
     },
+    shaderReport: () => shaderText(),
   };
   (window as unknown as { mybob?: typeof api }).mybob = api;
   const first = report();

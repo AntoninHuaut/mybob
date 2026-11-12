@@ -152,3 +152,57 @@ test('diag prints the report once and report returns it for copying', () => {
     globals.window = previousWindow;
   }
 });
+
+test('shaders(true) copies the report, and falls back to copy() when the clipboard refuses', async () => {
+  const window = new Window({ url: 'http://localhost' });
+  const globals = globalThis as { window?: unknown };
+  const previousWindow = globals.window;
+  const previousNavigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  const printed: string[] = [];
+  const copied: string[] = [];
+  let refuse = false;
+  const originalInfo = console.info;
+  globals.window = window;
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: {
+      clipboard: {
+        writeText: async (text: string) => {
+          if (refuse) throw new Error('not focused');
+          copied.push(text);
+        },
+      },
+    },
+  });
+  console.info = (...args: unknown[]) => void printed.push(args.join(' '));
+  try {
+    installDiagnostics(
+      () => collectDiagnostics(engine(), scene(), view),
+      () => '[shaders] 2 programmes liés',
+    );
+    const api = (
+      window as unknown as {
+        mybob: { shaders(copy?: boolean): unknown; shaderReport(): string };
+      }
+    ).mybob;
+    printed.length = 0;
+    assert.equal(api.shaders(), undefined);
+    assert.deepEqual(printed, ['[shaders] 2 programmes liés']);
+    assert.deepEqual(copied, [], 'no copy without the argument');
+
+    api.shaders(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(copied, ['[shaders] 2 programmes liés']);
+    assert.match(printed.at(-1) ?? '', /copié/);
+
+    refuse = true;
+    api.shaders(true);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.match(printed.at(-1) ?? '', /copy\(mybob\.shaderReport\(\)\)/);
+    assert.equal(api.shaderReport(), '[shaders] 2 programmes liés');
+  } finally {
+    console.info = originalInfo;
+    globals.window = previousWindow;
+    if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
+  }
+});

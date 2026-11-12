@@ -48,3 +48,28 @@ test('the log keeps a bounded history', () => {
   assert.ok(log.entries.length <= 600);
   assert.equal(log.entries.at(-1)?.label, 'm699');
 });
+
+test('the summary sums each preparation and counts the links after a view is ready', () => {
+  let clock = 0;
+  const log = new ShaderLog(() => clock);
+  const { engine, link } = fakeEngine();
+  (engine as { getCaps?: () => object }).getCaps = () => ({});
+  log.attach(engine);
+  assert.match(log.summary().at(-1) ?? '', /aucune vue préparée/);
+  log.markView('orbit', 'start', 'plugins');
+  link('pbr@a', {}, () => (clock += 90));
+  log.mark('  image 1');
+  link('pbr@b', {}, () => (clock += 60));
+  log.markView('orbit', 'end', 'plugins');
+  link('pbr@late', {}, () => (clock += 25));
+  log.markView('walk', 'start', 'plugins');
+  link('pbr@c', {}, () => (clock += 200));
+  log.markView('walk', 'end', 'plugins');
+  assert.deepEqual(log.summary(), [
+    '[shaders] compilation parallèle (KHR_parallel_shader_compile) : non (chaque liaison bloque)',
+    '[shaders] préparation orbit : 2 programmes · 150 ms',
+    '[shaders] préparation walk : 1 programmes · 200 ms',
+    '[shaders] 1 programmes · 25 ms hors préparation',
+  ]);
+  assert.ok(log.report().includes('── prête : walk · plugins'));
+});
