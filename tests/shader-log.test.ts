@@ -49,27 +49,45 @@ test('the log keeps a bounded history', () => {
   assert.equal(log.entries.at(-1)?.label, 'm699');
 });
 
-test('the summary sums each preparation and counts the links after a view is ready', () => {
+function preparedLog(caps: object) {
   let clock = 0;
   const log = new ShaderLog(() => clock);
   const { engine, link } = fakeEngine();
-  (engine as { getCaps?: () => object }).getCaps = () => ({});
+  (engine as { getCaps?: () => object }).getCaps = () => caps;
   log.attach(engine);
   assert.match(log.summary().at(-1) ?? '', /aucune vue préparée/);
   log.markView('orbit', 'start', 'plugins');
-  link('pbr@a', {}, () => (clock += 90));
+  // Two links in flight at once: their latencies overlap.
+  link('pbr@a', {}, () => (clock += 900));
+  link('pbr@b', {}, () => (clock += 600));
   log.mark('  image 1');
-  link('pbr@b', {}, () => (clock += 60));
   log.markView('orbit', 'end', 'plugins');
   link('pbr@late', {}, () => (clock += 25));
   log.markView('walk', 'start', 'plugins');
   link('pbr@c', {}, () => (clock += 200));
   log.markView('walk', 'end', 'plugins');
+  return log;
+}
+
+test('without parallel linking, each preparation shows its overlay time and blocking sum', () => {
+  const log = preparedLog({});
   assert.deepEqual(log.summary(), [
-    '[shaders] compilation parallèle (KHR_parallel_shader_compile) : non (chaque liaison bloque)',
-    '[shaders] préparation orbit : 2 programmes · 150 ms',
-    '[shaders] préparation walk : 1 programmes · 200 ms',
-    '[shaders] 1 programmes · 25 ms hors préparation',
+    '[shaders] compilation parallèle (KHR_parallel_shader_compile) : non (chaque liaison bloque la page)',
+    '[shaders] préparation orbit : 1.50 s · 2 programmes · 1500 ms bloquants',
+    '[shaders] préparation walk : 0.20 s · 1 programmes · 200 ms bloquants',
+    '[shaders] 1 programmes liés après une préparation',
   ]);
+  assert.match(log.report(), /4 programmes liés · 1725 ms bloquants au total/);
   assert.ok(log.report().includes('── prête : walk · plugins'));
+});
+
+test('with parallel linking, link durations are latencies and are never summed', () => {
+  const log = preparedLog({ parallelShaderCompile: {} });
+  assert.deepEqual(log.summary(), [
+    '[shaders] compilation parallèle (KHR_parallel_shader_compile) : oui (les durées de liaison sont des latences, pas des blocages)',
+    '[shaders] préparation orbit : 1.50 s · 2 programmes',
+    '[shaders] préparation walk : 0.20 s · 1 programmes',
+    '[shaders] 1 programmes liés après une préparation',
+  ]);
+  assert.doesNotMatch(log.report(), /bloquants/);
 });

@@ -430,9 +430,12 @@ last call, and read back at start-up.
   The start-up is the same path with the landing view, so nothing else needs to call it. A new
   scene (project or level change) releases the cached effects and makes every view cold again.
   `mybob.shaders()` lists every link with its duration and the preparation marks. Its first
-  lines summarise what to check: whether the engine has `KHR_parallel_shader_compile` (without
-  it every link blocks the page), the blocking time under each view's preparation, and the links
-  that happened outside any preparation. `mybob.shaders(true)` also copies the report, because
+  lines summarise what to check: whether the engine has `KHR_parallel_shader_compile`, each
+  view's overlay time (from its `préparation` mark to its `prête` mark) with its program count,
+  and the links that came after a preparation. With the extension, which Firefox and Chrome
+  both expose, Babylon only polls for completion: a link's `ms` is the time until it finished,
+  not time the page was frozen, and overlapping links must not be summed. Without it, each
+  link blocks, and the report also gives the blocking sum per view. `mybob.shaders(true)` also copies the report, because
   the console truncates it; when the clipboard refuses, `copy(mybob.shaderReport())` does it.
 - Leaving the visit switches the temporal jitter material plugin off (`reprojectHistory = false`
   before the pipeline is disposed, `ViewEffects.releaseWalkPipelines`): Babylon leaves that plugin
