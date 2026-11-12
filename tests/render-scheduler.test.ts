@@ -4,6 +4,7 @@ import {
   IDLE_REFRESH_MS,
   RENDER_SETTLE_FRAMES,
   RenderScheduler,
+  wakesScene,
 } from '../src/scene/renderScheduler';
 
 const still = () => false;
@@ -100,4 +101,24 @@ test('a busy scene and a moved camera still draw with a temporal effect', () => 
     true,
   );
   assert.equal(scheduler.shouldRender(2016, 'elsewhere', still, false), true);
+});
+
+test('only pointer moves and wheel turns that can change the scene wake it', () => {
+  const canvas = new EventTarget();
+  const panel = new EventTarget();
+  const event = (type: string, target: EventTarget, buttons = 0) =>
+    ({ type, target, buttons }) as unknown as Event;
+  // Over a panel: the sidebar used to redraw the scene at the screen's rate.
+  assert.equal(wakesScene(event('pointermove', panel), canvas), false);
+  assert.equal(wakesScene(event('pointermove', panel, 1), canvas), false);
+  assert.equal(wakesScene(event('wheel', panel), canvas), false);
+  // Over the canvas: a wheel zooms, a held button drags a camera or a piece.
+  assert.equal(wakesScene(event('wheel', canvas), canvas), true);
+  assert.equal(wakesScene(event('pointermove', canvas, 1), canvas), true);
+  // A bare hover changes nothing, unless the measure line or a locked pointer follows it.
+  assert.equal(wakesScene(event('pointermove', canvas), canvas), false);
+  assert.equal(wakesScene(event('pointermove', canvas), canvas, true), true);
+  // Clicks, keys and form edits are how panels change the scene: always global.
+  for (const type of ['pointerdown', 'pointerup', 'click', 'keydown', 'keyup', 'input', 'change'])
+    assert.equal(wakesScene(event(type, panel), canvas), true, type);
 });
