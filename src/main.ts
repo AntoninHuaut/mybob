@@ -15,7 +15,19 @@ import { confirmImportReplacement } from './ui/confirmImport';
 import { solarPosition } from './scene/solar';
 import { HouseViewer, isImmersiveSupported, preloadImmersive, type ViewMode } from './scene/viewer';
 import { createEngine } from './scene/engine';
-import { collectDiagnostics, installDiagnostics, viewLabel } from './scene/diagnostics';
+import {
+  collectDiagnostics,
+  diagnosticLines,
+  installDiagnostics,
+  viewLabel,
+} from './scene/diagnostics';
+import {
+  copyReport,
+  reportProgressHtml,
+  reportRequested,
+  reportResultHtml,
+  withoutReportParameter,
+} from './ui/performanceReport';
 import { shaderLog } from './scene/shaderLog';
 import { FrameRateMeter } from './ui/frameRate';
 import type { HouseProject, Room } from './model/types';
@@ -1039,6 +1051,39 @@ function syncViewChrome() {
   el('#depth-label').hidden = !showDimensions || next === 'walk';
   el('#door-prompt').hidden = true;
   el('#furniture-edit-prompt').hidden = true;
+}
+
+/** `?diagnostic`: measure every view and show a report to copy (`ui/performanceReport.ts`). */
+async function measureForReport() {
+  history.replaceState(null, '', withoutReportParameter(location.href));
+  openDialog('PERFORMANCES', reportProgressHtml(0, 1));
+  const { benchmarkViews } = await import('./scene/frameProfiler');
+  const lines = await benchmarkViews(viewer, 4, (done, total) => {
+    const progress = document.querySelector<HTMLProgressElement>('#report-progress');
+    if (progress) {
+      progress.max = total;
+      progress.value = done;
+    }
+  });
+  const text = [
+    ...diagnosticLines(
+      collectDiagnostics(viewer.engine, viewer.scene, {
+        mode: viewer.mode,
+        exterior: viewer.exteriorView,
+        environment: viewer.ambience.environment,
+        occlusion: viewer.ambience.occlusion,
+        idle: viewer.renderingIdle,
+        renderScale: viewer.currentRenderScale,
+        effectTier: viewer.currentEffectTier,
+      }),
+    ),
+    ...lines,
+  ].join('\n');
+  openDialog('PERFORMANCES', reportResultHtml(text));
+  el('#copy-report').addEventListener('click', async () => {
+    const copied = await copyReport(text, el('#report-text'));
+    el('#copy-report').textContent = copied ? 'Copié' : 'Texte sélectionné : Ctrl+C';
+  });
 }
 
 function openDialog(title: string, content: string) {
@@ -2198,6 +2243,7 @@ async function start() {
     onboarding = readOnboarding();
     showStartCard();
     if (unreadableProjects > 0) showQuarantineBanner(unreadableProjects);
+    if (reportRequested(location.search)) void measureForReport();
   } catch (error) {
     el('#loading').hidden = true;
     el('#fatal-error').hidden = false;
