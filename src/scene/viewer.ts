@@ -219,6 +219,10 @@ export class HouseViewer {
    * gets neither, which keeps its e2e scenarios within their timeouts.
    */
   private readonly hardwareRenderer: boolean;
+  /** The browser draws with a CPU rasteriser: graphics acceleration is off or unavailable. */
+  get softwareRendering(): boolean {
+    return !this.hardwareRenderer;
+  }
   /** The host shows its overlay while shaders are linked; `first` is the start-up, not a switch. */
   onPreparing?: (active: boolean, first: boolean) => void;
   private readonly adaptiveResolution = new AdaptiveResolution(

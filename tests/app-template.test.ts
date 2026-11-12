@@ -56,6 +56,17 @@ test('the frame-rate counter lives in the scene footer and waits for its first m
   assert.ok(counter.hasAttribute('hidden'), 'il n’affiche rien avant la première mesure');
 });
 
+test('the software-rendering notice sits next to the frame rate and stays hidden by default', () => {
+  const document = render();
+  const notice = document.querySelector('#software-render');
+  assert.ok(notice, 'la mention existe');
+  assert.ok(
+    document.querySelector('.bottom-meta')!.contains(notice),
+    'elle est lue là où se lit la cadence',
+  );
+  assert.ok(notice.hasAttribute('hidden'), 'une machine avec carte graphique ne la voit jamais');
+});
+
 test('the headset button waits for a supporting browser before showing', () => {
   const document = render();
   const button = document.querySelector('#enter-immersive');

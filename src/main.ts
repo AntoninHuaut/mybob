@@ -144,13 +144,16 @@ function publishedLinkHashes(): string[] {
 
 el('#app').innerHTML = appTemplate();
 
-function toast(message: string) {
+const SOFTWARE_RENDER_HELP =
+  'Le navigateur dessine la 3D sans la carte graphique, d’où la lenteur. Activez l’accélération graphique (Chrome, Edge : Paramètres → Système ; Firefox : Paramètres → Performances), puis relancez le navigateur.';
+
+function toast(message: string, durationMs = 5000) {
   clearTimeout(toastTimer);
   el('#toast').textContent = message;
   el('#toast').hidden = false;
   toastTimer = setTimeout(() => {
     el('#toast').hidden = true;
-  }, 5000);
+  }, durationMs);
 }
 
 function readOnboarding(): OnboardingState {
@@ -2073,6 +2076,12 @@ async function start() {
     const sceneEngine = createEngine(el<HTMLCanvasElement>('#scene'));
     viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'), sceneEngine);
     const frameRate = new FrameRateMeter(el('#frame-rate'));
+    if (viewer.softwareRendering) {
+      // A CPU rasteriser draws the scene ten to fifty times slower than any GPU: the
+      // usual cause is graphics acceleration switched off in the browser settings.
+      el('#software-render').hidden = false;
+      el('#software-render').addEventListener('click', () => toast(SOFTWARE_RENDER_HELP, 15000));
+    }
     solarPanel = new SolarPanel({
       onApply: (settings, instant) => {
         viewer.setSolar(settings ? solarPosition(settings, instant) : undefined);
