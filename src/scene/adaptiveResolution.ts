@@ -6,11 +6,12 @@ export const RENDER_SCALES = [1, 0.8, 0.67] as const;
 
 /**
  * Effect tiers, tried once the resolution is at its floor (it costs the least to the eye):
- * 1 lighter temporal antialiasing (8 samples), 2 no occlusion. The occlusion is never
- * degraded on the way: a grainy cheap-blur version is the ugliest of the states, and a
- * look that changes by itself reads as a bug.
+ * 1 no occlusion. The occlusion is never degraded on the way: a grainy cheap-blur version
+ * is the ugliest of the states, and a look that changes by itself reads as a bug. Fewer
+ * temporal antialiasing samples is no tier: the count only sets the length of the jitter
+ * sequence, each image costs the same.
  */
-export const EFFECT_TIERS = 2;
+export const EFFECT_TIERS = 1;
 
 /** Above this median frame time (under 40 fps), the next render scale is tried. */
 export const FRAME_BUDGET_MS = 25;

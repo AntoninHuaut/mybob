@@ -399,12 +399,16 @@ last call, and read back at start-up.
   A gap over 5 s between two images is a stall, never a measurement, and hiding the
   page, losing or regaining the focus restarts that warm-up and drops the half-measured
   series: the slow images after an alt-tab are not the machine, and a tier is never lifted.
-  Once at the resolution floor and still over budget, visit effects drop one tier per series:
-  1 lighter temporal antialiasing (8 samples), 2 no occlusion, which fades out over 0.8 s
-  rather than blinking off. The occlusion is never degraded on the way (fewer samples, cheap
-  blur): a look that changes by itself reads as a bug. A tier is never lifted. A PC that holds
-  the frame rate never leaves 100 % nor tier 0.
-  `mybob.diag()` shows the scale and the tier (`effets palier n/2`). The tier is not stored
+  Once at the resolution floor and still over budget, the visit drops its one effect tier:
+  no occlusion, which fades out over 0.8 s rather than blinking off. The occlusion is never
+  degraded on the way (fewer samples, cheap blur): a look that changes by itself reads as a
+  bug. Fewer TAA samples is no tier: the count only sets the length of the jitter sequence,
+  each image costs the same. A tier is never lifted. A PC that holds the frame rate never
+  leaves 100 % nor tier 0. At dpr 1 the floor is 100 %, so the tier is the only lever; on an
+  integrated GPU at 75 Hz the walk can run at 63–70 fps (frames missing one refresh), measured
+  above the 40 fps budget and left as it is: no single effect costs more than the run-to-run
+  noise, only half the resolution holds 75 fps.
+  `mybob.diag()` shows the scale and the tier (`effets palier n/1`). The tier is not stored
   between sessions.
 - Static house and exterior meshes freeze their world matrices after construction. Moving
   door leaves and every descendant of a moving pivot stay unfrozen. House shell and trim

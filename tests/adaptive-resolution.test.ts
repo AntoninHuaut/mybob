@@ -75,8 +75,6 @@ test('effects are lowered one tier per series, only once the resolution is at it
   assert.equal(resolution.effectTier, 0, 'the scale went first');
   feed(resolution, SERIES, 45);
   assert.equal(resolution.effectTier, 1);
-  feed(resolution, SERIES, 45);
-  assert.equal(resolution.effectTier, 2);
   feed(resolution, SERIES * 10, 45);
   assert.equal(resolution.effectTier, EFFECT_TIERS);
 });
@@ -131,8 +129,8 @@ test('resume discards a half-measured series', () => {
 
 test('the bench can pin a tier and hand it back', () => {
   const resolution = new AdaptiveResolution(1.6);
-  resolution.force(2);
-  assert.equal(resolution.effectTier, 2);
+  resolution.force(1);
+  assert.equal(resolution.effectTier, 1);
   resolution.force(99);
   assert.equal(resolution.effectTier, EFFECT_TIERS);
   resolution.force(undefined);

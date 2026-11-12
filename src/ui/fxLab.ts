@@ -18,8 +18,7 @@ import { cornerBeadMesh, roomCorners } from '../scene/cornerBead';
  * tens of microns — under a pixel at any distance — and a sprite big enough to
  * be seen reads as snow. What is left:
  *
- * - the visit's effect tier, pinned by hand (0 = full, 1 = lighter TAA, 2 = no
- *   occlusion) to judge each state without waiting for a slow machine;
+ * - the visit's effect tier, pinned by hand (0 = full, 1 = no occlusion) to judge each state without waiting for a slow machine;
  * - a chamfer on the concave vertical corner between two walls, the one place
  *   the wall bevel cannot reach.
  *

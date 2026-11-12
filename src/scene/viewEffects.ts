@@ -228,7 +228,6 @@ export class ViewEffects {
    * the occlusion is either whole or gone, and it fades out rather than blinking off.
    */
   applyEffectTier(tier: number, now: number = performance.now()): boolean {
-    if (tier >= 1 && this.taa) this.taa.samples = 8;
     if (tier < EFFECT_TIERS || !this.occlusion) return false;
     this.occlusionFade ??= { from: this.occlusion.totalStrength, since: now };
     const progress = Math.max(0, (now - this.occlusionFade.since) / OCCLUSION_FADE_MS);

@@ -36,7 +36,7 @@ export interface DiagnosticView {
   idle?: boolean;
   /** Render scale used while the camera moves; under 1 on a machine too slow for 40 fps. */
   renderScale?: number;
-  /** Effect tier (0 = full quality, 3 = no occlusion), lowered when the scale floor is not enough. */
+  /** Effect tier (0 = full quality, 1 = no occlusion), lowered when the scale floor is not enough. */
   effectTier?: number;
 }
 

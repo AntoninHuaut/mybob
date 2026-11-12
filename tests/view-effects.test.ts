@@ -168,24 +168,28 @@ test('camera switches dispose the old chain before rebuilding in order, with no 
   }
 });
 
-test('effect tiers keep lighter settings and never recreate dropped occlusion', () => {
+test('the effect tier fades the occlusion out and never recreates it', () => {
   const { engine, scene, effects, state, resources, calls } = setup();
   try {
-    effects.updateWalk({ ...state, effectTier: 1 });
-    assert.equal(resources[0].samples, 8);
+    effects.updateWalk({ ...state, effectTier: 0 });
+    assert.equal(
+      resources[0].samples,
+      16,
+      'the sample count costs nothing per image: no tier lowers it',
+    );
     assert.equal(resources[1].samples, 16, 'the occlusion is never degraded');
     assert.equal(resources[1].expensiveBlur, true);
     assert.equal(resources[1].totalStrength, 0.6);
     const fade = OCCLUSION_FADE_MS;
-    assert.equal(effects.applyEffectTier(2, 1000), true);
+    assert.equal(effects.applyEffectTier(1, 1000), true);
     assert.equal(resources[1].totalStrength, 0.6, 'the fade starts from the full strength');
-    assert.equal(effects.applyEffectTier(2, 1000 + fade / 2), true);
+    assert.equal(effects.applyEffectTier(1, 1000 + fade / 2), true);
     assert.ok(Math.abs(resources[1].totalStrength - 0.3) < 1e-9, 'half way, half the strength');
     assert.equal(resources[1].disposals, 0, 'still there while it fades');
-    assert.equal(effects.applyEffectTier(2, 1000 + fade), true);
+    assert.equal(effects.applyEffectTier(1, 1000 + fade), true);
     assert.equal(resources[1].disposals, 1);
-    assert.equal(effects.applyEffectTier(2, 1000 + fade * 2), false);
-    effects.updateWalk({ ...state, effectTier: 2 });
+    assert.equal(effects.applyEffectTier(1, 1000 + fade * 2), false);
+    effects.updateWalk({ ...state, effectTier: 1 });
     assert.equal(calls.filter((call) => call === 'occlusion:screen').length, 1);
     scene.dispose();
     assert.ok(resources.every((resource) => resource.disposals === 1));
@@ -397,7 +401,7 @@ test('orbit temporal refinement waits for a rendered frame and precedes reused b
     assert.equal(temporal.isEnabled, false, 'Plan detaches temporal refinement');
     effects.updateOrbit(true, camera);
     assert.equal(temporal.isEnabled, true);
-    effects.applyEffectTier(2);
+    effects.applyEffectTier(1);
     assert.equal(temporal.samples, 16, 'orbit refinement is outside walk tiers');
     effects.dispose();
     effects.dispose();
