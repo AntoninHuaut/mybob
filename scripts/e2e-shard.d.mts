@@ -10,3 +10,5 @@ export function balanceShards(
   durations: Record<string, number>,
   count: number,
 ): { tests: string[]; duration: number }[];
+export function parseShardLog(text: string): [test: string, ms: number][];
+export function medianDurations(logs: string[]): Record<string, number>;

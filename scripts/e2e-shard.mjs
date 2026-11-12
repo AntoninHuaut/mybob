@@ -39,9 +39,60 @@ export function balanceShards(tests, durations, count) {
   return shards;
 }
 
+const RESULT_LINE =
+  /[✓✘]\s+\d+\s+(\[[^\]]+\]) › e2e\/(\S+?):\d+:\d+ › (.*) \(([\d.]+)(ms|s|m)\)\s*$/;
+const UNIT_MS = { ms: 1, s: 1000, m: 60_000 };
+
+/** Read every finished test and its duration from a text shard log (Playwright list reporter). */
+export function parseShardLog(text) {
+  const results = [];
+  for (const line of text.split('\n')) {
+    const match = RESULT_LINE.exec(line);
+    if (!match) continue;
+    const [, project, file, title, value, unit] = match;
+    results.push([`${project} › ${file} › ${title}`, Math.round(Number(value) * UNIT_MS[unit])]);
+  }
+  return results;
+}
+
+/** Median duration per test over several shard logs, sorted by test name. */
+export function medianDurations(logs) {
+  const samples = new Map();
+  for (const [test, ms] of logs.flatMap(parseShardLog)) {
+    samples.set(test, [...(samples.get(test) ?? []), ms]);
+  }
+  return Object.fromEntries(
+    [...samples]
+      .sort(([a], [b]) => a.localeCompare(b, 'en'))
+      .map(([test, values]) => {
+        const sorted = values.sort((a, b) => a - b);
+        const middle = sorted.length / 2;
+        const median = Number.isInteger(middle)
+          ? (sorted[middle - 1] + sorted[middle]) / 2
+          : sorted[Math.floor(middle)];
+        return [test, Math.round(median)];
+      }),
+  );
+}
+
+function refresh(files) {
+  if (!files.length) throw new Error('Usage: node scripts/e2e-shard.mjs --refresh <log>...');
+  const durations = medianDurations(files.map((file) => readFileSync(file, 'utf8')));
+  if (!Object.keys(durations).length) throw new Error('No test result found in the logs');
+  writeFileSync(
+    new URL('./e2e-durations.json', import.meta.url),
+    `${JSON.stringify(durations, null, 2)}\n`,
+  );
+  console.log(`Recorded ${Object.keys(durations).length} tests from ${files.length} logs`);
+}
+
 function main() {
+  if (process.argv[2] === '--refresh') return refresh(process.argv.slice(3));
   const match = /^(\d+)\/(\d+)$/.exec(process.argv[2] ?? '');
-  if (!match) throw new Error('Usage: node scripts/e2e-shard.mjs <index>/<count> [--list]');
+  if (!match)
+    throw new Error(
+      'Usage: node scripts/e2e-shard.mjs <index>/<count> [--list] | --refresh <log>...',
+    );
   const [, index, count] = match.map(Number);
   if (index < 1 || index > count) throw new Error('Invalid shard index');
   const cli = createRequire(import.meta.url).resolve('@playwright/test/cli');

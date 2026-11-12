@@ -53,10 +53,12 @@ comparison.
 Configuration: `playwright.config.ts`.
 
 CI collects the current test list before assigning every test to exactly one shard,
-longest estimates first. `scripts/e2e-durations.json` records worker milliseconds from
-PR #218's successful Linux CI run (43061290688); new or renamed scenarios default to
-30 seconds. The split view-state scenarios and the pixel probe initially use estimates.
-Refresh estimates from text-only shard timings when scenario durations change.
+longest estimates first. `scripts/e2e-durations.json` records each test's median worker
+milliseconds over the text logs of six successful `main` runs (18 shard logs); new or
+renamed scenarios default to 30 seconds. Single-run timings vary up to 2× per test on
+the shared runners, so refresh from several runs when scenario durations change: save each
+shard log with `gh run view <run> --log --job <job> > <file>`, then
+`node scripts/e2e-shard.mjs --refresh <file>...` rewrites the estimates.
 `node scripts/e2e-shard.mjs n/3 --list` checks membership without running browsers.
 The static estimates balance expected work, not runner load; confirm the slowest shard
 stays within 25% of the fastest over three consecutive successful `main` runs.

@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { balanceShards, collectedTests } from '../scripts/e2e-shard.mjs';
+import {
+  balanceShards,
+  collectedTests,
+  medianDurations,
+  parseShardLog,
+} from '../scripts/e2e-shard.mjs';
 
 test('duration sharding covers every test once, balances long tests and includes new tests', () => {
   const tests = ['a', 'b', 'c', 'd', 'new'];
@@ -35,4 +40,22 @@ test('collection preserves nested describes and projects and rejects ambiguous o
   assert.throws(() => collectedTests({ suites: [] }));
   assert.throws(() => collectedTests({ suites: [], errors: [{ message: 'load error' }] }));
   assert.throws(() => collectedTests({ suites: [{ specs: [spec, spec] }] }));
+});
+
+test('shard logs refresh durations with the median of every finished test', () => {
+  const line = (title: string, time: string) =>
+    `2026-11-12T10:00:00.0Z   ✓   3 [desktop-chromium] › e2e/view.spec.ts:12:1 › ${title} (${time})`;
+  const logs = [
+    [line('slow › nested', '1.5m'), line('fast', '900ms'), '  12 passed (5.2m)'].join('\n'),
+    [line('slow › nested', '60.0s'), line('fast', '1.1s')].join('\n'),
+    line('slow › nested', '2.0m').replace('✓', '✘'),
+  ];
+  assert.deepEqual(parseShardLog(logs[0]), [
+    ['[desktop-chromium] › view.spec.ts › slow › nested', 90000],
+    ['[desktop-chromium] › view.spec.ts › fast', 900],
+  ]);
+  assert.deepEqual(medianDurations(logs), {
+    '[desktop-chromium] › view.spec.ts › fast': 1000,
+    '[desktop-chromium] › view.spec.ts › slow › nested': 90000,
+  });
 });
