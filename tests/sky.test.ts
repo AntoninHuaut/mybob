@@ -31,7 +31,8 @@ test('the sky layer is a disabled background layer until the viewer turns it on'
     const layer = createSkyLayer(scene);
     assert.equal(layer.isBackground, true);
     assert.equal(layer.isEnabled, false);
-    assert.deepEqual(layer.texture?.getSize(), { width: 1, height: 64 });
+    const size = layer.texture!.getSize();
+    assert.deepEqual([size.width, size.height], [1, 64]);
   } finally {
     scene.dispose();
     engine.dispose();
