@@ -7,6 +7,7 @@ import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { PerfCounter } from '@babylonjs/core/Misc/perfCounter';
 import {
+  createCounters,
   distribution,
   FrameRecorder,
   profileLines,
@@ -98,6 +99,24 @@ test('a profile draws every image while it runs, then releases the hold and its 
     assert.equal(scene.onAfterRenderObservable.observers.length, observersBefore);
   } finally {
     clearInterval(timer);
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+test('an engine with a GPU timer gets its counter, not a missing-method error', async () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  // NullEngine has no timer query; a real WebGL 2 context does. `captureGPUFrameTime`
+  // then needs `getGPUFrameTimeCounter`, which lives in its own Babylon module.
+  const caps = engine.getCaps() as { timerQuery?: unknown };
+  caps.timerQuery = {};
+  try {
+    const counters = await createCounters(engine, scene);
+    assert.ok(counters.gpu, 'the GPU counter is created');
+    counters.dispose();
+  } finally {
+    caps.timerQuery = undefined;
     scene.dispose();
     engine.dispose();
   }
