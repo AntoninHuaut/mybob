@@ -1034,3 +1034,42 @@ test('a shower panel length is a draft: exact when untouched, saved when edited'
     cleanup();
   }
 });
+
+test('the editing popup repaints a piece only on Save, and keeps an untouched colour exact', async () => {
+  const { window, editor, panel, getItems, setItems, cleanup } = setup(false);
+  try {
+    setItems([{ ...getItems()[0], color: '#A5A18A' }]);
+    const open = () => {
+      panel.openEdit('sofa');
+      const form = editor.querySelector<DOMForm>('form')!;
+      form.reportValidity = () => true;
+      return {
+        form,
+        color: form.elements.namedItem('color') as unknown as DOMInput,
+        save: () =>
+          form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true })),
+      };
+    };
+    let edit = open();
+    assert.equal(edit.color.value, '#a5a18a', 'the control shows the stored colour');
+    edit.save();
+    await Promise.resolve();
+    assert.equal(getItems()[0].color, '#A5A18A', 'untouched: the stored spelling is kept');
+
+    edit = open();
+    edit.color.value = '#d02828';
+    editor
+      .querySelector('[data-edit-close]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    await Promise.resolve();
+    assert.equal(getItems()[0].color, '#A5A18A', 'Cancel discards the new colour');
+
+    edit = open();
+    edit.color.value = '#d02828';
+    edit.save();
+    await Promise.resolve();
+    assert.equal(getItems()[0].color, '#d02828', 'Save applies it');
+  } finally {
+    cleanup();
+  }
+});

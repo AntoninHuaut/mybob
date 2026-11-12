@@ -319,6 +319,7 @@ export class FurniturePanel {
     return `<section class="furniture-detail" aria-label="Réglages du meuble">
       <form id="furniture-edit-form" class="furniture-edit-form" data-furniture-edit="${esc(item.id)}" data-geometry-locked="${item.locked}">
         <label class="furniture-field">Nom<input name="name" value="${esc(item.name)}" maxlength="100" required></label>
+        <label class="furniture-field furniture-tone-field">Teinte du volume<input name="color" type="color" value="${esc(item.color.toLowerCase())}"></label>
         ${dimensionsFields(item)}
         ${sofaFields(item)}
         ${dressingFields(item)}
@@ -560,6 +561,8 @@ export class FurniturePanel {
     const next: FurnitureItem = {
       ...item,
       name: String(data.get('name')).trim(),
+      // Colour is not geometry: a locked piece can still be repainted.
+      color: data.has('color') ? String(data.get('color')) : item.color,
       ...(item.locked
         ? {
             width: item.width,
@@ -628,6 +631,8 @@ export class FurniturePanel {
           after.length = before.length;
       }
     }
+    // The colour control reports lowercase hex: an untouched one keeps the stored spelling.
+    if (unchanged('color')) next.color = item.color;
     if (unchanged('x')) next.position[0] = item.position[0];
     if (unchanged('z')) next.position[1] = item.position[1];
     if (unchanged('rotation')) next.rotation = item.rotation;
