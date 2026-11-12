@@ -100,6 +100,7 @@ export class ViewportProjection {
               selectedRoomId !== room.id);
           label.style.left = `${p.x}px`;
           label.style.top = `${p.y}px`;
+          label.style.setProperty('--label-scale', '1');
           if (viewer.mode === 'plan' && !label.hidden) {
             // The layout may nudge the label, never out of its own room on screen. A label
             // anchored outside its polygon on purpose is not confined.
@@ -159,6 +160,7 @@ export class ViewportProjection {
           label.hidden = !placed.visible;
           label.style.left = `${placed.x}px`;
           label.style.top = `${placed.y}px`;
+          label.style.setProperty('--label-scale', String(placed.scale));
         }
       }
       if (showDimensions && viewer.mode !== 'walk') {

@@ -18,7 +18,7 @@ state lives in the browser's `localStorage`.
 - `src/ui/` — pure HTML fragments and self-contained panels.
 
 The two worlds talk in one direction at a time: `main.ts` calls viewer methods, and the viewer
-reports back through callbacks (`onViewChange`, `onFrame`, `onSelectRoom`, `onDestination`,
+reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSelectRoom`, `onDestination`,
 `onMeasure`, `onEditFurniture`).
 
 ## Module map
@@ -154,6 +154,10 @@ Babylon clears those observers with their scene. `ViewEffects` owns effect creat
 disposal together, releases walk pipelines when their camera changes, and also cleans up on
 scene disposal. Bootstrap composes the viewer and `ViewportProjection`; per-frame UI inputs
 are explicit, while project loading and share-link adoption keep their existing boundaries.
+`onFrame` fires before Babylon updates the camera (HUD state); `ViewportProjection` runs from
+`onRendered`, after the image is drawn, because `viewer.project` only reads the camera's
+current matrices: projected before the render, a label trails its room by one frame while the
+camera moves.
 
 ## Walk and rendering
 

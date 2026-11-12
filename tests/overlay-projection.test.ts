@@ -126,3 +126,39 @@ test('reading an overlay leaves the camera matrix that the next frame draws with
   const fresh = camera.getProjectionMatrix(true);
   assert.deepEqual(Array.from(drawn.m), Array.from(fresh.m), 'the cached projection is not stale');
 });
+
+test('overlays are projected once the frame is drawn, with the camera that drew it', () => {
+  const { scene, camera, viewer } = setup();
+  camera.mode = ArcRotateCamera.ORTHOGRAPHIC_CAMERA;
+  camera.orthoTop = 8;
+  camera.orthoBottom = -8;
+  camera.orthoLeft = -14;
+  camera.orthoRight = 14;
+  camera.panningInertia = 0.9;
+  camera.panningSensibility = 100;
+  scene.render();
+  const frame = { cameraMoved: true } as never;
+  const seen: { before: number; rendered: number }[] = [];
+  Object.assign(viewer, {
+    onFrame: () => (
+      seen.push({ before: viewer.project(point).x, rendered: Number.NaN }),
+      undefined
+    ),
+    onRendered: () => {
+      seen.at(-1)!.rendered = viewer.project(point).x;
+    },
+  });
+  const internals = viewer as unknown as {
+    watchFrames(scene: Scene): void;
+    emitFrame(build: () => never): void;
+  };
+  // The real hooks, with the per-frame work reduced to emitting the frame.
+  internals.watchFrames(scene);
+  scene.onBeforeAnimationsObservable.clear();
+  scene.onBeforeAnimationsObservable.add(() => internals.emitFrame(() => frame));
+  camera.inertialPanningX = 40;
+  scene.render();
+  const drawn = viewer.project(point).x;
+  assert.notEqual(seen[0].before, drawn, 'the camera moved during this render');
+  assert.ok(Math.abs(seen[0].rendered - drawn) < 1e-6, 'the overlay uses the drawn camera');
+});
