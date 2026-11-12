@@ -1,6 +1,4 @@
 import { EFFECT_TIERS } from '../scene/adaptiveResolution';
-import { FxLabEffect } from './fxLabEffect';
-import { createInteriorOcclusion } from '../scene/interiorAmbience';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseViewer } from '../scene/viewer';
@@ -96,28 +94,6 @@ function slider(
 
 export function mountFxLab(viewer: HouseViewer): void {
   const box = panel('Banc d’essai — visite');
-  const experiment = new FxLabEffect(() => {
-    occlusionToggle.checked = false;
-  });
-  const occlusionToggle = checkbox(box, 'Occlusion de vue 3D (essai)', (on) => {
-    sync();
-    const allowed = viewer.mode === 'overview' && !viewer.exteriorView;
-    occlusionToggle.checked = on && allowed;
-    experiment.toggle(on && allowed, () => {
-      const camera = viewer.scene.activeCamera!;
-      const manager = viewer.scene.postProcessRenderPipelineManager;
-      manager.detachCamerasFromRenderPipeline('orbit-bloom', camera);
-      const pipeline = createInteriorOcclusion(viewer.scene, camera);
-      if (pipeline) {
-        pipeline.radius = 0.5;
-        pipeline.maxZ = 100;
-        pipeline.expensiveBlur = true;
-      }
-      manager.attachCamerasToRenderPipeline('orbit-bloom', camera, true);
-      return pipeline;
-    });
-    viewer.requestRender();
-  });
   // Seeded with the live scene: an undefined start would make the first `sync`
   // look like a project change and throw away whatever was already built.
   let scene: Scene | undefined = viewer.scene;
@@ -137,7 +113,6 @@ export function mountFxLab(viewer: HouseViewer): void {
 
   const sync = () => {
     if (scene !== viewer.scene) forget();
-    experiment.sync(viewer.scene, viewer.mode === 'overview' && !viewer.exteriorView);
     if (cornerOn && !beads)
       beads = cornerBeadMesh(
         viewer.scene,

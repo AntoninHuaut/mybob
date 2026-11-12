@@ -90,7 +90,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Help and welcome        | `src/ui/firstSteps.ts`, `onboarding.ts`                                      | "Premiers pas" card, short and full help                                                                            |
 | Image export            | `src/ui/imageExport.ts`                                                      | PNG of the camera, title block, options                                                                             |
 | UI helpers              | `src/ui/format.ts`, `icons.ts`                                               | HTML escaping, number/area formatting, inline icons                                                                 |
-| Test bench (dev)        | `src/ui/fxLab.ts`, `src/ui/fxLabEffect.ts`                                   | Unsettled rendering questions — never in a build                                                                    |
+| Test bench (dev)        | `src/ui/fxLab.ts`                                                            | Unsettled rendering questions — never in a build                                                                    |
 | Build constants         | `src/build-env.d.ts`                                                         | Vite-injected public/private build flags                                                                            |
 | Styles                  | `src/style.css` + `src/style/*.css`                                          | `chrome`, `scene`, `feedback`; panel CSS next to `furniture/panel.ts`, `ui/arrangementPanel.ts`, `ui/solarPanel.ts` |
 
@@ -289,9 +289,8 @@ the previous texture is disposed after replacement. Scene disposal cancels pendi
 rebuilds explicitly request a render, and diagnostics report either active owned environment.
 No location is inferred. The walk environment and bloom calibration remain unchanged.
 
-The development bench offers an experimental orbit SSAO (0.5 m radius, 100 m max depth,
-expensive blur); production has no orbit SSAO yet. Two comparisons were closed on the
-reference PC, and the bench no longer offers them:
+Three comparisons were closed on the development bench, on the reference PC, and it no longer
+offers them: Vue 3D occlusion was adopted (#205, described above), and two were dropped:
 
 - Tone mapping stays ACES. Khronos PBR Neutral was compared in every view and showed no
   visible difference: the finishes people choose here are light, low-saturation colours
