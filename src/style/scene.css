@@ -8,10 +8,6 @@
   background-image: radial-gradient(#c7d0c0 0.65px, transparent 0.65px);
   background-size: 20px 20px;
 }
-/* Vue 3D and Extérieur: the sky behind the transparent canvas (`src/scene/sky.ts`). */
-.viewport.sky {
-  background: var(--sky);
-}
 #scene {
   display: block;
   position: absolute;

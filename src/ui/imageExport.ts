@@ -1,5 +1,4 @@
 import type { HouseViewer } from '../scene/viewer';
-import { paintSky } from '../scene/sky';
 import { bounds, polygonArea } from '../model/geometry';
 import { layoutLabels, type LabelBox, type LabelRect } from './labelLayout';
 
@@ -42,7 +41,7 @@ export async function exportSceneImage(
   viewer: HouseViewer,
   options: SceneImageOptions,
 ): Promise<Blob> {
-  const captured = viewer.captureCanvas(options.dimensions);
+  const captured = viewer.captureCanvas(options.dimensions, !options.transparent);
   const size = exportImageSize(captured.width, captured.height);
   const header = options.header === false ? 0 : size.header;
   const output = document.createElement('canvas');
@@ -53,8 +52,6 @@ export async function exportSceneImage(
   if (!options.transparent) {
     context.fillStyle = '#edf0e9';
     context.fillRect(0, 0, output.width, output.height);
-    // The sky is the viewport's CSS background, which the canvas copy leaves out.
-    if (viewer.mode === 'overview') paintSky(context, 0, header, output.width, size.sceneHeight);
   }
   context.drawImage(captured, 0, header, size.width, size.sceneHeight);
   if (header > 0) {
