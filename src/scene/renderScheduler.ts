@@ -16,7 +16,8 @@ export const IDLE_REFRESH_MS = 1000;
 /**
  * Page events that may change the scene: a click in a panel, a slider, a key, the
  * mouse over a piece of furniture. Listened to on the window, so no feature has to
- * remember to ask for an image.
+ * remember to ask for an image; `wakesScene` keeps pointer moves and wheel turns to
+ * those over the canvas.
  */
 export const WAKE_EVENTS = [
   'pointerdown',
@@ -31,6 +32,28 @@ export const WAKE_EVENTS = [
   'pointerlockchange',
   'focus',
 ] as const;
+
+/**
+ * Pointer moves and wheel turns change the scene only through the canvas: Babylon, the
+ * cameras and the furniture listen there (a drag keeps the canvas as target through
+ * pointer capture or pointer lock). Over a panel they only cost: each one restarted
+ * `RENDER_SETTLE_FRAMES` images, so sweeping the mouse across the sidebar redrew the whole
+ * scene at the screen's rate, every effect included, and a weak GPU starved the page it
+ * was scrolling. Over the canvas, a move with no button held changes nothing either,
+ * unless `hoverChangesScene`: the measure line follows the cursor, and a locked pointer
+ * turns the walk camera. A camera dragged with a button is woken by the button. Every other wake event (clicks, keys, form edits)
+ * stays global: those are how a panel changes what the scene shows.
+ */
+export function wakesScene(
+  event: Event,
+  canvas: EventTarget,
+  hoverChangesScene: boolean = false,
+): boolean {
+  if (event.type === 'wheel') return event.target === canvas;
+  if (event.type !== 'pointermove') return true;
+  if (event.target !== canvas) return false;
+  return hoverChangesScene || ((event as PointerEvent).buttons ?? 0) !== 0;
+}
 
 /**
  * Decides whether the render loop draws this image. A still scene is not redrawn:

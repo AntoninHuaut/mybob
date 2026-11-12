@@ -49,7 +49,7 @@ import { panOrbitWithKeys } from './orbitNavigation';
 import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
 import { ShadowRefresh } from './shadowRefresh';
 import { furnitureRevision, furnitureObstaclesRevision } from '../furniture/layer';
-import { RenderScheduler, WAKE_EVENTS } from './renderScheduler';
+import { RenderScheduler, WAKE_EVENTS, wakesScene } from './renderScheduler';
 import { isSoftwareRenderer, nextPaint, viewKey, ViewWarmth, warmFrames } from './shaderWarmup';
 import { pluginSummary, shaderLog } from './shaderLog';
 import { AdaptiveResolution } from './adaptiveResolution';
@@ -231,7 +231,12 @@ export class HouseViewer {
   /** Open `holdRendering` calls: every image is drawn while one is held. */
   private renderingHolds = 0;
   /** Any input anywhere in the page may change what the scene shows. */
-  private wake = () => this.renderScheduler.request();
+  private wake = (event?: Event) => {
+    // A locked pointer turns the walk camera, which Babylon applies only while rendering:
+    // its signature cannot change before an image is drawn, so the move itself must wake.
+    const hover = this.measureMode || document.pointerLockElement === this.canvas;
+    if (!event || wakesScene(event, this.canvas, hover)) this.renderScheduler.request();
+  };
   private sectionHeight?: number;
   private planOpenings?: PlanOpenings;
   private dimensions: GreasedLineMesh[] = [];
