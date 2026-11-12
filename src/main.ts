@@ -15,7 +15,7 @@ import { confirmImportReplacement } from './ui/confirmImport';
 import { solarPosition } from './scene/solar';
 import { HouseViewer, isImmersiveSupported, preloadImmersive, type ViewMode } from './scene/viewer';
 import { createEngine } from './scene/engine';
-import { collectDiagnostics, installDiagnostics } from './scene/diagnostics';
+import { collectDiagnostics, installDiagnostics, viewLabel } from './scene/diagnostics';
 import { shaderLog } from './scene/shaderLog';
 import { FrameRateMeter } from './ui/frameRate';
 import type { HouseProject, Room } from './model/types';
@@ -2172,6 +2172,11 @@ async function start() {
           effectTier: viewer.currentEffectTier,
         }),
       () => shaderLog.report(),
+      async (seconds) => {
+        const { profileView, profileLines } = await import('./scene/frameProfiler');
+        const view = viewLabel(viewer.mode, viewer.exteriorView);
+        return profileLines(await profileView(viewer, seconds * 1000), view).join('\n');
+      },
     );
     wireEvents();
     // The first view links its shaders behind the loading overlay; the other views

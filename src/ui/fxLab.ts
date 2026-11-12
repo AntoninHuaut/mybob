@@ -3,6 +3,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseViewer } from '../scene/viewer';
 import { cornerBeadMesh, roomCorners } from '../scene/cornerBead';
+import { profileLines, profileView } from '../scene/frameProfiler';
 
 /**
  * Development-only bench for the visit's open rendering questions.
@@ -16,7 +17,9 @@ import { cornerBeadMesh, roomCorners } from '../scene/cornerBead';
  *
  * - the visit's effect tier, pinned by hand (0 = full, 1 = no occlusion) to judge each state without waiting for a slow machine;
  * - a chamfer on the concave vertical corner between two walls, the one place
- *   the wall bevel cannot reach.
+ *   the wall bevel cannot reach;
+ * - a benchmark: `mybob.profile()` run in each view in turn, Vue 3D still and turning,
+ *   so a rendering change is judged on numbers from the same path every time.
  *
  * Nothing here is a product decision, and none of it touches the shipped scene.
  */
@@ -160,10 +163,57 @@ export function mountFxLab(viewer: HouseViewer): void {
   tierRow.append('Effets de la visite', tierSelect);
   box.append(tierRow);
 
+  const benchButton = document.createElement('button');
+  benchButton.type = 'button';
+  benchButton.textContent = 'Mesurer chaque vue (4 s)';
+  benchButton.style.cssText = 'margin-top:6px;font:inherit';
+  benchButton.addEventListener('click', () => {
+    benchButton.disabled = true;
+    void benchmark().finally(() => (benchButton.disabled = false));
+  });
+  box.append(benchButton);
+
   const note = document.createElement('div');
   note.textContent = 'Entrez en visite pour juger.';
   note.style.cssText = 'margin-top:8px;color:#9aa79a';
   box.append(note);
+
+  /**
+   * Same path every run: each view prepared, then profiled for four seconds. Vue 3D is
+   * measured twice, still (temporal antialiasing and occlusion settle) and turning
+   * (the antialiasing is bypassed, multisampling takes over). Lines go to the console.
+   */
+  const benchmark = async (seconds = 4) => {
+    const start = { mode: viewer.mode, exterior: viewer.exteriorView };
+    const runs: Array<{
+      label: string;
+      mode: 'plan' | 'overview' | 'walk';
+      exterior?: boolean;
+      turn?: boolean;
+    }> = [
+      { label: 'plan', mode: 'plan' },
+      { label: 'vue 3D, immobile', mode: 'overview' },
+      { label: 'vue 3D, en rotation', mode: 'overview', turn: true },
+      { label: 'extérieur', mode: 'overview', exterior: true },
+      { label: 'visite', mode: 'walk' },
+    ];
+    const lines: string[] = [];
+    try {
+      for (const run of runs) {
+        if (!viewer.setMode(run.mode, run.exterior ?? false) && viewer.mode !== run.mode) {
+          lines.push(`[profil] ${run.label} · vue refusée`);
+          continue;
+        }
+        await viewer.whenReady();
+        if (run.turn) viewer.tourOrbit(Math.PI * 2, seconds * 1000 + 500);
+        lines.push(...profileLines(await profileView(viewer, seconds * 1000), run.label));
+      }
+    } finally {
+      viewer.setMode(start.mode, start.exterior);
+    }
+    console.info(lines.join('\n'));
+    return lines;
+  };
 
   const previousViewChange = viewer.onViewChange;
   viewer.onViewChange = (mode) => {
@@ -177,6 +227,7 @@ export function mountFxLab(viewer: HouseViewer): void {
     viewer,
     sync,
     forceTier: setTier,
+    benchmark,
     corners: () => roomCorners(viewer.level),
     setCorner: (on: boolean, size = beadSize) => {
       cornerOn = on;
