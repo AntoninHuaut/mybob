@@ -1,8 +1,6 @@
 import { EFFECT_TIERS } from '../scene/adaptiveResolution';
 import { FxLabEffect } from './fxLabEffect';
 import { createInteriorOcclusion } from '../scene/interiorAmbience';
-import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
-import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseViewer } from '../scene/viewer';
@@ -98,24 +96,6 @@ function slider(
 
 export function mountFxLab(viewer: HouseViewer): void {
   const box = panel('Banc d’essai — visite');
-  const neutralToggle = checkbox(box, 'Tons PBR neutres', (on) => {
-    viewer.scene.imageProcessingConfiguration.toneMappingType = on
-      ? ImageProcessingConfiguration.TONEMAPPING_KHR_PBR_NEUTRAL
-      : ImageProcessingConfiguration.TONEMAPPING_ACES;
-    viewer.requestRender();
-  });
-  const shadowToggle = checkbox(box, 'Ombres de contact (PCSS)', (on) => {
-    for (const light of viewer.scene.lights) {
-      const generator = light.getShadowGenerator();
-      if (generator instanceof ShadowGenerator) {
-        generator.useContactHardeningShadow = on;
-        if (!on) generator.usePercentageCloserFiltering = true;
-        generator.contactHardeningLightSizeUVRatio = 0.03;
-        generator.getShadowMap()?.resetRefreshCounter();
-      }
-    }
-    viewer.requestRender();
-  });
   const experiment = new FxLabEffect(() => {
     occlusionToggle.checked = false;
   });
@@ -152,7 +132,7 @@ export function mountFxLab(viewer: HouseViewer): void {
     beads = undefined;
     scene = viewer.scene;
     cornerOn = false;
-    cornerToggle.checked = neutralToggle.checked = shadowToggle.checked = false;
+    cornerToggle.checked = false;
   };
 
   const sync = () => {
