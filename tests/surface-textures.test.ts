@@ -178,3 +178,44 @@ test('the maps reach the GPU as tiling textures', () => {
     engine.dispose();
   }
 });
+
+test('slates step up at every course butt and are separated by a groove', () => {
+  const map = surfaceMapData().slateNormal;
+  /** Groups of strong tilts along a line, merging neighbours closer than 5 texels. */
+  const clusters = (tilt: number[]) => {
+    const strong = tilt.flatMap((value, index) => (Math.abs(value) > 40 ? [index] : []));
+    return strong.filter((index, k) => k === 0 || index - strong[k - 1] > 5).length;
+  };
+  // The green channel is the normal's v tilt: one cluster per 0.2 m course butt,
+  // six per tile, plus the butt cut by the seam if it falls on row 0.
+  const up = Array.from({ length: map.size }, (_, y) => channel(map, 20, y, 1) - 128);
+  const butts = clusters(up);
+  assert.ok(butts === 6 || butts === 7, `six course butts per tile, got ${butts}`);
+  // The red channel is the u tilt: one cluster per joint, four slates per course.
+  const across = Array.from({ length: map.size }, (_, x) => channel(map, x, 25, 0) - 128);
+  const joints = clusters(across);
+  assert.ok(joints === 4 || joints === 5, `four joints per course, got ${joints}`);
+});
+
+test('the lawn varies over metres and its detail map stays neutral on average', () => {
+  const { lawnAlbedo, lawnDetail } = surfaceMapData();
+  // Mean green over 2 m squares: broad patches make them differ visibly.
+  const square = lawnAlbedo.size / 8;
+  const means: number[] = [];
+  for (let sy = 0; sy < 8; sy++)
+    for (let sx = 0; sx < 8; sx++) {
+      let sum = 0;
+      for (let y = sy * square; y < (sy + 1) * square; y++)
+        for (let x = sx * square; x < (sx + 1) * square; x++) sum += channel(lawnAlbedo, x, y, 1);
+      means.push(sum / square / square);
+    }
+  assert.ok(Math.max(...means) - Math.min(...means) > 15, 'patches over several metres');
+  const overall = means.reduce((a, b) => a + b, 0) / means.length;
+  assert.ok(Math.abs(overall - 160) < 12, `the lawn keeps its green on average, got ${overall}`);
+  for (const c of [0, 2]) {
+    let sum = 0;
+    for (let i = 0; i < lawnDetail.size * lawnDetail.size; i++) sum += lawnDetail.data[i * 4 + c];
+    const mean = sum / lawnDetail.size / lawnDetail.size;
+    assert.ok(Math.abs(mean - 128) < 8, `detail channel ${c} is neutral on average, got ${mean}`);
+  }
+});

@@ -74,6 +74,7 @@ import {
 import { packShareDocument, type ShareDocument } from './model/linkPacker';
 import { chooseProjectToReplace } from './ui/chooseProjectToReplace';
 import { confirmLinkDivergence } from './ui/confirmLinkDivergence';
+import { skyCss } from './scene/sky';
 
 const STORAGE = 'maison-atelier:projects:v1';
 const MAX_IMPORTED = 10;
@@ -1007,6 +1008,7 @@ function syncViewChrome() {
     b.setAttribute('aria-pressed', String(b.dataset.view === next));
   });
   el('#viewport').classList.toggle('walking', next === 'walk');
+  el('#viewport').classList.toggle('sky', next === 'overview');
   const title = modeTitle(next, number(Number(el<HTMLSelectElement>('#eye-height').value)));
   el('#view-eyebrow').textContent = title[0];
   el('#view-title').textContent = title[1];
@@ -2089,6 +2091,7 @@ async function start() {
     });
     solarPanel.mountTimeline(el('#viewport'));
     viewer.canChangeMode = canChangeMode;
+    el('#viewport').style.setProperty('--sky', skyCss());
     viewer.onViewChange = syncViewChrome;
     viewer.onDestination = () => {
       activeButton('#go-to', false);

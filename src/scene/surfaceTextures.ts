@@ -19,6 +19,22 @@ const WOOD_SIZE = 512;
 const CONCRETE_SIZE = 256;
 const METAL_SIZE = 256;
 
+/**
+ * Exterior maps. The lawn albedo spans 16 m so its 4–8 m patches never repeat
+ * within a plot's width; the detail map adds the grain at 0.73 m, a scale that
+ * does not divide 16 m, so the two repeats never line up. Slates come in 0.2 m
+ * courses of 0.3 m slates; the 1.2 m tile holds an even number of courses so the
+ * stagger continues across the seam.
+ */
+export const LAWN_TILE = 16;
+export const LAWN_DETAIL_TILE = 0.73;
+export const SLATE_TILE = 1.2;
+const LAWN_SIZE = 512;
+const LAWN_DETAIL_SIZE = 256;
+const SLATE_SIZE = 256;
+const SLATE_COURSES = 6;
+const SLATES_PER_COURSE = 4;
+
 /** Plank layout of the parquet albedo, in texels of a 512 px tile. */
 const WOOD_PLANK_WIDTH = 128;
 const WOOD_PLANK_HEIGHT = 32;
@@ -232,6 +248,115 @@ function metalRoughness(size: number): Float32Array {
   return field;
 }
 
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.max(0, Math.min(1, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * Lawn colour, in sRGB bytes around the green the lawn always had: broad patches
+ * of denser and sparser grass, drier yellowish zones, and a fine grain. One tile
+ * covers `LAWN_TILE` metres.
+ */
+function lawnAlbedo(size: number): Uint8Array {
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = x / size;
+      const v = y / size;
+      const patch = fbm(u, v, 2, 2, 3, 131);
+      const dry = smoothstep(0.52, 0.72, fbm(u, v, 3, 3, 2, 137));
+      const grain = fbm(u, v, 64, 64, 2, 139);
+      const shade = 1 + (patch - 0.5) * 0.36 + (grain - 0.5) * 0.16;
+      const offset = (y * size + x) * 4;
+      data[offset] = Math.round(Math.min(255, 143 * shade + dry * 16));
+      data[offset + 1] = Math.round(Math.min(255, 160 * shade + dry * 3));
+      data[offset + 2] = Math.round(Math.min(255, Math.max(0, 112 * shade - dry * 12)));
+      data[offset + 3] = 255;
+    }
+  }
+  return data;
+}
+
+/**
+ * Babylon's detail map packs four channels: red is an albedo offset, green and
+ * alpha the normal's Y and X, blue a roughness offset, all neutral at 0.5. Grass
+ * clumps are a few centimetres across at `LAWN_DETAIL_TILE` metres per tile.
+ */
+function lawnDetail(size: number): Uint8Array {
+  const height = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const u = x / size;
+      const v = y / size;
+      height[y * size + x] = fbm(u, v, 24, 24, 3, 151) * 0.6 + fbm(u, v, 96, 96, 2, 157) * 0.4;
+    }
+  }
+  const normal = normalFromHeight(height, size, 3);
+  const data = new Uint8Array(size * size * 4);
+  for (let i = 0; i < size * size; i++) {
+    const relief = height[i] - 0.5;
+    data[i * 4] = Math.round(128 + relief * 90);
+    data[i * 4 + 1] = normal[i * 4 + 1];
+    // Clump tops catch the light and read slightly smoother than the hollows.
+    data[i * 4 + 2] = Math.round(128 - relief * 50);
+    data[i * 4 + 3] = normal[i * 4];
+  }
+  return data;
+}
+
+/** Which slate a texel of the slate tile belongs to, and where in it. */
+function slateAt(x: number, y: number, size: number) {
+  const courseHeight = size / SLATE_COURSES;
+  const slateWidth = size / SLATES_PER_COURSE;
+  const course = Math.floor(y / courseHeight);
+  const stagger = course % 2 ? slateWidth / 2 : 0;
+  const along = (x - stagger + size) % size;
+  return {
+    course,
+    slate: Math.floor(along / slateWidth),
+    /** 0 at the exposed butt (bottom edge of the course), 1 under the next course. */
+    up: (y - course * courseHeight) / courseHeight,
+    /** Texels to the nearest side joint. */
+    joint: Math.min(along % slateWidth, slateWidth - (along % slateWidth)),
+    courseHeight,
+  };
+}
+
+/**
+ * Slate relief, with the texture's v running up the slope: each course lies on
+ * the one below, so the surface steps up at every butt and thins towards the
+ * next one; a narrow groove separates the slates of a course, and each slate
+ * sits at its own slight tilt.
+ */
+function slateHeight(size: number): Float32Array {
+  const height = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const { course, slate, up, joint, courseHeight } = slateAt(x, y, size);
+      // A two-texel bevel at the butt keeps the step from aliasing into stairs.
+      const butt = Math.min(1, (up * courseHeight) / 2);
+      const groove = Math.min(1, joint / 1.5);
+      const tilt = (hash(course, slate, 167) - 0.5) * 0.12;
+      const grain = fbm(x / size, y / size, 48, 48, 2, 173) * 0.06;
+      height[y * size + x] = (0.6 - up * 0.3 + tilt + grain) * groove * butt;
+    }
+  }
+  return height;
+}
+
+function slateRoughness(size: number): Float32Array {
+  const field = new Float32Array(size * size);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const { course, slate } = slateAt(x, y, size);
+      field[y * size + x] =
+        0.8 + hash(course, slate, 179) * 0.14 + fbm(x / size, y / size, 12, 12, 2, 181) * 0.06;
+    }
+  }
+  return field;
+}
+
 export interface SurfaceMapData {
   size: number;
   data: Uint8Array;
@@ -246,6 +371,10 @@ export interface SurfaceMaps {
   concreteRoughness: SurfaceMapData;
   metalNormal: SurfaceMapData;
   metalRoughness: SurfaceMapData;
+  lawnAlbedo: SurfaceMapData;
+  lawnDetail: SurfaceMapData;
+  slateNormal: SurfaceMapData;
+  slateRoughness: SurfaceMapData;
 }
 
 let cached: SurfaceMaps | undefined;
@@ -288,6 +417,16 @@ export function surfaceMapData(): SurfaceMaps {
     metalRoughness: {
       size: METAL_SIZE,
       data: greyFromField(metalRoughness(METAL_SIZE), METAL_SIZE),
+    },
+    lawnAlbedo: { size: LAWN_SIZE, data: lawnAlbedo(LAWN_SIZE) },
+    lawnDetail: { size: LAWN_DETAIL_SIZE, data: lawnDetail(LAWN_DETAIL_SIZE) },
+    slateNormal: {
+      size: SLATE_SIZE,
+      data: normalFromHeight(slateHeight(SLATE_SIZE), SLATE_SIZE, 3),
+    },
+    slateRoughness: {
+      size: SLATE_SIZE,
+      data: greyFromField(slateRoughness(SLATE_SIZE), SLATE_SIZE),
     },
   };
   return cached;
@@ -333,5 +472,28 @@ export function createSurfaceTextures(scene: Scene): SurfaceTextures {
     concreteRoughness: upload(scene, 'concrete-roughness', maps.concreteRoughness),
     metalNormal: upload(scene, 'metal-normal', maps.metalNormal),
     metalRoughness: upload(scene, 'metal-roughness', maps.metalRoughness),
+  };
+}
+
+export interface ExteriorTextures {
+  lawnAlbedo: RawTexture;
+  lawnDetail: RawTexture;
+  slateNormal: RawTexture;
+  slateRoughness: RawTexture;
+  renderNormal: RawTexture;
+}
+
+/**
+ * The exterior's own uploads. The exterior disposes its materials with their
+ * textures, so it must not share the interior's set.
+ */
+export function createExteriorTextures(scene: Scene): ExteriorTextures {
+  const maps = surfaceMapData();
+  return {
+    lawnAlbedo: upload(scene, 'lawn-albedo', maps.lawnAlbedo),
+    lawnDetail: upload(scene, 'lawn-detail', maps.lawnDetail),
+    slateNormal: upload(scene, 'slate-normal', maps.slateNormal),
+    slateRoughness: upload(scene, 'slate-roughness', maps.slateRoughness),
+    renderNormal: upload(scene, 'render-normal', maps.plasterNormal),
   };
 }
