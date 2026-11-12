@@ -281,12 +281,18 @@ the previous texture is disposed after replacement. Scene disposal cancels pendi
 rebuilds explicitly request a render, and diagnostics report either active owned environment.
 No location is inferred. The walk environment and bloom calibration remain unchanged.
 
-The development bench offers ACES/PBR Neutral and experimental orbit SSAO (0.5 m radius,
-100 m max depth, expensive blur). These are comparison controls; production retains ACES
-and no orbit SSAO. Sun shadows stay on medium PCF: contact-hardening shadows (PCSS, light
-size ratio 0.03) were compared in Extérieur with a solar preview and showed no visible
-difference on the reference PC (#204), so the bench no longer offers them. The orbit experiment releases on mode exit and resets its controls on scene replacement.
-It remains outside production adaptive-quality policy.
+The development bench offers an experimental orbit SSAO (0.5 m radius, 100 m max depth,
+expensive blur); production has no orbit SSAO yet. Two comparisons were closed on the
+reference PC, and the bench no longer offers them:
+
+- Tone mapping stays ACES. Khronos PBR Neutral was compared in every view and showed no
+  visible difference: the finishes people choose here are light, low-saturation colours
+  (default wall `#eeede8`), where both curves agree; they diverge on saturated colours in
+  strong light, which this tool's projects rarely use (#202). The bloom thresholds and walk
+  intensities, calibrated on ACES, are unchanged.
+- Sun shadows stay on medium PCF: contact-hardening shadows (PCSS, light size ratio 0.03)
+  were compared in Extérieur with a solar preview and showed no visible difference (#204). The orbit experiment releases on mode exit and resets its controls on scene replacement.
+  It remains outside production adaptive-quality policy.
 
 ## The visit in a headset
 
