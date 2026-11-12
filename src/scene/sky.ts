@@ -4,8 +4,9 @@ import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import type { Scene } from '@babylonjs/core/scene';
 
 /**
- * The sky behind Vue 3D and Extérieur, drawn inside the canvas as a background
- * layer. It cannot be a CSS background: the canvas clears to a light grey with a
+ * The sky behind Vue 3D, Extérieur and the windows of Visite, drawn inside the
+ * canvas as a background layer. It is a screen-space gradient, so it stays out
+ * of a headset, where it would turn with the head, and out of the plan. It cannot be a CSS background: the canvas clears to a light grey with a
  * zero alpha, which the browser composites as premultiplied, so it adds that
  * grey to whatever is behind it and washes it out. Inside the canvas, the PNG
  * export captures it like the rest of the scene. Every stop stays at or below
@@ -17,6 +18,13 @@ export const SKY_STOPS: ReadonlyArray<readonly [offset: number, color: string]> 
   [0.55, '#cfdbe2'],
   [1, '#e5e1d4'],
 ];
+
+/**
+ * Brightness of the sky seen through the windows in Visite. The visit blooms
+ * above 0.9 so that its view through the bay window glows; the sky's horizon
+ * (luminance 0.88) crosses that at 1.06, its blue zenith (about 0.75) does not.
+ */
+export const WALK_SKY_GAIN = 1.06;
 
 /** Rows of the gradient texture; linear filtering smooths between them. */
 const SKY_ROWS = 64;
@@ -54,7 +62,7 @@ export function skyPixels(rows = SKY_ROWS): Uint8Array {
 
 /**
  * A full-screen background layer showing the sky, disabled until the viewer
- * turns it on for the overview. Belongs to the scene and goes with it.
+ * turns it on. Belongs to the scene and goes with it.
  */
 export function createSkyLayer(scene: Scene): Layer {
   const texture = RawTexture.CreateRGBATexture(

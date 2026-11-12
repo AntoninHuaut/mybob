@@ -4,7 +4,7 @@ import test from 'node:test';
 import { Window } from 'happy-dom';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
-import { createSkyLayer, SKY_STOPS, skyPixels } from '../src/scene/sky';
+import { createSkyLayer, SKY_STOPS, skyPixels, WALK_SKY_GAIN } from '../src/scene/sky';
 import { validateProject } from '../src/model/validate';
 
 const hex = (data: Uint8Array, row: number) =>
@@ -40,7 +40,7 @@ test('the sky layer is a disabled background layer until the viewer turns it on'
 });
 
 /** The real viewer on a NullEngine, as in `canonical-defines.test.ts`. */
-test('the sky shows in Vue 3D and Extérieur only, and a transparent export leaves it out', async () => {
+test('the sky shows everywhere but the plan, brighter in Visite, and a transparent export leaves it out', async () => {
   const window = new Window({ url: 'http://localhost' });
   const names = ['window', 'document', 'ResizeObserver'] as const;
   const previous = names.map((name) => Object.getOwnPropertyDescriptor(globalThis, name));
@@ -83,8 +83,12 @@ test('the sky shows in Vue 3D and Extérieur only, and a transparent export leav
     assert.equal(sky().isEnabled, true, 'the landing Vue 3D shows the sky');
     viewer.setMode('plan');
     assert.equal(sky().isEnabled, false, 'the plan keeps its flat background');
+    assert.ok(viewer.setMode('walk'), 'the demo has a visit destination');
+    assert.equal(sky().isEnabled, true, 'Visite shows the sky through the windows');
+    assert.equal(sky().color.r, WALK_SKY_GAIN, 'brighter in Visite, so a window still blooms');
     viewer.setMode('overview', true);
     assert.equal(sky().isEnabled, true, 'Extérieur shows the sky');
+    assert.equal(sky().color.r, 1, 'the overview shows the stops as they are');
 
     // Watch the layer during the capture's render: hidden for a transparent export only.
     const seen: boolean[] = [];

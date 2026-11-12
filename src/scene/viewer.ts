@@ -1,6 +1,6 @@
 import { createScreenLines } from './screenLines';
 import { refreshFixtureLights } from './fixtureLights';
-import { createSkyLayer } from './sky';
+import { createSkyLayer, WALK_SKY_GAIN } from './sky';
 import type { Layer } from '@babylonjs/core/Layers/layer';
 import { installCanonicalDefineOrder } from './canonicalDefines';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
@@ -613,8 +613,7 @@ export class HouseViewer {
     this.currentExteriorView = exterior && mode === 'overview' && !!this.exteriorFrame;
     this.exterior?.root.setEnabled(mode !== 'plan');
     this.updateRoofVisibility();
-    // The sky stays out of the plan, which keeps its flat background, and the visit.
-    if (this.sky) this.sky.isEnabled = mode === 'overview';
+    this.updateSky();
     this.setGoToMode(false);
     this.setMeasureMode(false);
     if (mode === 'walk') {
@@ -1012,6 +1011,18 @@ export class HouseViewer {
     this.updateLighting();
   }
 
+  /**
+   * The sky everywhere but the plan, which keeps its flat background, and a
+   * headset, where a screen-space gradient would turn with the head. Brighter in
+   * Visite, where the view through a window is meant to bloom.
+   */
+  private updateSky() {
+    if (!this.sky) return;
+    this.sky.isEnabled = this.mode !== 'plan' && !this.immersive;
+    const gain = this.mode === 'walk' ? WALK_SKY_GAIN : 1;
+    this.sky.color.set(gain, gain, gain, 1);
+  }
+
   private captureSunPreset() {
     if (!this.baseSun && this.sun?.direction && this.sun.position && this.sun.diffuse) {
       this.baseSun = {
@@ -1329,6 +1340,7 @@ export class HouseViewer {
         return;
       }
       this.immersive = walk;
+      this.updateSky();
       // The screen walk's pipelines are bound to its camera: dropped until the headset is ready.
       this.viewEffects?.releaseWalkPipelines();
       this.onImmersiveChange?.(true);
@@ -1348,6 +1360,7 @@ export class HouseViewer {
     const forward = walk.camera.getDirection(Vector3.Forward(true));
     this.immersive = undefined;
     walk.dispose();
+    this.updateSky();
     if (!this.scene || !this.walk) return;
     this.walk.position.set(x, groundElevationAt(this.level, this.site, [x, z]) + this.eyeHeight, z);
     this.walk.rotation.set(0, yawFromDirection(forward), 0);
