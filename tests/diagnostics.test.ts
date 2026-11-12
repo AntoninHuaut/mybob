@@ -206,3 +206,35 @@ test('shaders(true) copies the report, and falls back to copy() when the clipboa
     if (previousNavigator) Object.defineProperty(globalThis, 'navigator', previousNavigator);
   }
 });
+
+test('profile(seconds) prints the profile once it is measured, clamped to a sane duration', async () => {
+  const window = new Window({ url: 'http://localhost' });
+  const globals = globalThis as { window?: unknown };
+  const previousWindow = globals.window;
+  const printed: string[] = [];
+  const asked: number[] = [];
+  const originalInfo = console.info;
+  globals.window = window;
+  console.info = (...args: unknown[]) => void printed.push(args.join(' '));
+  try {
+    installDiagnostics(
+      () => collectDiagnostics(engine(), scene(), view),
+      undefined,
+      async (seconds) => {
+        asked.push(seconds);
+        return `[profil] ${seconds} s`;
+      },
+    );
+    const api = (window as unknown as { mybob: { profile(seconds?: number): unknown } }).mybob;
+    printed.length = 0;
+    assert.equal(api.profile(), undefined, 'nothing for the console to echo');
+    api.profile(600);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert.deepEqual(asked, [5, 60]);
+    assert.ok(printed.includes('[profil] 5 s'));
+    assert.ok(printed.includes('[profil] 60 s'));
+  } finally {
+    console.info = originalInfo;
+    globals.window = previousWindow;
+  }
+});

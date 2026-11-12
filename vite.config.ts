@@ -23,6 +23,8 @@ export default defineConfig(({ mode }) => {
             if (!id.includes('/node_modules/@babylonjs/core/')) return undefined;
             // Headset support is reached only through the lazy xrWalk entry.
             if (id.includes('/XR/')) return 'babylon-xr';
+            // Profiling instrumentation is reached only through `mybob.profile()`.
+            if (/\/Instrumentation\/|\/engine\.query(\.pure)?\.js$/.test(id)) return undefined;
             // Shaders stay lazy chunks: merging them would make every visit pay for all of them.
             return /\/Shaders(?:WGSL)?\//.test(id) ? undefined : 'babylon';
           },

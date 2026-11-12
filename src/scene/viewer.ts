@@ -228,6 +228,8 @@ export class HouseViewer {
   private readonly baseScaling = 1 / Math.min(window.devicePixelRatio || 1, 1.6);
   private renderScale = 1;
   private lastRenderAt?: number;
+  /** Open `holdRendering` calls: every image is drawn while one is held. */
+  private renderingHolds = 0;
   /** Any input anywhere in the page may change what the scene shows. */
   private wake = () => this.renderScheduler.request();
   private sectionHeight?: number;
@@ -319,13 +321,16 @@ export class HouseViewer {
       // in a session every frame is drawn, at the resolution the headset chose.
       const render =
         !!this.immersive ||
+        this.renderingHolds > 0 ||
         this.renderScheduler.shouldRender(
           now,
           this.cameraSignature(),
           () => this.busy(),
           !this.viewEffects?.temporalActive,
         );
-      if (!this.immersive) this.applyRenderScale(now, render);
+      // A profile forces images the user did not ask for: they are not the machine's
+      // cadence, and a scale taken for them would be kept for the session.
+      if (!this.immersive) this.applyRenderScale(now, render && this.renderingHolds === 0);
       if (render) {
         this.scene.render();
         this.updateOrbitBloom();
@@ -1415,6 +1420,21 @@ export class HouseViewer {
   }
 
   /** True while the loop only redraws once a second because nothing moves. */
+  /**
+   * Draws every image, still or not, until the returned function is called: what
+   * `mybob.profile()` needs to measure the cost of an image of a still view.
+   */
+  holdRendering(): () => void {
+    this.renderingHolds++;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.renderingHolds--;
+      this.renderScheduler.request();
+    };
+  }
+
   get renderingIdle(): boolean {
     return this.renderScheduler?.idle ?? false;
   }

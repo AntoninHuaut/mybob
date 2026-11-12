@@ -50,6 +50,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion, bloom (walk, 3D view and Exterior)                                                       |
 | View effect lifecycle   | `src/scene/viewEffects.ts`                                                   | Scene-owned environment and pipelines, camera replacement, effect tiers and disposal                                |
 | Diagnostics             | `src/scene/diagnostics.ts`                                                   | `mybob.diag()`: engine, GPU, frame rate, resolution, scene                                                          |
+| Frame profiler          | `src/scene/frameProfiler.ts`                                                 | `mybob.profile(s)`: GPU/CPU time and draw calls per image of the current view, loaded on demand                     |
 | Screen-width lines      | `src/scene/screenLines.ts`                                                   | CSS-width dimension/measurement polylines, resize and material ownership                                            |
 | Measurement             | `src/scene/measurement.ts`                                                   | Snapping to the plan axes                                                                                           |
 | Sun                     | `src/scene/solar.ts`                                                         | NOAA equations, IANA time zones                                                                                     |
@@ -255,7 +256,13 @@ camera moves.
   state, scene size and machine characteristics; the command is recalled at start-up.
   `mybob.diag()` returns nothing — the console would echo the return value and the report
   would appear twice — and `mybob.report()` gives the same text without printing it, for
-  `copy(mybob.report())`.
+  `copy(mybob.report())`. `mybob.profile(seconds)` measures instead of describing: it draws every image of the
+  current view for that long (a still view included, without feeding the dynamic resolution)
+  and prints the median and 95th percentile of the GPU time — only where the browser exposes
+  the timer query, Chrome on most desktops — the CPU time of the render, the mesh selection
+  and the draw calls. The development bench's « Mesurer chaque vue » runs it on Plan, Vue 3D
+  still and turning, Extérieur and Visite in turn: a rendering change is judged on those
+  numbers, from the same path, before and after.
 - The exterior frames the building and its roof — distance and azimuth are chosen with them,
   and the plot stays whole in the background without dictating the framing; 3D view shows the
   house open; Plan hides terrain and roof. Selecting a room or adding furniture from the

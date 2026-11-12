@@ -73,6 +73,11 @@ const OCCLUSION_LABELS: Record<OcclusionState, string> = {
   idle: 'hors visite',
 };
 
+/** The view's name as the interface says it. */
+export function viewLabel(mode: string, exterior: boolean): string {
+  return exterior ? 'extérieur' : (MODE_LABELS[mode] ?? mode);
+}
+
 /** One decimal, French comma: the report is read by a person, not parsed. */
 function decimal(value: number): string {
   return value.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
@@ -112,7 +117,7 @@ function deviceLine(snapshot: DiagnosticSnapshot): string {
 /** The report as console lines: one fact per line, aligned for a screenshot. */
 export function diagnosticLines(snapshot: DiagnosticSnapshot): string[] {
   const view = snapshot.view;
-  const mode = view.exterior ? 'extérieur' : (MODE_LABELS[view.mode] ?? view.mode);
+  const mode = viewLabel(view.mode, view.exterior);
   return [
     '[diag] MyBob — rapport de performance',
     `  moteur      ${snapshot.engine} · ${snapshot.gpu}`,
@@ -173,9 +178,14 @@ export function collectDiagnostics(
  * `diag()` prints and returns nothing on purpose: the console echoes the value of
  * every expression typed into it, so returning the report would show it twice.
  * `report()` is the copyable form, for `copy(mybob.report())`; `shaderReport()` is the
- * same for `shaders()`.
+ * same for `shaders()`. `profile(seconds)` measures the cost of an image of the current
+ * view (`scene/frameProfiler.ts`).
  */
-export function installDiagnostics(report: () => DiagnosticSnapshot, shaders?: () => string): void {
+export function installDiagnostics(
+  report: () => DiagnosticSnapshot,
+  shaders?: () => string,
+  profile?: (seconds: number) => Promise<string>,
+): void {
   const text = () => diagnosticLines(report()).join('\n');
   const shaderText = () => shaders?.() ?? '[shaders] indisponible';
   const api = {
@@ -199,6 +209,22 @@ export function installDiagnostics(report: () => DiagnosticSnapshot, shaders?: (
       }
     },
     shaderReport: () => shaderText(),
+    /**
+     * Draws every image of the current view for `seconds` and prints what one costs:
+     * GPU and CPU time, draw calls. Prints nothing back to the console's echo.
+     */
+    profile: (seconds = 5) => {
+      if (!profile) {
+        console.info('[profil] indisponible');
+        return;
+      }
+      const duration = Math.min(60, Math.max(1, Number(seconds) || 5));
+      console.info(`[profil] mesure pendant ${duration} s…`);
+      profile(duration).then(
+        (text) => console.info(text),
+        (error) => console.info(`[profil] échec : ${String(error)}`),
+      );
+    },
   };
   (window as unknown as { mybob?: typeof api }).mybob = api;
   const first = report();
