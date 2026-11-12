@@ -1,5 +1,6 @@
 import { createScreenLines } from './screenLines';
 import { refreshFixtureLights } from './fixtureLights';
+import { installCanonicalDefineOrder } from './canonicalDefines';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Camera } from '@babylonjs/core/Cameras/camera';
 import { HouseOrbitPointersInput } from './orbitPointerInput';
@@ -268,6 +269,7 @@ export class HouseViewer {
     readonly canvas: HTMLCanvasElement,
     engine: AbstractEngine,
   ) {
+    installCanonicalDefineOrder();
     this.engine = engine;
     this.engine.setHardwareScalingLevel(this.baseScaling);
     shaderLog.attach(engine);

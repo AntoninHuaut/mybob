@@ -434,6 +434,13 @@ last call, and read back at start-up.
   it every link blocks the page), the blocking time under each view's preparation, and the links
   that happened outside any preparation. `mybob.shaders(true)` also copies the report, because
   the console truncates it; when the clipboard refuses, `copy(mybob.shaderReport())` does it.
+- Babylon keys a program by its define string, in the order the defines were first set on
+  that sub-mesh: a light index seen for the first time lands after `LIGHTCOUNT`, so a mesh
+  first drawn in the plan asked for the overview's programs again, reordered, and linked
+  duplicates after the view was ready. `installCanonicalDefineOrder`
+  (`src/scene/canonicalDefines.ts`, called by the viewer) sorts the keys of every
+  `MaterialDefines`; `tests/canonical-defines.test.ts` drives the viewer through every view
+  on a NullEngine and requires no new program on the way back.
 - Leaving the visit switches the temporal jitter material plugin off (`reprojectHistory = false`
   before the pipeline is disposed, `ViewEffects.releaseWalkPipelines`): Babylon leaves that plugin
   attached and enabled on every material, which changes their defines and made the plan, the
