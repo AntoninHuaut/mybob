@@ -51,6 +51,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | View effect lifecycle   | `src/scene/viewEffects.ts`                                                   | Scene-owned environment and pipelines, camera replacement, effect tiers and disposal                                |
 | Diagnostics             | `src/scene/diagnostics.ts`                                                   | `mybob.diag()`: engine, GPU, frame rate, resolution, scene                                                          |
 | Frame profiler          | `src/scene/frameProfiler.ts`                                                 | `mybob.profile(s)`: GPU/CPU time and draw calls per image of the current view, loaded on demand                     |
+| Performance report      | `src/ui/performanceReport.ts`                                                | `?diagnostic` link: measures every view and shows a report to copy, no console needed                               |
 | Screen-width lines      | `src/scene/screenLines.ts`                                                   | CSS-width dimension/measurement polylines, resize and material ownership                                            |
 | Measurement             | `src/scene/measurement.ts`                                                   | Snapping to the plan axes                                                                                           |
 | Sun                     | `src/scene/solar.ts`                                                         | NOAA equations, IANA time zones                                                                                     |
@@ -268,7 +269,11 @@ camera moves.
   the timer query, Chrome on most desktops — the CPU time of the render, the mesh selection
   and the draw calls. The development bench's « Mesurer chaque vue » runs it on Plan, Vue 3D
   still and turning, Extérieur and Visite in turn: a rendering change is judged on those
-  numbers, from the same path, before and after.
+  numbers, from the same path, before and after. For a relative who never opens a console,
+  the site's link with `?diagnostic` runs that same path (`benchmarkViews`) behind a dialog,
+  then shows the `diag` and `profile` text with a copy button; the parameter is removed from
+  the address so a reload does not measure again. The text holds the machine and the timings,
+  never the house.
 - The exterior frames the building and its roof — distance and azimuth are chosen with them,
   and the plot stays whole in the background without dictating the framing; 3D view shows the
   house open; Plan hides terrain and roof. Selecting a room or adding furniture from the

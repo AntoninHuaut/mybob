@@ -96,6 +96,24 @@ dialog h2 {
   font-weight: 550;
   letter-spacing: -0.8px;
 }
+/* `?diagnostic` report: monospace so the aligned report columns survive a copy. */
+.report-text {
+  max-height: 40vh;
+  overflow: auto;
+  margin: 12px 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: #f1f5ec;
+  font:
+    11px/1.45 ui-monospace,
+    monospace;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+#report-progress {
+  width: 100%;
+}
 dialog h3 {
   margin: 23px 0 9px;
   font-size: 15px;

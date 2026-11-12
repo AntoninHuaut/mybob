@@ -3,7 +3,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseViewer } from '../scene/viewer';
 import { cornerBeadMesh, roomCorners } from '../scene/cornerBead';
-import { profileLines, profileView } from '../scene/frameProfiler';
+import { benchmarkViews } from '../scene/frameProfiler';
 
 /**
  * Development-only bench for the visit's open rendering questions.
@@ -184,33 +184,7 @@ export function mountFxLab(viewer: HouseViewer): void {
    * (the antialiasing is bypassed, multisampling takes over). Lines go to the console.
    */
   const benchmark = async (seconds = 4) => {
-    const start = { mode: viewer.mode, exterior: viewer.exteriorView };
-    const runs: Array<{
-      label: string;
-      mode: 'plan' | 'overview' | 'walk';
-      exterior?: boolean;
-      turn?: boolean;
-    }> = [
-      { label: 'plan', mode: 'plan' },
-      { label: 'vue 3D, immobile', mode: 'overview' },
-      { label: 'vue 3D, en rotation', mode: 'overview', turn: true },
-      { label: 'extérieur', mode: 'overview', exterior: true },
-      { label: 'visite', mode: 'walk' },
-    ];
-    const lines: string[] = [];
-    try {
-      for (const run of runs) {
-        if (!viewer.setMode(run.mode, run.exterior ?? false) && viewer.mode !== run.mode) {
-          lines.push(`[profil] ${run.label} · vue refusée`);
-          continue;
-        }
-        await viewer.whenReady();
-        if (run.turn) viewer.tourOrbit(Math.PI * 2, seconds * 1000 + 500);
-        lines.push(...profileLines(await profileView(viewer, seconds * 1000), run.label));
-      }
-    } finally {
-      viewer.setMode(start.mode, start.exterior);
-    }
+    const lines = await benchmarkViews(viewer, seconds);
     console.info(lines.join('\n'));
     return lines;
   };

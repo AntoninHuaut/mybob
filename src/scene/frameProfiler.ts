@@ -200,3 +200,61 @@ export async function profileView(
     counters.dispose();
   }
 }
+
+/** What a whole-app benchmark needs from the viewer, besides profiling. */
+export interface BenchmarkViewer extends ProfiledViewer {
+  readonly mode: 'plan' | 'overview' | 'walk';
+  readonly exteriorView: boolean;
+  setMode(mode: 'plan' | 'overview' | 'walk', exterior?: boolean): boolean;
+  whenReady(): Promise<void>;
+  tourOrbit(radians?: number, duration?: number): boolean;
+}
+
+/** The same path every run: a rendering change is judged on numbers from one route. */
+export const BENCHMARK_RUNS: ReadonlyArray<{
+  label: string;
+  mode: 'plan' | 'overview' | 'walk';
+  exterior?: boolean;
+  turn?: boolean;
+}> = [
+  { label: 'plan', mode: 'plan' },
+  { label: 'vue 3D, immobile', mode: 'overview' },
+  { label: 'vue 3D, en rotation', mode: 'overview', turn: true },
+  { label: 'extérieur', mode: 'overview', exterior: true },
+  { label: 'visite', mode: 'walk' },
+];
+
+/**
+ * Profiles each view in turn for `seconds`: Plan, Vue 3D still and turning (its
+ * antialiasing is bypassed in motion), Extérieur, Visite. A view the viewer refuses (no
+ * plot for Extérieur, a touch screen for the Visite) is reported, not measured. The view
+ * the user was in is restored at the end, whatever happened.
+ */
+export async function benchmarkViews(
+  viewer: BenchmarkViewer,
+  seconds = 4,
+  onProgress?: (done: number, total: number) => void,
+): Promise<string[]> {
+  const start = { mode: viewer.mode, exterior: viewer.exteriorView };
+  const lines: string[] = [];
+  try {
+    for (const [index, run] of BENCHMARK_RUNS.entries()) {
+      onProgress?.(index, BENCHMARK_RUNS.length);
+      const accepted = viewer.setMode(run.mode, run.exterior ?? false);
+      if (
+        (!accepted && viewer.mode !== run.mode) ||
+        Boolean(run.exterior) !== viewer.exteriorView
+      ) {
+        lines.push(`[profil] ${run.label} · vue indisponible`);
+        continue;
+      }
+      await viewer.whenReady();
+      if (run.turn) viewer.tourOrbit(Math.PI * 2, seconds * 1000 + 500);
+      lines.push(...profileLines(await profileView(viewer, seconds * 1000), run.label));
+    }
+  } finally {
+    viewer.setMode(start.mode, start.exterior);
+  }
+  onProgress?.(BENCHMARK_RUNS.length, BENCHMARK_RUNS.length);
+  return lines;
+}
