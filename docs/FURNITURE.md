@@ -66,7 +66,7 @@ A single click selects and offers the quick rotations. A double click in the sce
 
 Sofa depths are entered from the back: depth of the main body, then total depth on the extended side. No subtraction is asked. The local diagram shows these two lengths and the return width. L-shaped seats and bases use continuous volumes, with no hole at the junction.
 
-Changing a straight sofa into a corner or chaise longue uses the displayed total depth for the return; going back to a straight sofa keeps the body depth. Measurements left untouched keep their original precision. Unticking the lock in the popup immediately makes dimensions and position editable, in the same draft. Annuler keeps the original piece and lock; Enregistrer applies the unlock and the changes together.
+The popup's Teinte du volume repaints the piece, as when adding, locked or not: colour is not geometry. It stays a draft like the rest; an untouched control keeps the stored hex spelling, since the browser reports lowercase. Changing a straight sofa into a corner or chaise longue uses the displayed total depth for the return; going back to a straight sofa keeps the body depth. Measurements left untouched keep their original precision. Unticking the lock in the popup immediately makes dimensions and position editable, in the same draft. Annuler keeps the original piece and lock; Enregistrer applies the unlock and the changes together.
 
 A TV is first entered by its diagonal in inches, in 16:9. The case and feet are estimated; Dimensions exactes corrects width, depth and height. A manual change of width/height removes the associated diagonal, so as not to keep an indication that has become wrong. Older televisions with custom dimensions stay compatible.
 
