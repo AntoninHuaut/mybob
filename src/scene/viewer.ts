@@ -1130,29 +1130,36 @@ export class HouseViewer {
   }
 
   project(point: Point2, height = 0.04) {
+    return this.projector()(point, height);
+  }
+
+  /**
+   * `project` for many points of one frame: the camera transform and the canvas size are
+   * read once. Each `project` recomputes the projection matrix and reads the canvas's
+   * client size, which after a label's style write forces a layout: the Plan labels
+   * paid it once per room and per corner, every frame.
+   */
+  projector(): (point: Point2, height?: number) => { x: number; y: number; visible: boolean } {
     const camera = this.scene.activeCamera!;
-    const viewport = camera.viewport.toGlobal(
-      this.engine.getRenderWidth(),
-      this.engine.getRenderHeight(),
-    );
-    const v = Vector3.Project(
-      new Vector3(point[0], this.level.elevation + height, point[1]),
-      Matrix.IdentityReadOnly,
-      this.overlayTransform(),
-      viewport,
-    );
-    const x = (v.x / this.engine.getRenderWidth()) * this.canvas.clientWidth;
-    const y = (v.y / this.engine.getRenderHeight()) * this.canvas.clientHeight;
-    return {
-      x,
-      y,
-      visible:
-        v.z > 0 &&
-        v.z < 1 &&
-        x > -30 &&
-        y > -30 &&
-        x < this.canvas.clientWidth + 30 &&
-        y < this.canvas.clientHeight + 30,
+    const renderWidth = this.engine.getRenderWidth();
+    const renderHeight = this.engine.getRenderHeight();
+    const viewport = camera.viewport.toGlobal(renderWidth, renderHeight);
+    const transform = this.overlayTransform();
+    const width = this.canvas.clientWidth;
+    const height = this.canvas.clientHeight;
+    const elevation = this.level.elevation;
+    const world = new Vector3();
+    const v = new Vector3();
+    return (point, pointHeight = 0.04) => {
+      world.set(point[0], elevation + pointHeight, point[1]);
+      Vector3.ProjectToRef(world, Matrix.IdentityReadOnly, transform, viewport, v);
+      const x = (v.x / renderWidth) * width;
+      const y = (v.y / renderHeight) * height;
+      return {
+        x,
+        y,
+        visible: v.z > 0 && v.z < 1 && x > -30 && y > -30 && x < width + 30 && y < height + 30,
+      };
     };
   }
 

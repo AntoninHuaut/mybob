@@ -2115,8 +2115,7 @@ async function start() {
     const viewportProjection = new ViewportProjection(
       el('#viewport'),
       measureBar,
-      () =>
-        furnitureLayer?.getLabelObstacles((point, height) => viewer.project(point, height)) ?? [],
+      (project) => furnitureLayer?.getLabelObstacles(project) ?? [],
     );
     viewer.onFrame = () => {
       if (!current) return;
