@@ -189,7 +189,10 @@ camera moves.
   repeated-export stability have CI-only numeric probes, without visual attachments.
 - The stable Babylon vendor chunk excludes WebXR modules: those live in `babylon-xr`,
   reached through the lazy `xrWalk` entry. A public-build guard rejects WebXR in the
-  static import graph of an entry. Walk effects still load with the main engine.
+  static import graph of an entry. Walk effects still load with the main engine. Mesh
+  builders are imported one by one (`Meshes/Builders/<name>Builder`): `MeshBuilder`
+  re-exports all of them and cost about 80 kB of minified engine chunk
+  (`tests/bundle-imports.test.ts`).
 
 - Walking speed is 2.8 m/s by default, adjustable from 1 to 5 m/s; Shift multiplies it by 1.7.
   Look sensitivity ranges from 50 to 200 %. Both settings are local

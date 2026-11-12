@@ -2,7 +2,8 @@ import { FixtureLights } from './fixtureLights';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
+import { CreateCylinder } from '@babylonjs/core/Meshes/Builders/cylinderBuilder';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
@@ -189,7 +190,7 @@ export function buildHouse(
     const mesh =
       bevel > 0
         ? beveledBox(name, width, height, depth, bevel, scene)
-        : MeshBuilder.CreateBox(name, { width, height, depth }, scene);
+        : CreateBox(name, { width, height, depth }, scene);
     // A chamfered box already carries world-scale UVs; a plain one does not.
     if (bevel <= 0) worldScaleUvs(mesh);
     mesh.position.set(x, y, z);
@@ -710,7 +711,7 @@ export function buildHouse(
   const pointLights: PointLight[] = [];
   const fixtures: Mesh[] = [];
   for (const light of level.lights) {
-    const fixture = MeshBuilder.CreateCylinder(
+    const fixture = CreateCylinder(
       `fixture:${light.id}`,
       { diameter: 0.26, height: 0.035, tessellation: 24 },
       scene,

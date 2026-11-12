@@ -3,7 +3,8 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import type { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
-import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
+import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
+import { CreateLines } from '@babylonjs/core/Meshes/Builders/linesBuilder';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
@@ -269,7 +270,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     mesh.checkCollisions = true;
   }
   // Draw a discreet parcel edge, without inventing fences or hedge heights.
-  const edge = MeshBuilder.CreateLines(
+  const edge = CreateLines(
     'parcel-boundary',
     {
       points: [...site.boundary, site.boundary[0]].map(
@@ -415,7 +416,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       const [x, z] = alongWall(wall, (start + end) / 2, sign * normal);
       const mesh = add(
         metricBox(
-          MeshBuilder.CreateBox(
+          CreateBox(
             `facade:${wall.id}:${i}`,
             {
               width: end - start,
@@ -499,7 +500,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
         const [x, z] = alongWall(wall, from + (section.start + section.end) / 2);
         const band = add(
           metricBox(
-            MeshBuilder.CreateBox(
+            CreateBox(
               merged.length ? `roof-wall-band:${wall.id}:${i}` : `roof-wall-band:${wall.id}`,
               {
                 width: section.end - section.start,
