@@ -18,7 +18,7 @@ state lives in the browser's `localStorage`.
 - `src/ui/` — pure HTML fragments and self-contained panels.
 
 The two worlds talk in one direction at a time: `main.ts` calls viewer methods, and the viewer
-reports back through callbacks (`onViewChange`, `onFrame`, `onSelectRoom`, `onDestination`,
+reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSelectRoom`, `onDestination`,
 `onMeasure`, `onEditFurniture`).
 
 ## Module map
@@ -82,7 +82,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onSelectRoom`, `onDe
 | Arrangement panel       | `src/ui/arrangementPanel.ts`                                                 | Align/distribute actions, grid snapping                                                                             |
 | Sun panel               | `src/ui/solarPanel.ts`, `solarTimeline.ts`, `solarDay.ts`                    | Location (Open-Meteo only on an explicit search), timeline, day bounds                                              |
 | Measure bar             | `src/ui/measureBar.ts`                                                       | Measure instructions and floating label; no geometry                                                                |
-| Plan labels             | `src/ui/labelLayout.ts`                                                      | Non-overlapping label placement                                                                                     |
+| Plan labels             | `src/ui/labelLayout.ts`                                                      | Non-overlapping label placement, confined to the room                                                               |
 | Plans and precision     | `src/ui/sourcePanel.ts`                                                      | « Plans et précision » dialog: gap to the stated areas                                                              |
 | Link divergence         | `src/ui/confirmLinkDivergence.ts`                                            | Three outcomes when a link and the local state differ                                                               |
 | Import and limit        | `src/ui/confirmImport.ts`, `chooseProjectToReplace.ts`                       | Confirm a replacing import; pick a project to replace at the limit                                                  |
@@ -154,6 +154,10 @@ Babylon clears those observers with their scene. `ViewEffects` owns effect creat
 disposal together, releases walk pipelines when their camera changes, and also cleans up on
 scene disposal. Bootstrap composes the viewer and `ViewportProjection`; per-frame UI inputs
 are explicit, while project loading and share-link adoption keep their existing boundaries.
+`onFrame` fires before Babylon updates the camera (HUD state); `ViewportProjection` runs from
+`onRendered`, after the image is drawn, because `viewer.project` only reads the camera's
+current matrices: projected before the render, a label trails its room by one frame while the
+camera moves.
 
 ## Walk and rendering
 

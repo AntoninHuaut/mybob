@@ -2118,10 +2118,14 @@ async function start() {
       () =>
         furnitureLayer?.getLabelObstacles((point, height) => viewer.project(point, height)) ?? [],
     );
-    viewer.onFrame = (frame) => {
+    viewer.onFrame = () => {
       if (!current) return;
       frameRate.update(performance.now(), viewer.engine.getFps());
       updateFurnitureContext();
+    };
+    // After the image is drawn: the camera matrices are then the ones the rooms were drawn with.
+    viewer.onRendered = (frame) => {
+      if (!current) return;
       viewportProjection.update(viewer, frame, {
         showLabels,
         showDimensions,

@@ -435,7 +435,8 @@
 }
 .scene-label {
   position: absolute;
-  transform: translate(-50%, -50%);
+  /* Plan shrinks a label that is too big for its room (--label-scale, set by the layout). */
+  transform: translate(-50%, -50%) scale(var(--label-scale, 1));
   pointer-events: auto;
   padding: 5px 8px;
   border: 1px solid #dce5d0;

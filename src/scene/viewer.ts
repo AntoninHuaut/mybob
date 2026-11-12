@@ -174,6 +174,13 @@ export class HouseViewer {
   measurement?: Measurement;
   onSelectRoom?: (id: string) => void;
   onFrame?: (frame: FrameInfo) => void;
+  /**
+   * The same frame, once the image has been drawn. Screen overlays are projected here: before
+   * the render the camera still holds last frame's matrices, so a label trails its room by one
+   * frame while the camera moves, and settles when it stops.
+   */
+  onRendered?: (frame: FrameInfo) => void;
+  private lastFrame?: FrameInfo;
   onMeasure?: (measurement?: Measurement) => void;
   onPointerLockError?: () => void;
   /** Optional host policy, checked before any transition side effects. */
@@ -537,8 +544,27 @@ export class HouseViewer {
         if (room) this.onSelectRoom?.(room.id);
       }
     });
-    // Input must be prepared before Babylon updates its active camera, not after rendering starts.
+    this.watchFrames(scene);
+  }
+
+  /** Input is prepared before Babylon updates its active camera; overlays follow the drawn image. */
+  private watchFrames(scene: Scene) {
     scene.onBeforeAnimationsObservable.add(() => this.beforeFrame());
+    scene.onAfterRenderObservable.add(() => this.frameRendered());
+  }
+
+  /** The frame is built only when someone listens: some of its fields are not free. */
+  private emitFrame(build: () => FrameInfo) {
+    if (!this.onFrame && !this.onRendered) return;
+    const frame = build();
+    this.lastFrame = frame;
+    this.onFrame?.(frame);
+  }
+
+  private frameRendered() {
+    const frame = this.lastFrame;
+    this.lastFrame = undefined;
+    if (frame) this.onRendered?.(frame);
   }
 
   setMode(mode: ViewMode, exterior = false, destination?: Point2): boolean {
@@ -1497,19 +1523,20 @@ export class HouseViewer {
       }
     }
     this.shadowRefresh?.step();
-    if (this.immersive) {
-      this.immersive.step(dt);
-      const position = this.immersive.position;
-      this.onFrame?.({
+    const immersive = this.immersive;
+    if (immersive) {
+      immersive.step(dt);
+      const position = immersive.position;
+      this.emitFrame(() => ({
         cameraMoved,
         furnitureObstaclesRevision: furnitureObstaclesRevision(this.scene),
         position,
-        headingDegrees: planHeading(this.immersive.camera),
+        headingDegrees: planHeading(immersive.camera),
         planUpDegrees: this.planUpDegrees(),
         roomId: this.level.rooms.find((r) => pointInPolygon(position, r.polygon))?.id,
         nearDoor: false,
         locked: true,
-      });
+      }));
       return;
     }
     if (this.mode === 'walk') {
@@ -1554,7 +1581,7 @@ export class HouseViewer {
         this.walkRayDirty = false;
       }
       const hit = this.walkHit;
-      this.onFrame?.({
+      this.emitFrame(() => ({
         cameraMoved,
         furnitureObstaclesRevision: furnitureObstaclesRevision(this.scene),
         position: [p.x, p.z],
@@ -1564,7 +1591,7 @@ export class HouseViewer {
         nearDoor: hit?.pickedMesh?.metadata?.kind === 'door' && hit.distance <= 2.4,
         nearFurnitureId: this.paused ? undefined : editableFurnitureId(hit),
         locked: document.pointerLockElement === this.canvas,
-      });
+      }));
     } else {
       if (
         !this.paused &&
@@ -1590,7 +1617,7 @@ export class HouseViewer {
           this.keyState.has('ShiftLeft') || this.keyState.has('ShiftRight'),
         );
       }
-      this.onFrame?.({
+      this.emitFrame(() => ({
         cameraMoved,
         furnitureObstaclesRevision: furnitureObstaclesRevision(this.scene),
         position: [this.walk.position.x, this.walk.position.z],
@@ -1598,7 +1625,7 @@ export class HouseViewer {
         planUpDegrees: this.planUpDegrees(),
         nearDoor: false,
         locked: false,
-      });
+      }));
     }
   }
 
