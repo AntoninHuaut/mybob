@@ -412,6 +412,19 @@
 .frame-rate.low {
   color: #a8703f;
 }
+/* The browser draws the scene without the GPU: the one cause of slowness the user can
+   fix in a minute, so it is said where the frame rate is read, and explained on click. */
+.software-render {
+  font: inherit;
+  font-size: 11px;
+  color: #a8703f;
+  background: none;
+  border: 0;
+  padding: 0;
+  text-decoration: underline dotted;
+  cursor: pointer;
+  white-space: nowrap;
+}
 .scale-note {
   display: flex;
   align-items: center;

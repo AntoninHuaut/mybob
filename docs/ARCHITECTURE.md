@@ -254,7 +254,10 @@ camera moves.
   render targets, which `createInteriorOcclusion` detects and remembers so as not to reject on
   every walk entry. A slow GPU therefore keeps the occlusion and renders fewer frames.
 - The frame rate is shown very small in the scene footer and turns amber below 24 frames per
-  second. It is a display, not a quality setting. To diagnose a slow machine remotely,
+  second. It is a display, not a quality setting. Next to it, « Sans accélération graphique »
+  appears when the renderer is a CPU rasteriser (`isSoftwareRenderer`: SwiftShader, WARP,
+  llvmpipe — graphics acceleration off in the browser); a click explains how to switch it
+  on. It is the one cause of a slow scene a visitor fixes alone, without losing quality. To diagnose a slow machine remotely,
   `mybob.diag()` prints engine, GPU, frame rate, actually rendered resolution, walk ambience
   state, scene size and machine characteristics; the command is recalled at start-up.
   `mybob.diag()` returns nothing — the console would echo the return value and the report
