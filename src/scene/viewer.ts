@@ -667,7 +667,7 @@ export class HouseViewer {
     const key = this.currentViewKey();
     const first = this.warmth.untouched;
     this.preparing = true;
-    shaderLog.mark(`préparation : ${key} · ${pluginSummary(scene.materials)}`);
+    shaderLog.markView(key, 'start', pluginSummary(scene.materials));
     this.onPreparing?.(true, first);
     try {
       await nextPaint();
@@ -695,7 +695,7 @@ export class HouseViewer {
     } finally {
       // A scene replaced meanwhile has released its effects: it stays cold.
       if (scene === this.scene) this.warmth.markWarm(key);
-      shaderLog.mark(`prête : ${key} · ${pluginSummary(scene.materials)}`);
+      shaderLog.markView(key, 'end', pluginSummary(scene.materials));
       this.preparing = false;
       this.requestRender();
       this.onPreparing?.(false, first);
