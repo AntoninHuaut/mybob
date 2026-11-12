@@ -679,7 +679,7 @@ test('Vue 3D occlusion sits between the orbit refinement and the bloom, leaves w
     assert.equal(effects.status(false).occlusion, 'active', 'reported outside the visit');
     calls.length = 0;
     effects.updateOrbit(true, camera, vue3d);
-    assert.deepEqual(calls, [], 'every frame calls it: nothing is rebuilt');
+    assert.equal(calls.length, 0, 'every frame calls it: nothing is rebuilt');
 
     effects.updateOrbit(true, camera, { occlusion: false, effectTier: 0 });
     assert.deepEqual(calls, ['dispose:occlusion', 'prepass:off'], 'Extérieur has none');
