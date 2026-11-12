@@ -92,6 +92,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Image export            | `src/ui/imageExport.ts`                                                      | PNG of the camera, title block, options                                                                             |
 | UI helpers              | `src/ui/format.ts`, `icons.ts`                                               | HTML escaping, number/area formatting, inline icons                                                                 |
 | Test bench (dev)        | `src/ui/fxLab.ts`                                                            | Unsettled rendering questions — never in a build                                                                    |
+| Occlusion candidate     | `src/scene/occlusionNoise.ts`                                                | Bench only: 8-sample SSAO with a noise the TAA averages, against production's 16                                    |
 | Build constants         | `src/build-env.d.ts`                                                         | Vite-injected public/private build flags                                                                            |
 | Styles                  | `src/style.css` + `src/style/*.css`                                          | `chrome`, `scene`, `feedback`; panel CSS next to `furniture/panel.ts`, `ui/arrangementPanel.ts`, `ui/solarPanel.ts` |
 
@@ -245,6 +246,12 @@ camera moves.
   is released last switches the prepass off (`prePassInUse`). Software renderers never build
   it (`hardwareRenderer` in `viewer.ts`), which keeps CI's SwiftShader e2e as before; the last
   effect tier fades it out like the walk's, for good.
+- A cheaper occlusion is on the bench, not shipped (`occlusionNoise.ts`): Babylon's SSAO2
+  repeats one fixed noise every image, so only its blur hides the noise and it needs 16
+  samples. The candidate swaps the noise among 8 seeded patterns while the TAA accumulates
+  (always in the walk, only at rest in Vue 3D) and takes 8 samples on a deterministic
+  Hammersley kernel. To judge: the bench's toggle, Visite while walking (shimmer is the
+  risk), and « Mesurer chaque vue » for the GPU time, on and off.
 - Walk occlusion is **unconditional**: the probe that removed it below 24 frames per second has
   been deleted — judged on the test bench, losing the corner hollows cost more than a few
   frames per second on a weak machine. The only remaining refusal: a backend without multiple

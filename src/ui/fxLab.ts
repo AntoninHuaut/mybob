@@ -4,6 +4,8 @@ import type { Scene } from '@babylonjs/core/scene';
 import type { HouseViewer } from '../scene/viewer';
 import { cornerBeadMesh, roomCorners } from '../scene/cornerBead';
 import { profileLines, profileView } from '../scene/frameProfiler';
+import { RotatingOcclusionNoise, stillCamera } from '../scene/occlusionNoise';
+import type { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
 
 /**
  * Development-only bench for the visit's open rendering questions.
@@ -19,7 +21,9 @@ import { profileLines, profileView } from '../scene/frameProfiler';
  * - a chamfer on the concave vertical corner between two walls, the one place
  *   the wall bevel cannot reach;
  * - a benchmark: `mybob.profile()` run in each view in turn, Vue 3D still and turning,
- *   so a rendering change is judged on numbers from the same path every time.
+ *   so a rendering change is judged on numbers from the same path every time;
+ * - a cheaper occlusion candidate (`scene/occlusionNoise.ts`): 8 samples and a noise the
+ *   temporal antialiasing averages, against production's 16 samples and fixed noise.
  *
  * Nothing here is a product decision, and none of it touches the shipped scene.
  */
@@ -173,6 +177,52 @@ export function mountFxLab(viewer: HouseViewer): void {
   });
   box.append(benchButton);
 
+  // The pipelines are rebuilt on view changes and on project loads: the candidate is
+  // re-applied to whichever occlusion pipeline is current, by name.
+  let economyOn = false;
+  let economyTimer: ReturnType<typeof setInterval> | undefined;
+  const economy = new Map<
+    SSAO2RenderingPipeline,
+    { noise: RotatingOcclusionNoise; scene: Scene } | undefined
+  >();
+  const economyStatus = document.createElement('div');
+  economyStatus.style.cssText = 'color:#9aa79a';
+  const syncEconomy = () => {
+    const current = new Set<SSAO2RenderingPipeline>();
+    if (economyOn) {
+      for (const pipeline of viewer.scene.postProcessRenderPipelineManager.supportedPipelines) {
+        const name = pipeline.name;
+        if (name !== 'interior-occlusion' && name !== 'orbit-occlusion') continue;
+        const occlusion = pipeline as unknown as SSAO2RenderingPipeline;
+        current.add(occlusion);
+        if (economy.has(occlusion)) continue;
+        const accumulating = name === 'orbit-occlusion' ? stillCamera(viewer.orbit) : () => true;
+        const noise = RotatingOcclusionNoise.apply(occlusion, viewer.scene, accumulating);
+        economy.set(occlusion, noise && { noise, scene: viewer.scene });
+        economyStatus.textContent = noise
+          ? `appliquée : ${name}`
+          : 'internes de Babylon introuvables : candidate inapplicable';
+      }
+    }
+    for (const [pipeline, entry] of economy) {
+      if (current.has(pipeline)) continue;
+      entry?.noise.dispose(entry.scene);
+      economy.delete(pipeline);
+    }
+    if (economyOn && !current.size) economyStatus.textContent = 'aucune occlusion à l’écran';
+    if (!economyOn) economyStatus.textContent = '';
+    viewer.requestRender();
+  };
+  const setEconomy = (on: boolean) => {
+    economyOn = on;
+    economyToggle.checked = on;
+    clearInterval(economyTimer);
+    economyTimer = on ? setInterval(syncEconomy, 500) : undefined;
+    syncEconomy();
+  };
+  const economyToggle = checkbox(box, 'Occlusion économique (8 éch., bruit tournant)', setEconomy);
+  box.append(economyStatus);
+
   const note = document.createElement('div');
   note.textContent = 'Entrez en visite pour juger.';
   note.style.cssText = 'margin-top:8px;color:#9aa79a';
@@ -228,6 +278,7 @@ export function mountFxLab(viewer: HouseViewer): void {
     sync,
     forceTier: setTier,
     benchmark,
+    setOcclusionEconomy: setEconomy,
     corners: () => roomCorners(viewer.level),
     setCorner: (on: boolean, size = beadSize) => {
       cornerOn = on;
