@@ -55,11 +55,19 @@ function slotsInside(box: LabelRect, room: Point2[]): [number, number][] {
   const grid = 6;
   const xs = room.map((p) => p[0]);
   const ys = room.map((p) => p[1]);
-  const slots: [number, number][] = [];
+  const slots: { offset: [number, number]; distance: number }[] = [];
   for (let x = Math.min(...xs) + box.width / 2; x <= Math.max(...xs) - box.width / 2; x += grid)
-    for (let y = Math.min(...ys) + box.height / 2; y <= Math.max(...ys) - box.height / 2; y += grid)
-      slots.push([x - box.x, y - box.y]);
-  return slots.sort((a, b) => Math.hypot(...a) - Math.hypot(...b));
+    for (
+      let y = Math.min(...ys) + box.height / 2;
+      y <= Math.max(...ys) - box.height / 2;
+      y += grid
+    ) {
+      const offset: [number, number] = [x - box.x, y - box.y];
+      slots.push({ offset, distance: Math.hypot(...offset) });
+    }
+  // One distance per slot: a zoomed room holds thousands, and a comparator computing it
+  // twice per comparison made this sort the costliest part of a Plan frame.
+  return slots.sort((a, b) => a.distance - b.distance).map((slot) => slot.offset);
 }
 
 /**
@@ -80,7 +88,7 @@ export function layoutLabels(
     const step = Math.max(20, box.height + 8);
     search: for (const scale of box.room ? LABEL_SCALES : [1]) {
       const size = { width: box.width * scale, height: box.height * scale };
-      const slots: [number, number][] = [
+      const nudges: [number, number][] = [
         [0, 0],
         [0, -step],
         [0, step],
@@ -91,8 +99,14 @@ export function layoutLabels(
         [0, -2 * step],
         [0, 2 * step],
       ];
-      if (box.room) slots.push(...slotsInside({ ...box, ...size }, box.room));
-      for (const [dx, dy] of slots) {
+      // The room's grid is built only when no nudge fits: almost every label takes a nudge,
+      // and the grid of a room zoomed in Plan holds thousands of slots, rebuilt every frame.
+      const room = box.room;
+      const slots = function* (): Generator<[number, number]> {
+        yield* nudges;
+        if (room) yield* slotsInside({ ...box, ...size }, room);
+      };
+      for (const [dx, dy] of slots()) {
         const rect = {
           x: box.x + dx - size.width / 2,
           y: box.y + dy - size.height / 2,

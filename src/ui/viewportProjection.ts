@@ -8,7 +8,9 @@ import type { MeasureBar } from './measureBar';
 type ProjectedView = Pick<
   HouseViewer,
   'mode' | 'level' | 'measureMode' | 'measurement' | 'project'
->;
+> &
+  Partial<Pick<HouseViewer, 'projector'>>;
+type Project = (point: Point2, height?: number) => { x: number; y: number; visible: boolean };
 interface ProjectionPreferences {
   showLabels: boolean;
   showDimensions: boolean;
@@ -26,7 +28,7 @@ export class ViewportProjection {
   constructor(
     private readonly viewport: HTMLElement,
     private readonly measureBar: Pick<MeasureBar, 'moveTo'>,
-    private readonly getFurnitureObstacles: () => LabelRect[],
+    private readonly getFurnitureObstacles: (project: Project) => LabelRect[],
   ) {
     for (const event of [
       'click',
@@ -81,6 +83,9 @@ export class ViewportProjection {
     this.preferencesSignature = signature;
     this.projectedLevel = viewer.level;
     if (projectLabels) {
+      // One camera transform and one canvas size for the whole frame (`projector`).
+      const project: Project =
+        viewer.projector?.() ?? ((point, height) => viewer.project(point, height));
       const planLabels: {
         id: string;
         label: HTMLElement;
@@ -92,7 +97,7 @@ export class ViewportProjection {
         const label = this.roomLabelElement(room.id);
         if (!label) continue;
         if (labelsVisible) {
-          const p = viewer.project(room.label, (room.floorOffset ?? 0) + 0.04);
+          const p = project(room.label, (room.floorOffset ?? 0) + 0.04);
           label.hidden =
             !p.visible ||
             (viewer.mode === 'overview' &&
@@ -105,7 +110,7 @@ export class ViewportProjection {
             // The layout may nudge the label, never out of its own room on screen. A label
             // anchored outside its polygon on purpose is not confined.
             const outline = room.polygon.map((corner) => {
-              const c = viewer.project(corner, (room.floorOffset ?? 0) + 0.04);
+              const c = project(corner, (room.floorOffset ?? 0) + 0.04);
               return [c.x, c.y] as Point2;
             });
             planLabels.push({
@@ -132,7 +137,7 @@ export class ViewportProjection {
       if (viewer.mode === 'plan' && labelBoxes.length) {
         const viewport = this.viewport;
         const origin = viewport.getBoundingClientRect();
-        const obstacles = this.getFurnitureObstacles();
+        const obstacles = this.getFurnitureObstacles(project);
         for (const selector of [
           '.viewport-top',
           '.floating-tools',
@@ -169,7 +174,7 @@ export class ViewportProjection {
           ['width-label', [b.center[0], b.maxZ + 0.6], b.width],
           ['depth-label', [b.maxX + 0.6, b.center[1]], b.depth],
         ] as [string, [number, number], number][]) {
-          const pos = viewer.project(point);
+          const pos = project(point);
           const element = el(`#${id}`);
           element.textContent = `${number(value)} m`;
           element.hidden = !pos.visible;
@@ -180,7 +185,7 @@ export class ViewportProjection {
       if (viewer.measurement?.b) {
         const { a, b } = viewer.measurement;
         const midpoint: [number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
-        const p = viewer.project(
+        const p = project(
           midpoint,
           floorElevationAt(viewer.level, midpoint) - viewer.level.elevation + 0.1,
         );

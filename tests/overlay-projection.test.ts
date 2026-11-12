@@ -162,3 +162,36 @@ test('overlays are projected once the frame is drawn, with the camera that drew 
   assert.notEqual(seen[0].before, drawn, 'the camera moved during this render');
   assert.ok(Math.abs(seen[0].rendered - drawn) < 1e-6, 'the overlay uses the drawn camera');
 });
+
+test('a projector gives what project gives, and reads the canvas size once per frame', () => {
+  const { viewer } = setup();
+  let reads = 0;
+  const canvas = { clientWidth: WIDTH, clientHeight: HEIGHT };
+  Object.defineProperty(viewer, 'canvas', {
+    value: {
+      get clientWidth() {
+        reads++;
+        return canvas.clientWidth;
+      },
+      get clientHeight() {
+        reads++;
+        return canvas.clientHeight;
+      },
+    },
+  });
+  const points: [[number, number], number][] = [
+    [[2, 1], 0.04],
+    [[-4, 3.5], 0],
+    [[0, 0], 1.2],
+    [[40, -40], 0.04],
+  ];
+  const expected = points.map(([p, h]) => viewer.project(p, h));
+  reads = 0;
+  const project = viewer.projector();
+  assert.deepEqual(
+    points.map(([p, h]) => project(p, h)),
+    expected,
+  );
+  // Each read after a label's style write forces a layout: once per frame, not per point.
+  assert.equal(reads, 2);
+});
