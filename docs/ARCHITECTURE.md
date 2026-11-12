@@ -92,7 +92,6 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Image export            | `src/ui/imageExport.ts`                                                      | PNG of the camera, title block, options                                                                             |
 | UI helpers              | `src/ui/format.ts`, `icons.ts`                                               | HTML escaping, number/area formatting, inline icons                                                                 |
 | Test bench (dev)        | `src/ui/fxLab.ts`                                                            | Unsettled rendering questions — never in a build                                                                    |
-| Occlusion candidate     | `src/scene/occlusionNoise.ts`                                                | Bench only: 8-sample SSAO with a noise the TAA averages, against production's 16                                    |
 | Build constants         | `src/build-env.d.ts`                                                         | Vite-injected public/private build flags                                                                            |
 | Styles                  | `src/style.css` + `src/style/*.css`                                          | `chrome`, `scene`, `feedback`; panel CSS next to `furniture/panel.ts`, `ui/arrangementPanel.ts`, `ui/solarPanel.ts` |
 
@@ -249,12 +248,6 @@ camera moves.
   is released last switches the prepass off (`prePassInUse`). Software renderers never build
   it (`hardwareRenderer` in `viewer.ts`), which keeps CI's SwiftShader e2e as before; the last
   effect tier fades it out like the walk's, for good.
-- A cheaper occlusion is on the bench, not shipped (`occlusionNoise.ts`): Babylon's SSAO2
-  repeats one fixed noise every image, so only its blur hides the noise and it needs 16
-  samples. The candidate swaps the noise among 8 seeded patterns while the TAA accumulates
-  (always in the walk, only at rest in Vue 3D) and takes 8 samples on a deterministic
-  Hammersley kernel. To judge: the bench's toggle, Visite while walking (shimmer is the
-  risk), and « Mesurer chaque vue » for the GPU time, on and off.
 - Walk occlusion is **unconditional**: the probe that removed it below 24 frames per second has
   been deleted — judged on the test bench, losing the corner hollows cost more than a few
   frames per second on a weak machine. The only remaining refusal: a backend without multiple
@@ -306,14 +299,19 @@ the previous texture is disposed after replacement. Scene disposal cancels pendi
 rebuilds explicitly request a render, and diagnostics report either active owned environment.
 No location is inferred. The walk environment and bloom calibration remain unchanged.
 
-Three comparisons were closed on the development bench, on the reference PC, and it no longer
-offers them: Vue 3D occlusion was adopted (#205, described above), and two were dropped:
+Four comparisons were closed on the development bench, on the reference PC, and it no longer
+offers them: Vue 3D occlusion was adopted (#205, described above), and three were dropped:
 
 - Tone mapping stays ACES. Khronos PBR Neutral was compared in every view and showed no
   visible difference: the finishes people choose here are light, low-saturation colours
   (default wall `#eeede8`), where both curves agree; they diverge on saturated colours in
   strong light, which this tool's projects rarely use (#202). The bloom thresholds and walk
   intensities, calibrated on ACES, are unchanged.
+- Occlusion stays at 16 samples with Babylon's fixed noise. The candidate took 8 samples and
+  swapped the noise among 8 patterns every image for the TAA to average (the GTAO/XeGTAO
+  approach). Measured with « Mesurer chaque vue » on an RX 9060 XT, it saved 0.1–0.2 ms of a
+  1.8 ms Visite image, and left streaky grain on plain walls even at rest: the walk's TAA
+  clamps its history, so it never averages the moving noise away. Not worth a visible loss.
 - Sun shadows stay on medium PCF: contact-hardening shadows (PCSS, light size ratio 0.03)
   were compared in Extérieur with a solar preview and showed no visible difference (#204). The orbit experiment releases on mode exit and resets its controls on scene replacement.
   It remains outside production adaptive-quality policy.
