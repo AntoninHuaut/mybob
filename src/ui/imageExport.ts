@@ -41,7 +41,7 @@ export async function exportSceneImage(
   viewer: HouseViewer,
   options: SceneImageOptions,
 ): Promise<Blob> {
-  const captured = viewer.captureCanvas(options.dimensions);
+  const captured = viewer.captureCanvas(options.dimensions, !options.transparent);
   const size = exportImageSize(captured.width, captured.height);
   const header = options.header === false ? 0 : size.header;
   const output = document.createElement('canvas');

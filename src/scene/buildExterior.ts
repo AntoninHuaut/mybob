@@ -1,8 +1,7 @@
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
-import { RawTexture } from '@babylonjs/core/Materials/Textures/rawTexture';
-import { Texture } from '@babylonjs/core/Materials/Textures/texture';
+import type { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
@@ -23,7 +22,8 @@ import {
   wallLength,
   wallSections,
 } from '../model/geometry';
-import { polygonMesh, wallFloorSpan } from './buildHouse';
+import { polygonMesh, wallFloorSpan, worldScaleUvs } from './buildHouse';
+import { createExteriorTextures, LAWN_DETAIL_TILE, LAWN_TILE, SLATE_TILE } from './surfaceTextures';
 
 export interface ExteriorScene {
   root: TransformNode;
@@ -41,6 +41,33 @@ export interface ExteriorScene {
  * Triangulate planar faces in their dominant plane, including vertical gables.
  * Dormer piercings arrive as hole rings lying on the face plane.
  */
+/** Box UVs in metres, so the render's grain keeps one size on every façade. */
+function metricBox(mesh: Mesh): Mesh {
+  worldScaleUvs(mesh);
+  return mesh;
+}
+
+/**
+ * Metric UVs in the plane of a face: `u` runs horizontally along it and `v` up
+ * its slope (straight up on a wall), so slate courses follow the eave and a
+ * render keeps one grain size on every face. A level face falls back to plan
+ * axes. The sign of the normal does not matter.
+ */
+export function planeUv(point: [number, number, number], normal: number[]): [number, number] {
+  const length = Math.hypot(normal[0], normal[1], normal[2]) || 1;
+  const [nx, ny, nz] = normal.map((value) => value / length);
+  if (Math.abs(ny) > 0.999) return [point[0], point[2]];
+  // Up projected onto the plane, then the horizontal direction across it.
+  const up = [-nx * ny, 1 - ny * ny, -nz * ny];
+  const upLength = Math.hypot(up[0], up[1], up[2]);
+  const along = [nz, 0, -nx];
+  const alongLength = Math.hypot(along[0], along[2]);
+  return [
+    (point[0] * along[0] + point[2] * along[2]) / alongLength,
+    (point[0] * up[0] + point[1] * up[1] + point[2] * up[2]) / upLength,
+  ];
+}
+
 function faceMesh(
   name: string,
   vertices: [number, number, number][],
@@ -73,7 +100,7 @@ function faceMesh(
   data.indices = earcut(flat, holeIndices);
   data.normals = [];
   VertexData.ComputeNormals(data.positions, data.indices, data.normals);
-  data.uvs = rings.flat().flatMap(([x, y, z]) => [Math.hypot(x, z), y]);
+  data.uvs = rings.flat().flatMap((point) => planeUv(point, normal));
   const mesh = new Mesh(name, scene);
   data.applyToMesh(mesh);
   return mesh;
@@ -191,34 +218,29 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     materials.push(m);
     return m;
   };
+  const textures = createExteriorTextures(scene);
+  const tiled = (texture: Texture, metres: number) => {
+    texture.uScale = texture.vScale = 1 / metres;
+    return texture;
+  };
   const grass = material('lawn', '#91a374');
-  // Small deterministic noise texture, generated locally; no third-party requests.
-  const pixels = new Uint8Array(128 * 128 * 4);
-  let seed = 71;
-  for (let i = 0; i < pixels.length; i += 4) {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    const variation = ((seed >>> 24) / 255 - 0.5) * 28;
-    pixels[i] = 143 + variation;
-    pixels[i + 1] = 160 + variation;
-    pixels[i + 2] = 112 + variation;
-    pixels[i + 3] = 255;
-  }
-  const noise = RawTexture.CreateRGBATexture(
-    pixels,
-    128,
-    128,
-    scene,
-    true,
-    false,
-    Texture.TRILINEAR_SAMPLINGMODE,
-  );
-  noise.wrapU = noise.wrapV = Texture.WRAP_ADDRESSMODE;
-  noise.uScale = noise.vScale = 6;
-  grass.albedoTexture = noise;
+  // Patches over 16 m in the colour, grain and relief over 0.73 m in the detail
+  // map: two scales that never line up, so neither repeat shows. The lawn's UVs
+  // are in metres. Generated locally; no third-party requests.
+  grass.albedoTexture = tiled(textures.lawnAlbedo, LAWN_TILE);
+  grass.detailMap.texture = tiled(textures.lawnDetail, LAWN_DETAIL_TILE);
+  grass.detailMap.isEnabled = true;
+  grass.detailMap.diffuseBlendLevel = 0.5;
+  grass.detailMap.roughnessBlendLevel = 0.4;
+  grass.detailMap.bumpLevel = 1;
   const gravel = material('permeable-gravel', '#a9a69c');
   const path = material('garden-path', '#c6bcaa');
   const plaster = material('exterior-render', site.facadeColor ?? '#d6c5a3');
+  // The interior plaster grain at twice its tile: a render is coarser than paint.
+  plaster.bumpTexture = tiled(textures.renderNormal, 1);
   const roof = material('slate-roof', site.roofColor ?? '#41484b');
+  roof.bumpTexture = tiled(textures.slateNormal, SLATE_TILE);
+  roof.microSurfaceTexture = tiled(textures.slateRoughness, SLATE_TILE);
   roof.backFaceCulling = false;
   roof.twoSidedLighting = true;
   plaster.backFaceCulling = false;
@@ -233,7 +255,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     return mesh;
   };
   const lawn = add(
-    polygonMesh('parcel-lawn', site.boundary, site.elevation, scene, [level.outline]),
+    polygonMesh('parcel-lawn', site.boundary, site.elevation, scene, [level.outline], 1, [1, 1]),
     grass,
     'ground',
   );
@@ -392,14 +414,16 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       const end = section.end === length ? section.end + stretch.end : section.end;
       const [x, z] = alongWall(wall, (start + end) / 2, sign * normal);
       const mesh = add(
-        MeshBuilder.CreateBox(
-          `facade:${wall.id}:${i}`,
-          {
-            width: end - start,
-            height: section.top - bottom,
-            depth: 0.018,
-          },
-          scene,
+        metricBox(
+          MeshBuilder.CreateBox(
+            `facade:${wall.id}:${i}`,
+            {
+              width: end - start,
+              height: section.top - bottom,
+              depth: 0.018,
+            },
+            scene,
+          ),
         ),
         plaster,
         'facade',
@@ -474,14 +498,16 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
         if (section.end - section.start < 1e-4 || section.top - section.bottom < 1e-4) continue;
         const [x, z] = alongWall(wall, from + (section.start + section.end) / 2);
         const band = add(
-          MeshBuilder.CreateBox(
-            merged.length ? `roof-wall-band:${wall.id}:${i}` : `roof-wall-band:${wall.id}`,
-            {
-              width: section.end - section.start,
-              height: section.top - section.bottom,
-              depth: wall.thickness,
-            },
-            scene,
+          metricBox(
+            MeshBuilder.CreateBox(
+              merged.length ? `roof-wall-band:${wall.id}:${i}` : `roof-wall-band:${wall.id}`,
+              {
+                width: section.end - section.start,
+                height: section.top - section.bottom,
+                depth: wall.thickness,
+              },
+              scene,
+            ),
           ),
           plaster,
           'roof',

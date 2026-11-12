@@ -5,7 +5,9 @@ import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { Ray } from '@babylonjs/core/Culling/ray';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { buildExterior } from '../src/scene/buildExterior';
+import { buildExterior, planeUv } from '../src/scene/buildExterior';
+import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+import type { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { polygonArea, resolveRoofDormer, resolveRoofWindow } from '../src/model/geometry';
 import { validateProject } from '../src/model/validate';
 import { pointInOrOnPolygon, roofFaceHeightAt, roofFacePlanOutline } from '../src/model/geometry';
@@ -811,4 +813,71 @@ test('an attic window in the gable wall opens the band and the gable, a knee-wal
   built.dispose();
   scene.dispose();
   engine.dispose();
+});
+
+test('face UVs are metres along the eave and up the slope, whatever the face', () => {
+  // A 30° roof face rising towards +z: the slope, not its plan depth, is the v span.
+  const normal = [0, Math.cos(Math.PI / 6), -Math.sin(Math.PI / 6)];
+  const eave = planeUv([2, 3, 0], normal);
+  const ridge = planeUv([2, 3 + Math.tan(Math.PI / 6) * 4, 4], normal);
+  const along = planeUv([7, 3, 0], normal);
+  near(Math.abs(along[0] - eave[0]), 5);
+  near(along[1], eave[1]);
+  near(ridge[1] - eave[1], 4 / Math.cos(Math.PI / 6));
+  near(ridge[0], eave[0]);
+  // The opposite normal gives the same slope: the winding of a face does not matter.
+  const flipped = planeUv(
+    [2, 3 + Math.tan(Math.PI / 6) * 4, 4],
+    normal.map((v) => -v),
+  );
+  near(
+    flipped[1] -
+      planeUv(
+        [2, 3, 0],
+        normal.map((v) => -v),
+      )[1],
+    4 / Math.cos(Math.PI / 6),
+  );
+  // A wall: v is the height. A level face: plan axes.
+  near(planeUv([1, 2.5, 3], [1, 0, 0])[1], 2.5);
+  assert.deepEqual(planeUv([1, 2, 3], [0, 1, 0]), [1, 3]);
+});
+
+test('the lawn, roof and render carry their generated maps, on metric UVs', () => {
+  const { engine, built, scene } = exterior();
+  try {
+    const lawn = scene.getMaterialByName('lawn') as PBRMaterial;
+    assert.equal(lawn.albedoTexture?.name, 'lawn-albedo');
+    assert.ok(lawn.detailMap.isEnabled && lawn.detailMap.texture?.name === 'lawn-detail');
+    near((lawn.albedoTexture as Texture).uScale, 1 / 16, 1e-9);
+    const roof = scene.getMaterialByName('slate-roof') as PBRMaterial;
+    assert.equal(roof.bumpTexture?.name, 'slate-normal');
+    assert.equal(roof.microSurfaceTexture?.name, 'slate-roughness');
+    const render = scene.getMaterialByName('exterior-render') as PBRMaterial;
+    assert.equal(render.bumpTexture?.name, 'render-normal');
+    // Lawn UVs are plan metres.
+    const ground = built.meshes.find((mesh) => mesh.name === 'parcel-lawn')!;
+    const positions = ground.getVerticesData('position')!;
+    const uvs = ground.getVerticesData('uv')!;
+    near(uvs[0], positions[0], 1e-6);
+    near(uvs[1], positions[2], 1e-6);
+    // A façade panel spans its width in metres on its large faces, not 0..1.
+    const facade = built.facadeMeshes.reduce((widest, mesh) =>
+      mesh.getBoundingInfo().boundingBox.extendSize.x >
+      widest.getBoundingInfo().boundingBox.extendSize.x
+        ? mesh
+        : widest,
+    );
+    const width = facade.getBoundingInfo().boundingBox.extendSize.x * 2;
+    const facadeUvs = facade.getVerticesData('uv')!;
+    const normals = facade.getVerticesData('normal')!;
+    const u = Array.from({ length: normals.length / 3 }, (_, i) => i)
+      .filter((i) => Math.abs(normals[i * 3 + 2]) > 0.5)
+      .map((i) => facadeUvs[i * 2]);
+    assert.ok(width > 1, 'the widest façade panel is wider than a metre');
+    near(Math.max(...u) - Math.min(...u), width, 1e-4);
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
 });
