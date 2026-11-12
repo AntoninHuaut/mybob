@@ -323,9 +323,34 @@ export function createOrbitTaa(scene: Scene, camera: Camera): TAARenderingPipeli
  * keeps the cost down. It reads the PrePass rather than the legacy geometry buffer,
  * so it shares a single auxiliary pass with the temporal antialiasing.
  */
+/** Scale of an occlusion pipeline: the walk sees a room, the overview a whole house. */
+export interface OcclusionSettings {
+  name: string;
+  radius: number;
+  maxZ: number;
+}
+
+export const WALK_OCCLUSION: OcclusionSettings = {
+  name: 'interior-occlusion',
+  radius: 0.35,
+  maxZ: 14,
+};
+
+/**
+ * Vue 3D stands about twice the house size away (`fitOverview`), so it needs a far
+ * depth range and a radius around half a metre to darken wall/floor junctions and
+ * furniture bases. Judged on the bench and kept by the owner (#205).
+ */
+export const ORBIT_OCCLUSION: OcclusionSettings = {
+  name: 'orbit-occlusion',
+  radius: 0.5,
+  maxZ: 100,
+};
+
 export function createInteriorOcclusion(
   scene: Scene,
   camera: Camera,
+  settings: OcclusionSettings = WALK_OCCLUSION,
 ): SSAO2RenderingPipeline | undefined {
   try {
     // SSAO2 reads depth and normals from either the legacy geometry buffer or the
@@ -334,16 +359,16 @@ export function createInteriorOcclusion(
     const prePass = scene.enablePrePassRenderer();
     if (!prePass) return undefined;
     const pipeline = new SSAO2RenderingPipeline(
-      'interior-occlusion',
+      settings.name,
       scene,
       { ssaoRatio: 0.5, blurRatio: 1 },
       [camera],
       false,
     );
     pipeline.totalStrength = 0.6;
-    pipeline.radius = 0.35;
+    pipeline.radius = settings.radius;
     pipeline.samples = 16;
-    pipeline.maxZ = 14;
+    pipeline.maxZ = settings.maxZ;
     // `samples` above is the SSAO sample count, not antialiasing. The pipeline renders
     // the scene into its own single-sample texture, so the engine's `antialias: true`
     // never reaches the visit; the temporal antialiasing smooths those edges instead.
@@ -361,6 +386,14 @@ export function createInteriorOcclusion(
     );
     return undefined;
   }
+}
+
+/** The overview's occlusion: the walk's pipeline at the overview's scale. */
+export function createOrbitOcclusion(
+  scene: Scene,
+  camera: Camera,
+): SSAO2RenderingPipeline | undefined {
+  return createInteriorOcclusion(scene, camera, ORBIT_OCCLUSION);
 }
 
 /**

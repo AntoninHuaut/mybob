@@ -236,6 +236,14 @@ camera moves.
   would be applied twice — the app already tone-maps in the material shaders — and its
   sub-effects are configured before the cut-off, which destroys the post-process and nulls
   `imageProcessing`.
+- Vue 3D has its own occlusion (#205), the walk's pipeline at the overview's scale
+  (`ORBIT_OCCLUSION`: 0.5 m radius, 100 m depth range), built by `ViewEffects.updateOrbit` on
+  the orbit camera between the orbit TAA and the bloom: it waits for the TAA's one attempt,
+  detaches the bloom, and the bloom is attached again last. Extérieur and Plan have none, and
+  it is released on leaving Vue 3D. The prepass it reads is shared with the walk, so whichever
+  is released last switches the prepass off (`prePassInUse`). Software renderers never build
+  it (`hardwareRenderer` in `viewer.ts`), which keeps CI's SwiftShader e2e as before; the last
+  effect tier fades it out like the walk's, for good.
 - Walk occlusion is **unconditional**: the probe that removed it below 24 frames per second has
   been deleted — judged on the test bench, losing the corner hollows cost more than a few
   frames per second on a weak machine. The only remaining refusal: a backend without multiple
@@ -409,7 +417,7 @@ last call, and read back at start-up.
   page, losing or regaining the focus restarts that warm-up and drops the half-measured
   series: the slow images after an alt-tab are not the machine, and a tier is never lifted.
   Once at the resolution floor and still over budget, the visit drops its one effect tier:
-  no occlusion, which fades out over 0.8 s rather than blinking off. The occlusion is never
+  no occlusion (the walk's and Vue 3D's), which fades out over 0.8 s rather than blinking off. The occlusion is never
   degraded on the way (fewer samples, cheap blur): a look that changes by itself reads as a
   bug. Fewer TAA samples is no tier: the count only sets the length of the jitter sequence,
   each image costs the same. A tier is never lifted. A PC that holds the frame rate never

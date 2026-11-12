@@ -213,8 +213,12 @@ export class HouseViewer {
   private readonly renderScheduler = new RenderScheduler();
   private readonly warmth = new ViewWarmth();
   private preparing = false;
-  /** Hardware renderers only: see `isSoftwareRenderer`. */
-  private readonly preparesViews: boolean;
+  /**
+   * A GPU rather than a software rasteriser (`isSoftwareRenderer`): only then are views
+   * prepared behind the overlay and does Vue 3D get its occlusion. CI's SwiftShader
+   * gets neither, which keeps its e2e scenarios within their timeouts.
+   */
+  private readonly hardwareRenderer: boolean;
   /** The host shows its overlay while shaders are linked; `first` is the start-up, not a switch. */
   onPreparing?: (active: boolean, first: boolean) => void;
   private readonly adaptiveResolution = new AdaptiveResolution(
@@ -276,7 +280,7 @@ export class HouseViewer {
     this.engine = engine;
     this.engine.setHardwareScalingLevel(this.baseScaling);
     shaderLog.attach(engine);
-    this.preparesViews = !isSoftwareRenderer(
+    this.hardwareRenderer = !isSoftwareRenderer(
       (engine as { getGlInfo?(): { renderer?: string } }).getGlInfo?.().renderer,
     );
     this.resizeObserver = new ResizeObserver(() => this.resize());
@@ -304,7 +308,7 @@ export class HouseViewer {
       // instead of freezing the page for seconds while it draws.
       if (
         this.preparing ||
-        (this.preparesViews && !this.immersive && this.warmth.isCold(this.currentViewKey()))
+        (this.hardwareRenderer && !this.immersive && this.warmth.isCold(this.currentViewKey()))
       ) {
         if (!this.preparing) void this.prepareView();
         this.lastRenderAt = undefined;
@@ -714,7 +718,7 @@ export class HouseViewer {
     const end = performance.now() + timeoutMs;
     while (
       this.scene &&
-      this.preparesViews &&
+      this.hardwareRenderer &&
       (this.preparing || this.warmth.isCold(this.currentViewKey())) &&
       performance.now() < end
     )
@@ -1387,7 +1391,10 @@ export class HouseViewer {
    */
   private updateOrbitBloom() {
     if (!this.scene || !this.orbit) return;
-    this.viewEffects?.updateOrbit(this.mode === 'overview', this.orbit);
+    this.viewEffects?.updateOrbit(this.mode === 'overview', this.orbit, {
+      occlusion: !this.exteriorView && this.hardwareRenderer,
+      effectTier: this.currentEffectTier,
+    });
   }
 
   private setOrthoSize() {

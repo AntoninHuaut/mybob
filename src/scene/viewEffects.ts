@@ -13,6 +13,7 @@ import {
   createInteriorOcclusion,
   createInteriorTaa,
   createOrbitBloom,
+  createOrbitOcclusion,
   createOrbitTaa,
   INTERIOR_ENVIRONMENT_INTENSITY,
 } from './interiorAmbience';
@@ -36,6 +37,7 @@ interface EffectFactories {
   bloom(scene: Scene, camera: Camera): Bloom | undefined;
   orbitTaa?(scene: Scene, camera: Camera): OrbitTemporal | undefined;
   orbitBloom(scene: Scene, camera: Camera): Bloom | undefined;
+  orbitOcclusion?(scene: Scene, camera: Camera): Occlusion | undefined;
 }
 const factories: EffectFactories = {
   environment: createInteriorEnvironment,
@@ -44,7 +46,15 @@ const factories: EffectFactories = {
   bloom: createInteriorBloom,
   orbitBloom: createOrbitBloom,
   orbitTaa: createOrbitTaa,
+  orbitOcclusion: createOrbitOcclusion,
 };
+
+/** What the overview asks of `updateOrbit` besides being on screen. */
+export interface OrbitOptions {
+  /** Vue 3D on a hardware renderer: not Extérieur, never a software rasteriser. */
+  occlusion?: boolean;
+  effectTier?: number;
+}
 
 /** All view effects belong to one scene; walk pipelines also belong to one camera. */
 export class ViewEffects {
@@ -64,6 +74,9 @@ export class ViewEffects {
   private orbitAttached = false;
   private orbitTaa?: OrbitTemporal;
   private orbitTaaAttempted = false;
+  private orbitOcclusion?: Occlusion;
+  private orbitOcclusionFade?: { from: number; since: number };
+  private orbitOcclusionUnavailable = false;
   private camera?: Camera;
   private disposed = false;
 
@@ -156,7 +169,7 @@ export class ViewEffects {
     }
   }
 
-  updateOrbit(active: boolean, camera: Camera): void {
+  updateOrbit(active: boolean, camera: Camera, options: OrbitOptions = {}): void {
     if (this.disposed) return;
     if (active && !this.orbitTaaAttempted && this.create.orbitTaa && this.scene.getFrameId() > 0) {
       this.orbitTaaAttempted = true;
@@ -179,6 +192,30 @@ export class ViewEffects {
       }
       this.orbitTaa.isEnabled = active;
       if (!active) camera.getProjectionMatrix(true);
+    }
+    // Occlusion sits between the temporal refinement and the bloom, so it waits for
+    // the refinement's one attempt and is appended with the bloom detached; the bloom
+    // is attached again below, last. It leaves with Vue 3D, and the last effect tier
+    // fades it out for good (`applyEffectTier`).
+    const tier = options.effectTier ?? 0;
+    if (!active || !options.occlusion) this.releaseOrbitOcclusion();
+    else if (
+      !this.orbitOcclusion &&
+      !this.orbitOcclusionUnavailable &&
+      tier < EFFECT_TIERS &&
+      this.create.orbitOcclusion &&
+      (this.orbitTaaAttempted || !this.create.orbitTaa)
+    ) {
+      if (this.orbitBloom && this.orbitAttached) {
+        this.scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline(
+          'orbit-bloom',
+          camera,
+        );
+        this.orbitAttached = false;
+      }
+      this.orbitOcclusion = this.create.orbitOcclusion(this.scene, camera);
+      this.orbitOcclusionUnavailable = !this.orbitOcclusion;
+      this.invalidate();
     }
     if (active && !this.orbitBloom) {
       this.orbitBloom = this.create.orbitBloom(this.scene, camera);
@@ -228,17 +265,37 @@ export class ViewEffects {
    * the occlusion is either whole or gone, and it fades out rather than blinking off.
    */
   applyEffectTier(tier: number, now: number = performance.now()): boolean {
-    if (tier < EFFECT_TIERS || !this.occlusion) return false;
-    this.occlusionFade ??= { from: this.occlusion.totalStrength, since: now };
-    const progress = Math.max(0, (now - this.occlusionFade.since) / OCCLUSION_FADE_MS);
-    if (progress < 1) {
-      this.occlusion.totalStrength = this.occlusionFade.from * (1 - progress);
-      return true;
+    if (tier < EFFECT_TIERS) return false;
+    let changed = false;
+    if (this.occlusion) {
+      this.occlusionFade ??= { from: this.occlusion.totalStrength, since: now };
+      if (!fade(this.occlusion, this.occlusionFade, now)) {
+        this.occlusion.dispose(true);
+        this.occlusion = undefined;
+        this.occlusionFade = undefined;
+      }
+      changed = true;
     }
-    this.occlusion.dispose(true);
-    this.occlusion = undefined;
-    this.occlusionFade = undefined;
-    return true;
+    if (this.orbitOcclusion) {
+      this.orbitOcclusionFade ??= { from: this.orbitOcclusion.totalStrength, since: now };
+      if (!fade(this.orbitOcclusion, this.orbitOcclusionFade, now)) this.releaseOrbitOcclusion();
+      changed = true;
+    }
+    return changed;
+  }
+
+  /** The prepass serves both occlusions and the walk's temporal reprojection. */
+  private prePassInUse(): boolean {
+    return Boolean(this.taa || this.occlusion || this.orbitOcclusion);
+  }
+
+  private releaseOrbitOcclusion(): void {
+    if (!this.orbitOcclusion) return;
+    this.orbitOcclusion.dispose(false);
+    this.orbitOcclusion = undefined;
+    this.orbitOcclusionFade = undefined;
+    if (!this.prePassInUse()) this.scene.disablePrePassRenderer();
+    this.invalidate();
   }
 
   releaseWalkPipelines(): void {
@@ -256,7 +313,8 @@ export class ViewEffects {
     this.bloom?.dispose();
     this.bloom = undefined;
     this.camera = undefined;
-    this.scene.disablePrePassRenderer();
+    // Vue 3D's occlusion may still read it: leaving the walk keeps the prepass then.
+    if (!this.prePassInUse()) this.scene.disablePrePassRenderer();
   }
 
   status(walking: boolean): { environment: boolean; occlusion: OcclusionState } {
@@ -266,7 +324,13 @@ export class ViewEffects {
         (this.scene.environmentTexture === this.environment ||
           this.scene.environmentTexture === this.exteriorEnvironment),
       ),
-      occlusion: !walking ? 'idle' : this.occlusion ? 'active' : 'unavailable',
+      occlusion: walking
+        ? this.occlusion
+          ? 'active'
+          : 'unavailable'
+        : this.orbitOcclusion
+          ? 'active'
+          : 'idle',
     };
   }
 
@@ -298,5 +362,15 @@ export class ViewEffects {
     this.orbitBloom = undefined;
     this.orbitTaa?.dispose();
     this.orbitTaa = undefined;
+    this.orbitOcclusion?.dispose(false);
+    this.orbitOcclusion = undefined;
   }
+}
+
+/** One step of an occlusion fade; false once it has reached zero. */
+function fade(occlusion: Occlusion, state: { from: number; since: number }, now: number): boolean {
+  const progress = Math.max(0, (now - state.since) / OCCLUSION_FADE_MS);
+  if (progress >= 1) return false;
+  occlusion.totalStrength = state.from * (1 - progress);
+  return true;
 }
