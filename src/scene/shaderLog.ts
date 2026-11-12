@@ -91,41 +91,47 @@ export class ShaderLog {
   }
 
   /**
-   * The figures to check first, before the truncated timeline: the blocking time
-   * under each preparation, and every link that came after a view was declared ready.
+   * The figures to check first, before the truncated timeline. With
+   * `KHR_parallel_shader_compile` the engine only polls for completion, so a link's
+   * `ms` is how long it took to finish, not how long it froze the page, and links
+   * overlap: their sum means nothing. What the user waits for is the overlay, from
+   * a view's `préparation` mark to its `prête` mark.
    */
   summary(): string[] {
-    const views: Array<{ key: string; links: number; ms: number }> = [];
-    let current: { key: string; links: number; ms: number } | undefined;
-    let late = { links: 0, ms: 0 };
+    const views: Array<{ key: string; from: number; to?: number; links: number; ms: number }> = [];
+    let current: (typeof views)[number] | undefined;
+    let late = 0;
     for (const entry of this.entries) {
       if (entry.view?.edge === 'start') {
-        current = { key: entry.view.key, links: 0, ms: 0 };
+        current = { key: entry.view.key, from: entry.at, links: 0, ms: 0 };
         views.push(current);
       } else if (entry.view?.edge === 'end') {
+        if (current) current.to = entry.at;
         current = undefined;
       } else if (entry.kind === 'link') {
-        const bucket = current ?? late;
-        bucket.links++;
-        bucket.ms += entry.ms;
+        if (current) {
+          current.links++;
+          current.ms += entry.ms;
+        } else if (views.length) late++;
       }
     }
     const parallel =
       this.parallel === undefined
         ? 'inconnue'
         : this.parallel
-          ? 'oui'
-          : 'non (chaque liaison bloque)';
-    const ready = this.entries.some((entry) => entry.view?.edge === 'end')
-      ? `${late.links} programmes · ${Math.round(late.ms)} ms hors préparation`
-      : 'aucune vue préparée';
+          ? 'oui (les durées de liaison sont des latences, pas des blocages)'
+          : 'non (chaque liaison bloque la page)';
     return [
       `[shaders] compilation parallèle (KHR_parallel_shader_compile) : ${parallel}`,
-      ...views.map(
-        (view) =>
-          `[shaders] préparation ${view.key} : ${view.links} programmes · ${Math.round(view.ms)} ms`,
-      ),
-      `[shaders] ${ready}`,
+      ...views.map((view) => {
+        const overlay =
+          view.to === undefined ? 'en cours' : `${((view.to - view.from) / 1000).toFixed(2)} s`;
+        const blocking = this.parallel === false ? ` · ${Math.round(view.ms)} ms bloquants` : '';
+        return `[shaders] préparation ${view.key} : ${overlay} · ${view.links} programmes${blocking}`;
+      }),
+      views.length
+        ? `[shaders] ${late} programmes liés après une préparation`
+        : '[shaders] aucune vue préparée',
     ];
   }
 
@@ -138,7 +144,9 @@ export class ShaderLog {
     const links = this.entries.filter((entry) => entry.kind === 'link');
     const total = links.reduce((sum, entry) => sum + entry.ms, 0);
     const lines = [
-      `[shaders] ${links.length} programmes liés · ${Math.round(total)} ms bloquants au total`,
+      this.parallel
+        ? `[shaders] ${links.length} programmes liés`
+        : `[shaders] ${links.length} programmes liés · ${Math.round(total)} ms bloquants au total`,
       ...this.summary(),
     ];
     for (const entry of this.entries) {
