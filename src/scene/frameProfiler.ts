@@ -143,8 +143,10 @@ export async function createCounters(
   const [{ SceneInstrumentation }, { EngineInstrumentation }] = await Promise.all([
     import('@babylonjs/core/Instrumentation/sceneInstrumentation'),
     import('@babylonjs/core/Instrumentation/engineInstrumentation'),
-    // Registers `captureGPUFrameTime` on the WebGL engine; loaded here, not at start-up.
+    // Register `captureGPUFrameTime` on the WebGL engine and the counter it fills
+    // (`getGPUFrameTimeCounter`, a separate module); loaded here, not at start-up.
     import('@babylonjs/core/Engines/Extensions/engine.query'),
+    import('@babylonjs/core/Engines/AbstractEngine/abstractEngine.timeQuery'),
   ]);
   const sceneCounters = new SceneInstrumentation(scene);
   sceneCounters.captureFrameTime = true;
