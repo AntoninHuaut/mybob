@@ -7,6 +7,8 @@ import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { Ray } from '@babylonjs/core/Culling/ray';
 import { CreateBox } from '@babylonjs/core/Meshes/Builders/boxBuilder';
 import { CreateDisc } from '@babylonjs/core/Meshes/Builders/discBuilder';
+import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
+import '@babylonjs/core/Meshes/thinInstanceMesh';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { Scene } from '@babylonjs/core/scene';
@@ -21,6 +23,7 @@ import {
   LoadingGate,
   XR_DEFAULT_LAYERS,
   XR_VEIL_LAYER,
+  XrBlink,
   XrHud,
   XrVeil,
   XrVignette,
@@ -34,10 +37,15 @@ import {
  * Controls, xr-standard gamepad mapping (Quest Touch):
  * - left stick: walk, relative to where the head looks, with wall collisions;
  * - room-scale steps (the headset itself moving) meet the same walls;
- * - right stick sideways: smooth turn; pushed forward then released: teleport; aimed at a
- *   stair tread, the teleport takes the stair to the next level, behind the loading veil;
+ * - right stick sideways: smooth turn; pushed forward then released: teleport along an arc;
+ *   aimed at a stair tread, the teleport takes the stair to the next level, behind the
+ *   loading veil;
  * - trigger, either hand: open or close the door the controller points at;
- * - A or X: seated mode on or off (the eyes raised to the walk's eye height).
+ * - A: seated mode on or off (the eyes raised to the walk's eye height);
+ * - X: frame counter shown or hidden;
+ * - B or Y: teleport-only mode on or off. In it no stick glides the visitor: either stick
+ *   pushed forward aims a teleport, sideways turns by 30° steps, and both happen behind a
+ *   short blink to black. Remembered with the counter's visibility (`XR_PREFERENCES`).
  *
  * While the stick walks or turns, a comfort vignette (`XrVignette`, `xrHud.ts`) darkens the
  * edges of the view: the visual motion the inner ear does not feel is what makes people sick,
@@ -133,6 +141,94 @@ export class FrameRateGovernor {
   }
 }
 
+/** Turn step of the teleport-only mode, in degrees. */
+export const XR_SNAP_DEGREES = 30;
+/** A snap turn fires past this deflection and re-arms once the stick is back under the lower one. */
+export const XR_SNAP_FIRE = 0.7;
+export const XR_SNAP_REARM = 0.3;
+
+/**
+ * One frame of the teleport-only turn: a single step when the stick crosses `XR_SNAP_FIRE`,
+ * then nothing until it comes back near the centre. Right-handed y-up: right is negative.
+ */
+export function snapTurn(armed: boolean, axis: number): { angle: number; armed: boolean } {
+  if (!armed) return { angle: 0, armed: Math.abs(axis) < XR_SNAP_REARM };
+  if (Math.abs(axis) < XR_SNAP_FIRE) return { angle: 0, armed: true };
+  return { angle: (-Math.sign(axis) * XR_SNAP_DEGREES * Math.PI) / 180, armed: false };
+}
+
+/** Launch speed, gravity and sampling of the teleport arc: about 8 m of reach from the hand. */
+export const XR_ARC_SPEED = 8;
+export const XR_ARC_GRAVITY = 9.81;
+export const XR_ARC_STEP_SECONDS = 0.07;
+export const XR_ARC_SEGMENTS = 28;
+
+/**
+ * The teleport arc: a throw from the controller, sampled every `XR_ARC_STEP_SECONDS`. A curve
+ * reaches the far floor with the wrist raised, where a straight ray had to point down; and
+ * it falls onto what lies beyond a doorway instead of a wall behind it.
+ */
+export function teleportArc(
+  origin: Vector3,
+  direction: Vector3,
+  segments = XR_ARC_SEGMENTS,
+): Vector3[] {
+  const velocity = direction.normalizeToNew().scaleInPlace(XR_ARC_SPEED);
+  const points = [origin.clone()];
+  for (let i = 1; i <= segments; i++) {
+    const t = i * XR_ARC_STEP_SECONDS;
+    points.push(
+      new Vector3(
+        origin.x + velocity.x * t,
+        origin.y + velocity.y * t - (XR_ARC_GRAVITY * t * t) / 2,
+        origin.z + velocity.z * t,
+      ),
+    );
+  }
+  return points;
+}
+
+/** Headset choices kept between sessions, per browser. */
+export const XR_PREFERENCES = 'maison-atelier:headset:v1';
+
+export interface XrPreferences {
+  /** Teleport-only locomotion: no stick glides the visitor. */
+  teleport: boolean;
+  /** The frame counter is shown. */
+  counter: boolean;
+}
+
+export function readXrPreferences(storage?: Pick<Storage, 'getItem'>): XrPreferences {
+  const preferences: XrPreferences = { teleport: false, counter: true };
+  try {
+    const saved = JSON.parse(storage?.getItem(XR_PREFERENCES) ?? '{}');
+    if (typeof saved?.teleport === 'boolean') preferences.teleport = saved.teleport;
+    if (typeof saved?.counter === 'boolean') preferences.counter = saved.counter;
+  } catch {
+    /* Defaults when the storage is unavailable or the value is damaged. */
+  }
+  return preferences;
+}
+
+function writeXrPreferences(preferences: XrPreferences, storage?: Pick<Storage, 'setItem'>) {
+  try {
+    storage?.setItem(XR_PREFERENCES, JSON.stringify(preferences));
+  } catch {
+    /* Not remembered: the choice still holds for this session. */
+  }
+}
+
+function browserStorage(): Storage | undefined {
+  try {
+    return typeof localStorage === 'undefined' ? undefined : localStorage;
+  } catch {
+    return undefined;
+  }
+}
+
+/** How long the counter shows itself after a mode change while it is hidden, in seconds. */
+export const XR_HUD_FLASH_SECONDS = 2.5;
+
 /** A head move larger than this in one frame is a tracking reset, not a step: it is not collided. */
 export const XR_POSE_JUMP = 0.5;
 
@@ -199,11 +295,13 @@ export interface ControllerState {
   trigger: boolean;
   /** The lower face button: A on the right controller, X on the left. */
   face: boolean;
+  /** The upper face button: B on the right controller, Y on the left. */
+  upper: boolean;
 }
 
-/** xr-standard mapping: thumbstick on axes 2-3, trigger on button 0, A/X on button 4. */
+/** xr-standard mapping: thumbstick on axes 2-3, trigger on button 0, A/X on 4, B/Y on 5. */
 export function readControllerGamepad(gamepad: Gamepad | null | undefined): ControllerState {
-  if (!gamepad) return { x: 0, y: 0, trigger: false, face: false };
+  if (!gamepad) return { x: 0, y: 0, trigger: false, face: false, upper: false };
   const axes = gamepad.axes;
   const stick = axes.length >= 4 ? 2 : 0;
   return {
@@ -211,6 +309,7 @@ export function readControllerGamepad(gamepad: Gamepad | null | undefined): Cont
     y: applyDeadzone(axes[stick + 1] ?? 0),
     trigger: !!gamepad.buttons[0]?.pressed,
     face: !!gamepad.buttons[4]?.pressed,
+    upper: !!gamepad.buttons[5]?.pressed,
   };
 }
 
@@ -234,6 +333,8 @@ export interface ImmersiveHost {
   readiness?(): number;
   /** The session ended, whoever ended it: the headset menu, the page or an error. */
   onEnd(walk: ImmersiveWalk): void;
+  /** Where the headset choices are kept; the browser's localStorage when omitted. */
+  storage?: Pick<Storage, 'getItem' | 'setItem'>;
 }
 
 interface Pointer {
@@ -242,6 +343,9 @@ interface Pointer {
   ray: Mesh;
   trigger: boolean;
   face: boolean;
+  upper: boolean;
+  /** The teleport-only turn may fire again: the stick came back near the centre. */
+  snapArmed: boolean;
 }
 
 const READY = new Color3(0.92, 0.92, 0.88);
@@ -271,8 +375,17 @@ export class ImmersiveWalk {
   private readonly pointers = new Map<XRInputSource, Pointer>();
   private readonly material: StandardMaterial;
   private readonly marker: Mesh;
+  /** Dots along the teleport arc, one thin instance per sample. */
+  private readonly arc: Mesh;
+  private readonly arcMatrices = new Float32Array(16 * (XR_ARC_SEGMENTS + 1));
   private readonly hud: XrHud;
   private readonly vignette: XrVignette;
+  private readonly blink: XrBlink;
+  private readonly storage?: Pick<Storage, 'getItem' | 'setItem'>;
+  private readonly preferences: XrPreferences;
+  /** Seconds the counter still shows itself after a mode change while hidden. */
+  private hudFlash = 0;
+  private lastFps = 0;
   private veil?: XrVeil;
   private loading = new LoadingGate();
   private readiness = new PreparationProgress();
@@ -282,7 +395,8 @@ export class ImmersiveWalk {
   private seatedRaise = 0;
   private limitHits = 0;
   private collider?: Collider;
-  private aiming = false;
+  /** The hand aiming a teleport, if any. */
+  private aiming?: XRHandedness;
   private target?: Point2;
   private stair?: { id: string; direction: StairDirection };
   private lastValid?: Point2;
@@ -315,8 +429,19 @@ export class ImmersiveWalk {
     this.marker.material = this.material;
     this.marker.isPickable = false;
     this.marker.setEnabled(false);
+    this.arc = CreateSphere('xr-arc', { diameter: 0.025, segments: 4 }, scene);
+    this.arc.material = this.material;
+    this.arc.isPickable = false;
+    this.arc.alwaysSelectAsActiveMesh = true;
+    this.arc.thinInstanceSetBuffer('matrix', this.arcMatrices, 16, false);
+    this.arc.thinInstanceCount = 0;
+    this.arc.setEnabled(false);
+    this.storage = host.storage ?? browserStorage();
+    this.preferences = readXrPreferences(this.storage);
     this.hud = new XrHud(scene, camera);
+    this.hud.visible = this.preferences.counter;
     this.vignette = new XrVignette(scene, camera);
+    this.blink = new XrBlink(scene, camera);
     this.veil = new XrVeil(scene, camera);
     camera.layerMask = XR_VEIL_LAYER;
     helper.sessionManager.onXRSessionEnded.addOnce(() => this.end());
@@ -342,14 +467,19 @@ export class ImmersiveWalk {
     if (!frame || !session || this.ended) return;
     if (this.veil && !this.lift()) return;
     this.followPose();
+    this.blink.update(seconds);
     const fps = this.counter.tick(performance.now());
     if (fps !== undefined) {
-      this.hud.show(fps, this.limitHits, this.seatedOffset > 0);
+      this.lastFps = fps;
+      this.showHud();
       const lower = this.governor?.observe(fps);
       if (lower !== undefined) this.setFrameRate(lower);
     }
-    let move: ControllerState | undefined;
-    let aim: ControllerState | undefined;
+    if (this.hudFlash > 0) {
+      this.hudFlash -= seconds;
+      if (this.hudFlash <= 0) this.hud.visible = this.preferences.counter;
+    }
+    const states = new Map<XRHandedness, ControllerState>();
     for (const source of session.inputSources) {
       if (source.targetRayMode !== 'tracked-pointer') continue;
       const pointer = this.pointer(source);
@@ -362,30 +492,48 @@ export class ImmersiveWalk {
       pointer.root.rotationQuaternion ??= new Quaternion();
       pointer.root.rotationQuaternion.set(o.x, o.y, o.z, o.w);
       const state = readControllerGamepad(source.gamepad);
-      if (source.handedness === 'left') move = state;
-      else aim = state;
+      const hand: XRHandedness = source.handedness === 'left' ? 'left' : 'right';
+      states.set(hand, state);
       const hit = this.pick(pointer, XR_DOOR_REACH);
       const door = hit?.pickedMesh?.metadata?.kind === 'door' ? hit.pickedMesh.metadata.id : '';
       pointer.ray.scaling.z = hit?.hit ? hit.distance : XR_DOOR_REACH;
       if (state.trigger && !pointer.trigger && door) this.host.toggleDoor(door);
       pointer.trigger = state.trigger;
-      if (state.face && !pointer.face) this.toggleSeated();
+      if (state.face && !pointer.face) {
+        if (hand === 'left') this.toggleCounter();
+        else this.toggleSeated();
+      }
       pointer.face = state.face;
+      if (state.upper && !pointer.upper) this.toggleTeleportOnly();
+      pointer.upper = state.upper;
     }
 
     let motion = 0;
-    if (move && (move.x || move.y)) {
-      const forward = this.camera.getDirection(Vector3.Forward(true));
-      this.walk(stickDisplacement(forward, move.x, move.y, XR_WALK_SPEED, seconds));
-      motion = Math.min(1, Math.hypot(move.x, move.y));
-    }
-    if (aim) {
-      const axis = this.aiming ? 0 : turnAxis(aim.x, aim.y);
-      if (axis) {
-        this.turn(smoothTurnAngle(axis, seconds));
-        motion = Math.max(motion, Math.abs(axis));
+    if (this.preferences.teleport) {
+      for (const [hand, state] of states) {
+        const pointer = this.pointerFor(hand);
+        if (!pointer) continue;
+        const snap = snapTurn(pointer.snapArmed, this.aiming ? 0 : turnAxis(state.x, state.y));
+        pointer.snapArmed = snap.armed;
+        if (snap.angle) this.blink.start(() => this.turn(snap.angle));
+        this.updateTeleport(state, hand);
       }
-      this.updateTeleport(aim);
+    } else {
+      const move = states.get('left');
+      const aim = states.get('right');
+      if (move && (move.x || move.y)) {
+        const forward = this.camera.getDirection(Vector3.Forward(true));
+        this.walk(stickDisplacement(forward, move.x, move.y, XR_WALK_SPEED, seconds));
+        motion = Math.min(1, Math.hypot(move.x, move.y));
+      }
+      if (aim) {
+        const axis = this.aiming ? 0 : turnAxis(aim.x, aim.y);
+        if (axis) {
+          this.turn(smoothTurnAngle(axis, seconds));
+          motion = Math.max(motion, Math.abs(axis));
+        }
+        this.updateTeleport(aim, 'right');
+      }
     }
     this.vignette.update(motion, seconds);
 
@@ -485,9 +633,11 @@ export class ImmersiveWalk {
     for (const pointer of this.pointers.values()) pointer.root.dispose();
     this.pointers.clear();
     this.marker.dispose();
+    this.arc.dispose();
     this.material.dispose();
     this.hud.dispose();
     this.vignette.dispose();
+    this.blink.dispose();
     this.veil?.dispose();
     this.veil = undefined;
     this.camera.layerMask = XR_DEFAULT_LAYERS;
@@ -573,6 +723,47 @@ export class ImmersiveWalk {
       this.seatedRaise > 0 ? 0 : seatedLift(this.camera.position.y, this.host.eyeHeight);
     this.followFloor();
     this.lastHead = this.head();
+    this.flashHud();
+  }
+
+  /** Teleport-only locomotion is on (B or Y). */
+  get teleportOnly(): boolean {
+    return this.preferences.teleport;
+  }
+
+  /** The frame counter is on screen. */
+  get counterVisible(): boolean {
+    return this.hud.visible;
+  }
+
+  /** B or Y: teleport-only locomotion on or off, remembered for the next sessions. */
+  toggleTeleportOnly() {
+    this.preferences.teleport = !this.preferences.teleport;
+    this.cancelAim();
+    this.vignette.hide();
+    writeXrPreferences(this.preferences, this.storage);
+    this.flashHud();
+  }
+
+  /** X: the frame counter shown or hidden, remembered for the next sessions. */
+  toggleCounter() {
+    this.preferences.counter = !this.preferences.counter;
+    this.hudFlash = 0;
+    this.hud.visible = this.preferences.counter;
+    writeXrPreferences(this.preferences, this.storage);
+    this.showHud();
+  }
+
+  /** A mode changed: the counter names it, and shows itself a moment if it is hidden. */
+  private flashHud() {
+    this.showHud();
+    if (this.preferences.counter) return;
+    this.hud.visible = true;
+    this.hudFlash = XR_HUD_FLASH_SECONDS;
+  }
+
+  private showHud() {
+    this.hud.show(this.lastFps, this.limitHits, this.seatedOffset > 0, this.preferences.teleport);
   }
 
   /** Asks the headset for the highest display rate up to the target; ignored where unsupported. */
@@ -603,12 +794,34 @@ export class ImmersiveWalk {
     this.host.onEnd(this);
   }
 
-  private updateTeleport(aim: ControllerState) {
-    const pointer = [...this.pointers.values()].find((p) => p.handedness === 'right');
+  private pointerFor(hand: XRHandedness): Pointer | undefined {
+    return [...this.pointers.values()].find((p) => p.handedness === hand);
+  }
+
+  /** Drops an aim in progress without jumping. */
+  private cancelAim() {
+    const pointer = this.aiming && this.pointerFor(this.aiming);
+    if (pointer) pointer.ray.setEnabled(true);
+    this.aiming = undefined;
+    this.target = undefined;
+    this.stair = undefined;
+    this.marker.setEnabled(false);
+    this.arc.setEnabled(false);
+    this.material.emissiveColor = READY;
+  }
+
+  /**
+   * The stick of `hand` pushed forward aims a teleport along an arc; released, the visitor
+   * lands on the last valid point. One hand aims at a time.
+   */
+  private updateTeleport(aim: ControllerState, hand: XRHandedness) {
+    if (this.aiming && this.aiming !== hand) return;
+    const pointer = this.pointerFor(hand);
     if (!pointer) return;
     if (aim.y < -0.6) {
-      this.aiming = true;
-      const hit = this.pick(pointer, XR_TELEPORT_REACH);
+      this.aiming = hand;
+      pointer.ray.setEnabled(false);
+      const hit = this.pickArc(pointer);
       const normal = hit?.hit ? hit.getNormal(true) : null;
       const point: Point2 | undefined =
         hit?.pickedPoint && normal && normal.y > 0.7
@@ -620,31 +833,61 @@ export class ImmersiveWalk {
           ? { id: metadata.id, direction: metadata.direction }
           : undefined;
       this.target = point && (this.stair || this.host.isDestination(point)) ? point : undefined;
-      pointer.ray.scaling.z = hit?.hit ? hit.distance : XR_TELEPORT_REACH;
       this.material.emissiveColor = this.target ? VALID : INVALID;
       this.marker.setEnabled(!!point);
       if (hit?.pickedPoint)
         this.marker.position.copyFrom(hit.pickedPoint).addInPlaceFromFloats(0, 0.01, 0);
       return;
     }
-    if (!this.aiming) return;
+    if (this.aiming !== hand) return;
     // Stick released: jump if the last aimed point was valid.
-    this.aiming = false;
-    this.marker.setEnabled(false);
-    this.material.emissiveColor = READY;
     const target = this.target;
     const stair = this.stair;
-    this.target = undefined;
-    this.stair = undefined;
+    this.cancelAim();
     if (aim.y < -0.2 || !target) return;
     if (stair) {
-      // The host rebuilds the level and calls `arrive`, which places the visitor.
+      // The host rebuilds the level and calls `arrive`, which places the visitor behind the veil.
       this.host.takeStair(stair.id, stair.direction);
       return;
     }
-    this.moveHeadTo(target);
-    this.lastValid = target;
-    this.followFloor();
+    const land = () => {
+      this.moveHeadTo(target);
+      this.lastValid = target;
+      this.followFloor();
+    };
+    if (this.preferences.teleport) this.blink.start(land);
+    else land();
+  }
+
+  /** Follows the arc from the controller to the first surface it meets, and draws its dots. */
+  private pickArc(pointer: Pointer) {
+    const root = pointer.root;
+    root.computeWorldMatrix(true);
+    const direction = Vector3.TransformNormal(Vector3.Forward(true), root.getWorldMatrix());
+    const points = teleportArc(root.getAbsolutePosition(), direction);
+    let hit: ReturnType<Scene['pickWithRay']> = null;
+    let drawn = points.length;
+    for (let i = 1; i < points.length; i++) {
+      const segment = points[i].subtract(points[i - 1]);
+      const length = segment.length();
+      const found = this.host.scene.pickWithRay(
+        new Ray(points[i - 1], segment.scaleInPlace(1 / length), length),
+      );
+      if (found?.hit) {
+        hit = found;
+        drawn = i;
+        break;
+      }
+    }
+    for (let i = 0; i < drawn; i++)
+      Matrix.Translation(points[i].x, points[i].y, points[i].z).copyToArray(
+        this.arcMatrices,
+        i * 16,
+      );
+    this.arc.thinInstanceBufferUpdated('matrix');
+    this.arc.thinInstanceCount = drawn;
+    this.arc.setEnabled(true);
+    return hit;
   }
 
   private pick(pointer: Pointer, length: number) {
@@ -687,6 +930,8 @@ export class ImmersiveWalk {
       ray,
       trigger: false,
       face: false,
+      upper: false,
+      snapArmed: true,
     };
     this.pointers.set(source, pointer);
     return pointer;

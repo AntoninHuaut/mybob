@@ -24,6 +24,13 @@ import {
   pickFrameRate,
   seatedLift,
   XR_WALK_SPEED,
+  snapTurn,
+  teleportArc,
+  readXrPreferences,
+  XR_PREFERENCES,
+  XR_ARC_SEGMENTS,
+  XR_HUD_FLASH_SECONDS,
+  XR_SNAP_DEGREES,
 } from '../src/scene/xrWalk';
 import { createWalkCamera } from '../src/scene/walkCamera';
 import {
@@ -37,6 +44,9 @@ import {
   XR_VEIL_LAYER,
   XR_VEIL_ONLY_FRAMES,
   approachStrength,
+  BlinkFade,
+  BLINK_IN_SECONDS,
+  BLINK_OUT_SECONDS,
   VIGNETTE_CLEAR_DEGREES,
   VIGNETTE_DARK_DEGREES,
   VIGNETTE_FADE_SECONDS,
@@ -152,8 +162,9 @@ test('controllers are read from the xr-standard gamepad, without a controller mo
   assert.ok(Math.abs(state.x - 0.5) < 1e-9);
   assert.equal(state.y, -1);
   assert.equal(state.trigger, true);
-  // Button 4 is A or X; button 5 (B or Y) is not read.
+  // Button 4 is A or X, button 5 is B or Y.
   assert.equal(state.face, false);
+  assert.equal(state.upper, true);
   assert.equal(
     readControllerGamepad({
       ...gamepad,
@@ -161,7 +172,13 @@ test('controllers are read from the xr-standard gamepad, without a controller mo
     } as unknown as Gamepad).face,
     true,
   );
-  assert.deepEqual(readControllerGamepad(null), { x: 0, y: 0, trigger: false, face: false });
+  assert.deepEqual(readControllerGamepad(null), {
+    x: 0,
+    y: 0,
+    trigger: false,
+    face: false,
+    upper: false,
+  });
 });
 
 test('leaving the headset keeps the gaze direction on the screen walk camera', () => {
@@ -180,7 +197,19 @@ test('leaving the headset keeps the gaze direction on the screen walk camera', (
   engine.dispose();
 });
 
-function headsetWalk(start: { point: [number, number]; yaw: number }) {
+function memoryStorage(initial: Record<string, string> = {}) {
+  const values = new Map(Object.entries(initial));
+  return {
+    values,
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => void values.set(key, value),
+  };
+}
+
+function headsetWalk(
+  start: { point: [number, number]; yaw: number },
+  storage: Pick<Storage, 'getItem' | 'setItem'> = memoryStorage(),
+) {
   const engine = new NullEngine();
   const scene = new Scene(engine);
   usePlanCoordinates(scene);
@@ -203,6 +232,7 @@ function headsetWalk(start: { point: [number, number]; yaw: number }) {
       takeStair: () => false,
       isReady: () => true,
       onEnd: () => {},
+      storage,
     },
     helper,
   );
@@ -386,7 +416,7 @@ test('the headset session starts with the veil alone in its camera layers', () =
   session.dispose();
 });
 
-test('A or X switches seated mode: the eyes go to the eye height, then back to the real height', () => {
+test('A switches seated mode: the eyes go to the eye height, then back to the real height', () => {
   assert.ok(Math.abs(seatedLift(1.11, 1.65) - 0.54) < 1e-9);
   assert.equal(seatedLift(1.8, 1.65), 0, 'never lowered');
   assert.equal(seatedLift(Number.NaN, 1.65), 0);
@@ -422,4 +452,114 @@ test('the headset asks for the highest rate up to 90 Hz and steps down when it c
   for (let i = 0; i < 2; i++) governor.observe(60);
   assert.equal(governor.observe(60), 72);
   for (let i = 0; i < 5; i++) assert.equal(governor.observe(40), undefined, 'nothing lower');
+});
+
+test('the teleport-only turn steps 30° once per push and re-arms near the centre', () => {
+  const step = (XR_SNAP_DEGREES * Math.PI) / 180;
+  let state = snapTurn(true, 0.5);
+  assert.deepEqual(state, { angle: 0, armed: true }, 'a light push does not turn');
+  state = snapTurn(true, 0.9);
+  assert.ok(Math.abs(state.angle + step) < 1e-12, 'right is a negative yaw');
+  assert.equal(state.armed, false);
+  // Held over: no second step, frame after frame.
+  for (let i = 0; i < 90; i++) {
+    state = snapTurn(state.armed, 1);
+    assert.equal(state.angle, 0);
+  }
+  state = snapTurn(state.armed, 0.5);
+  assert.equal(state.armed, false, 'not re-armed half way back');
+  state = snapTurn(state.armed, 0.1);
+  assert.equal(state.armed, true);
+  assert.ok(Math.abs(snapTurn(true, -0.8).angle - step) < 1e-12, 'left is positive');
+});
+
+test('the teleport arc starts at the hand, follows the aim and falls', () => {
+  const origin = new Vector3(1, 1.2, 2);
+  const level45 = new Vector3(0, 1, -1);
+  const points = teleportArc(origin, level45);
+  assert.equal(points.length, XR_ARC_SEGMENTS + 1);
+  assert.ok(points[0].equals(origin));
+  assert.ok(
+    points.every((p) => Math.abs(p.x - 1) < 1e-9),
+    'stays in the aimed vertical plane',
+  );
+  for (let i = 1; i < points.length; i++) assert.ok(points[i].z < points[i - 1].z, 'goes ahead');
+  // Rises first, then comes down below the hand: a raised wrist reaches the far floor.
+  assert.ok(points[3].y > origin.y);
+  const landing = points.findIndex((p, i) => i > 0 && p.y < 0);
+  assert.ok(landing > 0, 'reaches the floor');
+  const reach = origin.z - points[landing].z;
+  assert.ok(reach > 6 && reach < 10, `reach ${reach}`);
+});
+
+test('the teleport blink goes dark, moves the visitor unseen, and clears', () => {
+  const blink = new BlinkFade();
+  assert.equal(blink.active, false);
+  let moved = 0;
+  blink.start(() => moved++);
+  const frame = 1 / 90;
+  let alpha = 0;
+  let frames = 0;
+  while (moved === 0 && frames < 100) {
+    alpha = blink.tick(frame);
+    frames++;
+    if (moved === 0) assert.ok(alpha < 1, 'moved only once fully dark');
+  }
+  assert.equal(alpha, 1);
+  assert.ok(frames <= Math.ceil(BLINK_OUT_SECONDS / frame) + 1, `out in ${frames} frames`);
+  frames = 0;
+  while (blink.active && frames < 100) {
+    alpha = blink.tick(frame);
+    frames++;
+  }
+  assert.equal(alpha, 0);
+  assert.equal(moved, 1);
+  assert.ok(frames <= Math.ceil(BLINK_IN_SECONDS / frame) + 1, `in in ${frames} frames`);
+});
+
+test('the headset choices are read with defaults and survive a damaged value', () => {
+  assert.deepEqual(readXrPreferences(undefined), { teleport: false, counter: true });
+  assert.deepEqual(readXrPreferences(memoryStorage({ [XR_PREFERENCES]: '{not json' })), {
+    teleport: false,
+    counter: true,
+  });
+  assert.deepEqual(
+    readXrPreferences(
+      memoryStorage({ [XR_PREFERENCES]: JSON.stringify({ teleport: true, counter: 'x' }) }),
+    ),
+    { teleport: true, counter: true },
+  );
+});
+
+test('X hides the counter and B or Y switches teleport-only, both remembered', () => {
+  const storage = memoryStorage();
+  const session = headsetWalk({ point: [4, 4.2], yaw: 0 }, storage);
+  const walk = session.walk;
+  assert.equal(walk.counterVisible, true, 'counter shown by default');
+  assert.equal(walk.teleportOnly, false, 'smooth walk by default');
+  walk.toggleCounter();
+  assert.equal(walk.counterVisible, false);
+  walk.toggleTeleportOnly();
+  assert.equal(walk.teleportOnly, true);
+  // A mode change shows the hidden counter a moment, so the new mode is read.
+  assert.equal(walk.counterVisible, true);
+  session.dispose();
+  assert.deepEqual(JSON.parse(storage.values.get(XR_PREFERENCES)!), {
+    teleport: true,
+    counter: false,
+  });
+
+  const next = headsetWalk({ point: [4, 4.2], yaw: 0 }, storage);
+  assert.equal(next.walk.teleportOnly, true, 'remembered for the next session');
+  assert.equal(next.walk.counterVisible, false);
+  next.dispose();
+});
+
+test('the headset counter sits in the lower right of the view and names teleport-only', () => {
+  const session = headsetWalk({ point: [4, 4.2], yaw: 0 });
+  const hud = session.scene.getMeshByName('xr-hud')!;
+  assert.ok(hud.position.x > 0 && hud.position.y < 0 && hud.position.z < 0);
+  session.dispose();
+  assert.deepEqual(hudLines(72, 0, true, true).slice(1), ['téléportation · mode assis']);
+  assert.ok(XR_HUD_FLASH_SECONDS > 1);
 });
