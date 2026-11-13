@@ -378,7 +378,9 @@ export function createInteriorOcclusion(
     );
     pipeline.totalStrength = 0.6;
     pipeline.radius = settings.radius;
-    pipeline.samples = 16;
+    // Eight samples, halved from sixteen on trial (owner, 2026-11-13): the bilateral
+    // blur below keeps the result smooth, at half the occlusion's sampling cost.
+    pipeline.samples = 8;
     pipeline.maxZ = settings.maxZ;
     // `samples` above is the SSAO sample count, not antialiasing. The pipeline renders
     // the scene into its own single-sample texture, so the engine's `antialias: true`
