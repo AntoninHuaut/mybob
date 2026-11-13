@@ -53,7 +53,7 @@ import { furnitureRevision, furnitureObstaclesRevision } from '../furniture/laye
 import { RenderScheduler, WAKE_EVENTS, wakesScene } from './renderScheduler';
 import { isSoftwareRenderer, nextPaint, viewKey, ViewWarmth, warmFrames } from './shaderWarmup';
 import { pluginSummary, shaderLog } from './shaderLog';
-import { AdaptiveResolution } from './adaptiveResolution';
+import { ViewResolutions } from './adaptiveResolution';
 import {
   AUTO_CUT_HEIGHT,
   buildWallCutaway,
@@ -226,9 +226,11 @@ export class HouseViewer {
   }
   /** The host shows its overlay while shaders are linked; `first` is the start-up, not a switch. */
   onPreparing?: (active: boolean, first: boolean) => void;
-  private readonly adaptiveResolution = new AdaptiveResolution(
-    Math.min(window.devicePixelRatio || 1, 1.6),
-  );
+  private readonly resolutions = new ViewResolutions(Math.min(window.devicePixelRatio || 1, 1.6));
+  /** The current view's dynamic resolution (`ViewResolutions`). */
+  private get adaptiveResolution() {
+    return this.resolutions.for(this.currentViewKey());
+  }
   /** Hardware scaling at full resolution: the screen's pixel ratio, capped. */
   private readonly baseScaling = 1 / Math.min(window.devicePixelRatio || 1, 1.6);
   private renderScale = 1;
@@ -1458,8 +1460,8 @@ export class HouseViewer {
   }
 
   /**
-   * Fewer pixels on a machine too slow for 40 fps, at rest and in motion alike: a resize
-   * hitches, so it never follows the camera (`adaptiveResolution.ts`).
+   * Fewer pixels on a machine too slow for 40 fps in this view, at rest and in motion
+   * alike: a resize hitches, so it never follows the camera (`adaptiveResolution.ts`).
    */
   private applyRenderScale(now: number, render: boolean) {
     const frameMs = render && this.lastRenderAt !== undefined ? now - this.lastRenderAt : undefined;
@@ -1485,7 +1487,7 @@ export class HouseViewer {
    * is the one way to go back down (a real tier is never lifted).
    */
   forceEffectTier(tier?: number): void {
-    this.adaptiveResolution.force(tier);
+    this.resolutions.force(tier);
     this.rebuildWalkPipelines();
   }
 
@@ -1752,7 +1754,7 @@ export class HouseViewer {
   };
   /** Leaving or returning to the page: the next images say nothing about the machine. */
   private pauseMeasure = () => {
-    this.adaptiveResolution.resume();
+    this.resolutions.resume();
     this.lastRenderAt = undefined;
   };
   private clearKeys = () => {
