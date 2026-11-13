@@ -216,6 +216,25 @@ test('audit flags a partition floating outside the outline, not a straddling ext
   );
 });
 
+test('audit accepts tiny door jambs on the floor and still flags the same host outside it', () => {
+  const issues = auditPlan(
+    project({
+      walls: [1, 5].map((z) => ({
+        id: `host-${z}`,
+        start: [1, z] as Point2,
+        end: [2, z] as Point2,
+        thickness: 0.07,
+        openings: [
+          { id: `door-${z}`, kind: 'door' as const, offset: 0.04, width: 0.92, height: 2.1 },
+        ],
+      })),
+    }),
+  ).issues.filter((i) => i.kind === 'interior-wall-outside-outline');
+  assert.equal(issues.length, 1);
+  assert.deepEqual(issues[0].ids, ['host-5']);
+  assert.ok(Math.abs(issues[0].value - 0.0056) < 1e-8);
+});
+
 test('audit flags a spawn outside every room', () => {
   const issues = auditPlan(
     project({

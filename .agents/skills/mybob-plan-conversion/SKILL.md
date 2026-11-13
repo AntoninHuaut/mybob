@@ -483,37 +483,30 @@ from the hinge is the **open** position, hence the swing direction; the other is
 position, hence the opening in the wall. Without that segment, the two ends are
 interchangeable and the script does not count the door.
 
-**Measured state on both plans** (19 arcs, 21 leaf doors written):
+**Compare both the pivot and the open leaf.** `--compare` checks the hinge end, position
+and width, but it does not validate the local `swing` sign against the measured world vector.
+An omitted `hinge` or `swing` takes a renderer default: import validation and a hinge-only
+report can both pass while the leaf opens into sanitary equipment. Explicitly decide both
+fields for each hinged opening, then build the level in NullEngine and compare the fully
+open leaf's world direction with the source vector. For a double-leaf door, verify both
+pivots and both leaves; the `hinge` field alone does not describe that pair. Sliding and
+sectional openings have no hinged swing and are reviewed separately against their symbols.
 
-| plan     | arcs read | doors written | paired | within ±5 cm along the wall |
-| -------- | --------- | ------------- | ------ | --------------------------- |
-| A, RDC   | 8         | 8             | 8      | 5                           |
-| B, RDC   | 6         | 7             | 6      | 5                           |
-| B, attic | 5         | 6             | 5      | 5                           |
+A half arc on a double-leaf French window must not shrink the full opening to the width of
+one measured leaf. Likewise, distinguish a nominal leaf width from a rough opening with
+jamb allowances before changing dimensions. Keep those decisions in the private inventory.
 
-Gaps are **listed, never silently corrected**:
+**No arc is a question to inspect, not permission to invent a door.** A plain passage with
+no drawn leaf is modelled as a gap between wall segments, rather than a default hinged door.
+Keep other openings' world positions when splitting their host wall, and preserve their IDs.
+A recessed door must be carried by the wall across the recess, not projected onto the edge
+of the corridor. Check the room polygons against that actual threshold too: transfer the
+entry recess between the adjoining rooms, then re-run printed areas and the audit. Do not
+move an entire shared wall to correct one recessed opening.
 
-- **two doors have no arc** — `hall-nord-door-1` (plan B, RDC, 1.36 m) and `p-dressing`
-  (attic, 1.00 m). The drawing shows a hatched band and reveal lines there, not a quarter
-  circle. The script says `NO ARC READ`; it does not invent them;
-- **a two-leaf French window** has only one complete arc: the second is truncated at 37.7°.
-  The script reports it as a **partial arc** and only counts the full leaf, hence 0.583 m
-  instead of 1.20 m;
-- **a door whose `hinge` contradicts the drawing is a blocking error** (`--compare` exits 1 and prints it). Plan A and plan B (RDC) now report 0; the attic of plan B has no frame (`--origin` needed) and was not re-measured. Historically, three doors of plan A and three of plan B had the hinge on the other side of the
-  opening compared with the hand-written `hinge` field. The opening itself is in the right
-  place: it is the pivot side that is wrong;
-- **two project walls are offset** and carry their door with them: `entree-fond` (plan B,
-  RDC) by 0.51 m and the north wall of the attic WC by 0.76 m. The position along the wall is
-  right to 2 cm; it is the wall that is not where the project says. The report separates the
-  two, because fixing the door would not fix the wall;
-- **two doors are more than 5 cm off**: `porte-ch2` of plan A (+0.72 m, the project's
-  `ch2-nord` partition is offset by 0.44 m and 0.57 m too long) and `wc-ouest-door-1` of plan
-  B (−0.76 m, the opening is written on the wrong side of the hinge).
-
-**What the script does not decide.** The swing direction is returned as a **vector**, not as a
-sign: the project's `swing` field is a rotation direction in the wall's local frame, and the
-two cannot be compared without the viewer's code. The room side stays an interpretation to
-confirm on site, and the project must say so.
+Keep the source extraction, explicit decisions, before/after exports and runtime verification
+in the ignored evidence directories. Report positional or width residuals separately from
+hinge and swing errors; a successful orientation check does not prove the whole plan exact.
 
 **The frame, and its refusal.** `--registry` deduces origin and scale from the closed chains,
 with the `derive_outline.py` rule. Plan B's attic page has **no closed vertical chain**: the
