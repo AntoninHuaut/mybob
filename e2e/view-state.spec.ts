@@ -45,7 +45,7 @@ test('view controls derive chrome from the accepted view', async ({ page }) => {
   expect(errors).toEqual([]);
 });
 
-test('project and level reload reset the accepted view and chrome', async ({ page }) => {
+test('a level change keeps the view, a project change resets it', async ({ page }) => {
   test.slow();
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
@@ -54,13 +54,16 @@ test('project and level reload reset the accepted view and chrome', async ({ pag
   await expect(page.locator('#view-title')).toHaveText('Visite intérieure');
   for (const level of ['upper-test', 'atelier-rdc', 'upper-test']) {
     await page.locator('#level-select').selectOption(level);
-    await expect(page.locator('#view-title')).toHaveText('Vue 3D');
-    await expect(page.locator('#viewport')).not.toHaveClass(/walking/);
-    await expect(page.locator('[data-view=overview]')).toHaveAttribute('aria-pressed', 'true');
-    await page.locator('[data-view=walk]').click();
+    await expect(page.locator('#level-select')).toHaveValue(level);
     await expect(page.locator('#view-title')).toHaveText('Visite intérieure');
+    await expect(page.locator('#viewport')).toHaveClass(/walking/);
+    await expect(page.locator('[data-view=walk]')).toHaveAttribute('aria-pressed', 'true');
   }
   await page.locator('#view-exterior').click();
+  await expect(page.locator('#view-title')).toHaveText('Extérieur');
+  await page.locator('#level-select').selectOption('atelier-rdc');
+  await expect(page.locator('#view-title')).toHaveText('Extérieur');
+  await expect(page.locator('#view-exterior')).toHaveAttribute('aria-pressed', 'true');
   await page.locator('#project-select').selectOption('studio-demo');
   await expect(page.locator('#view-title')).toHaveText('Vue 3D');
   await expect(page.locator('#view-exterior')).toBeHidden();
