@@ -90,8 +90,20 @@ export const XR_BODY_HALF_HEIGHT = 0.5;
 export const XR_BODY_DROP = 0.6;
 /** The highest display rate asked of the headset; the session falls back when it cannot hold it. */
 export const XR_TARGET_FRAME_RATE = 90;
-/** Frame-rate windows in a row below the target before the next lower rate is asked. */
-export const XR_RATE_FALLBACK_WINDOWS = 3;
+/**
+ * Frame-rate windows (500 ms each) in a row below the rate before the next lower one is
+ * asked: 3 s. At 1.5 s the hitches after loading pushed a Quest 2 down to 60 Hz for good.
+ */
+export const XR_RATE_FALLBACK_WINDOWS = 6;
+/** Windows ignored after the session opens: shaders and textures still settle (3 s). */
+export const XR_RATE_WARMUP_WINDOWS = 6;
+/**
+ * The lowest display rate ever asked. At 60 Hz a Quest 2's low-persistence screen flickers
+ * over the whole image (owner, 2026-11-13: « the whole image flickers », a steady 60 fps in
+ * the Quest Browser); 72 Hz is the headset's own default for that reason. A headset that
+ * offers nothing at or above it keeps its own rates.
+ */
+export const XR_MIN_FRAME_RATE = 72;
 
 /** The most the seated mode moves the visitor, up or down, in metres. */
 export const XR_SEATED_MAX_RAISE = 1.2;
@@ -116,8 +128,14 @@ export function pickFrameRate(
   supported: ArrayLike<number> | undefined,
   target = XR_TARGET_FRAME_RATE,
 ): number | undefined {
-  const rates = Array.from(supported ?? []).filter((rate) => rate <= target + 0.5);
+  const rates = flickerFree(Array.from(supported ?? [])).filter((rate) => rate <= target + 0.5);
   return rates.length ? Math.max(...rates) : undefined;
+}
+
+/** The rates at or above `XR_MIN_FRAME_RATE`, or all of them if none is. */
+export function flickerFree(rates: number[]): number[] {
+  const steady = rates.filter((rate) => rate >= XR_MIN_FRAME_RATE - 0.5);
+  return steady.length ? steady : rates;
 }
 
 /**
@@ -127,11 +145,15 @@ export function pickFrameRate(
  */
 export class FrameRateGovernor {
   private slow = 0;
+  private warmup = XR_RATE_WARMUP_WINDOWS;
+  private readonly supported: number[];
 
   constructor(
     private rate: number | undefined,
-    private readonly supported: number[],
-  ) {}
+    supported: number[],
+  ) {
+    this.supported = flickerFree(supported);
+  }
 
   get current(): number | undefined {
     return this.rate;
@@ -140,6 +162,10 @@ export class FrameRateGovernor {
   /** The new rate to ask for after this window, if it changes. */
   observe(fps: number): number | undefined {
     if (this.rate === undefined) return undefined;
+    if (this.warmup > 0) {
+      this.warmup--;
+      return undefined;
+    }
     this.slow = fps < this.rate * 0.9 ? this.slow + 1 : 0;
     if (this.slow < XR_RATE_FALLBACK_WINDOWS) return undefined;
     this.slow = 0;
