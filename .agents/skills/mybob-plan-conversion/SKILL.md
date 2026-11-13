@@ -661,6 +661,12 @@ Two limits measured on real plans: **a façade whose openings are only isolated 
 (not a closed chain) gives no opening, and **an interior door without a swing arc** cannot be
 read by its symbol. Both are reported as missing, never invented.
 
+**An ink-free range without an arc is not always a door.** Between two piers, a dimensioned gap
+with no swing arc and no leaf is an **open bay**: on plan B the hall opens onto the living area
+through `87 | 1.41 | 1.26`, and a conversion made it a 1.36 m hinged door, which the owner saw
+as a door that does not exist. The schema has no "passage" opening: split the wall at the bay
+(two walls, the gap between their ends) instead of declaring a `door`.
+
 Interior doors carrying an arc are read by `extract_doors.py` (see "Interior doors, read on the
 arc"). Those that do not are read **in ink**, wall by wall, and the AI places them: the owner
 accepts that they are approximated, provided the walls are right. The method that works: sweep
@@ -828,8 +834,10 @@ error on every room.
 
 **The floor extends into the dormers.** A slope pierced by a dormer is not a continuous slope:
 the room's floor runs under the dormer up to its back wall. On plan B, two 0.90 m wide dormers
-pierce the south slope (x 2.161..3.060 and 10.181..11.081) and add **0.75 m²** each. That is
-exactly the gap of the two bedrooms 3: 4.55 × 3.37 = 15.33 plus 0.77 of dormer = 16.10 printed.
+pierce the south slope (alcoves x 2.165..3.065 and 10.185..11.085). The table counts about
+**0.77 m²** each (4.55 × 3.37 = 15.33 plus 0.77 = 16.10 printed), which takes the alcove to
+z ≈ 8.09; the drawing closes it at the inner face of the dormer piers (7.94), 0.64 m². Keep the
+drawing and document the 0.13 m² per bedroom.
 The rafter must therefore be **cut** at each opening and the level outline carry the two
 projections. A continuous rafter leaves both rooms short by 0.77 m² and suggests a
 contradiction in the plan that does not exist.
@@ -841,8 +849,8 @@ lines, tolerance 0.05 m²:
 | -------------- | ------- | ------- | ----- | ------------------------------------------------------- |
 | bathroom       | 9.38    | 9.37    | −0.01 | —                                                       |
 | bedroom 2      | 14.44   | 14.44   | 0.00  | —                                                       |
-| bedroom 3 west | 16.10   | 16.12   | +0.02 | 4.55 × 3.37 + 0.75 of dormer                            |
-| bedroom 3 east | 13.90   | 13.90   | 0.00  | 4.96 × 2.78 − 0.65 of corridor end + 0.75 of dormer     |
+| bedroom 3 west | 16.10   | 15.97   | −0.13 | 4.55 × 3.37 + 0.64 of dormer alcove                     |
+| bedroom 3 east | 13.90   | 13.74   | −0.16 | 4.96 × 2.78 − 0.65 of corridor end + 0.64 of dormer     |
 | dressing       | 7.12    | 7.05    | −0.07 | technical cupboard: 0.25 in the drawing, 0.19 in table  |
 | WC             | 1.24    | 2.01    | +0.77 | the table counts 0.85 × 1.46, the dimension 0.85 × 2.39 |
 | corridor       | 4.14    | 3.48    | −0.66 | the table moves 0.77 m² from the WC to the corridor     |
@@ -1126,7 +1134,9 @@ A missing wall is also fixed by hand, and it has to be looked for: neither the a
 the audit flags an absent wall. On plan B, the west wall of the WC did not exist — the WC was
 open onto the hall over 1.60 m — and nothing said so. What showed it was the overlay: the model's
 walls in orange over the drawing, and a hatched band of the drawing with no orange under it. Do
-the overlay on every pass, not only at the end.
+the overlay on every pass, not only at the end. Short returns are the easiest to lose: the 60 cm
+partition return west of bedroom 1's corner on plan B (`60 | 7`, standing free in the open
+kitchen) was missing for several passes until the owner noticed it in 3D.
 
 **The symmetric case — a wall the drawing does not carry — slipped through three times.** An
 area stays right, `reachedRooms` stays complete and the audit says nothing: none of the three
