@@ -27,6 +27,7 @@ const geometryChanged = (before: FurnitureItem | undefined, after: FurnitureItem
   before.position[1] !== after.position[1] ||
   JSON.stringify(before.sofa) !== JSON.stringify(after.sofa) ||
   JSON.stringify(before.dressing) !== JSON.stringify(after.dressing) ||
+  JSON.stringify(before.kitchen) !== JSON.stringify(after.kitchen) ||
   before.showerTray !== after.showerTray ||
   JSON.stringify(before.showerPanels) !== JSON.stringify(after.showerPanels) ||
   JSON.stringify(before.showerPanelSpans) !== JSON.stringify(after.showerPanelSpans);

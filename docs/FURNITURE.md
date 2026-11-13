@@ -44,9 +44,11 @@ House areas that are still uncertain stay flagged in the model's notes. Furnitur
 
 ## Types and configurations
 
-The nineteen categories are grouped by room in the Type de meuble menu: Salon, Salle à manger, Chambre, Dressing, Bureau, Salle de bain and Autre. The bathroom offers WC, shower, bathtub and vanity unit. Select a sofa then choose its shape: straight, corner with a return backrest, or open chaise longue. The side is described looking at the sofa from the front. Overall dimensions stay width, depth and height; the main body and the return width define the void of the L. Collisions use the two occupied parts and leave that void free for a table.
+The twenty categories are grouped by room in the Type de meuble menu: Salon, Salle à manger, Chambre, Dressing, Cuisine, Bureau, Salle de bain and Autre. The bathroom offers WC, shower, bathtub and vanity unit. Select a sofa then choose its shape: straight, corner with a return backrest, or open chaise longue. The side is described looking at the sofa from the front. Overall dimensions stay width, depth and height; the main body and the return width define the void of the L. Collisions use the two occupied parts and leave that void free for a table.
 
 A walk-in wardrobe is described as a sequence of runs: a common depth, then for each run its length and the angle that ends it (left, right or end). One run is enough for a straight wardrobe, two make a corner, three a U, and so on up to twelve. Overall width and depth are computed from the runs and are not entered. Runs share their corner and the inner void stays free, for instance for a seat.
+
+A kitchen uses the same run chain and corner convention as a dressing. Enter run lengths and depth in centimetres; the overall footprint follows automatically and its inner void stays free. Set the worktop height, the overall height (including tall columns), the front colour through Teinte du volume, and a separate worktop colour. Optional wall units share a bottom height, height and depth. Add sink, hob, oven-column and fridge-column markers with a run number, offset from that run's start and width. Slots must fit on their run and may not overlap on the same run. A separate straight kitchen represents an island. Everything stays in the popup draft until Save and travels with JSON exports and share links. These are simplified volumes and equipment markers, not a reconstruction of appliances or photo textures.
 
 A shower is described by two independent settings: the tray height in centimetres, where 0 gives a walk-in shower without a tray, and the sides carrying a glass panel (left, right, front, back). A ticked side takes an optional length in centimetres: a panel shorter than the side leaves the rest open, which is how a walk-in shower keeps its entrance (left and right panels start at the back where the shower head is; front and back panels start from the left or the right as chosen). A blank length keeps the whole side, so earlier projects and links do not change. Geometry in `furniture/showerPanels.ts`. The shower head is at the back of the volume; rotating the shower changes the wall. Sanitary volumes are simplified markers: replace the proposed measurements with those of the real model.
 
@@ -110,11 +112,11 @@ Measured repository benchmarks, each with one default piece of every kind:
 
 | Fixture         | House meshes before / after | Furnished meshes before / after | Materials before / after | Vertices before / after |
 | --------------- | --------------------------- | ------------------------------- | ------------------------ | ----------------------- |
-| Large benchmark | 266 / 124                   | 438 / 238                       | 113 / 24                 | 14,565 / 23,425         |
-| studio-demo     | 70 / 38                     | 192 / 102                       | 107 / 18                 | 5,746 / 14,606          |
+| Large benchmark | 266 / 124                   | 438 / 241                       | 113 / 25                 | 14,565 / 23,621         |
+| studio-demo     | 70 / 38                     | 192 / 105                       | 107 / 19                 | 5,746 / 14,802          |
 
-Furniture bodies alone fall from 122 meshes/98 materials to 45 meshes/8 materials; contact
-footprints add 19 meshes and one material. Real chamfer strips and corner triangles add
-8,784 vertices; contact quads add 76. This deliberate appearance cost has an explicitly
+Furniture bodies alone fall from 122 meshes/98 materials to 47 meshes/9 materials; contact
+footprints add 20 meshes and one material. Real chamfer strips and corner triangles add
+8,784 vertices; contact quads add 80. This deliberate appearance cost has an explicitly
 reviewed vertex budget with the same 10% headroom. Mesh/material ceilings are lowered to
 the final counts plus 10%. NullEngine resource counts do not measure GPU frame time.

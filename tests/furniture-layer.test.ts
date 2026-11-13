@@ -464,3 +464,51 @@ test('Plan glass preserves two-sided rendering, alpha and exact diffuse channels
   assert.equal(glass.material, physical);
   cleanup();
 });
+
+test('kitchen renders the two runs, tall column and separate worktop finish within its footprint', async () => {
+  const { createFurniture } = await import('../src/furniture/model');
+  const { layer, scene, cleanup } = setup();
+  try {
+    const kitchen = createFurniture({
+      id: 'k',
+      kind: 'kitchen',
+      position: [5, 5],
+      kitchen: {
+        runDepth: 0.6,
+        runs: [{ length: 3.2, turn: 'right' }, { length: 2.1 }],
+        worktopHeight: 0.9,
+        worktopColor: '#123456',
+        slots: [
+          { kind: 'fridge', run: 0, offset: 0, width: 0.6 },
+          { kind: 'sink', run: 1, offset: 0.8, width: 0.6 },
+        ],
+      },
+    });
+    layer.setItems([kitchen]);
+    const meshes = scene.meshes.filter(
+      (m) => m.name.startsWith('furniture:k:') && m.getTotalVertices() > 0 && m.isPickable,
+    );
+    assert.ok(
+      meshes.some(
+        (m) =>
+          m.material instanceof PBRMaterial && m.material.albedoColor.toHexString() === '#123456',
+      ),
+    );
+    const maxY = Math.max(
+      ...meshes.map((m) => {
+        m.computeWorldMatrix(true);
+        return m.getBoundingInfo().boundingBox.maximumWorld.y;
+      }),
+    );
+    assert.ok(Math.abs(maxY - (level.elevation + 2.2)) < 0.001);
+    for (const mesh of meshes) {
+      const bounds = mesh.getBoundingInfo().boundingBox;
+      assert.ok(bounds.minimumWorld.x >= 5 - 1.6 - 0.001);
+      assert.ok(bounds.maximumWorld.x <= 5 + 1.6 + 0.001);
+      assert.ok(bounds.minimumWorld.z >= 5 - 1.05 - 0.001);
+      assert.ok(bounds.maximumWorld.z <= 5 + 1.05 + 0.001);
+    }
+  } finally {
+    cleanup();
+  }
+});

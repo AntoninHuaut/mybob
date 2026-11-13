@@ -260,3 +260,52 @@ test('duplicating with an undefined id creates a fresh id without discarding fac
   const defaulted = createFurniture({ kind: 'sofa', width: undefined });
   assert.equal(defaulted.width, 2.1);
 });
+
+test('an L kitchen keeps its empty corner free and validates appliance positions', () => {
+  const kitchen = createFurniture({
+    kind: 'kitchen',
+    kitchen: {
+      runDepth: 0.6,
+      runs: [{ length: 3.2, turn: 'right' }, { length: 2.1 }],
+      worktopHeight: 0.9,
+      worktopColor: '#aa8855',
+      slots: [
+        { run: 0, offset: 0, width: 0.6, kind: 'fridge' },
+        { run: 0, offset: 1.4, width: 0.6, kind: 'hob' },
+        { run: 1, offset: 0.8, width: 0.6, kind: 'sink' },
+      ],
+    },
+  });
+  near(kitchen.width, 3.2);
+  near(kitchen.depth, 2.1);
+  assert.equal(kitchen.height, 2.2);
+  assert.equal(validateFurnitureList([kitchen]).length, 1);
+  assert.throws(() =>
+    validateFurnitureList([
+      {
+        ...kitchen,
+        kitchen: {
+          ...kitchen.kitchen!,
+          slots: [{ run: 1, offset: 2, width: 0.6, kind: 'sink' }],
+        },
+      },
+    ]),
+  );
+});
+
+test('an L kitchen fits against two walls without filling the free inside corner', () => {
+  const kitchen = createFurniture({
+    kind: 'kitchen',
+    position: [1.9, 1.35],
+    kitchen: {
+      runs: [{ length: 3.2, turn: 'right' }, { length: 2.1 }],
+    },
+  });
+  const table = createFurniture({ kind: 'table', width: 0.4, depth: 0.4, position: [1, 1.5] });
+  assert.deepEqual(
+    checkFurniture([kitchen, table], room).filter((i) => i.severity === 'error'),
+    [],
+  );
+  const throughWall = { ...kitchen, position: [1.9, 1.3] as [number, number] };
+  assert.ok(checkFurniture([throughWall], room).some((i) => i.severity === 'error'));
+});

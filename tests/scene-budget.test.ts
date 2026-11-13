@@ -64,8 +64,8 @@ for (const name of ['maison-atelier', 'studio-demo'] as const) {
         ),
       );
       const bodies = scene.meshes.filter((mesh) => mesh.metadata?.kind === 'furniture');
-      assert.equal(bodies.length, 45);
-      assert.equal(new Set(bodies.map((mesh) => mesh.material)).size, 8);
+      assert.equal(bodies.length, 47);
+      assert.equal(new Set(bodies.map((mesh) => mesh.material)).size, 9);
       for (const item of new Set(bodies.map((mesh) => mesh.metadata.id))) {
         const parts = bodies.filter((mesh) => mesh.metadata.id === item);
         assert.equal(parts.length, new Set(parts.map((mesh) => mesh.material)).size);

@@ -6,9 +6,11 @@
 
 Read [AGENTS.md](AGENTS.md), then [the code map](docs/ARCHITECTURE.md) and [the maintenance skill](.agents/skills/mybob-maintenance/SKILL.md). **Export your project from the current browser before switching to local**: the repository does not contain the arrangement saved in that browser.
 
+Parametric kitchens support corner runs, separate worktop and front colours, wall units and equipment markers. See [furniture configurations](docs/FURNITURE.md#types-and-configurations).
+
 ## Getting started
 
-Node.js 24 and pnpm 12.15.0.
+Node.js 26.13.0 and pnpm 12.18.0.
 
 ```sh
 pnpm install --frozen-lockfile
@@ -25,7 +27,7 @@ pnpm run format:check
 
 The `dist/` folder contains the deployable static version. Dependencies and house data are bundled or served locally; Google Fonts is optional and has system fallback fonts.
 
-Automated browser tests: `pnpm exec playwright install chromium`, then run only the scenarios of the feature you touched; CI runs the full suite. See [the E2E guide](docs/E2E.md).
+Automated browser tests run in CI; local reproduction is restricted by [AGENTS.md](AGENTS.md#local-browser-verification-policy). See [the E2E guide](docs/E2E.md).
 
 The normal build is **public and limited to the demonstration**. `pnpm run ci` runs every check and verifies that no personal plan is present in the artefact. Cloudflare Pages and GitHub Actions configuration: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
 

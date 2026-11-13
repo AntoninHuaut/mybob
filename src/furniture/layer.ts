@@ -141,6 +141,7 @@ export class FurnitureLayer {
         item.color,
         item.sofa,
         item.dressing,
+        item.kitchen,
         item.showerTray,
         item.showerPanels,
         item.showerPanelSpans,
@@ -728,6 +729,90 @@ export class FurnitureLayer {
           roles.metal,
         );
       }
+    } else if (item.kind === 'kitchen' && item.kitchen) {
+      const k = item.kitchen;
+      const bounds = dressingBounds(k.runDepth, k.runs);
+      const top = material('worktop', Color3.FromHexString(k.worktopColor));
+      const appliance = () => {
+        const finish = material('appliance', new Color3(0.12, 0.13, 0.14));
+        finish.zOffset = -1;
+        return finish;
+      };
+      dressingPlacements(k.runDepth, k.runs).forEach((placement, index) => {
+        const [dx, dz] = placement.direction;
+        const run = new TransformNode(`furniture:${item.id}:run`, this.scene);
+        run.parent = root;
+        run.position.set(
+          placement.start[0] - bounds.centerX,
+          0,
+          placement.start[1] - bounds.centerZ,
+        );
+        run.rotation.y = Math.atan2(-dz, dx);
+        const part = (
+          start: number,
+          length: number,
+          bottom: number,
+          height: number,
+          depth: number,
+          mat = roles.main,
+        ) =>
+          box(length, height, depth, start + length / 2, bottom + height / 2, depth / 2, mat, run);
+        const slots = k.slots
+          .filter((slot) => slot.run === index)
+          .sort((a, b) => a.offset - b.offset);
+        const columns = slots.filter((slot) => slot.kind === 'oven' || slot.kind === 'fridge');
+        let start = 0;
+        for (const column of [...columns, { offset: placement.length, width: 0 }]) {
+          const length = column.offset - start;
+          if (length > 0) {
+            part(start, length, 0.1, k.worktopHeight - 0.14, k.runDepth);
+            part(start, length, k.worktopHeight - 0.04, 0.04, k.runDepth, top);
+            if (k.wallUnits)
+              part(start, length, k.wallUnits.bottom, k.wallUnits.height, k.wallUnits.depth);
+          }
+          if (column.width > 0) {
+            part(column.offset, column.width, 0, h, k.runDepth);
+            if ('kind' in column && column.kind === 'oven')
+              box(
+                column.width * 0.85,
+                0.55,
+                0.012,
+                column.offset + column.width / 2,
+                1.05,
+                k.runDepth - 0.006,
+                roles.metal,
+                run,
+              );
+          }
+          start = column.offset + column.width;
+        }
+        for (const slot of slots) {
+          if (slot.kind !== 'sink' && slot.kind !== 'hob') continue;
+          box(
+            slot.width * 0.85,
+            0.012,
+            k.runDepth * 0.7,
+            slot.offset + slot.width / 2,
+            k.worktopHeight - 0.006,
+            k.runDepth / 2,
+            appliance(),
+            run,
+          );
+          const tapHeight = Math.min(0.25, h - k.worktopHeight);
+          if (slot.kind === 'sink' && tapHeight > 0) {
+            box(
+              0.025,
+              tapHeight,
+              0.025,
+              slot.offset + slot.width / 2,
+              k.worktopHeight + tapHeight / 2,
+              k.runDepth * 0.15,
+              roles.metal,
+              run,
+            );
+          }
+        }
+      });
     } else if (item.kind === 'dressing') {
       const panel = Math.min(w, d, h) * 0.05;
       const runDepth = item.dressing?.runDepth ?? d;

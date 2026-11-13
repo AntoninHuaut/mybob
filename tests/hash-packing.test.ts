@@ -533,3 +533,45 @@ test('the pack closes with a CRC-32 that detects any flipped byte', () => {
     assert.throws(() => unpackShareDocument(damaged), LinkPackError, `byte ${index}`);
   }
 });
+
+test('kitchen runs, finishes, wall units and equipment survive a share link', async () => {
+  const project = readPlan('public/projects/studio-demo.json');
+  const kitchen = createFurniture({
+    kind: 'kitchen',
+    kitchen: {
+      runDepth: 0.65,
+      runs: [{ length: 3.2, turn: 'right' }, { length: 2.1 }],
+      worktopColor: '#987654',
+      worktopHeight: 0.92,
+      wallUnits: { bottom: 1.4, height: 0.7, depth: 0.35 },
+      slots: [{ run: 1, offset: 0.8, width: 0.6, kind: 'sink' }],
+    },
+  });
+  const variants: VariantBook = {
+    version: 1,
+    activeId: 'k',
+    variants: [
+      {
+        id: 'k',
+        name: 'Cuisine',
+        levels: Object.fromEntries(project.levels.map((l) => [l.id, [kitchen]])),
+      },
+    ],
+  };
+  const exported = JSON.parse(JSON.stringify(shareDocument(project, variants)));
+  validateProject(exported);
+  const imported = validateVariantBook(
+    exported.furnishing.variants,
+    project.levels.map((l) => l.id),
+  );
+  assert.deepEqual(imported.variants[0].levels[project.levels[0].id][0].kitchen, kitchen.kitchen);
+  const hash = await encodeShareLinkHash(shareDocument(project, variants));
+  const restored = await decodeShareLinkHash(hash);
+  assert.deepEqual(
+    validateVariantBook(
+      restored.document.furnishing!.variants,
+      restored.document.levels.map((l) => l.id),
+    ).variants[0].levels[restored.document.levels[0].id][0].kitchen,
+    kitchen.kitchen,
+  );
+});
