@@ -41,9 +41,11 @@ These files replace reliance on any previous chat context.
 - Keep the application adaptable to other houses. Never hardcode the owner's house dimensions
   or identifiers into scene/UI logic.
 - The owner explicitly wants their house **absent from the repository and the deployed site**.
-  The repository is public: personal plans live in `public/projects/private-*.json` —
-  git-ignored, never committed (`dev:private` loads every `private-*.json` present), and their
-  Git history has been purged before publication. Public builds include only the fictitious
+  The repository is public: personal plans live in `reference-documents/<id>.json` (the
+  reference) and in their working copies in `public/projects/private-*.json`. Both are
+  git-ignored and never committed (`dev:private` loads every `private-*.json` present), and
+  their Git history has been purged before publication. Which copy wins:
+  [Backing up personal projects](.agents/skills/mybob-plan-conversion/SKILL.md#backing-up-personal-projects). Public builds include only the fictitious
   demonstrations; personal plans are imported locally. Preserve the allowlist in
   `vite.config.ts` and `scripts/check-public-build.mjs`. Never commit original PDF/photos,
   secrets or generated private bundles.

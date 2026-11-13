@@ -1206,15 +1206,20 @@ confirmation at every step: the owner asked for the work, not for a running comm
 
 ## Backing up personal projects
 
-A `private-*.json` project only exists in two places: the local clone and the browser storage.
-Losing the clone means losing the house.
+The reference copy of a personal project is `reference-documents/<id>.json`. A
+`public/projects/private-*.json` file is only a working copy, loaded by `dev:private`. It can
+go stale: in a real session, an old `private-*.json` was imported into the browser instead of the
+reference, and the upper floor's windows and a whole kitchen looked lost. Import into the browser
+from `reference-documents/`. When a working copy is needed, copy the reference over it first. If
+the two disagree, the reference wins unless you know the working copy carries newer decisions.
 
 ```sh
 pnpm run backup:private
 ```
 
-Copies every `public/projects/private-*.json` to `reference-documents/<id>.json`. **Run it
-after every decision pass**, not only at the end: a copy three passes old is worse than no copy,
+Copies every `public/projects/private-*.json` to `reference-documents/<id>.json`. It refuses
+to overwrite a reference that differs and is more recent than the working copy (`--force`
+overrides). **Run it after every decision pass**, not only at the end: a copy three passes old is worse than no copy,
 because it looks like a backup. In a real session, the two copies had drifted by three keys and
 by ten keys — including the whole `site` of the second plan, added after the copy. It happened
 again: the plan B fixes of a later session (WC walls, dormers, roof windows) lived only in a
