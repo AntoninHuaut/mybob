@@ -15,7 +15,8 @@ import earcut from 'earcut';
 import type { Level, Opening, Point2, Wall } from '../model/types';
 import { alongWall, pointInPolygon, wallLength, wallSections } from '../model/geometry';
 import type { Materials } from './materials';
-import { beveledBox } from './beveledBox';
+import { beveledBox, facetsData, slopedPrismFacets } from './beveledBox';
+import { ceilingHeightAt, ceilingProfile, ceilingTriangles } from '../model/ceiling';
 
 /**
  * Chamfer of a wall edge. A real plastered arris is two millimetres, but two
@@ -132,6 +133,32 @@ export function polygonMesh(
   return mesh;
 }
 
+/**
+ * The ceiling of a level with sloping parts: flat where the flat ceiling is the
+ * lowest, following each slope elsewhere. Facing down into the room, with plaster
+ * UVs in metres in the plane of each facet.
+ */
+export function slopedCeilingMesh(level: Level, scene: Scene, holes: Point2[][] = []): Mesh {
+  const facets = ceilingTriangles(level, level.outline, holes).map((points) => {
+    const [a, b, c] = points;
+    const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
+    const e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    let n: [number, number, number] = [
+      e1[1] * e2[2] - e1[2] * e2[1],
+      e1[2] * e2[0] - e1[0] * e2[2],
+      e1[0] * e2[1] - e1[1] * e2[0],
+    ];
+    const length = Math.hypot(...n) || 1;
+    n = n.map((v) => v / length) as [number, number, number];
+    // Facing down into the room.
+    if (n[1] > 0) n = [-n[0], -n[1], -n[2]];
+    return { points, normal: n };
+  });
+  const mesh = new Mesh('ceiling', scene);
+  facetsData(facets).applyToMesh(mesh);
+  return mesh;
+}
+
 function pointSegmentDistance(point: Point2, a: Point2, b: Point2) {
   const dx = b[0] - a[0],
     dz = b[1] - a[1];
@@ -199,6 +226,28 @@ export function buildHouse(
     mesh.checkCollisions = collision;
     mesh.receiveShadows = true;
     if (shadow && height > 0.12) shadow.addShadowCaster(mesh);
+    return mesh;
+  };
+
+  const sloped = (level.ceilingSlopes?.length ?? 0) > 0;
+  /** A wall piece under a ceiling slope: its top follows the slope. */
+  const slopedPiece = (
+    name: string,
+    x0: number,
+    x1: number,
+    bottom: number,
+    top0: number,
+    top1: number,
+    depth: number,
+    parent: TransformNode,
+  ) => {
+    const mesh = new Mesh(name, scene);
+    facetsData(slopedPrismFacets(x0, x1, bottom, top0, top1, depth)).applyToMesh(mesh);
+    mesh.parent = parent;
+    mesh.material = materials.plaster;
+    mesh.checkCollisions = true;
+    mesh.receiveShadows = true;
+    if (shadow) shadow.addShadowCaster(mesh);
     return mesh;
   };
 
@@ -317,22 +366,57 @@ export function buildHouse(
       ...wall,
       openings: wall.openings?.map((o) => ({ ...o, sill: (o.sill ?? 0) + openingBase })),
     };
+    // Only a dormer back wall rises above the flat ceiling (the validation sees to
+    // it): it crosses the covering, so no ceiling slope trims it.
+    const trimmed = sloped && h <= level.ceilingHeight + 1e-6;
     for (const [i, section] of wallSections(effectiveWall, h).entries()) {
       const bottom = section.bottom === 0 ? wallBottom : section.bottom;
       if (section.top - bottom <= 0.00001) continue;
-      box(
-        `wall:${wall.id}:${i}`,
-        section.end - section.start,
-        section.top - bottom,
-        wall.thickness,
-        (section.start + section.end) / 2,
-        (bottom + section.top) / 2,
-        0,
-        materials.plaster,
-        group,
-        true,
-        WALL_BEVEL,
-      );
+      const runs = trimmed
+        ? ceilingProfile(
+            level,
+            alongWall(wall, section.start),
+            alongWall(wall, section.end),
+            section.top,
+          ).map((run) => ({
+            ...run,
+            start: run.start + section.start,
+            end: run.end + section.start,
+          }))
+        : [{ start: section.start, end: section.end, from: section.top, to: section.top }];
+      // A section cut into several runs names them `wall:<id>:<section>:<run>`.
+      for (const [k, run] of runs.entries()) {
+        const name = runs.length === 1 ? `wall:${wall.id}:${i}` : `wall:${wall.id}:${i}:${k}`;
+        if (Math.abs(run.from - run.to) < 1e-6) {
+          if (run.from - bottom <= 0.00001) continue;
+          box(
+            name,
+            run.end - run.start,
+            run.from - bottom,
+            wall.thickness,
+            (run.start + run.end) / 2,
+            (bottom + run.from) / 2,
+            0,
+            materials.plaster,
+            group,
+            true,
+            WALL_BEVEL,
+          );
+          continue;
+        }
+        // Keep the part of the run above the wall's bottom.
+        let { start, end, from, to } = run;
+        if (from <= bottom && to <= bottom) continue;
+        if (from < bottom) {
+          start += ((bottom - from) / (to - from)) * (end - start);
+          from = bottom;
+        } else if (to < bottom) {
+          end = start + ((from - bottom) / (from - to)) * (end - start);
+          to = bottom;
+        }
+        if (end - start < 0.0001) continue;
+        slopedPiece(name, start, end, bottom, from, to, wall.thickness, group);
+      }
     }
     if (openingBase > wallBottom)
       for (const opening of wall.openings ?? []) {
@@ -691,16 +775,18 @@ export function buildHouse(
     poseDoor(instance);
   }
 
-  const ceiling = polygonMesh(
-    'ceiling',
-    level.outline,
-    level.ceilingHeight,
-    scene,
-    ceilingVoids,
-    -1,
-    // The ceiling is plaster, so it takes the plaster grain, not the parquet tile.
-    [1, 1],
-  );
+  const ceiling = sloped
+    ? slopedCeilingMesh(level, scene, ceilingVoids)
+    : polygonMesh(
+        'ceiling',
+        level.outline,
+        level.ceilingHeight,
+        scene,
+        ceilingVoids,
+        -1,
+        // The ceiling is plaster, so it takes the plaster grain, not the parquet tile.
+        [1, 1],
+      );
   ceiling.parent = root;
   ceiling.material = materials.plaster;
   shadow?.addShadowCaster(ceiling);
@@ -717,18 +803,16 @@ export function buildHouse(
       scene,
     );
     fixture.parent = root;
-    fixture.position.set(light.position[0], level.ceilingHeight - 0.025, light.position[1]);
+    // Under a slope the fixture hangs from the slope, not from the flat ceiling.
+    const lightCeiling = ceilingHeightAt(level, light.position);
+    fixture.position.set(light.position[0], lightCeiling - 0.025, light.position[1]);
     fixture.material = materials.glow;
     fixture.isPickable = false;
     fixtures.push(fixture);
     fixture.setEnabled(false);
     const point = new PointLight(
       light.id,
-      new Vector3(
-        light.position[0],
-        level.elevation + level.ceilingHeight - 0.18,
-        light.position[1],
-      ),
+      new Vector3(light.position[0], level.elevation + lightCeiling - 0.18, light.position[1]),
       scene,
     );
     point.diffuse = Color3.FromHexString('#fff0da');

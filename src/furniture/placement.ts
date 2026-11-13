@@ -2,6 +2,7 @@ import type { Level, Point2, Room } from '../model/types';
 import { bounds, floorElevationAt, pointInPolygon, polygonInsidePolygon } from '../model/geometry';
 import { footprint, footprintParts, type FurnitureItem } from './model';
 import { polygonsOverlap, wallSolids, type FurnitureIssue } from './checks';
+import { lowestCeiling } from '../model/ceiling';
 
 const EPS = 0.002;
 const PARAM_EPS = 1e-10;
@@ -18,7 +19,8 @@ function buildingChecker(level: Level) {
       floor = floorElevationAt(level, item.position) - level.elevation + (item.elevation ?? 0);
     if (!parts.every((part) => polygonInsidePolygon(part, level.outline)))
       add('Dépasse le contour de la maison.');
-    if (floor + item.height > level.ceilingHeight + EPS) add('Dépasse la hauteur du plafond.');
+    if (floor + item.height > lowestCeiling(level, parts.flat()) + EPS)
+      add('Dépasse la hauteur du plafond.');
     if (
       solids.some(
         (s) =>

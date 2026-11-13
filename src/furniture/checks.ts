@@ -7,6 +7,7 @@ import {
   wallSections,
 } from '../model/geometry';
 import { footprint, footprintParts, localToWorld, type FurnitureItem } from './model';
+import { lowestCeiling } from '../model/ceiling';
 
 export interface FurnitureIssue {
   itemId: string;
@@ -150,7 +151,7 @@ export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureI
       add(item, 'warning', 'Chevauche une différence de niveau du sol.');
     if (!parts.every((part) => polygonInsidePolygon(part, level.outline)))
       add(item, 'error', 'Dépasse le contour de la maison.');
-    if (floor + item.height > level.ceilingHeight + EPS)
+    if (floor + item.height > lowestCeiling(level, parts.flat()) + EPS)
       add(item, 'error', 'Dépasse la hauteur du plafond.');
     const walls = solids.filter((s) => s.top > floor + EPS && s.bottom < floor + item.height - EPS);
     if (walls.some((wall) => parts.some((part) => polygonsOverlap(part, wall.polygon))))
