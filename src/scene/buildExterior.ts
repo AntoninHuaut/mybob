@@ -26,6 +26,9 @@ import {
 import { polygonMesh, wallFloorSpan, worldScaleUvs } from './buildHouse';
 import { createExteriorTextures, LAWN_DETAIL_TILE, LAWN_TILE, SLATE_TILE } from './surfaceTextures';
 
+/** How far a dormer roof stays above its back wall's top: enough for the depth buffer from the plot. */
+const DORMER_ROOF_CLEARANCE = 0.02;
+
 export interface ExteriorScene {
   root: TransformNode;
   meshes: Mesh[];
@@ -580,6 +583,19 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
           : [across, roofFaceHeightAt(r.vertices, face, across, side), side];
       const topAt = (side: number, across: number, height: number): [number, number, number] =>
         frame.acrossZ ? [side, height, across] : [across, height, side];
+      // The back wall's own top sits at `frontTop`, through its whole thickness: a dormer roof
+      // starting there would share that plane (a flat dormer roof flickered over the wall).
+      // The roof front is lifted just enough to stay above the wall's inner face.
+      const join = panAt(frame.sideLow, frame.meet)[1];
+      const retreat = Math.abs(frame.front - frame.meet);
+      const inside = (retreat - frame.wall.thickness) / retreat;
+      const roofTop =
+        inside > 0.05
+          ? Math.max(
+              frame.frontTop,
+              join + (frame.frontTop + DORMER_ROOF_CLEARANCE - join) / inside,
+            )
+          : frame.frontTop + DORMER_ROOF_CLEARANCE;
       // The roof face is opened from the join on the slope to the outer face of the back wall.
       const hole: [number, number, number][] = [
         panAt(frame.sideLow, frame.meet),
@@ -595,7 +611,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       for (const [index, side] of [frame.sideLow, frame.sideHigh].entries()) {
         const ring: [number, number, number][] = [
           panAt(side, frame.front),
-          topAt(side, frame.front, frame.frontTop),
+          topAt(side, frame.front, roofTop),
           panAt(side, frame.meet),
         ];
         roofMeshes.push(
@@ -615,8 +631,8 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       // along the footprint stays within the face tolerance.
       const joinLow = panAt(frame.sideLow, frame.meet);
       const joinHigh = panAt(frame.sideHigh, frame.meet);
-      const capFrontLow = topAt(frame.sideLow, frame.front, frame.frontTop);
-      const capFrontHigh = topAt(frame.sideHigh, frame.front, frame.frontTop);
+      const capFrontLow = topAt(frame.sideLow, frame.front, roofTop);
+      const capFrontHigh = topAt(frame.sideHigh, frame.front, roofTop);
       for (const [index, triangle] of [
         [capFrontLow, capFrontHigh, joinHigh],
         [capFrontLow, joinHigh, joinLow],
@@ -633,7 +649,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       const outward = Math.sign(frame.front - frame.meet);
       const skin = frame.front + outward * 0.012;
       const bottom = Math.max(panAt(frame.sideLow, skin)[1], panAt(frame.sideHigh, skin)[1]);
-      if (frame.frontTop - bottom > 0.005) {
+      if (roofTop - bottom > 0.005) {
         const frontHoles: [number, number, number][][] = [];
         for (const upper of upperOpenings) {
           if (upper.wall.id !== frame.wall.id || upper.level.id !== frame.level.id) continue;
@@ -663,8 +679,8 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
         const ring: [number, number, number][] = [
           panAt(frame.sideLow, skin),
           panAt(frame.sideHigh, skin),
-          topAt(frame.sideHigh, skin, frame.frontTop),
-          topAt(frame.sideLow, skin, frame.frontTop),
+          topAt(frame.sideHigh, skin, roofTop),
+          topAt(frame.sideLow, skin, roofTop),
         ];
         roofMeshes.push(
           add(
@@ -680,7 +696,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
           ),
         );
       }
-      result.height = Math.max(result.height, frame.frontTop);
+      result.height = Math.max(result.height, roofTop);
     }
     // A roof window lives on the roof face, not on a wall: the renderer opens the
     // slope and sets the frame in the plane of the rafter, at its height from the
