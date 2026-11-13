@@ -55,7 +55,7 @@ test('replacing scene resources clears old input observers and disposes the scen
     },
   }) as HouseViewer;
   const lifecycle = viewer as unknown as {
-    attachSceneInput(scene: Scene, level: Level): void;
+    attachSceneInput(scene: Scene): void;
     releaseScene(): void;
   };
   const pick = new PickingInfo();
@@ -69,13 +69,14 @@ test('replacing scene resources clears old input observers and disposes the scen
       const scene = new Scene(engine);
       Object.assign(viewer, {
         scene,
+        level,
         immersive: {
           dispose() {
             headsets++;
           },
         },
       });
-      lifecycle.attachSceneInput(scene, level);
+      lifecycle.attachSceneInput(scene);
       click(scene);
       scene.onBeforeAnimationsObservable.notifyObservers(scene);
       assert.equal(selections, i + 1);

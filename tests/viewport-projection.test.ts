@@ -68,7 +68,7 @@ function setup(
   window.document.body.innerHTML = `<div id="viewport">
     <div id="orientation-arrow"></div><div id="scene-labels"><button data-label="small"></button></div>
     <span id="width-label"></span><span id="depth-label"></span>
-    <div id="walk-start" hidden></div><div id="door-prompt"></div><div id="furniture-edit-prompt"></div>
+    <div id="walk-start" hidden></div><div id="door-prompt"></div><div id="stair-prompt" hidden><span id="stair-prompt-label"></span></div><div id="furniture-edit-prompt"></div>
     <button id="resume-walk"></button><svg><g id="map-marker"></g></svg><span id="mini-caption"></span>
   </div>`;
   const viewport = window.document.querySelector('#viewport')! as unknown as HTMLElement;
@@ -124,6 +124,10 @@ test('measurement projection uses the lowered floor, and the walk HUD respects d
   assert.equal(el('#door-prompt').hidden, false);
   assert.equal(el('#furniture-edit-prompt').hidden, false);
   assert.equal(el('#resume-walk').hidden, false);
+  assert.equal(el('#stair-prompt').hidden, true);
+  projection.update(view, { ...frame, nearStair: 'down' }, preferences);
+  assert.equal(el('#stair-prompt').hidden, false);
+  assert.equal(el('#stair-prompt-label').textContent, 'Descendre');
   window.document.body.insertAdjacentHTML('beforeend', '<dialog open></dialog>');
   projection.update(view, { ...frame, locked: true }, preferences);
   assert.equal(el('#furniture-edit-prompt').hidden, true);
