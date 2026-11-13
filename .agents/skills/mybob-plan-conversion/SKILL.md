@@ -308,6 +308,49 @@ The symptom to recognise: area labels falling outside the level, a computed tota
 the printed total, or a frame whose origin changes between two levels of the same page. Check
 the frame before suspecting the geometry.
 
+## Fixed equipment read on the drawing
+
+Before delivering a conversion, inspect every room on every level for sanitary, kitchen and
+technical symbols. A connection label such as `(V)`, `(E)` or `(LL)` alone is not an object:
+only import a piece when the drawing carries its footprint. Do not confuse the maintenance
+clearance of a heat pump with its casing, or a crossed shower tray with a cupboard.
+
+Keep a reviewed inventory in the ignored evidence directory: source PDF fingerprint, page
+and room, symbol identity, measured footprint, centre, orientation and uncertainty. A script
+may measure vector paths or calibrated pixels and compute coordinates; the AI decides which
+paths belong to which equipment. Use the same printed-dimension frame as the walls. Check
+independent anchors before accepting the frame, especially on an attic page. Compare each
+placed footprint back to its symbol; every WC, shower, bathtub and basin must be present in
+its room within 5 cm of the drawn position. Count both basins of a double vanity.
+
+Use the existing `toilet`, `shower`, `bathtub`, `vanity` and `kitchen` kinds; use named `custom`
+boxes for technical units. Do not invent a new furniture kind for conversion. Heights and
+elevations not given by the source remain explicit provisional assumptions. A shower's tray,
+panels and orientation must follow the symbol; do not infer a full glass enclosure from a
+crossed tray. Keep technical maintenance zones out of the furniture footprint.
+
+Write the inventory as a variant named **Équipements du plan**, with stable item identifiers
+and `locked: true`. Furniture belongs in `furnishing`, never in the house's `levels`. Preserve
+all existing variants and furnishings (including a separately documented purchased kitchen);
+do not silently replace them with a schematic kitchen. For a new export, select the equipment
+variant and mirror it in `furnishing.levels`. When enriching an existing export, keep its active
+variant and matching mirror; the equipment variant remains selectable. Avoid duplicate variant
+or item identifiers on a repeated pass. The export contract is in
+[PROJECT-FORMAT.md](../../../docs/PROJECT-FORMAT.md#adding-and-saving).
+
+Add a French `source.notes` entry stating that footprints are read on the drawing, not printed
+dimensions, and identifying provisional heights or unresolved symbols. Furniture has no note
+field: do not add one that import would discard. Retain the per-item evidence locally.
+
+Validate the whole project with `validateProject`, every furniture list with
+`validateFurnitureList`, and the variant book with `validateVariantBook` using that project's
+level identifiers. Run `tests/variants.test.ts` as a regression check; it does not read private
+exports, so it cannot replace those direct validations. Re-run the area gate and internal
+audit, compare with their baseline, and require unchanged house geometry. Back up the original
+export and keep the inventory and replay script in `reference-documents/historique/`; then
+synchronise the reference and private working copies as described below. Browser verification
+follows [AGENTS.md](../../../AGENTS.md#local-browser-verification-policy).
+
 ## The three layers
 
 Keep extraction, decision and construction separate so that an error cannot hide behind a
