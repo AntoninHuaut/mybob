@@ -8,6 +8,7 @@ import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { worldScaleUvs } from '../src/scene/buildHouse';
 import {
   fenceMeshData,
+  hedgeMapData,
   greyFromField,
   normalFromHeight,
   createSurfaceTextures,
@@ -230,4 +231,25 @@ test('the fence mesh is mostly open, with wires that meet across the tile seam',
   // A wire at the first column and row: repeated tiles keep an unbroken grid.
   for (let y = 0; y < size; y++) assert.equal(data[y * size * 4 + 3], 255);
   for (let x = 0; x < size; x++) assert.equal(data[x * 4 + 3], 255);
+});
+
+test('the hedge reads as foliage: varied greens, and leaf detail neutral on average', () => {
+  const { albedo, detail } = hedgeMapData();
+  let low = 255,
+    high = 0,
+    green = 0;
+  const texels = albedo.size * albedo.size;
+  for (let i = 0; i < texels; i++) {
+    const [r, g, b] = [albedo.data[i * 4], albedo.data[i * 4 + 1], albedo.data[i * 4 + 2]];
+    low = Math.min(low, g);
+    high = Math.max(high, g);
+    if (g > r && g > b) green++;
+  }
+  assert.ok(high - low > 60, `green spread ${low}..${high}`);
+  assert.equal(green, texels, 'every texel stays green');
+  // A detail map must not shift the hedge's mean colour, only modulate it.
+  let sum = 0;
+  for (let i = 0; i < detail.size * detail.size; i++) sum += detail.data[i * 4];
+  const mean = sum / (detail.size * detail.size);
+  assert.ok(Math.abs(mean - 128) < 12, `detail mean ${mean}`);
 });

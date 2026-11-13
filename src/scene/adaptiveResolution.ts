@@ -29,8 +29,70 @@ export const VISIT_SCALE_FLOOR = 0.67;
  */
 export const EFFECT_TIERS = 1;
 
+/**
+ * How sharp a screen may be rendered (owner, 2026-11-13): 150 % on a 4K screen, 125 % on
+ * a 2K one, never above 100 % under 2K. Measured on the screen's device pixels, so a 4K
+ * screen scaled to 150 % (2560 CSS pixels wide) still counts as 4K.
+ */
+export function upscaleCap(width: number, height: number, pixelRatio: number): number {
+  const pixels = Math.max(width, height) * (pixelRatio || 1);
+  if (!Number.isFinite(pixels)) return 1;
+  if (pixels >= 3800) return 1.5;
+  if (pixels >= 2500) return 1.25;
+  return 1;
+}
+
+/** Scales above full resolution up to `cap`, 10 % apart, the cap itself last. */
+export function upscales(cap: number): number[] {
+  return [1.1, 1.2, 1.3, 1.4, 1.5]
+    .filter((scale) => scale < cap - 1e-6)
+    .concat(cap > 1 ? [cap] : []);
+}
+
+/** The whole ladder for a cap, sharpest first: up-scales, full resolution, the steps down. */
+function ladder(cap: number): number[] {
+  return [...upscales(cap).reverse(), ...RENDER_SCALES];
+}
+
+/** Every scale a user may pin in the Navigation panel on this screen, lowest first. */
+export function pinnableScales(cap: number): number[] {
+  return ladder(cap).reverse();
+}
+
 /** Above this median frame time (under 40 fps), the next render scale is tried. */
 export const FRAME_BUDGET_MS = 25;
+
+/**
+ * Refresh rates a display runs at. A median frame time within `VSYNC_TOLERANCE` of one
+ * of them is the browser waiting for the screen: the machine keeps up, with room to spare.
+ */
+export const REFRESH_RATES_HZ = [60, 75, 90, 100, 120, 144, 165, 240] as const;
+export const VSYNC_TOLERANCE = 0.05;
+
+/**
+ * Over the refresh interval by this much at an up-scale, the machine no longer keeps up:
+ * the scale goes back one step and stays there for the session.
+ */
+export const UPSCALE_SLIP = 0.15;
+
+/** The refresh interval a median frame time sits on, or undefined if it sits on none. */
+export function refreshIntervalOf(medianMs: number): number | undefined {
+  for (const hz of REFRESH_RATES_HZ) {
+    const interval = 1000 / hz;
+    if (Math.abs(medianMs - interval) <= interval * VSYNC_TOLERANCE) return interval;
+  }
+  return undefined;
+}
+
+/** How a view's scale is chosen: measured and adapted, or pinned by the user. */
+export interface ScalePolicy {
+  /** A pinned scale: never adapted, in either direction. */
+  fixed?: number;
+  /** Where an adapted view starts: the scale this machine reached last time. */
+  start?: number;
+  /** The sharpest scale this screen allows (`upscaleCap`); 1 means no up-scaling. */
+  cap?: number;
+}
 
 /** Images measured before each decision: one slow image is not a slow machine. */
 export const FRAME_SAMPLES = 6;
@@ -51,12 +113,19 @@ export const STALL_MS = 5000;
 
 /**
  * Dynamic resolution of one view, the same at rest and in motion. A machine that cannot
- * hold 40 fps renders fewer pixels, one step at a time; a machine that can never leaves
- * full resolution. The scale only goes down, and is kept for the session: changing it
- * resizes every render target, which hitches, so it must not follow the camera.
+ * hold 40 fps renders fewer pixels, one step at a time. A machine that keeps up with the
+ * screen's refresh rate (60, 90, 120, 144 Hz…) renders more, one step at a time up to the
+ * screen's cap; when it falls behind the refresh, the scale goes back one step. Once a view
+ * has stepped down it never climbs again in the session: changing scale resizes every
+ * render target, which hitches, so the scale must not swing with the camera.
  */
 export class AdaptiveResolution {
-  private level = 0;
+  private readonly ladder: number[];
+  private readonly full: number;
+  private level: number;
+  /** The screen's refresh interval, once a series sat on one. */
+  private refreshMs?: number;
+  private steppedDown = false;
   private effectLevel = 0;
   private forcedTier?: number;
   private samples: number[] = [];
@@ -71,7 +140,18 @@ export class AdaptiveResolution {
     private readonly pixelRatio: number,
     private readonly floor = 1,
     private readonly tiers = 0,
-  ) {}
+    private readonly policy: ScalePolicy = {},
+  ) {
+    this.ladder = ladder(policy.cap ?? 1);
+    this.full = this.ladder.indexOf(1);
+    const wanted = policy.fixed ?? policy.start;
+    let best = this.full;
+    if (wanted !== undefined && Number.isFinite(wanted))
+      this.ladder.forEach((value, index) => {
+        if (Math.abs(value - wanted) < Math.abs(this.ladder[best] - wanted)) best = index;
+      });
+    this.level = best;
+  }
 
   /**
    * `frameMs` is the time since the previous image, when both were drawn in a row;
@@ -79,31 +159,64 @@ export class AdaptiveResolution {
    */
   update(frameMs?: number): number {
     if (frameMs === undefined || !Number.isFinite(frameMs) || frameMs > STALL_MS)
-      return RENDER_SCALES[this.level];
+      return this.ladder[this.level];
     if (this.warmup > 0) {
       this.warmup--;
-      return RENDER_SCALES[this.level];
+      return this.ladder[this.level];
     }
     this.samples.push(frameMs);
     if (this.samples.length >= FRAME_SAMPLES) {
       const sorted = [...this.samples].sort((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)];
       this.samples = [];
-      if (median > FRAME_BUDGET_MS) {
-        const next = RENDER_SCALES[this.level + 1];
-        if (this.effectLevel < this.tiers) {
+      const pinned = this.policy.fixed !== undefined;
+      const vsync = refreshIntervalOf(median);
+      if (vsync !== undefined) this.refreshMs = Math.min(this.refreshMs ?? Infinity, vsync);
+      const scale = this.ladder[this.level];
+      if (
+        !pinned &&
+        scale > 1 &&
+        (this.refreshMs === undefined
+          ? vsync === undefined
+          : median > this.refreshMs * (1 + UPSCALE_SLIP))
+      ) {
+        // Behind the screen at an up-scale (or, started there from a saved scale, not yet
+        // seen keeping up with any refresh rate): back one step, and no more climbing.
+        this.level++;
+        this.steppedDown = true;
+        this.warmup = WARMUP_FRAMES;
+      } else if (median > FRAME_BUDGET_MS) {
+        const next = this.ladder[this.level + 1];
+        // Sharpness above 100 % is a bonus: it goes before the occlusion does.
+        if (!pinned && this.ladder[this.level] > 1) {
+          this.level++;
+          this.steppedDown = true;
+          this.warmup = WARMUP_FRAMES;
+        } else if (this.effectLevel < this.tiers) {
           this.effectLevel++;
           this.warmup = WARMUP_FRAMES;
         } else if (
+          !pinned &&
           next !== undefined &&
-          (this.floor < 1 ? next >= this.floor : next * this.pixelRatio >= 1)
+          (next >= 1 || (this.floor < 1 ? next >= this.floor : next * this.pixelRatio >= 1))
         ) {
           this.level++;
+          this.steppedDown = true;
           this.warmup = WARMUP_FRAMES;
         }
+      } else if (
+        vsync !== undefined &&
+        vsync === this.refreshMs &&
+        !pinned &&
+        !this.steppedDown &&
+        this.effectLevel === 0 &&
+        this.level > 0
+      ) {
+        this.level--;
+        this.warmup = WARMUP_FRAMES;
       }
     }
-    return RENDER_SCALES[this.level];
+    return this.ladder[this.level];
   }
 
   /**
@@ -129,7 +242,7 @@ export class AdaptiveResolution {
 
   /** The scale in use on this machine, for the diagnostic. */
   get scale(): number {
-    return RENDER_SCALES[this.level];
+    return this.ladder[this.level];
   }
 }
 
@@ -144,8 +257,37 @@ export class ViewResolutions {
   private readonly views = new Map<string, AdaptiveResolution>();
   private current?: string;
   private forcedTier?: number;
+  private fixed?: number;
+  private starts: Record<string, number> = {};
 
-  constructor(private readonly pixelRatio: number) {}
+  /** `cap`: the sharpest scale this screen allows (`upscaleCap`). */
+  constructor(
+    private readonly pixelRatio: number,
+    private cap = 1,
+  ) {}
+
+  /**
+   * The window moved to a screen with another cap: every view starts over under it (its
+   * refresh rate may differ too). Returns whether anything changed.
+   */
+  setCap(cap: number): boolean {
+    if (cap === this.cap) return false;
+    this.cap = cap;
+    this.views.clear();
+    this.current = undefined;
+    return true;
+  }
+
+  /**
+   * A pinned scale for every view, or adapted views starting where this machine left them.
+   * Views already measured are dropped and start over under the new policy.
+   */
+  configure(fixed: number | undefined, starts: Record<string, number>): void {
+    this.fixed = fixed;
+    this.starts = { ...starts };
+    this.views.clear();
+    this.current = undefined;
+  }
 
   /** The resolution of `view`, created on first use; entering it restarts its warm-up. */
   for(view: string): AdaptiveResolution {
@@ -156,6 +298,7 @@ export class ViewResolutions {
         view === 'walk' ? VISIT_SCALE_FLOOR : 1,
         // Only the visit and Vue 3D carry an occlusion to drop.
         view === 'walk' || view === 'overview' ? EFFECT_TIERS : 0,
+        { fixed: this.fixed, start: this.starts[view], cap: this.cap },
       );
       resolution.force(this.forcedTier);
       this.views.set(view, resolution);

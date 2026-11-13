@@ -37,7 +37,7 @@ import {
   type HouseScene,
 } from './buildHouse';
 import { createMaterials, type Materials } from './materials';
-import { buildExterior, type ExteriorScene } from './buildExterior';
+import { buildExterior, poseGate, type ExteriorScene } from './buildExterior';
 import {
   applyLookSensitivity,
   createWalkCamera,
@@ -61,7 +61,7 @@ import {
   warmFrames,
 } from './shaderWarmup';
 import { pluginSummary, shaderLog } from './shaderLog';
-import { EFFECT_TIERS, MAX_PIXEL_RATIO, ViewResolutions } from './adaptiveResolution';
+import { EFFECT_TIERS, MAX_PIXEL_RATIO, upscaleCap, ViewResolutions } from './adaptiveResolution';
 import {
   AUTO_CUT_HEIGHT,
   buildWallCutaway,
@@ -258,6 +258,7 @@ export class HouseViewer {
   onPreparingProgress?: (fraction: number) => void;
   private readonly resolutions = new ViewResolutions(
     Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO),
+    upscaleCap(window.screen?.width ?? 0, window.screen?.height ?? 0, window.devicePixelRatio || 1),
   );
   /** The current view's dynamic resolution (`ViewResolutions`). */
   private get adaptiveResolution() {
@@ -1103,7 +1104,8 @@ export class HouseViewer {
   }
 
   toggleDoor(id: string) {
-    const door = this.house.doors.find((d) => d.id === id);
+    const door =
+      this.house.doors.find((d) => d.id === id) ?? this.exterior?.gates.find((g) => g.id === id);
     if (door) {
       door.open = !door.open;
       door.target = door.open ? 1 : 0;
@@ -1728,6 +1730,7 @@ export class HouseViewer {
     this.applyEffectTier();
     if (scale === this.renderScale) return;
     this.renderScale = scale;
+    this.onRenderScaleChange?.(this.currentViewKey(), scale);
     this.engine.setHardwareScalingLevel(this.baseScaling / scale);
     // The targets were resized: the image is drawn again and settled.
     this.renderScheduler.request();
@@ -1755,6 +1758,26 @@ export class HouseViewer {
     // `occlusionOn` is undefined on a viewer built from its prototype (scene tests).
     if (this.occlusionOn === false) return EFFECT_TIERS;
     return this.adaptiveResolution?.effectTier ?? 0;
+  }
+
+  /** An adapted view changed scale: the host remembers it for the next session. */
+  onRenderScaleChange?: (view: string, scale: number) => void;
+
+  /**
+   * Render resolution: a scale pinned for every view, or `undefined` to adapt, each view
+   * starting from `starts[view]`, the scale this machine reached last time.
+   */
+  /** The window now sits on a screen with another cap (multi-screen): views start over. */
+  setScreenCap(cap: number) {
+    if (!this.resolutions.setCap(cap)) return;
+    this.renderScale = Number.NaN;
+    this.requestRender();
+  }
+
+  setRenderScalePolicy(fixed: number | undefined, starts: Record<string, number>) {
+    this.resolutions.configure(fixed, starts);
+    this.renderScale = Number.NaN; // the next image applies the policy's scale
+    this.requestRender();
   }
 
   /** Render scale in use on this machine (1 = full resolution), for the diagnostic. */
@@ -1808,6 +1831,7 @@ export class HouseViewer {
       this.orbitTour !== undefined ||
       this.capturing ||
       !!this.house?.doors.some((door) => Math.abs(door.progress - door.target) > 0.001) ||
+      !!this.exterior?.gates.some((gate) => Math.abs(gate.progress - gate.target) > 0.001) ||
       (this.shadowRefresh !== undefined && !this.shadowRefresh.settled) ||
       !this.engine.areAllEffectsReady() ||
       this.scene.getWaitingItemsCount() > 0
@@ -1853,6 +1877,16 @@ export class HouseViewer {
           Math.sign(door.target - door.progress) *
           Math.min(Math.abs(door.target - door.progress), dt * 2.5);
         poseDoor(door);
+        doorsMoved = true;
+        this.shadowRefresh?.invalidate();
+      }
+    }
+    for (const gate of this.exterior?.gates ?? []) {
+      if (Math.abs(gate.progress - gate.target) > 0.001) {
+        gate.progress +=
+          Math.sign(gate.target - gate.progress) *
+          Math.min(Math.abs(gate.target - gate.progress), dt * 2.5);
+        poseGate(gate);
         doorsMoved = true;
         this.shadowRefresh?.invalidate();
       }

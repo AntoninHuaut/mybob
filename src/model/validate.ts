@@ -449,6 +449,8 @@ export function validateProject(
           fail(
             `Un mur de clôture, une clôture ou une haie suit au moins deux points distincts dans la parcelle : ${line.id}`,
           );
+        if (line.kind === 'gate' && line.points.length !== 2)
+          fail(`Un portillon a exactement deux points, ses deux poteaux : ${line.id}`);
         if (!finite(line.height) || line.height < 0.1 || line.height > 4)
           fail(`La hauteur doit être comprise entre 0,1 et 4 m : ${line.id}`);
         if (
@@ -456,6 +458,13 @@ export function validateProject(
           (!finite(line.thickness) || line.thickness < 0.02 || line.thickness > 2)
         )
           fail(`L’épaisseur doit être comprise entre 2 cm et 2 m : ${line.id}`);
+        if (
+          line.infill !== undefined &&
+          (!['mesh', 'slats'].includes(line.infill) || !['fence', 'gate'].includes(line.kind))
+        )
+          fail(
+            `Seuls une clôture ou un portillon ont un remplissage, grillage ou lames : ${line.id}`,
+          );
       }
     }
     if (site.roofs !== undefined) {

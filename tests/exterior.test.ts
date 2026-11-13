@@ -5,7 +5,7 @@ import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { Ray } from '@babylonjs/core/Culling/ray';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { buildExterior, planeUv } from '../src/scene/buildExterior';
+import { buildExterior, planeUv, poseGate } from '../src/scene/buildExterior';
 import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import type { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import {
@@ -1116,9 +1116,57 @@ test('#259: garden surfaces and boundaries reject what the engine cannot draw', 
   bad((p) => {
     (p.site!.boundaries![2] as { kind: string }).kind = 'door';
   });
+  bad((p) => {
+    p.site!.boundaries![0].infill = 'slats'; // a wall has no infill
+  });
+  bad((p) => {
+    (p.site!.boundaries![1] as { infill: string }).infill = 'glass';
+  });
 });
 
-test('a garden gate is drawn like a fence and lets the visitor through', () => {
+test('a garden gate swings open and shut like a door, and bars the way when closed', () => {
+  const project = gardenProject();
+  project.site!.boundaries!.push({
+    id: 'portillon',
+    kind: 'gate',
+    height: 1.4,
+    infill: 'slats',
+    points: [
+      [-9, 4],
+      [-9, 5],
+    ],
+  });
+  const { built, scene, engine } = exterior(validateProject(project));
+  const leaf = scene.getMeshByName('site-boundary:portillon')!;
+  const posts = scene.getMeshByName('site-boundary-posts:portillon')!;
+  assert.ok(leaf && posts, 'leaf and posts are built');
+  assert.equal(leaf.material!.name, 'garden-fence-slats');
+  assert.equal(
+    scene.getMeshByName('site-boundary:cloture-est')!.material!.name,
+    'garden-fence-mesh',
+  );
+  assert.deepEqual(leaf.metadata, { kind: 'door', exteriorKind: 'boundary', id: 'gate:portillon' });
+  assert.ok(leaf.isPickable && leaf.checkCollisions && posts.checkCollisions);
+  assert.ok([leaf, posts].every((mesh) => built.boundaryMeshes.includes(mesh as never)));
+  const gate = built.gates.find((g) => g.id === 'gate:portillon')!;
+  const centre = () => {
+    leaf.computeWorldMatrix(true);
+    return leaf.getBoundingInfo().boundingBox.centerWorld;
+  };
+  // Closed: the leaf spans the opening along +z, on x = -9.
+  near(centre().x, -9);
+  near(centre().z, 4.5);
+  gate.progress = 1;
+  poseGate(gate);
+  // Open: a quarter turn towards (-dz, dx) = -x, so the leaf lies along -x from the hinge.
+  near(centre().z, 4.04);
+  near(centre().x, -9 - 0.46);
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
+});
+
+test('a gate has exactly two points', () => {
   const project = gardenProject();
   project.site!.boundaries!.push({
     id: 'portillon',
@@ -1127,19 +1175,10 @@ test('a garden gate is drawn like a fence and lets the visitor through', () => {
     points: [
       [-9, 4],
       [-9, 5],
+      [-8, 5],
     ],
   });
-  const { built, scene, engine } = exterior(validateProject(project));
-  const gate = ['site-boundary:portillon', 'site-boundary-posts:portillon'].map((name) =>
-    scene.getMeshByName(name)!,
-  );
-  assert.ok(gate.every(Boolean), 'panel and posts are built');
-  assert.ok(
-    gate.every((mesh) => !mesh.checkCollisions && built.boundaryMeshes.some((m) => m === mesh)),
-  );
-  built.dispose();
-  scene.dispose();
-  engine.dispose();
+  assert.throws(() => validateProject(project));
 });
 
 test('#259: a project without garden boundaries builds none', () => {

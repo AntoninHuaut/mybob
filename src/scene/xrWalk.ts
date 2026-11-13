@@ -1,4 +1,12 @@
 import { WebXRExperienceHelper } from '@babylonjs/core/XR/webXRExperienceHelper';
+import { WebXRManagedOutputCanvasOptions } from '@babylonjs/core/XR/webXRManagedOutputCanvas';
+import {
+  isTetheredHeadset,
+  parseXrScale,
+  startScale,
+  XR_SCALE_STORAGE,
+  XrScaleTuner,
+} from './xrScale';
 import type { WebXRCamera } from '@babylonjs/core/XR/webXRCamera';
 import type { Collider } from '@babylonjs/core/Collisions/collider';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
@@ -434,9 +442,24 @@ const INVALID = new Color3(0.9, 0.35, 0.3);
 
 export async function startImmersiveWalk(host: ImmersiveHost): Promise<ImmersiveWalk> {
   const helper = await WebXRExperienceHelper.CreateAsync(host.scene);
-  const walk = new ImmersiveWalk(host, helper);
+  // A PC-driven headset opens at the scale its last session earned (`xrScale.ts`).
+  let saved: number | undefined;
   try {
-    await helper.enterXRAsync('immersive-vr', 'local-floor');
+    saved = parseXrScale(localStorage.getItem(XR_SCALE_STORAGE));
+  } catch {
+    saved = undefined;
+  }
+  const tethered = isTetheredHeadset(navigator.userAgent);
+  const scale = startScale(saved, tethered);
+  const walk = new ImmersiveWalk(host, helper, tethered ? new XrScaleTuner(scale) : undefined);
+  try {
+    const options = WebXRManagedOutputCanvasOptions.GetDefaults(host.scene.getEngine());
+    options.canvasOptions = { ...options.canvasOptions, framebufferScaleFactor: scale };
+    await helper.enterXRAsync(
+      'immersive-vr',
+      'local-floor',
+      helper.sessionManager.getWebXRRenderTarget(options),
+    );
     // 0 to 1; ignored by a browser or layer without fixed foveation.
     helper.sessionManager.fixedFoveation = XR_FIXED_FOVEATION;
   } catch (error) {
@@ -490,6 +513,8 @@ export class ImmersiveWalk {
   constructor(
     private readonly host: ImmersiveHost,
     private readonly helper: WebXRExperienceHelper,
+    /** Present on a PC-driven headset: tunes the next session's render scale. */
+    private readonly scaleTuner?: XrScaleTuner,
   ) {
     const scene = host.scene;
     const camera = (this.camera = helper.camera);
@@ -560,8 +585,14 @@ export class ImmersiveWalk {
     if (fps !== undefined) {
       this.lastFps = fps;
       this.showHud();
+      const before = this.governor?.current;
       const rate = this.governor?.observe(fps);
-      if (rate !== undefined) this.setFrameRate(rate);
+      if (rate !== undefined) {
+        this.setFrameRate(rate);
+        // Only a lowered rate says the scale was too much; a probe upwards says nothing.
+        if (before !== undefined && rate < before) this.scaleTuner?.markTooMuch();
+      }
+      this.scaleTuner?.observe(fps, this.governor?.current);
     }
     if (this.hudFlash > 0) {
       this.hudFlash -= seconds;
@@ -718,6 +749,13 @@ export class ImmersiveWalk {
   dispose() {
     if (this.disposed) return;
     this.disposed = true;
+    // The next session opens at the scale this one earned.
+    if (this.scaleTuner)
+      try {
+        localStorage.setItem(XR_SCALE_STORAGE, JSON.stringify({ scale: this.scaleTuner.next }));
+      } catch {
+        /* optional persistence */
+      }
     for (const pointer of this.pointers.values()) pointer.root.dispose();
     this.pointers.clear();
     this.marker.dispose();
@@ -856,7 +894,7 @@ export class ImmersiveWalk {
       this.limitHits,
       this.seatedOffset !== 0,
       this.preferences.teleport,
-      undefined,
+      this.scaleTuner?.scale,
       this.hintSeconds > 0 ? XR_HINT : undefined,
     );
   }

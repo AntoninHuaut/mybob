@@ -47,6 +47,15 @@ import { FurnitureClipboard } from './furniture/clipboard';
 import { chairsAroundTable } from './furniture/tableChairs';
 import { snapDraggedFurniture, defaultSnapSettings } from './furniture/arrangement';
 import { MeasureBar } from './ui/measureBar';
+import {
+  parseRenderScale,
+  RENDER_SCALE_STORAGE,
+  renderScaleNote,
+  renderScaleOptionsHtml,
+  renderScaleValue,
+  screenCap,
+  type RenderScaleSettings,
+} from './ui/renderScale';
 import { desktopHint, modeTitle, touchHint as touchHintText } from './ui/modeChrome';
 import {
   roomDetailHtml,
@@ -897,6 +906,7 @@ function loadProject(
   el('#demo-notice').hidden = p.id !== 'studio-demo';
   el('#received-banner').hidden = !received;
   applyNavigationPreferences();
+  applyRenderScale();
   el<HTMLSelectElement>('#level-select').innerHTML = p.levels
     .map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`)
     .join('');
@@ -1036,7 +1046,13 @@ function syncViewChrome() {
   el('#view-eyebrow').textContent = title[0];
   el('#view-title').textContent = title[1];
   el('#view-subtitle').textContent = title[2];
-  el('#walk-start').hidden = next !== 'walk';
+  // The welcome shows on the first visit only; afterwards a click in the view
+  // captures the mouse, and the control hint keeps the keys on screen.
+  el('#walk-start').hidden = next !== 'walk' || onboarding.walkGuideSeen;
+  if (next === 'walk' && !onboarding.walkGuideSeen) {
+    onboarding = { ...onboarding, walkGuideSeen: true };
+    saveOnboarding(onboarding);
+  }
   el('#resume-walk').hidden = true;
   el('#crosshair').hidden = next !== 'walk';
   el('#scene-labels').hidden = next === 'walk' || !showLabels;
@@ -1556,6 +1572,55 @@ async function adoptReceived(source: ShareDocument) {
 }
 
 const NAVIGATION_STORAGE = 'maison-atelier:navigation:v1';
+let renderScaleSettings: RenderScaleSettings = { detected: {} };
+function saveRenderScale() {
+  try {
+    localStorage.setItem(RENDER_SCALE_STORAGE, JSON.stringify(renderScaleSettings));
+  } catch {
+    /* optional persistence */
+  }
+  el('#render-scale-note').textContent = renderScaleNote(renderScaleSettings);
+}
+/** « Résolution du rendu »: automatic from what this machine reached, or pinned. */
+function applyRenderScale() {
+  try {
+    renderScaleSettings = parseRenderScale(localStorage.getItem(RENDER_SCALE_STORAGE));
+  } catch {
+    renderScaleSettings = { detected: {} };
+  }
+  el<HTMLSelectElement>('#render-scale').value = renderScaleValue(renderScaleSettings.fixed);
+  el('#render-scale-note').textContent = renderScaleNote(renderScaleSettings);
+  viewer.setRenderScalePolicy(renderScaleSettings.fixed, renderScaleSettings.detected);
+  watchScreenCap();
+  viewer.onRenderScaleChange = (view, scale) => {
+    if (renderScaleSettings.fixed !== undefined) return;
+    renderScaleSettings.detected[view] = scale;
+    saveRenderScale();
+  };
+}
+/**
+ * Several screens: the window may move from a 4K screen to a 1080p one. The cap is read
+ * again when the screen changes (Chromium's `change` on `screen`), on resize and focus,
+ * and every two seconds, since moving between two screens of the same scale fires nothing.
+ */
+let watchedCap: number | undefined;
+function watchScreenCap() {
+  if (watchedCap !== undefined) return;
+  watchedCap = screenCap();
+  const check = () => {
+    const cap = screenCap();
+    if (cap === watchedCap) return;
+    watchedCap = cap;
+    viewer.setScreenCap(cap);
+    el('#render-scale').innerHTML = renderScaleOptionsHtml(cap);
+    el<HTMLSelectElement>('#render-scale').value = renderScaleValue(renderScaleSettings.fixed, cap);
+    el('#render-scale-note').textContent = renderScaleNote(renderScaleSettings, cap);
+  };
+  (window.screen as Screen & EventTarget).addEventListener?.('change', check);
+  window.addEventListener('resize', check);
+  window.addEventListener('focus', check);
+  window.setInterval(check, 2000);
+}
 function applyNavigationPreferences() {
   try {
     const saved = JSON.parse(localStorage.getItem(NAVIGATION_STORAGE) ?? '{}');
@@ -1700,6 +1765,12 @@ function wireNavigationControls() {
   el('#walk-speed').addEventListener('input', () => updateNavigationPreferences());
   el('#look-sensitivity').addEventListener('input', () => updateNavigationPreferences());
   el('#occlusion-enable').addEventListener('change', () => updateNavigationPreferences());
+  el('#render-scale').addEventListener('change', () => {
+    const value = el<HTMLSelectElement>('#render-scale').value;
+    renderScaleSettings.fixed = value === 'auto' ? undefined : Number(value);
+    saveRenderScale();
+    viewer.setRenderScalePolicy(renderScaleSettings.fixed, renderScaleSettings.detected);
+  });
   el('#go-to').addEventListener('click', () => {
     if (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) {
       setMode('walk');

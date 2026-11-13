@@ -5,6 +5,10 @@ import {
   EFFECT_TIERS,
   FRAME_SAMPLES,
   RENDER_SCALES,
+  pinnableScales,
+  refreshIntervalOf,
+  upscaleCap,
+  upscales,
   ViewResolutions,
   VISIT_SCALE_FLOOR,
   WARMUP_FRAMES,
@@ -217,4 +221,93 @@ test('leaving the page restarts the warm-up of every view', () => {
   assert.equal(walk.effectTier, 0, 'the half-measured series was dropped');
   feed(walk, 1, 60);
   assert.equal(walk.effectTier, EFFECT_TIERS);
+});
+
+test('the cap follows the screen: 150 % on 4K, 125 % on 2K, none below', () => {
+  assert.equal(upscaleCap(3840, 2160, 1), 1.5);
+  assert.equal(upscaleCap(2560, 1440, 1.5), 1.5, 'a 4K screen scaled to 150 %');
+  assert.equal(upscaleCap(2560, 1440, 1), 1.25);
+  assert.equal(upscaleCap(1920, 1080, 1), 1);
+  assert.deepEqual(upscales(1.25), [1.1, 1.2, 1.25]);
+  assert.deepEqual(upscales(1.5), [1.1, 1.2, 1.3, 1.4, 1.5]);
+  assert.deepEqual(upscales(1), []);
+  assert.deepEqual(pinnableScales(1.25), [0.67, 0.8, 0.9, 1, 1.1, 1.2, 1.25]);
+});
+
+test('a frame time sitting on a refresh rate is the screen waiting, not the machine', () => {
+  for (const hz of [60, 90, 120, 144]) assert.equal(refreshIntervalOf(1000 / hz), 1000 / hz);
+  assert.equal(refreshIntervalOf(1000 / 60 + 0.5), 1000 / 60);
+  assert.equal(refreshIntervalOf(30), undefined, '33 fps sits on no refresh rate');
+});
+
+test('a 2K screen held at 60 Hz sharpens step by step, up to 125 %', () => {
+  const resolution = new AdaptiveResolution(1, 1, EFFECT_TIERS, { cap: 1.25 });
+  assert.equal(feed(resolution, SERIES, 1000 / 60), 1.1);
+  feed(resolution, SERIES * 20, 1000 / 60);
+  assert.equal(resolution.scale, 1.25);
+});
+
+test('a 4K screen held at 144 Hz climbs to 150 %', () => {
+  const resolution = new AdaptiveResolution(1, 1, 0, { cap: 1.5 });
+  feed(resolution, SERIES * 20, 1000 / 144);
+  assert.equal(resolution.scale, 1.5);
+});
+
+test('below 2K, keeping up with the screen never sharpens past 100 %', () => {
+  const resolution = new AdaptiveResolution(1, 1, 0, { cap: 1 });
+  feed(resolution, SERIES * 20, 1000 / 144);
+  assert.equal(resolution.scale, 1);
+});
+
+test('falling behind the refresh at an up-scale goes back one step, for good', () => {
+  const resolution = new AdaptiveResolution(1, 1, EFFECT_TIERS, { cap: 1.5 });
+  feed(resolution, SERIES * 3, 1000 / 60);
+  assert.equal(resolution.scale, 1.3);
+  feed(resolution, SERIES, 22); // 45 fps: behind 60 Hz, yet above 40 fps
+  assert.equal(resolution.scale, 1.2, 'the up-scale goes, not the occlusion');
+  assert.equal(resolution.effectTier, 0);
+  feed(resolution, SERIES * 10, 1000 / 60);
+  assert.equal(resolution.scale, 1.2, 'no more climbing in this session');
+});
+
+test('started sharp from a saved scale but not keeping up, the view steps back down', () => {
+  const resolution = new AdaptiveResolution(1, 1, 0, { start: 1.25, cap: 1.25 });
+  feed(resolution, SERIES, 21);
+  assert.equal(resolution.scale, 1.2);
+});
+
+test('frame times off every refresh rate do not sharpen', () => {
+  const resolution = new AdaptiveResolution(1, 1, 0, { cap: 1.5 });
+  feed(resolution, SERIES * 10, 21); // 48 fps, CPU-bound
+  assert.equal(resolution.scale, 1);
+});
+
+test('an adapted view starts where this machine left it; a pinned one never moves', () => {
+  assert.equal(new AdaptiveResolution(1, 1, 0, { start: 1.3, cap: 1.5 }).scale, 1.3);
+  assert.equal(new AdaptiveResolution(1, 1, 0, { start: 1.5, cap: 1.25 }).scale, 1.25);
+  const pinned = new AdaptiveResolution(1, 1, 0, { fixed: 1.2, cap: 1.25 });
+  feed(pinned, SERIES * 10, 1000 / 60);
+  assert.equal(pinned.scale, 1.2);
+  feed(pinned, SERIES * 10, 60);
+  assert.equal(pinned.scale, 1.2);
+});
+
+test('a new policy starts every view over', () => {
+  const views = new ViewResolutions(1, 1.5);
+  feed(views.for('walk'), SERIES * 2, 1000 / 60);
+  assert.equal(views.for('walk').scale, 1.2);
+  views.configure(0.8, {});
+  assert.equal(views.for('walk').scale, 0.8);
+  views.configure(undefined, { walk: 1.4 });
+  assert.equal(views.for('walk').scale, 1.4);
+  assert.equal(views.for('plan').scale, 1);
+});
+
+test('moving to a screen with another cap starts the views over under it', () => {
+  const views = new ViewResolutions(1, 1.5);
+  feed(views.for('walk'), SERIES * 20, 1000 / 60);
+  assert.equal(views.for('walk').scale, 1.5);
+  assert.equal(views.setCap(1), true);
+  assert.equal(views.for('walk').scale, 1, 'a 1080p screen never renders above 100 %');
+  assert.equal(views.setCap(1), false, 'the same cap changes nothing');
 });
