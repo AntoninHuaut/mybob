@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
 import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { ShaderStore } from '@babylonjs/core/Engines/shaderStore';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
@@ -36,8 +37,11 @@ test("the guard wraps the whole shadow lookup of Babylon's include, once", () =>
   const close = patched.indexOf('}\n#ifdef SHADOWONLY\n#ifndef SHADOWINUSE');
   assert.ok(close > patched.lastIndexOf('computeShadow('));
   assert.ok(patched.indexOf('#else\nshadow=1.;\n#endif\naggShadow') > close);
-  assert.equal(count(patched, '{'), count(lightFragment.shader, '{') + 2);
-  assert.equal(count(patched, '}'), count(lightFragment.shader, '}') + 2);
+  // Code braces only: `{X}` is the light index placeholder. The guard's `{shadow=1.;}` plus
+  // the block around the lookup add two of each.
+  const braces = (text: string, brace: string) => count(text.replaceAll('{X}', ''), brace);
+  assert.equal(braces(patched, '{'), braces(lightFragment.shader, '{') + 2);
+  assert.equal(braces(patched, '}'), braces(lightFragment.shader, '}') + 2);
 });
 
 test('the guard only covers PBR materials and directional lights', () => {
@@ -98,7 +102,7 @@ test('a shadow-receiving PBR surface gets the guard, a standard material does no
     label.material = new StandardMaterial('label', scene);
     label.receiveShadows = true;
     shadow.addShadowCaster(wall);
-    scene.createDefaultCamera();
+    new FreeCamera('eye', new Vector3(0, 0, -5), scene);
     const fragment = (mesh: typeof wall) => mesh.subMeshes[0]?.effect?.fragmentSourceCode ?? '';
     for (let frame = 0; frame < 400; frame++) {
       scene.render();
