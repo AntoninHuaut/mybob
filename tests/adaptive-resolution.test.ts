@@ -154,11 +154,12 @@ test('a slow but running machine, like software rendering at under 2 fps, is sti
   assert.ok(resolution.effectTier > 0);
 });
 
-test('the visit drops its occlusion, then may go down to its floor below one pixel per CSS pixel', () => {
+test('the visit drops its occlusion, then goes down to its fixed floor, never 67 %', () => {
   for (const [ratio, expected] of [
     [1, VISIT_SCALE_FLOOR],
-    [1.25, 0.8],
-    [1.5, 0.67],
+    [1.25, VISIT_SCALE_FLOOR],
+    [1.5, VISIT_SCALE_FLOOR],
+    [2, VISIT_SCALE_FLOOR],
   ] as const) {
     const resolution = new AdaptiveResolution(ratio, VISIT_SCALE_FLOOR, EFFECT_TIERS);
     assert.equal(feed(resolution, SERIES, 40), 1, 'the occlusion goes first');

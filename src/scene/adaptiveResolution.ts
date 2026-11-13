@@ -5,11 +5,11 @@
 export const RENDER_SCALES = [1, 0.9, 0.8, 0.67] as const;
 
 /**
- * Lowest scale the visit may take even below one rendered pixel per CSS pixel, once its
- * occlusion is gone: 90 %, 80 % read too soft on the owner's screen (2026-11-13). Plan,
- * Vue 3D and Extérieur keep the one-pixel floor.
+ * The visit's fixed floor, whatever the pixel ratio, once its occlusion is gone: 80 %.
+ * 67 % is what made the visit look ugly on the owner's screen (2026-11-13). Plan, Vue 3D
+ * and Extérieur keep the one-rendered-pixel-per-CSS-pixel floor instead.
  */
-export const VISIT_SCALE_FLOOR = 0.9;
+export const VISIT_SCALE_FLOOR = 0.8;
 
 /**
  * Effect tiers, dropped **before** the resolution (owner, 2026-11-13: when the frame rate is
@@ -55,8 +55,8 @@ export class AdaptiveResolution {
   private warmup = WARMUP_FRAMES;
 
   /**
-   * `floor`: scales at or above it are allowed whatever the pixel ratio; below it, a step
-   * must keep at least one rendered pixel per CSS pixel. 1 keeps only that rule.
+   * `floor`: under 1, a fixed floor whatever the pixel ratio; 1 means each step must keep
+   * at least one rendered pixel per CSS pixel.
    * `tiers`: effect tiers this view can drop, first (0 for a view without occlusion).
    */
   constructor(
@@ -86,7 +86,10 @@ export class AdaptiveResolution {
         if (this.effectLevel < this.tiers) {
           this.effectLevel++;
           this.warmup = WARMUP_FRAMES;
-        } else if (next !== undefined && (next * this.pixelRatio >= 1 || next >= this.floor)) {
+        } else if (
+          next !== undefined &&
+          (this.floor < 1 ? next >= this.floor : next * this.pixelRatio >= 1)
+        ) {
           this.level++;
           this.warmup = WARMUP_FRAMES;
         }
