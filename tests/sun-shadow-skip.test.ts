@@ -111,8 +111,10 @@ test('the driver keeps the guard for a shadowed PBR surface, not for a standard 
       if (fragment(wall) && fragment(label)) break;
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
-    const defines = (program: string, name: string) =>
-      new RegExp(`^#define ${name}\\b`, 'm').test(program);
+    // The defines the material compiles its program with (Babylon writes them as `#define`
+    // lines at link time): truthy means defined for the driver.
+    const defines = (mesh: typeof wall, name: string) =>
+      Boolean((mesh.subMeshes[0]?.materialDefines as Record<string, unknown> | null)?.[name]);
     const pbr = fragment(wall);
     assert.ok(pbr.includes('NdotLUnclamped<=0.)'), 'the PBR program carries the guard');
     assert.ok(
@@ -120,9 +122,9 @@ test('the driver keeps the guard for a shadowed PBR surface, not for a standard 
       'before the lookup',
     );
     // The driver keeps the guard: the shadowed sun of a plain PBR surface meets its condition.
-    for (const name of ['PBR', 'DIRLIGHT0', 'SHADOW0']) assert.ok(defines(pbr, name), name);
+    for (const name of ['PBR', 'DIRLIGHT0', 'SHADOW0']) assert.ok(defines(wall, name), name);
     for (const name of ['SHADOWONLY', 'SS_TRANSLUCENCY', 'CLEARCOAT', 'SHEEN', 'LIGHTMAP']) {
-      assert.ok(!defines(pbr, name), `no ${name}`);
+      assert.ok(!defines(wall, name), `no ${name}`);
     }
     // The patched region, from the guard to the light's bookkeeping, closes what it opens.
     const guardLine = pbr.lastIndexOf('\n', pbr.indexOf('NdotLUnclamped<=0.)'));
@@ -130,9 +132,9 @@ test('the driver keeps the guard for a shadowed PBR surface, not for a standard 
     assert.ok(region.includes('computeShadow'), 'the lookup sits inside the region');
     assert.equal(count(region, '{'), count(region, '}'));
     // A standard material shares the include, but never defines PBR: the driver drops the guard.
-    const standard = fragment(label);
-    assert.ok(defines(standard, 'SHADOW0'), 'the standard surface is shadowed too');
-    assert.ok(!defines(standard, 'PBR'), 'standard materials never take the guard');
+    assert.ok(fragment(label).length > 0);
+    assert.ok(defines(label, 'SHADOW0'), 'the standard surface is shadowed too');
+    assert.ok(!defines(label, 'PBR'), 'standard materials never take the guard');
   } finally {
     scene.dispose();
     engine.dispose();
