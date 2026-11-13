@@ -369,13 +369,23 @@ walk where the headset left the visitor and restores the camera of the current m
   wall: there, the `isVisitArea` guard sends the visitor back.
 - No controller model is downloaded: gamepads are read directly and the pointers are drawn
   locally.
-- In a session the render loop draws every frame (a skipped frame judders in a h- In a session the render loop draws every frame (a skipped frame judders in a headset) and the
-  dynamic resolution is off. **No post-processing in the headset**, and no switch to bring it
-  back: on a Quest 2, TAA and SSAO held the visit at about 5 fps and the TAA jitter flickered
-  between the eyes, an unbearable view the visitor could not easily leave. The session also
+- In a session the render loop draws every frame (a skipped frame judders in a headset) and the
+  dynamic resolution is off. **No post-processing and no sun shadows in the headset**, and no
+  switch to bring them back: on a Quest 2, TAA and SSAO held the visit at about 5 fps and the
+  TAA jitter flickered between the eyes, an unbearable view the visitor could not easily leave.
+  The shadow lookup is costly too, and the 1024 px map's soft, jagged edges show more in a
+  headset (`updateShadowPolicy` suppresses shadows while `immersive` is set). The session also
   asks for the strongest **fixed foveation** (`XR_FIXED_FOVEATION`): the lens edges, blurred by
   the optics anyway, are drawn at a lower resolution; browsers without it ignore the request.
-  iew: the frame
+- The session opens behind a **loading veil** (`XrVeil`, `scene/xrHud.ts`), the headset's
+  counterpart of the page overlay of `prepareView`, which a headset never shows: turning the
+  shadows off changes every material's defines, and each relink would otherwise freeze the
+  headset on its first images. The camera first draws the veil alone (`XR_VEIL_LAYER`, two
+  images), so it is on screen before anything links; then the house is drawn behind it, and
+  `viewer.immersiveReady` asks every enabled, visible mesh whether it can draw, which starts
+  all their links at once. The veil lifts after three ready images in a row, or after 20 s
+  (`LoadingGate`); the controls wait for it.
+- A counter plane (`scene/xrHud.ts`) is carried by the head, lower left of the view: the frame
   rate over 500 ms windows, in red under 24 fps (the page's own counter is DOM, which a headset
   never shows). A second line, `limite du terrain ×N`, appears once the `isVisitArea` guard has
   sent the visitor back inside the modelled ground: it tells a rollback from that guard apart

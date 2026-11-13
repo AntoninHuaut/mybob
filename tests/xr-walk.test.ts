@@ -22,7 +22,17 @@ import {
   XR_WALK_SPEED,
 } from '../src/scene/xrWalk';
 import { createWalkCamera } from '../src/scene/walkCamera';
-import { FrameCounter, hudLines, XR_HUD_WINDOW_MS } from '../src/scene/xrHud';
+import {
+  FrameCounter,
+  hudLines,
+  LoadingGate,
+  XR_DEFAULT_LAYERS,
+  XR_HUD_WINDOW_MS,
+  XR_LOADING_STEADY_FRAMES,
+  XR_LOADING_TIMEOUT_MS,
+  XR_VEIL_LAYER,
+  XR_VEIL_ONLY_FRAMES,
+} from '../src/scene/xrHud';
 import { usePlanCoordinates, yawFromDirection } from '../src/scene/coordinates';
 
 const project: HouseProject = JSON.parse(
@@ -127,6 +137,7 @@ function headsetWalk(start: { point: [number, number]; yaw: number }) {
       start,
       isDestination: () => true,
       toggleDoor: () => {},
+      isReady: () => true,
       onEnd: () => {},
     },
     helper,
@@ -256,4 +267,57 @@ test('the headset counter reads the frame rate once per window', () => {
 test('the headset counter names the terrain limit only once it was hit', () => {
   assert.deepEqual(hudLines(71.6, 0), ['72 fps']);
   assert.deepEqual(hudLines(30, 3), ['30 fps', 'limite du terrain ×3']);
+});
+
+test('the headset veil is shown alone, then hides the house until it is steadily ready', () => {
+  const gate = new LoadingGate();
+  let asked = 0;
+  let ready = false;
+  const isReady = () => {
+    asked++;
+    return ready;
+  };
+  for (let frame = 0; frame < XR_VEIL_ONLY_FRAMES; frame++)
+    assert.equal(gate.tick(frame * 14, isReady), 'veil');
+  assert.equal(asked, 0, 'readiness is not asked while the veil is drawn alone');
+  let now = 100;
+  for (let frame = 0; frame < 5; frame++)
+    assert.equal(gate.tick((now += 14), isReady), 'compiling');
+  ready = true;
+  for (let frame = 1; frame < XR_LOADING_STEADY_FRAMES; frame++)
+    assert.equal(gate.tick((now += 14), isReady), 'compiling');
+  assert.equal(gate.tick((now += 14), isReady), 'done');
+  assert.equal(gate.tick((now += 14), isReady), 'done');
+});
+
+test('the headset veil lifts after its time limit even if a shader never links', () => {
+  const gate = new LoadingGate();
+  assert.equal(
+    gate.tick(0, () => false),
+    'veil',
+  );
+  assert.equal(
+    gate.tick(10, () => false),
+    'veil',
+  );
+  assert.equal(
+    gate.tick(XR_LOADING_TIMEOUT_MS - 1, () => false),
+    'compiling',
+  );
+  assert.equal(
+    gate.tick(XR_LOADING_TIMEOUT_MS, () => false),
+    'done',
+  );
+});
+
+test('the headset session starts with the veil alone in its camera layers', () => {
+  const session = headsetWalk({ point: [0, 0], yaw: 0 });
+  assert.equal(session.camera.layerMask, XR_VEIL_LAYER);
+  const veil = session.scene.meshes.filter((mesh) => mesh.name.startsWith('xr-veil'));
+  assert.equal(veil.length, 2);
+  assert.ok(veil.every((mesh) => mesh.layerMask === XR_VEIL_LAYER && mesh.renderingGroupId === 3));
+  session.walk.dispose();
+  assert.equal(session.camera.layerMask, XR_DEFAULT_LAYERS);
+  assert.ok(session.scene.meshes.every((mesh) => !mesh.name.startsWith('xr-veil')));
+  session.dispose();
 });

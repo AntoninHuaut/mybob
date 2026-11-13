@@ -14,7 +14,14 @@ import type { Level, Point2, ProjectSite } from '../model/types';
 import { groundElevationAt } from '../model/geometry';
 import { isVisitArea } from './navigation';
 import { VISITOR_RADIUS } from './walkCamera';
-import { FrameCounter, XrHud } from './xrHud';
+import {
+  FrameCounter,
+  LoadingGate,
+  XR_DEFAULT_LAYERS,
+  XR_VEIL_LAYER,
+  XrHud,
+  XrVeil,
+} from './xrHud';
 
 /**
  * The visit in a WebXR headset (Quest browser). It is a state of the walk, not a
@@ -27,7 +34,10 @@ import { FrameCounter, XrHud } from './xrHud';
  * - right stick sideways: snap turn; pushed forward then released: teleport;
  * - trigger, either hand: open or close the door the controller points at.
  *
- * The session renders without post-processing (`viewEffects.ts`) and with the strongest
+ * The session opens behind a loading veil (`xrHud.ts`) until the house's shaders are linked,
+ * like the page's overlay for the other views; the controls wait for it.
+ *
+ * The session renders without post-processing or sun shadows and with the strongest
  * fixed foveation the headset offers: the edges of each lens, blurred by the optics
  * anyway, are drawn at a lower resolution.
  *
@@ -142,6 +152,8 @@ export interface ImmersiveHost {
   /** A floor point where the visitor may stand: inside a room or on the parcel. */
   isDestination(point: Point2): boolean;
   toggleDoor(id: string): void;
+  /** Every visible mesh can be drawn; asking starts the links of those that cannot yet. */
+  isReady(): boolean;
   /** The session ended, whoever ended it: the headset menu, the page or an error. */
   onEnd(walk: ImmersiveWalk): void;
 }
@@ -180,6 +192,8 @@ export class ImmersiveWalk {
   private readonly material: StandardMaterial;
   private readonly marker: Mesh;
   private readonly hud: XrHud;
+  private veil?: XrVeil;
+  private readonly loading = new LoadingGate();
   private readonly counter = new FrameCounter();
   private limitHits = 0;
   private collider?: Collider;
@@ -217,6 +231,8 @@ export class ImmersiveWalk {
     this.marker.isPickable = false;
     this.marker.setEnabled(false);
     this.hud = new XrHud(scene, camera);
+    this.veil = new XrVeil(scene, camera);
+    camera.layerMask = XR_VEIL_LAYER;
     helper.sessionManager.onXRSessionEnded.addOnce(() => this.end());
   }
 
@@ -238,6 +254,7 @@ export class ImmersiveWalk {
     const frame = manager.currentFrame;
     const session = manager.session;
     if (!frame || !session || this.ended) return;
+    if (this.veil && !this.lift()) return;
     this.followPose();
     const fps = this.counter.tick(performance.now());
     if (fps !== undefined) this.hud.show(fps, this.limitHits);
@@ -308,6 +325,20 @@ export class ImmersiveWalk {
     this.lastHead = this.head();
   }
 
+  /** False while the veil stays: the first images show it alone, then it hides the house. */
+  private lift(): boolean {
+    const phase = this.loading.tick(performance.now(), () => this.host.isReady());
+    if (phase === 'veil') return false;
+    if (phase === 'compiling') {
+      this.camera.layerMask = XR_DEFAULT_LAYERS | XR_VEIL_LAYER;
+      return false;
+    }
+    this.camera.layerMask = XR_DEFAULT_LAYERS;
+    this.veil?.dispose();
+    this.veil = undefined;
+    return true;
+  }
+
   async exit() {
     if (this.ended) return;
     await this.helper.exitXRAsync();
@@ -332,6 +363,9 @@ export class ImmersiveWalk {
     this.marker.dispose();
     this.material.dispose();
     this.hud.dispose();
+    this.veil?.dispose();
+    this.veil = undefined;
+    this.camera.layerMask = XR_DEFAULT_LAYERS;
     this.camera.parent = null;
     this.helper.dispose();
     this.rig.dispose();
