@@ -2,13 +2,14 @@
  * Render scales tried, from full resolution down. Never below two thirds: under that,
  * textures turn visibly blurry.
  */
-export const RENDER_SCALES = [1, 0.8, 0.67] as const;
+export const RENDER_SCALES = [1, 0.9, 0.8, 0.67] as const;
 
 /**
  * Lowest scale the visit may take even below one rendered pixel per CSS pixel, once its
- * occlusion is gone. Plan, Vue 3D and Extérieur keep the one-pixel floor.
+ * occlusion is gone: 90 %, 80 % read too soft on the owner's screen (2026-11-13). Plan,
+ * Vue 3D and Extérieur keep the one-pixel floor.
  */
-export const VISIT_SCALE_FLOOR = 0.8;
+export const VISIT_SCALE_FLOOR = 0.9;
 
 /**
  * Effect tiers, dropped **before** the resolution (owner, 2026-11-13: when the frame rate is
