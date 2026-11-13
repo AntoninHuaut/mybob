@@ -137,6 +137,11 @@ with a migration.
 - Before changing state or cameras, `setMode` checks the host's `canChangeMode` policy
   (the UI explains refused touch-only walking) and resolves a valid walk destination.
   Refusal returns `false`, preserving the accepted mode, exterior, camera and active tools.
+- The displayed level is the only one with lights, furniture, picking and collisions. The
+  other levels are built too (`otherLevels`), without lights, never picked nor collided:
+  Vue 3D shows the levels under the displayed one, Extérieur shows them all (seen through
+  the windows), Plan and Visite hide them (`updateOtherLevels`). They are built before the
+  displayed level, whose `FixtureLights` must be the scene's last.
 - After applying the camera, roof, section, cutaway and ambience, the viewer calls
   `onViewChange`. `main.syncViewChrome` derives buttons, titles, help and furniture policy
   from the accepted state. It never requests another transition. Ambience failures still

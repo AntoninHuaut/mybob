@@ -158,6 +158,12 @@ export class HouseViewer {
   orbit!: ArcRotateCamera;
   walk!: UniversalCamera;
   house!: HouseScene;
+  /**
+   * The project's other levels, built without lights nor furniture, never picked nor
+   * collided: Vue 3D stacks the levels under the displayed one, Extérieur shows them
+   * all behind their windows.
+   */
+  private otherLevels: { level: Level; house: HouseScene }[] = [];
   exterior?: ExteriorScene;
   private currentExteriorView = false;
   get exteriorView(): boolean {
@@ -455,15 +461,43 @@ export class HouseViewer {
     this.shadowRefresh = new ShadowRefresh(shadow);
     this.cutawaySelection = '';
     // The level above owns the stairwell opening: it also pierces this ceiling.
-    const above = project.levels
-      .filter((candidate) => candidate.elevation > level.elevation)
-      .sort((a, b) => a.elevation - b.elevation)[0];
+    const aboveOf = (target: Level) =>
+      project.levels
+        .filter((candidate) => candidate.elevation > target.elevation)
+        .sort((a, b) => a.elevation - b.elevation)[0];
+    const materials = createMaterials(scene, project.finishes);
+    // Built before the displayed level: the fixture light assignment of the scene
+    // is the last level built, and only the displayed one keeps its lights.
+    this.otherLevels = project.levels
+      .filter((other) => other.id !== level.id)
+      .map((other) => {
+        const house = buildHouse(
+          other,
+          scene,
+          materials,
+          undefined,
+          aboveOf(other)?.floorVoids ?? [],
+          roofWindowWells(project, other),
+        );
+        house.pointLights.forEach((light) => light.dispose());
+        house.fixtures.forEach((fixture) => fixture.dispose());
+        house.pointLights = [];
+        house.fixtures = [];
+        for (const mesh of house.root.getChildMeshes()) {
+          mesh.isPickable = false;
+          mesh.checkCollisions = false;
+          // Floor picks use their own predicate, which ignores `isPickable`.
+          mesh.metadata = { otherLevel: other.id };
+        }
+        house.root.setEnabled(false);
+        return { level: other, house };
+      });
     this.house = buildHouse(
       level,
       scene,
-      createMaterials(scene, project.finishes),
+      materials,
       shadow,
-      above?.floorVoids ?? [],
+      aboveOf(level)?.floorVoids ?? [],
       roofWindowWells(project, level),
     );
     // The exterior is the building's, not the displayed level's: the façades
@@ -635,6 +669,7 @@ export class HouseViewer {
     this.currentExteriorView = exterior && mode === 'overview' && !!this.exteriorFrame;
     this.exterior?.root.setEnabled(mode !== 'plan');
     this.updateRoofVisibility();
+    this.updateOtherLevels();
     this.updateSky();
     this.setGoToMode(false);
     this.setMeasureMode(false);
@@ -974,6 +1009,19 @@ export class HouseViewer {
    * it, and so does the visit, which can now step out onto the parcel. Inside, the
    * ceiling hides it.
    */
+  /**
+   * Vue 3D stacks the levels under the displayed one, which stays on top with its
+   * cutaway; Extérieur shows every level, seen through the windows and roof windows.
+   * Plan and Visite keep the displayed level alone.
+   */
+  private updateOtherLevels() {
+    for (const { level, house } of this.otherLevels ?? [])
+      house.root.setEnabled(
+        this.mode === 'overview' && (this.exteriorView || level.elevation < this.level.elevation),
+      );
+    this.shadowRefresh?.invalidate();
+  }
+
   private updateRoofVisibility() {
     const visible = this.mode === 'walk' || (this.exteriorView && this.mode === 'overview');
     this.exterior?.roofMeshes.forEach((mesh) => mesh.setEnabled(visible));

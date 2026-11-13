@@ -437,16 +437,17 @@ export function ceilingSteps(
 export interface CeilingWells {
   /** Plan footprints of the wells, convex, cut out of the ceiling. */
   cutouts: Point2[][];
-  /** Vertical sides of the wells, from the ceiling up to the roof face. */
+  /** Sides and top of the wells, between the ceiling and the window. */
   reveals: { points: [number, number, number][]; normal: [number, number, number] }[];
 }
 
 /**
- * The wells of the roof windows above a level with sloping ceilings. Each window
- * opens the ceiling over its plan footprint, and its sides rise vertically from the
- * ceiling to the roof face, where the frame sits: from inside, the window shows at
- * the top of its well instead of being hidden behind the slope. Only the part of a
- * footprint over the level's floor is opened.
+ * The wells of the roof windows above a level with sloping ceilings, as an attic plan
+ * draws them: the ceiling opens under the window and on, towards the ridge, until it
+ * reaches the height of the window's top edge. The sides rise vertically from the
+ * ceiling to the roof face, or to that height where the well runs on under the slope,
+ * and a flat top closes it there. From inside, the window shows at the end of its
+ * well instead of being hidden behind the slope. Only the part over the floor opens.
  */
 export function roofWindowWells(project: HouseProject, level: Level): CeilingWells {
   const wells: CeilingWells = { cutouts: [], reveals: [] };
@@ -457,15 +458,50 @@ export function roofWindowWells(project: HouseProject, level: Level): CeilingWel
     for (const window of roof.windows ?? []) {
       const resolved = resolveRoofWindow(roof.vertices, roof.faces, window);
       if (!resolved.frame) continue;
-      const face = roof.faces[resolved.frame.faceIndex];
-      const footprint: Polygon = resolved.frame.corners.map(([x, , z]) => [x, z]);
+      const frame = resolved.frame;
+      const face = roof.faces[frame.faceIndex];
+      const roofHeight = (x: number, z: number) =>
+        roofFaceHeightAt(roof.vertices, face, x, z) - level.elevation;
+      const corners = frame.corners;
+      const windowTop = Math.max(...corners.map((c) => c[1])) - level.elevation;
+      // The well's flat top never rises above the flat ceiling.
+      const top = Math.min(windowTop, level.ceilingHeight);
+      // Up the slope, in plan: the well runs on that way under the ceiling.
+      const flat = Math.hypot(frame.up[0], frame.up[2]) || 1;
+      const inward: Point2 = [frame.up[0] / flat, frame.up[2] / flat];
+      const upper = corners.filter((c) => c[1] - level.elevation > windowTop - 1e-6);
+      const lower = corners.filter((c) => c[1] - level.elevation <= windowTop - 1e-6);
+      if (upper.length !== 2 || lower.length !== 2) continue;
+      // How far the ceiling stays under the top edge, from the middle of that edge.
+      const middle: Point2 = [(upper[0][0] + upper[1][0]) / 2, (upper[0][2] + upper[1][2]) / 2];
+      let reachIn = 0;
+      if (ceilingHeightAt(level, middle) < top) {
+        let low = 0;
+        let high = 6;
+        for (let k = 0; k < 40; k++) {
+          const mid = (low + high) / 2;
+          const at: Point2 = [middle[0] + inward[0] * mid, middle[1] + inward[1] * mid];
+          if (ceilingHeightAt(level, at) < top) low = mid;
+          else high = mid;
+        }
+        reachIn = high;
+      }
+      const [l0, l1] = lower.map((c): Point2 => [c[0], c[2]]);
+      const [u0, u1] = upper.map((c): Point2 => [c[0], c[2]]);
+      // Pair each upper corner with the lower corner on its side.
+      const sameSide =
+        Math.hypot(u0[0] - l0[0], u0[1] - l0[1]) <= Math.hypot(u0[0] - l1[0], u0[1] - l1[1]);
+      const [a0, a1] = sameSide ? [l0, l1] : [l1, l0];
+      const shift = (p: Point2): Point2 => [p[0] + inward[0] * reachIn, p[1] + inward[1] * reachIn];
+      const footprint: Polygon = [a0, a1, shift(u1), shift(u0)];
+      if (reachIn < 1e-6) footprint.splice(2, 2, u1, u0);
       // Only where the footprint is over the floor.
       let over: Polygon = level.outline;
       for (const plane of halfPlanes(footprint)) over = clip(over, plane);
       if (over.length < 3 || Math.abs(area(over)) < 1e-4) continue;
       wells.cutouts.push(footprint);
-      const roofHeight = (x: number, z: number) =>
-        roofFaceHeightAt(roof.vertices, face, x, z) - level.elevation;
+      // The well's upper surface: the roof face under the window, the top height beyond.
+      const ceilingOfWell = (x: number, z: number) => Math.min(roofHeight(x, z), top);
       const cx = footprint.reduce((sum, p) => sum + p[0], 0) / footprint.length;
       const cz = footprint.reduce((sum, p) => sum + p[1], 0) / footprint.length;
       footprint.forEach((p, i) => {
@@ -473,32 +509,50 @@ export function roofWindowWells(project: HouseProject, level: Level): CeilingWel
         const length = Math.hypot(q[0] - p[0], q[1] - p[1]);
         if (length < 1e-6) return;
         const u: Point2 = [(q[0] - p[0]) / length, (q[1] - p[1]) / length];
-        // Into the well.
         let normal: [number, number, number] = [-u[1], 0, u[0]];
         if (normal[0] * (cx - p[0]) + normal[2] * (cz - p[1]) < 0) normal = [u[1], 0, -u[0]];
+        const at = (t: number): Point2 => [p[0] + u[0] * t, p[1] + u[1] * t];
+        // Where the roof face crosses the top height along this edge.
+        const r0 = roofHeight(p[0], p[1]);
+        const r1 = roofHeight(q[0], q[1]);
+        const kink = Math.abs(r1 - r0) > 1e-9 ? ((top - r0) / (r1 - r0)) * length : -1;
         for (const [t0, t1] of insideIntervals(level.outline, p, u, reach)) {
           const s0 = Math.max(0, t0);
           const s1 = Math.min(length, t1);
           if (s1 - s0 < 1e-6) continue;
-          const at = (t: number): Point2 => [p[0] + u[0] * t, p[1] + u[1] * t];
           for (const run of ceilingProfile(level, at(s0), at(s1))) {
-            const a = at(s0 + run.start);
-            const b = at(s0 + run.end);
-            const topA = roofHeight(a[0], a[1]);
-            const topB = roofHeight(b[0], b[1]);
-            if (topA - run.from < 1e-6 && topB - run.to < 1e-6) continue;
-            wells.reveals.push({
-              points: [
-                [a[0], run.from, a[1]],
-                [b[0], run.to, b[1]],
-                [b[0], Math.max(topB, run.to), b[1]],
-                [a[0], Math.max(topA, run.from), a[1]],
-              ],
-              normal,
-            });
+            const cuts = [s0 + run.start, s0 + run.end];
+            if (kink > cuts[0] + 1e-6 && kink < cuts[1] - 1e-6) cuts.splice(1, 0, kink);
+            for (let k = 0; k + 1 < cuts.length; k++) {
+              const a = at(cuts[k]);
+              const b = at(cuts[k + 1]);
+              const span = run.end - run.start;
+              const bottomA = run.from + ((run.to - run.from) * (cuts[k] - s0 - run.start)) / span;
+              const bottomB =
+                run.from + ((run.to - run.from) * (cuts[k + 1] - s0 - run.start)) / span;
+              const topA = ceilingOfWell(a[0], a[1]);
+              const topB = ceilingOfWell(b[0], b[1]);
+              if (topA - bottomA < 1e-6 && topB - bottomB < 1e-6) continue;
+              wells.reveals.push({
+                points: [
+                  [a[0], bottomA, a[1]],
+                  [b[0], bottomB, b[1]],
+                  [b[0], Math.max(topB, bottomB), b[1]],
+                  [a[0], Math.max(topA, bottomA), a[1]],
+                ],
+                normal,
+              });
+            }
           }
         }
       });
+      // The flat top of the well, from the window's top edge to where the ceiling
+      // reaches it.
+      if (reachIn > 1e-6)
+        wells.reveals.push({
+          points: [u0, u1, shift(u1), shift(u0)].map(([x, z]) => [x, top, z]),
+          normal: [0, -1, 0],
+        });
     }
   return wells;
 }
