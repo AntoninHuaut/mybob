@@ -27,6 +27,7 @@ import '@babylonjs/core/Culling/ray';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
 import '@babylonjs/core/Collisions/collisionCoordinator';
 import type { HouseProject, Level, Point2, ProjectSite } from '../model/types';
+import { levelAbove, stairPassage, stairsDown, type StairDirection } from '../model/stairs';
 import { bounds, floorElevationAt, groundElevationAt, pointInPolygon } from '../model/geometry';
 import {
   buildHouse,
@@ -35,7 +36,7 @@ import {
   FIXTURE_LIGHT_RANGE,
   type HouseScene,
 } from './buildHouse';
-import { createMaterials } from './materials';
+import { createMaterials, type Materials } from './materials';
 import { buildExterior, type ExteriorScene } from './buildExterior';
 import {
   applyLookSensitivity,
@@ -110,6 +111,8 @@ export interface FrameInfo {
   planUpDegrees: number;
   roomId?: string;
   nearDoor: boolean;
+  /** A stair tread within reach ahead, and the way it leads. */
+  nearStair?: StairDirection;
   nearFurnitureId?: string;
   locked: boolean;
 }
@@ -151,6 +154,9 @@ function editableFurnitureId(hit: PickingInfo | null | undefined) {
 export function findEditableFurniture(camera: UniversalCamera, scene: Scene, distance = 3) {
   return editableFurnitureId(scene.pickWithRay(camera.getForwardRay(distance)));
 }
+
+/** How far E or a click reaches in the visit: a door or a stair ahead. */
+const WALK_REACH = 2.4;
 
 export class HouseViewer {
   readonly engine: AbstractEngine;
@@ -200,6 +206,14 @@ export class HouseViewer {
   onDestination?: (point: Point2) => void;
   onDestinationRejected?: () => void;
   onEditFurniture?: (id: string) => void;
+  /**
+   * The visit took a stair: the displayed level changed inside the same scene, so a headset
+   * session survives it. The host re-mounts what belongs to a level (furniture, room list).
+   */
+  onLevelChange?: (levelId: string) => void;
+  private loadedProject?: HouseProject;
+  private materials?: Materials;
+  private shadow?: ShadowGenerator;
   /** The headset session started (true) or ended (false). */
   onImmersiveChange?: (active: boolean) => void;
   goToMode = false;
@@ -466,46 +480,10 @@ export class HouseViewer {
     shadow.setDarkness(0.2);
     this.shadowRefresh = new ShadowRefresh(shadow);
     this.cutawaySelection = '';
-    // The level above owns the stairwell opening: it also pierces this ceiling.
-    const aboveOf = (target: Level) =>
-      project.levels
-        .filter((candidate) => candidate.elevation > target.elevation)
-        .sort((a, b) => a.elevation - b.elevation)[0];
-    const materials = createMaterials(scene, project.finishes);
-    // Built before the displayed level: the fixture light assignment of the scene
-    // is the last level built, and only the displayed one keeps its lights.
-    this.otherLevels = project.levels
-      .filter((other) => other.id !== level.id)
-      .map((other) => {
-        const house = buildHouse(
-          other,
-          scene,
-          materials,
-          undefined,
-          aboveOf(other)?.floorVoids ?? [],
-          roofWindowWells(project, other),
-        );
-        house.pointLights.forEach((light) => light.dispose());
-        house.fixtures.forEach((fixture) => fixture.dispose());
-        house.pointLights = [];
-        house.fixtures = [];
-        for (const mesh of house.root.getChildMeshes()) {
-          mesh.isPickable = false;
-          mesh.checkCollisions = false;
-          // Floor picks use their own predicate, which ignores `isPickable`.
-          mesh.metadata = { otherLevel: other.id };
-        }
-        house.root.setEnabled(false);
-        return { level: other, house };
-      });
-    this.house = buildHouse(
-      level,
-      scene,
-      materials,
-      shadow,
-      aboveOf(level)?.floorVoids ?? [],
-      roofWindowWells(project, level),
-    );
+    this.loadedProject = project;
+    this.materials = createMaterials(scene, project.finishes);
+    this.shadow = shadow;
+    this.buildLevels(project, level);
     // The exterior is the building's, not the displayed level's: the façades
     // are those of the lowest level, the roof covers the rest, and the upper
     // levels' openings are cut through it. Building from the attic only showed
@@ -533,17 +511,81 @@ export class HouseViewer {
         if (this.exterior.roofMeshes.includes(mesh)) shadow.addShadowCaster(mesh);
       }
     }
-    this.planOpenings = buildPlanOpenings(scene, level);
-    this.wallCutaway = buildWallCutaway(scene, level);
-    this.buildDimensions();
+    this.buildLevelOverlays();
     refreshFixtureLights(scene);
     this.setMode('overview');
-    this.attachSceneInput(scene, level);
+    this.attachSceneInput(scene);
     this.resize();
   }
 
+  /**
+   * Every level of the project, the displayed one last: the fixture light assignment of the
+   * scene is the last level built, and only the displayed one keeps its lights, its
+   * collisions and its picking.
+   */
+  private buildLevels(project: HouseProject, level: Level) {
+    const scene = this.scene;
+    const materials = this.materials!;
+    // The level above owns the stairwell opening: it also pierces this ceiling.
+    this.otherLevels = project.levels
+      .filter((other) => other.id !== level.id)
+      .map((other) => {
+        const house = buildHouse(
+          other,
+          scene,
+          materials,
+          undefined,
+          levelAbove(project, other)?.floorVoids ?? [],
+          roofWindowWells(project, other),
+          stairsDown(project, other),
+        );
+        house.pointLights.forEach((light) => light.dispose());
+        house.fixtures.forEach((fixture) => fixture.dispose());
+        house.pointLights = [];
+        house.fixtures = [];
+        for (const mesh of house.root.getChildMeshes()) {
+          mesh.isPickable = false;
+          mesh.checkCollisions = false;
+          // Floor picks use their own predicate, which ignores `isPickable`.
+          mesh.metadata = { otherLevel: other.id };
+        }
+        house.root.setEnabled(false);
+        return { level: other, house };
+      });
+    this.house = buildHouse(
+      level,
+      scene,
+      materials,
+      this.shadow,
+      levelAbove(project, level)?.floorVoids ?? [],
+      roofWindowWells(project, level),
+      stairsDown(project, level),
+    );
+  }
+
+  /** The displayed level's plan openings, façade cutaway and overall dimensions. */
+  private buildLevelOverlays() {
+    this.planOpenings = buildPlanOpenings(this.scene, this.level);
+    this.wallCutaway = buildWallCutaway(this.scene, this.level);
+    this.buildDimensions();
+  }
+
+  /** Disposes what `buildLevels` and `buildLevelOverlays` made; the shared materials stay. */
+  private releaseLevels() {
+    for (const { house } of this.otherLevels) house.root.dispose(false, false);
+    this.otherLevels = [];
+    this.house.pointLights.forEach((light) => light.dispose());
+    this.house.root.dispose(false, false);
+    this.wallCutaway?.dispose();
+    this.wallCutaway = undefined;
+    this.planOpenings?.dispose();
+    this.planOpenings = undefined;
+    this.dimensions.forEach((mesh) => mesh.dispose());
+    this.dimensions = [];
+  }
+
   /** Babylon clears both observers when this scene is disposed. */
-  private attachSceneInput(scene: Scene, level: Level) {
+  private attachSceneInput(scene: Scene) {
     scene.onPointerObservable.add((event) => {
       if (
         this.measureMode &&
@@ -571,8 +613,7 @@ export class HouseViewer {
       )
         return;
       if (this.mode === 'walk') {
-        const hit = scene.pickWithRay(this.walk.getForwardRay(2.4));
-        if (hit?.pickedMesh?.metadata?.kind === 'door') this.toggleDoor(hit.pickedMesh.metadata.id);
+        this.useAhead();
         return;
       }
       if (this.measureMode) {
@@ -608,7 +649,7 @@ export class HouseViewer {
       }
       if (hit?.pickedPoint) {
         const p: Point2 = [hit.pickedPoint.x, hit.pickedPoint.z];
-        const room = level.rooms.find((r) => pointInPolygon(p, r.polygon));
+        const room = this.level.rooms.find((r) => pointInPolygon(p, r.polygon));
         if (room) this.onSelectRoom?.(room.id);
       }
     });
@@ -967,6 +1008,71 @@ export class HouseViewer {
     this.clearKeys();
   }
 
+  /** E or a click in the visit: the door ahead opens or closes, the stair ahead is taken. */
+  private useAhead() {
+    const hit = this.scene.pickWithRay(this.walk.getForwardRay(WALK_REACH));
+    const metadata = hit?.pickedMesh?.metadata;
+    if (metadata?.kind === 'door') this.toggleDoor(metadata.id);
+    else if (metadata?.kind === 'stair') this.takeStair(metadata.id, metadata.direction);
+  }
+
+  /**
+   * The visit takes a stair: the arrival level replaces the displayed one inside the same
+   * scene (a headset session belongs to the scene and survives), and the visitor lands past
+   * the flight, facing the way it was walked. False when the stair leads nowhere modelled.
+   */
+  takeStair(stairId: string, direction: StairDirection): boolean {
+    const project = this.loadedProject;
+    if (!project || !this.scene || this.mode !== 'walk') return false;
+    const passage = stairPassage(project, this.level, stairId, direction);
+    const next = passage && project.levels.find((level) => level.id === passage.levelId);
+    if (!passage || !next) return false;
+    this.cancelOrbitTour();
+    this.clearKeys();
+    this.releaseLevels();
+    this.level = next;
+    this.buildLevels(project, next);
+    this.buildLevelOverlays();
+    refreshFixtureLights(this.scene);
+    this.cutawaySelection = '';
+    this.walkHit = undefined;
+    this.walkRayDirty = true;
+    // The host mounts the new level's furniture before the landing is checked against it.
+    this.onLevelChange?.(next.id);
+    const arrival = findVisitDestination(this.scene, next, passage.arrival) ?? passage.arrival;
+    const yaw = yawFromDirection(new Vector3(passage.heading[0], 0, passage.heading[1]));
+    const immersive = this.immersive;
+    if (immersive) {
+      immersive.arrive(arrival, yaw);
+      this.refreshDisplayedLevel();
+    } else {
+      // A new level is a new set of shaders: the walk is prepared again behind the overlay.
+      this.warmth.reset();
+      this.walk.rotation.set(0, yaw, 0);
+      this.walk.cameraDirection.setAll(0);
+      this.setMode('walk', false, arrival);
+    }
+    this.requestRender();
+    return true;
+  }
+
+  /** What `setMode` would redo for the displayed level, without leaving the headset. */
+  private refreshDisplayedLevel() {
+    this.updateRoofVisibility();
+    this.updateOtherLevels();
+    try {
+      this.updateLighting();
+      this.updateInteriorAmbience();
+    } catch (error) {
+      console.info(
+        `[visite] ambiance indisponible : ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    this.dimensions.forEach((mesh) => mesh.setEnabled(false));
+    this.updateSection();
+    this.updateCutaway();
+  }
+
   toggleDoor(id: string) {
     const door = this.house.doors.find((d) => d.id === id);
     if (door) {
@@ -1062,6 +1168,7 @@ export class HouseViewer {
    * Plan and Visite keep the displayed level alone.
    */
   private updateOtherLevels() {
+    this.house?.stairsDown?.forEach((step) => step.setEnabled(this.mode === 'walk'));
     for (const { level, house } of this.otherLevels ?? [])
       house.root.setEnabled(
         this.mode === 'overview' && (this.exteriorView || level.elevation < this.level.elevation),
@@ -1440,15 +1547,20 @@ export class HouseViewer {
       this.cancelCaptureRetry();
       if (document.pointerLockElement === this.canvas) document.exitPointerLock();
       const scene = this.scene;
+      const viewer = this;
       const walk = await startImmersiveWalk({
         scene,
-        level: this.level,
+        // A stair changes the displayed level during the session.
+        get level() {
+          return viewer.level;
+        },
         site: this.site,
         start: { point: [this.walk.position.x, this.walk.position.z], yaw: this.walk.rotation.y },
         isDestination: (point) =>
           isSceneVisitDestination(scene, this.level, point) ||
           isParcelDestination(this.level, this.site, point),
         toggleDoor: (id) => this.toggleDoor(id),
+        takeStair: (id, direction) => this.takeStair(id, direction),
         isReady: () => this.immersiveReady(scene),
         onEnd: (ended) => this.leaveImmersive(ended),
       });
@@ -1774,7 +1886,11 @@ export class HouseViewer {
         headingDegrees: planHeading(this.walk),
         planUpDegrees: this.planUpDegrees(),
         roomId: room?.id,
-        nearDoor: hit?.pickedMesh?.metadata?.kind === 'door' && hit.distance <= 2.4,
+        nearDoor: hit?.pickedMesh?.metadata?.kind === 'door' && hit.distance <= WALK_REACH,
+        nearStair:
+          hit?.pickedMesh?.metadata?.kind === 'stair' && hit.distance <= WALK_REACH
+            ? hit.pickedMesh.metadata.direction
+            : undefined,
         nearFurnitureId: this.paused ? undefined : editableFurnitureId(hit),
         locked: document.pointerLockElement === this.canvas,
       }));
@@ -1834,10 +1950,7 @@ export class HouseViewer {
       return;
     if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(event.code))
       event.preventDefault();
-    if (this.mode === 'walk' && event.code === 'KeyE' && !event.repeat) {
-      const hit = this.scene.pickWithRay(this.walk.getForwardRay(2.4));
-      if (hit?.pickedMesh?.metadata?.kind === 'door') this.toggleDoor(hit.pickedMesh.metadata.id);
-    }
+    if (this.mode === 'walk' && event.code === 'KeyE' && !event.repeat) this.useAhead();
     if (this.mode === 'walk' && event.code === 'KeyF') {
       if (!event.repeat) {
         const id = findEditableFurniture(this.walk, this.scene);

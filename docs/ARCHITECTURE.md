@@ -19,7 +19,7 @@ state lives in the browser's `localStorage`.
 
 The two worlds talk in one direction at a time: `main.ts` calls viewer methods, and the viewer
 reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSelectRoom`, `onDestination`,
-`onMeasure`, `onEditFurniture`).
+`onMeasure`, `onEditFurniture`, `onLevelChange`).
 
 ## Module map
 
@@ -38,6 +38,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Frame of reference      | `src/scene/coordinates.ts`                                                   | Conversion to the plan frame, plan framing, keyboard movement                                                       |
 | Framing                 | `src/scene/framing.ts`                                                       | `fitOverview`, `fitPlan`, UI margins                                                                                |
 | Navigation              | `src/scene/navigation.ts`                                                    | Walk destination, section plane, wall facing the camera                                                             |
+| Stairs                  | `src/model/stairs.ts`                                                        | Where a stair leads from a level, where the visit lands; the flights going down from a floor void                   |
 | Walk camera             | `src/scene/walkCamera.ts`                                                    | Eye height, visitor radius, speed, step                                                                             |
 | Headset visit           | `src/scene/xrWalk.ts`                                                        | WebXR session of the walk: sticks, snap turn, teleport, doors; loaded on demand                                     |
 | Orbit controls          | `src/scene/orbitNavigation.ts`, `orbitPointerInput.ts`                       | Keyboard pan in screen directions; one-finger pan and pinch zoom in Plan                                            |
@@ -145,6 +146,19 @@ with a migration.
   displayed level, whose `FixtureLights` must be the scene's last.
 - Changing level keeps the view (`loadProject(…, keep)` in `main.ts`): Extérieur, Plan, or a
   visit restarted from the new level's start; changing project starts in Vue 3D.
+- Taking a stair in the visit changes level **inside the same scene** (`viewer.takeStair`), so
+  that a headset session, which belongs to the scene, survives it: `releaseLevels` disposes
+  every level house and the level overlays (plan openings, cutaway, dimensions), keeping the
+  shared materials, sun, exterior, sky and cameras; `buildLevels` rebuilds them around the
+  arrival level, then `onLevelChange` lets `main.ts` re-mount the furniture and the level
+  chrome before the landing (`stairPassage`, checked by `findVisitDestination`) is chosen. On
+  screen the walk is prepared again behind the overlay; in a headset the loading veil comes
+  back (`ImmersiveWalk.arrive`).
+- Treads carry `{ kind: 'stair', id, direction }`. A flight belongs to its lower level; the
+  level it lands on also builds it, hanging in its floor void (`HouseScene.stairsDown`, shown
+  in the visit only, never collided), so the visitor sees it and goes down. E or a click on a
+  tread within 2.4 m takes it on screen (with an `E Monter / Descendre` prompt); in a headset,
+  the teleport aimed at a tread does.
 - After applying the camera, roof, section, cutaway and ambience, the viewer calls
   `onViewChange`. `main.syncViewChrome` derives buttons, titles, help and furniture policy
   from the accepted state. It never requests another transition. Ambience failures still
@@ -360,7 +374,8 @@ walk where the headset left the visitor and restores the camera of the current m
 - Controls, xr-standard mapping: left stick walks where the head looks (1.6 m/s, walls collide
   through an ellipsoid hung under the head, resolved on the rig, a 20 cm step does not); right
   stick sideways snaps 30°, pushed forward aims a teleport validated like a walk destination
-  (`isSceneVisitDestination` or `isParcelDestination`); trigger on a door toggles it.
+  (`isSceneVisitDestination` or `isParcelDestination`), or aimed at a stair tread takes the
+  stair (`takeStair`); trigger on a door toggles it.
 - `local-floor` reference space: the real head height replaces the eye-height setting, and the
   real floor is kept on `groundElevationAt` every frame. Room-scale moves (the headset itself
   moving, the emulator's ZQSD) go through the stick's collider every frame (`followPose`): the
