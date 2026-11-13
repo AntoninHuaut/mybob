@@ -115,7 +115,11 @@ test('a shadow-receiving PBR surface gets the guard, a standard material does no
       pbr.indexOf('NdotLUnclamped<=0.)') < pbr.lastIndexOf('computeShadow'),
       'before the lookup',
     );
-    assert.equal(count(pbr, '{'), count(pbr, '}'));
+    // The patched region, from the guard to the light's bookkeeping, closes what it opens.
+    const guardLine = pbr.lastIndexOf('\n', pbr.indexOf('NdotLUnclamped<=0.)'));
+    const region = pbr.slice(guardLine, pbr.indexOf('aggShadow+=shadow', guardLine));
+    assert.ok(region.includes('computeShadow'), 'the lookup sits inside the region');
+    assert.equal(count(region, '{'), count(region, '}'));
     const standard = fragment(label);
     assert.ok(standard.length > 0);
     assert.ok(!standard.includes('NdotLUnclamped<=0.)'), 'standard materials are unchanged');
