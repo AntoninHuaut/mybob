@@ -661,6 +661,12 @@ Two limits measured on real plans: **a façade whose openings are only isolated 
 (not a closed chain) gives no opening, and **an interior door without a swing arc** cannot be
 read by its symbol. Both are reported as missing, never invented.
 
+**An ink-free range without an arc is not always a door.** Between two piers, a dimensioned gap
+with no swing arc and no leaf is an **open bay**: on plan B the hall opens onto the living area
+through `87 | 1.41 | 1.26`, and a conversion made it a 1.36 m hinged door, which the owner saw
+as a door that does not exist. The schema has no "passage" opening: split the wall at the bay
+(two walls, the gap between their ends) instead of declaring a `door`.
+
 Interior doors carrying an arc are read by `extract_doors.py` (see "Interior doors, read on the
 arc"). Those that do not are read **in ink**, wall by wall, and the AI places them: the owner
 accepts that they are approximated, provided the walls are right. The method that works: sweep
@@ -794,7 +800,16 @@ next.
 
 ### A level under a roof slope
 
-An attic level is not read like a ground floor, and four things mislead there:
+An attic level is not read like a ground floor, and four things mislead there.
+
+**Read the floor and the slope on the section first.** The attic floor height, the knee wall
+height, the pitch and the flat ceiling are printed or drawn on the section (coupe), not on the
+attic plan. On plan B the section gives the attic floor at **+3.02** (the model said 2.75,
+guessed, for two sessions), knee walls 1.24 m high at their inner face, 45° slopes and a flat
+ceiling at 2.40 m. They become `elevation`, the knee walls' `height`, `ceilingSlopes` (foot line
+on the knee walls' inner faces, `height` 1.24, `rise` 1) and `ceilingHeight`. The check is
+arithmetic: 1.27 + (1.80 − 1.24) = 1.83 m, the printed `Limite H=1.80m` line. A wrong floor
+height moves every dormer sill, every roof window and the stair rise with it.
 
 **The floor does not reach the façade.** The drawing carries a line 1.27 m from each long
 façade: that is where the slope meets the floor. That line is the **floor limit**, not a height
@@ -819,8 +834,10 @@ error on every room.
 
 **The floor extends into the dormers.** A slope pierced by a dormer is not a continuous slope:
 the room's floor runs under the dormer up to its back wall. On plan B, two 0.90 m wide dormers
-pierce the south slope (x 2.161..3.060 and 10.181..11.081) and add **0.75 m²** each. That is
-exactly the gap of the two bedrooms 3: 4.55 × 3.37 = 15.33 plus 0.77 of dormer = 16.10 printed.
+pierce the south slope (alcoves x 2.165..3.065 and 10.185..11.085). The table counts about
+**0.77 m²** each (4.55 × 3.37 = 15.33 plus 0.77 = 16.10 printed), which takes the alcove to
+z ≈ 8.09; the drawing closes it at the inner face of the dormer piers (7.94), 0.64 m². Keep the
+drawing and document the 0.13 m² per bedroom.
 The rafter must therefore be **cut** at each opening and the level outline carry the two
 projections. A continuous rafter leaves both rooms short by 0.77 m² and suggests a
 contradiction in the plan that does not exist.
@@ -832,8 +849,8 @@ lines, tolerance 0.05 m²:
 | -------------- | ------- | ------- | ----- | ------------------------------------------------------- |
 | bathroom       | 9.38    | 9.37    | −0.01 | —                                                       |
 | bedroom 2      | 14.44   | 14.44   | 0.00  | —                                                       |
-| bedroom 3 west | 16.10   | 16.12   | +0.02 | 4.55 × 3.37 + 0.75 of dormer                            |
-| bedroom 3 east | 13.90   | 13.90   | 0.00  | 4.96 × 2.78 − 0.65 of corridor end + 0.75 of dormer     |
+| bedroom 3 west | 16.10   | 15.97   | −0.13 | 4.55 × 3.37 + 0.64 of dormer alcove                     |
+| bedroom 3 east | 13.90   | 13.74   | −0.16 | 4.96 × 2.78 − 0.65 of corridor end + 0.64 of dormer     |
 | dressing       | 7.12    | 7.05    | −0.07 | technical cupboard: 0.25 in the drawing, 0.19 in table  |
 | WC             | 1.24    | 2.01    | +0.77 | the table counts 0.85 × 1.46, the dimension 0.85 × 2.39 |
 | corridor       | 4.14    | 3.48    | −0.66 | the table moves 0.77 m² from the WC to the corridor     |
@@ -858,8 +875,15 @@ wall is a wall of the attic level at its **full drawn height**: it pierces the c
 validation allows it. Its height and its window sill are not on the plan: read them on the
 elevation that faces the dormer, calibrated on the ridge (the drawn gutter sits 15–20 cm above
 the dimensioned eave). On plan B, at 1/100: window 0.90 × 1.05 with its frame measuring exactly
-1.05 (the calibration check), sill 1.365 m above the attic floor, front top +5.41, so a 2.66 m
-back wall. The previous rule — cut the back wall to 1.10 m under the covering and drop the sill —
+1.05 (the calibration check), sill 1.10 m above the +3.02 attic floor (the `All : 1.10 m` of the
+attic plan agrees), front top +5.41, so a 2.39 m back wall, rounded to the 2.40 flat ceiling.
+The dormer front is **not** on the façade plane: the plan draws it between two 20 cm piers, at
+z 7.94–8.14 on plan B, 0.36 m inside the façade, and the façade chain `1.965 | 20 | 90/1.05 |
+20` gives the piers. The back wall spans piers and window (1.30 m), the alcove stays 0.90 wide,
+and `ceilingSlopes[].gaps` keep the ceiling flat over the alcove; two thin cheek walls beside the
+gap close its sides under the slope. Roof windows are placed the same way: their top and bottom
+edges on the elevation give heights, which the roof face turns into a plan centre (plan B:
+tops at +5.23). The previous rule — cut the back wall to 1.10 m under the covering and drop the sill —
 dates from before dormers existed in the roof format, and it buried both windows under the
 eave. A dormer roof is flat or single-slope in the format: a two-pitch dormer roof is approximated
 flat at its front top, its footprint reaching back to where that height meets the slope.
@@ -895,9 +919,9 @@ lowest level and the roof covers the rest. Building the exterior from the attic 
 roof, and put the lawn at its altitude.
 
 **The walls of a level under a slope must stay under the roof.** A wall's maximum height is
-`roof(z) − floor`. On plan B, the roof at the rafter is 4.80 for a floor at 2.75: 2.05 m at
-most. A `ceilingHeight` of 2.5 let the partitions cross the covering by 42 cm, visible from
-outside.
+`roof(z) − floor`. A flat `ceilingHeight` of 2.5 let the partitions cross the covering by 42 cm,
+visible from outside. Declare the slopes in `ceilingSlopes` instead: wall tops, the ceiling and
+fixtures then follow them, and the flat `ceilingHeight` is the true flat ceiling of the section.
 
 #### Checking an exterior already in place
 
@@ -1110,7 +1134,9 @@ A missing wall is also fixed by hand, and it has to be looked for: neither the a
 the audit flags an absent wall. On plan B, the west wall of the WC did not exist — the WC was
 open onto the hall over 1.60 m — and nothing said so. What showed it was the overlay: the model's
 walls in orange over the drawing, and a hatched band of the drawing with no orange under it. Do
-the overlay on every pass, not only at the end.
+the overlay on every pass, not only at the end. Short returns are the easiest to lose: the 60 cm
+partition return west of bedroom 1's corner on plan B (`60 | 7`, standing free in the open
+kitchen) was missing for several passes until the owner noticed it in 3D.
 
 **The symmetric case — a wall the drawing does not carry — slipped through three times.** An
 area stays right, `reachedRooms` stays complete and the audit says nothing: none of the three
@@ -1190,7 +1216,11 @@ pnpm run backup:private
 Copies every `public/projects/private-*.json` to `reference-documents/<id>.json`. **Run it
 after every decision pass**, not only at the end: a copy three passes old is worse than no copy,
 because it looks like a backup. In a real session, the two copies had drifted by three keys and
-by ten keys — including the whole `site` of the second plan, added after the copy.
+by ten keys — including the whole `site` of the second plan, added after the copy. It happened
+again: the plan B fixes of a later session (WC walls, dormers, roof windows) lived only in a
+`private-*.json` that was then lost, and the next session found the older copy, redid the
+measurements from the PDF and found the same defects. Keep the correction script next to the
+copy (`reference-documents/historique/`): it replays the decisions on any older copy.
 
 `reference-documents/` may be a **junction** to a synced folder (kDrive, OneDrive): scripts see
 no difference, and PDFs as well as copies leave the repository. The folder is git-ignored, so
