@@ -418,7 +418,9 @@ test('the headset session starts with the veil alone in its camera layers', () =
 
 test('A switches seated mode: the eyes go to the eye height, then back to the real height', () => {
   assert.ok(Math.abs(seatedLift(1.11, 1.65) - 0.54) < 1e-9);
-  assert.equal(seatedLift(1.8, 1.65), 0, 'never lowered');
+  assert.ok(Math.abs(seatedLift(2.2, 1.65) + 0.55) < 1e-9, 'a misplaced floor is lowered back');
+  assert.equal(seatedLift(4, 1.65), -1, 'within limits');
+  assert.equal(seatedLift(0, 1.65), 1.2);
   assert.equal(seatedLift(Number.NaN, 1.65), 0);
   const session = headsetWalk({ point: [4, 4.2], yaw: 0 });
   session.camera.position.y = 1.11;

@@ -401,7 +401,7 @@ walk where the headset left the visitor and restores the camera of the current m
   at full deflection), fading in and out over 0.2 s. Seen motion the inner ear does not feel is
   what makes smooth locomotion sickening, and most of it is seen in the periphery. Teleports
   and room-scale steps do not trigger it; the loading veil hides it.
-- `local-floor` reference space: the real head height replaces the eye-height setting, except in **seated mode**: A switches it on or off by hand (never guessed: a crouching or tall visitor would be misread), and while it is on the floor is lowered so the eyes stand at the eye-height setting from the head height measured at the press (`seatedLift`); and the
+- `local-floor` reference space: the real head height replaces the eye-height setting, except in **seated mode**: A switches it on or off by hand (never guessed: a crouching or tall visitor would be misread), and while it is on the floor is lowered so the eyes stand at the eye-height setting from the head height measured at the press (`seatedLift`), raising or lowering within 1.2 m up and 1 m down, so a floor the runtime misplaced (a seated owner once read 2.20 m over Link) is corrected too; the counter names the buttons for the first 8 s of a session (`XR_HINT`); and the
   real floor is kept on `groundElevationAt` every frame. Room-scale moves (the headset itself
   moving, the emulator's ZQSD) go through the stick's collider every frame (`followPose`): the
   rig takes back what a wall refused, so the head stops at the wall. A jump over 0.5 m in one

@@ -93,14 +93,23 @@ export const XR_TARGET_FRAME_RATE = 90;
 /** Frame-rate windows in a row below the target before the next lower rate is asked. */
 export const XR_RATE_FALLBACK_WINDOWS = 3;
 
+/** The most the seated mode moves the visitor, up or down, in metres. */
+export const XR_SEATED_MAX_RAISE = 1.2;
+export const XR_SEATED_MAX_DROP = 1;
+
 /**
- * How much the seated mode raises the visitor: the walk's eye height minus the real head
- * height when the mode is switched on. Never lowers.
+ * How much the seated mode (A) moves the visitor: the walk's eye height minus the real head
+ * height when it is switched on. It raises a seated visitor, and lowers one whose floor the
+ * runtime misplaced (a seated owner once read 2.20 m over Link), within limits.
  */
 export function seatedLift(headHeight: number, eyeHeight: number): number {
-  if (!Number.isFinite(headHeight)) return 0;
-  return Math.max(0, eyeHeight - Math.max(0, headHeight));
+  if (!Number.isFinite(headHeight) || !Number.isFinite(eyeHeight)) return 0;
+  return Math.max(-XR_SEATED_MAX_DROP, Math.min(XR_SEATED_MAX_RAISE, eyeHeight - headHeight));
 }
+
+/** How long the button hint shows once the headset view opens, in seconds. */
+export const XR_HINT_SECONDS = 8;
+export const XR_HINT = 'A : assis · B : téléportation · X : compteur';
 
 /** The display rate to ask for: the highest supported one up to the target, if above the default. */
 export function pickFrameRate(
@@ -391,6 +400,8 @@ export class ImmersiveWalk {
   private readiness = new PreparationProgress();
   private readonly counter = new FrameCounter();
   private governor?: FrameRateGovernor;
+  /** Seconds left of the button hint (`XR_HINT`). */
+  private hintSeconds = XR_HINT_SECONDS;
   /** Added to the floor in seated mode (A or X), in metres. */
   private seatedRaise = 0;
   private limitHits = 0;
@@ -468,6 +479,12 @@ export class ImmersiveWalk {
     if (this.veil && !this.lift()) return;
     this.followPose();
     this.blink.update(seconds);
+    if (this.hintSeconds > 0) {
+      // The buttons, named once as the view opens; the counter keeps its own choice after.
+      this.hintSeconds -= seconds;
+      this.hud.visible = this.hintSeconds > 0 || this.preferences.counter;
+      this.showHud();
+    }
     const fps = this.counter.tick(performance.now());
     if (fps !== undefined) {
       this.lastFps = fps;
@@ -720,7 +737,7 @@ export class ImmersiveWalk {
    */
   toggleSeated() {
     this.seatedRaise =
-      this.seatedRaise > 0 ? 0 : seatedLift(this.camera.position.y, this.host.eyeHeight);
+      this.seatedRaise !== 0 ? 0 : seatedLift(this.camera.position.y, this.host.eyeHeight);
     this.followFloor();
     this.lastHead = this.head();
     this.flashHud();
@@ -763,7 +780,14 @@ export class ImmersiveWalk {
   }
 
   private showHud() {
-    this.hud.show(this.lastFps, this.limitHits, this.seatedOffset > 0, this.preferences.teleport);
+    this.hud.show(
+      this.lastFps,
+      this.limitHits,
+      this.seatedOffset !== 0,
+      this.preferences.teleport,
+      undefined,
+      this.hintSeconds > 0 ? XR_HINT : undefined,
+    );
   }
 
   /** Asks the headset for the highest display rate up to the target; ignored where unsupported. */
