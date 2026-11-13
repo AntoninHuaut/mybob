@@ -418,6 +418,74 @@ test('a declared dormer slope changes where the dormer roof meets the pan', () =
   engine.dispose();
 });
 
+test('a flat dormer roof clears the top of its back wall instead of sharing its plane', () => {
+  const project = dormerProject();
+  // Back wall top at 2.5 + 3 = 5.5, the height of the pan at the back of the footprint: the
+  // dormer roof would be flat at the very height of the wall's top, through its thickness.
+  project.levels[1].walls.find((wall) => wall.id === 'h-d-fond')!.height = 3;
+  const { built, scene, engine } = exterior(validateProject(project));
+  // Lifted at the front so that over the wall's inner face (0.1 m into a 1.6 m retreat) it
+  // stays 2 cm above the wall: 5.5 + 0.02 / (1.5 / 1.6).
+  const front = 5.5 + 0.02 / (1.5 / 1.6);
+  for (const panel of built.roofMeshes.filter((mesh) => mesh.name.startsWith('dormer-toit:'))) {
+    const ys = Array.from(panel.getVerticesData('position')!.filter((_, i) => i % 3 === 1));
+    near(Math.min(...ys), 5.5);
+    near(Math.max(...ys), front);
+  }
+  // The cheeks and the front rise to the lifted roof, leaving no gap under it.
+  for (const name of ['dormer-joue:', 'dormer-facade:']) {
+    for (const mesh of built.roofMeshes.filter((candidate) => candidate.name.startsWith(name))) {
+      const ys = Array.from(mesh.getVerticesData('position')!.filter((_, i) => i % 3 === 1));
+      near(Math.max(...ys), front);
+    }
+  }
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
+});
+
+test('gables and wall bands stand in the facade skin plane, clear of the upper walls', () => {
+  // An upper level's exterior wall shown with the roof shares the wall plane: a gable or a
+  // band left in it flickered. Both stand at the skin's outer face, 0.012 + 0.018 / 2 out.
+  const skin = 0.021;
+  const project = dormerProject();
+  const { built, scene, engine } = exterior(validateProject(project));
+  const gables = built.roofMeshes.filter((mesh) => mesh.name.startsWith('gable:'));
+  assert.equal(gables.length, 2);
+  const xs = gables.map((gable) => {
+    const positions = Array.from(gable.getVerticesData('position')!.filter((_, i) => i % 3 === 0));
+    near(Math.min(...positions), Math.max(...positions));
+    return positions[0];
+  });
+  assert.deepEqual(
+    xs.sort((a, b) => a - b).map((x) => Math.round(x * 1000) / 1000),
+    [-skin, 10 + skin],
+  );
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
+  const atelier = exterior();
+  const walls = new Map(source.levels.flatMap((level) => level.walls).map((w) => [w.id, w]));
+  let checked = 0;
+  for (const band of atelier.built.roofMeshes.filter((m) => m.name.startsWith('roof-wall-band:'))) {
+    const wall = walls.get(band.name.slice('roof-wall-band:'.length).split(':')[0])!;
+    const alongX = Math.abs(wall.end[1] - wall.start[1]) < 1e-6;
+    if (!alongX && Math.abs(wall.end[0] - wall.start[0]) > 1e-6) continue;
+    const box = band.getBoundingInfo().boundingBox;
+    const axis = alongX ? wall.start[1] : wall.start[0];
+    const [low, high] = alongX
+      ? [box.minimumWorld.z, box.maximumWorld.z]
+      : [box.minimumWorld.x, box.maximumWorld.x];
+    const outward = Math.max(axis - low, high - axis);
+    near(outward, wall.thickness / 2 + skin, 0.0005);
+    checked++;
+  }
+  assert.ok(checked > 0);
+  atelier.built.dispose();
+  atelier.scene.dispose();
+  atelier.engine.dispose();
+});
+
 test('dormers resolve from the project data alone, whatever the house', () => {
   const project = dormerProject();
   const p = validateProject(project);

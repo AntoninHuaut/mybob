@@ -26,6 +26,17 @@ import {
 import { polygonMesh, wallFloorSpan, worldScaleUvs } from './buildHouse';
 import { createExteriorTextures, LAWN_DETAIL_TILE, LAWN_TILE, SLATE_TILE } from './surfaceTextures';
 
+/** How far a dormer roof stays above its back wall's top: enough for the depth buffer from the plot. */
+const DORMER_ROOF_CLEARANCE = 0.02;
+
+/**
+ * The outer face of a facade skin, beyond the wall's outer face (skin centred 12 mm out,
+ * 18 mm deep). The bands and the gables stand in that plane: in the wall's own plane they
+ * shared it with the upper levels' exterior walls, shown together, and flickered.
+ */
+const SKIN_OUTER_FACE = 0.012 + 0.018 / 2;
+const BAND_INNER_RECESS = 0.004;
+
 export interface ExteriorScene {
   root: TransformNode;
   meshes: Mesh[];
@@ -67,6 +78,34 @@ export function planeUv(point: [number, number, number], normal: number[]): [num
     (point[0] * along[0] + point[2] * along[2]) / alongLength,
     (point[0] * up[0] + point[1] * up[1] + point[2] * up[2]) / upLength,
   ];
+}
+
+/**
+ * A gable moved out of the wall plane to the skin's outer face, along its horizontal normal
+ * pointing away from the roof's middle. A gable that is not vertical stays where it is.
+ */
+function outwardGable(
+  points: [number, number, number][],
+  vertices: [number, number, number][],
+): [number, number, number][] {
+  const normal = [0, 0, 0];
+  for (let i = 0; i < points.length; i++) {
+    const a = points[i],
+      b = points[(i + 1) % points.length];
+    normal[0] += (a[1] - b[1]) * (a[2] + b[2]);
+    normal[2] += (a[0] - b[0]) * (a[1] + b[1]);
+  }
+  const size = Math.hypot(normal[0], normal[2]);
+  if (size < 1e-9) return points;
+  let nx = normal[0] / size,
+    nz = normal[2] / size;
+  const mean = (list: [number, number, number][], axis: number) =>
+    list.reduce((sum, point) => sum + point[axis], 0) / list.length;
+  if ((mean(points, 0) - mean(vertices, 0)) * nx + (mean(points, 2) - mean(vertices, 2)) * nz < 0) {
+    nx = -nx;
+    nz = -nz;
+  }
+  return points.map(([x, y, z]) => [x + nx * SKIN_OUTER_FACE, y, z + nz * SKIN_OUTER_FACE]);
 }
 
 function faceMesh(
@@ -121,7 +160,12 @@ function roofOverStrip(roofs: SiteRoof[], wall: Wall, from: number, to: number):
   const steps = Math.max(2, Math.ceil(span / 0.1));
   for (let i = 0; i <= steps; i++) {
     for (const side of [-1, 0, 1]) {
-      const [x, z] = alongWall(wall, from + (i / steps) * span, (side * wall.thickness) / 2);
+      // Out to the skin's outer face: the band reaches it.
+      const [x, z] = alongWall(
+        wall,
+        from + (i / steps) * span,
+        side * (wall.thickness / 2 + SKIN_OUTER_FACE),
+      );
       for (const roof of roofs)
         for (const face of roof.faces) {
           if (!pointInOrOnPolygon([x, z], roofFacePlanOutline(roof.vertices, face))) continue;
@@ -497,7 +541,13 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
         : [{ start: 0, end: to - from, bottom: 0, top: bandTop - height }];
       for (const [i, section] of sections.entries()) {
         if (section.end - section.start < 1e-4 || section.top - section.bottom < 1e-4) continue;
-        const [x, z] = alongWall(wall, from + (section.start + section.end) / 2);
+        // Out to the skin's outer face; the inner face a few millimetres inside the wall, behind
+        // the inner face of an upper wall standing on it.
+        const [x, z] = alongWall(
+          wall,
+          from + (section.start + section.end) / 2,
+          (sign * (SKIN_OUTER_FACE + BAND_INNER_RECESS)) / 2,
+        );
         const band = add(
           metricBox(
             CreateBox(
@@ -505,7 +555,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
               {
                 width: section.end - section.start,
                 height: section.top - section.bottom,
-                depth: wall.thickness,
+                depth: wall.thickness + SKIN_OUTER_FACE - BAND_INNER_RECESS,
               },
               scene,
             ),
@@ -580,6 +630,19 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
           : [across, roofFaceHeightAt(r.vertices, face, across, side), side];
       const topAt = (side: number, across: number, height: number): [number, number, number] =>
         frame.acrossZ ? [side, height, across] : [across, height, side];
+      // The back wall's own top sits at `frontTop`, through its whole thickness: a dormer roof
+      // starting there would share that plane (a flat dormer roof flickered over the wall).
+      // The roof front is lifted just enough to stay above the wall's inner face.
+      const join = panAt(frame.sideLow, frame.meet)[1];
+      const retreat = Math.abs(frame.front - frame.meet);
+      const inside = (retreat - frame.wall.thickness) / retreat;
+      const roofTop =
+        inside > 0.05
+          ? Math.max(
+              frame.frontTop,
+              join + (frame.frontTop + DORMER_ROOF_CLEARANCE - join) / inside,
+            )
+          : frame.frontTop + DORMER_ROOF_CLEARANCE;
       // The roof face is opened from the join on the slope to the outer face of the back wall.
       const hole: [number, number, number][] = [
         panAt(frame.sideLow, frame.meet),
@@ -595,7 +658,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       for (const [index, side] of [frame.sideLow, frame.sideHigh].entries()) {
         const ring: [number, number, number][] = [
           panAt(side, frame.front),
-          topAt(side, frame.front, frame.frontTop),
+          topAt(side, frame.front, roofTop),
           panAt(side, frame.meet),
         ];
         roofMeshes.push(
@@ -615,8 +678,8 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       // along the footprint stays within the face tolerance.
       const joinLow = panAt(frame.sideLow, frame.meet);
       const joinHigh = panAt(frame.sideHigh, frame.meet);
-      const capFrontLow = topAt(frame.sideLow, frame.front, frame.frontTop);
-      const capFrontHigh = topAt(frame.sideHigh, frame.front, frame.frontTop);
+      const capFrontLow = topAt(frame.sideLow, frame.front, roofTop);
+      const capFrontHigh = topAt(frame.sideHigh, frame.front, roofTop);
       for (const [index, triangle] of [
         [capFrontLow, capFrontHigh, joinHigh],
         [capFrontLow, joinHigh, joinLow],
@@ -633,7 +696,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       const outward = Math.sign(frame.front - frame.meet);
       const skin = frame.front + outward * 0.012;
       const bottom = Math.max(panAt(frame.sideLow, skin)[1], panAt(frame.sideHigh, skin)[1]);
-      if (frame.frontTop - bottom > 0.005) {
+      if (roofTop - bottom > 0.005) {
         const frontHoles: [number, number, number][][] = [];
         for (const upper of upperOpenings) {
           if (upper.wall.id !== frame.wall.id || upper.level.id !== frame.level.id) continue;
@@ -663,8 +726,8 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
         const ring: [number, number, number][] = [
           panAt(frame.sideLow, skin),
           panAt(frame.sideHigh, skin),
-          topAt(frame.sideHigh, skin, frame.frontTop),
-          topAt(frame.sideLow, skin, frame.frontTop),
+          topAt(frame.sideHigh, skin, roofTop),
+          topAt(frame.sideLow, skin, roofTop),
         ];
         roofMeshes.push(
           add(
@@ -680,7 +743,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
           ),
         );
       }
-      result.height = Math.max(result.height, frame.frontTop);
+      result.height = Math.max(result.height, roofTop);
     }
     // A roof window lives on the roof face, not on a wall: the renderer opens the
     // slope and sets the frame in the plane of the rafter, at its height from the
@@ -703,20 +766,25 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       roofMeshes.push(
         add(faceMesh(`roof:${r.id}:${i}`, r.vertices, face, scene, holes.get(i)), roof, 'roof'),
       );
-    for (const [i, face] of (r.gables ?? []).entries())
+    for (const [i, face] of (r.gables ?? []).entries()) {
+      const points = outwardGable(
+        face.map((index) => r.vertices[index]),
+        r.vertices,
+      );
       roofMeshes.push(
         add(
           faceMesh(
             `gable:${r.id}:${i}`,
-            r.vertices,
-            face,
+            points,
+            points.map((_, index) => index),
             scene,
-            gableHoles(face.map((index) => r.vertices[index])),
+            gableHoles(points),
           ),
           plaster,
           'roof',
         ),
       );
+    }
   }
   // The frames of the upper levels sit 3 cm inside the outer face, behind
   // whatever opened for them: the band, the gable or the dormer front.
