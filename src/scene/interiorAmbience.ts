@@ -320,7 +320,7 @@ export function createOrbitTaa(scene: Scene, camera: Camera): TAARenderingPipeli
 
 /**
  * Screen-space ambient occlusion for the visit camera only. In Babylon 9.35 the
- * 8-sample pass runs at full resolution; `ssaoRatio` sizes the horizontal blur and
+ * 16-sample pass runs at full resolution; `ssaoRatio` sizes the horizontal blur and
  * `blurRatio` both the vertical blur and the combine, which writes the scene image, so
  * it stays at 1. It reads the PrePass rather than the legacy geometry buffer, so it
  * shares a single auxiliary pass with the temporal antialiasing.
@@ -336,9 +336,8 @@ export interface OcclusionSettings {
  * Taps of the bilateral blur, per direction, each one a depth and an occlusion read. The
  * kernel spans as many texels, so fewer taps is a narrower blur. With Babylon's default of
  * 16, the blur cost 0.67 of the 3.0 ms visit on the owner's house (desktop GPU), mostly
- * the full-resolution vertical pass. 8 halved both passes (#254), but together with the
- * 8-sample occlusion pass the owner kept the narrow blur left grey blotches on the walls
- * under the ceiling (2026-11-13): back to 16, the combination the owner tried and kept.
+ * the full-resolution vertical pass. 8 halved both passes (#254) but left grey blotches on
+ * the walls under the ceiling (2026-11-13): back to 16.
  */
 export const OCCLUSION_BLUR_SAMPLES = 16;
 
@@ -379,9 +378,9 @@ export function createInteriorOcclusion(
     );
     pipeline.totalStrength = 0.6;
     pipeline.radius = settings.radius;
-    // Eight samples, halved from sixteen on trial (owner, 2026-11-13): the bilateral
-    // blur below keeps the result smooth, at half the occlusion's sampling cost.
-    pipeline.samples = 8;
+    // Sixteen samples: the eight-sample trial (2026-11-13) left grey blotches on plain
+    // walls and dark bands along the floor boards, even with the full blur below.
+    pipeline.samples = 16;
     pipeline.maxZ = settings.maxZ;
     // `samples` above is the SSAO sample count, not antialiasing. The pipeline renders
     // the scene into its own single-sample texture, so the engine's `antialias: true`

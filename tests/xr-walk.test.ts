@@ -14,10 +14,11 @@ import {
   applyDeadzone,
   ImmersiveWalk,
   readControllerGamepad,
-  snapTurn,
-  snapTurnAngle,
+  smoothTurnAngle,
   stickDisplacement,
   turnAround,
+  turnAxis,
+  XR_TURN_DEGREES_PER_SECOND,
   XR_POSE_JUMP,
   XR_WALK_SPEED,
 } from '../src/scene/xrWalk';
@@ -32,6 +33,12 @@ import {
   XR_LOADING_TIMEOUT_MS,
   XR_VEIL_LAYER,
   XR_VEIL_ONLY_FRAMES,
+  approachStrength,
+  VIGNETTE_CLEAR_DEGREES,
+  VIGNETTE_DARK_DEGREES,
+  VIGNETTE_FADE_SECONDS,
+  vignetteAlpha,
+  vignetteTextureData,
 } from '../src/scene/xrHud';
 import { usePlanCoordinates, yawFromDirection } from '../src/scene/coordinates';
 
@@ -49,22 +56,65 @@ test('the stick dead zone ignores drift and still reaches full deflection', () =
   assert.equal(applyDeadzone(Number.NaN), 0);
 });
 
-test('a snap turn fires once per push and needs the stick back near the centre', () => {
-  let armed = true;
-  const turns: number[] = [];
-  for (const axis of [0, 0.8, 0.9, 1, 0.5, 0.1, -0.9, -0.95, 0]) {
-    const result = snapTurn(axis, armed);
-    armed = result.armed;
-    if (result.turn) turns.push(result.turn);
-  }
-  assert.deepEqual(turns, [1, -1]);
+test('the smooth turn follows the stick deflection and frame time', () => {
+  const second = smoothTurnAngle(1, 1);
+  assert.ok(Math.abs(Math.abs(second) - (XR_TURN_DEGREES_PER_SECOND * Math.PI) / 180) < 1e-9);
+  assert.ok(Math.abs(smoothTurnAngle(0.5, 0.1) - second * 0.05) < 1e-12);
+  assert.equal(smoothTurnAngle(0, 1), 0);
+  // Ninety frames at 90 Hz add up to the one-second turn: no snap, no lost frame.
+  let total = 0;
+  for (let i = 0; i < 90; i++) total += smoothTurnAngle(1, 1 / 90);
+  assert.ok(Math.abs(total - second) < 1e-9);
+});
+
+test('the right stick turns sideways but never while it is pushed to aim', () => {
+  assert.equal(turnAxis(0.8, 0.1), 0.8);
+  assert.equal(turnAxis(-0.6, 0.2), -0.6);
+  assert.equal(turnAxis(0.5, -0.7), 0);
+  assert.equal(turnAxis(0, -1), 0);
 });
 
 test('turning right moves the gaze towards +x in the right-handed plan frame', () => {
-  const rotation = Quaternion.RotationAxis(Vector3.Up(), snapTurnAngle(1));
+  const rotation = Quaternion.RotationAxis(Vector3.Up(), smoothTurnAngle(1, 0.5));
   const forward = new Vector3(0, 0, -1).applyRotationQuaternion(rotation);
   assert.ok(forward.x > 0.4, `x=${forward.x}`);
-  assert.equal(snapTurnAngle(0), 0);
+});
+
+test('the comfort vignette is clear in the centre, dark at the edges, and fades', () => {
+  assert.equal(vignetteAlpha(0), 0);
+  assert.equal(vignetteAlpha(VIGNETTE_CLEAR_DEGREES), 0);
+  assert.equal(vignetteAlpha(VIGNETTE_DARK_DEGREES), 1);
+  assert.equal(vignetteAlpha(80), 1);
+  const middle = vignetteAlpha((VIGNETTE_CLEAR_DEGREES + VIGNETTE_DARK_DEGREES) / 2);
+  assert.ok(Math.abs(middle - 0.5) < 1e-9);
+  const size = 64;
+  const data = vignetteTextureData(size);
+  const alphaAt = (row: number, column: number) => data[(row * size + column) * 4 + 3];
+  assert.equal(alphaAt(size / 2, size / 2), 0, 'clear centre');
+  assert.equal(alphaAt(0, 0), 255, 'dark corner');
+  assert.equal(alphaAt(size / 2, 0), 255, 'dark side');
+  // Starting the stick closes the vignette over the fade time, not in one frame.
+  let strength = 0;
+  strength = approachStrength(strength, 1, 1 / 90);
+  assert.ok(strength > 0 && strength < 0.1, `first frame ${strength}`);
+  for (let t = 0; t < VIGNETTE_FADE_SECONDS; t += 1 / 90)
+    strength = approachStrength(strength, 1, 1 / 90);
+  assert.equal(strength, 1);
+  assert.equal(approachStrength(0.5, 0.4, 1), 0.4);
+  assert.equal(approachStrength(0, 3, 1), 1);
+});
+
+test('the headset session darkens the view edges while the visitor turns, then clears', () => {
+  const session = headsetWalk({ point: [4, 4.2], yaw: 0 });
+  const vignette = (
+    session.walk as unknown as { vignette: { opacity: number; update(m: number, s: number): void } }
+  ).vignette;
+  assert.equal(vignette.opacity, 0);
+  for (let i = 0; i < 30; i++) vignette.update(1, 1 / 90);
+  assert.ok(vignette.opacity > 0.8, `opacity ${vignette.opacity}`);
+  for (let i = 0; i < 30; i++) vignette.update(0, 1 / 90);
+  assert.equal(vignette.opacity, 0);
+  session.dispose();
 });
 
 test('the left stick walks where the head looks, level, at a bounded speed', () => {
@@ -171,11 +221,11 @@ test('the headset starts where the screen walk stood, looking the same way', () 
   session.dispose();
 });
 
-test('a snap turn happens on the spot, even with the head off the rig centre', () => {
+test('a turn happens on the spot, even with the head off the rig centre', () => {
   const session = headsetWalk({ point: [4, 4.2], yaw: 0 });
   session.camera.position.set(0.4, 1.7, -0.3);
   const before = session.walk.position;
-  session.walk.turn(snapTurnAngle(1));
+  session.walk.turn(smoothTurnAngle(1, 0.4));
   const after = session.walk.position;
   assert.ok(Math.hypot(after[0] - before[0], after[1] - before[1]) < 1e-5, `${before} → ${after}`);
   const pivot = turnAround(new Vector3(1, 0, 0), new Vector3(0, 5, 0), Math.PI / 2);
