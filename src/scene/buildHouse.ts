@@ -391,6 +391,7 @@ export function buildHouse(
             alongWall(wall, section.start),
             alongWall(wall, section.end),
             section.top,
+            wall.thickness,
           ).map((run) => ({
             ...run,
             start: run.start + section.start,

@@ -92,6 +92,12 @@ export function ceilingProfile(
   a: Point2,
   b: Point2,
   cap = level.ceilingHeight,
+  /**
+   * Thickness of a wall standing on `a → b`: each slope is then read on the wall's
+   * higher face, so the face on the rising side meets the ceiling instead of stopping
+   * under it; the rest of the wall top hides above the ceiling.
+   */
+  thickness = 0,
 ): CeilingRun[] {
   const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (length < EPS) return [];
@@ -103,8 +109,9 @@ export function ceilingProfile(
   const lines = [
     { h0: cap, k: 0 },
     ...slopes.map((slope) => {
-      const h0 = slope.height + slope.rise * slopeDistance(slope, a);
       const f = slopeFrame(slope);
+      const across = Math.abs(-uz * f.nx + ux * f.nz);
+      const h0 = slope.height + slope.rise * (slopeDistance(slope, a) + (thickness / 2) * across);
       return { h0, k: slope.rise * (ux * f.nx + uz * f.nz) };
     }),
   ];
@@ -131,8 +138,10 @@ export function ceilingProfile(
     // The lowest function in the middle of the run stays the lowest on the whole run.
     let best = lines[0];
     let bestHeight = cap;
+    const tm = (t0 + t1) / 2;
     slopes.forEach((slope, s) => {
-      const height = slopeHeightAt(slope, middle);
+      if (inGap(slope, slopeAlong(slope, middle))) return;
+      const height = lines[s + 1].h0 + lines[s + 1].k * tm;
       if (height < bestHeight) {
         bestHeight = height;
         best = lines[s + 1];
@@ -558,7 +567,20 @@ export function roofWindowWells(project: HouseProject, level: Level): CeilingWel
           ([t0, t1]) => t1 > 0 && t0 < length,
         );
         if (!first) return undefined;
-        const t = Math.max(0, first[0]);
+        // Past the knee wall standing on the floor's edge: the sill starts at its
+        // inner face, level with its top, instead of behind it.
+        const inWall = (p: Point2) =>
+          level.walls.some((wall) => {
+            const dx = wall.end[0] - wall.start[0];
+            const dz = wall.end[1] - wall.start[1];
+            const run = Math.hypot(dx, dz) || 1;
+            const along = ((p[0] - wall.start[0]) * dx + (p[1] - wall.start[1]) * dz) / run;
+            const off = Math.abs((p[0] - wall.start[0]) * dz - (p[1] - wall.start[1]) * dx) / run;
+            return along >= 0 && along <= run && off < wall.thickness / 2 - 1e-6;
+          });
+        let t = Math.max(0, first[0]);
+        const stop = Math.min(length, t + 0.6);
+        while (t < stop && inWall([corner[0] + u[0] * t, corner[1] + u[1] * t])) t += 0.001;
         return [corner[0] + u[0] * t, corner[1] + u[1] * t];
       };
       const c0 = entry(a0, shift(u0));
