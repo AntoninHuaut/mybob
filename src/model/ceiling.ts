@@ -284,3 +284,119 @@ export function ceilingTriangles(
   }
   return triangles;
 }
+
+/** Height of a profile at `t`, the runs covering it in order. */
+function profileAt(runs: CeilingRun[], t: number): number {
+  const run = runs.find((r) => t >= r.start - 1e-9 && t <= r.end + 1e-9) ?? runs[runs.length - 1];
+  if (!run) return NaN;
+  const span = run.end - run.start;
+  return span < 1e-12 ? run.from : run.from + ((run.to - run.from) * (t - run.start)) / span;
+}
+
+/** Parameters, along `a + t·u`, of the intervals of a line inside a polygon. */
+function insideIntervals(polygon: Point2[], a: Point2, u: Point2, reach: number) {
+  const ts = [-reach, reach];
+  for (let i = 0; i < polygon.length; i++) {
+    const p = polygon[i];
+    const q = polygon[(i + 1) % polygon.length];
+    const ex = q[0] - p[0];
+    const ez = q[1] - p[1];
+    const denominator = u[0] * ez - u[1] * ex;
+    if (Math.abs(denominator) < EPS) continue;
+    const wx = p[0] - a[0];
+    const wz = p[1] - a[1];
+    const t = (wx * ez - wz * ex) / denominator;
+    const s = (wx * u[1] - wz * u[0]) / denominator;
+    if (s >= -EPS && s <= 1 + EPS) ts.push(t);
+  }
+  ts.sort((p, q) => p - q);
+  const intervals: [number, number][] = [];
+  for (let i = 0; i + 1 < ts.length; i++) {
+    const middle = (ts[i] + ts[i + 1]) / 2;
+    if (
+      ts[i + 1] - ts[i] > 1e-6 &&
+      pointInside([a[0] + u[0] * middle, a[1] + u[1] * middle], polygon)
+    )
+      intervals.push([ts[i], ts[i + 1]]);
+  }
+  return intervals;
+}
+
+function pointInside(point: Point2, polygon: Point2[]): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const [xi, zi] = polygon[i];
+    const [xj, zj] = polygon[j];
+    if (
+      zi > point[1] !== zj > point[1] &&
+      point[0] < ((xj - xi) * (point[1] - zi)) / (zj - zi) + xi
+    )
+      inside = !inside;
+  }
+  return inside;
+}
+
+/**
+ * The vertical faces of the ceiling at the edges of a gap: beside a dormer, the
+ * flat ceiling over the gap stands above the slope next to it, and the step between
+ * them is a wall of plaster hanging from the flat ceiling down to the slope. Each
+ * face comes as quads [bottom start, bottom end, top end, top start], with the
+ * side of the gap as its normal.
+ */
+export function ceilingSteps(
+  level: Level,
+): { points: [number, number, number][]; normal: [number, number, number] }[] {
+  const faces: { points: [number, number, number][]; normal: [number, number, number] }[] = [];
+  const box = level.outline.reduce((r, [x, z]) => Math.max(r, Math.abs(x), Math.abs(z)), 0);
+  const reach = 4 * box + 10;
+  for (const slope of level.ceilingSlopes ?? []) {
+    const f = slopeFrame(slope);
+    for (const [from, to] of slope.gaps ?? [])
+      for (const [edge, inward] of [
+        [from, 1],
+        [to, -1],
+      ] as const) {
+        // The edge line, across the foot line, and the two sides of it.
+        const base: Point2 = [slope.start[0] + f.ux * edge, slope.start[1] + f.uz * edge];
+        const across: Point2 = [f.nx, f.nz];
+        const shift = (side: number): Point2 => [
+          base[0] + f.ux * side * 1e-5,
+          base[1] + f.uz * side * 1e-5,
+        ];
+        for (const [t0, t1] of insideIntervals(level.outline, base, across, reach)) {
+          const end = (origin: Point2, t: number): Point2 => [
+            origin[0] + across[0] * t,
+            origin[1] + across[1] * t,
+          ];
+          const gapSide = shift(inward);
+          const slopeSide = shift(-inward);
+          const high = ceilingProfile(level, end(gapSide, t0), end(gapSide, t1));
+          const low = ceilingProfile(level, end(slopeSide, t0), end(slopeSide, t1));
+          const cuts = [...new Set([...high, ...low].flatMap((run) => [run.start, run.end]))].sort(
+            (p, q) => p - q,
+          );
+          for (let i = 0; i + 1 < cuts.length; i++) {
+            const [s0, s1] = [cuts[i], cuts[i + 1]];
+            if (s1 - s0 < 1e-6) continue;
+            const top0 = profileAt(high, s0);
+            const top1 = profileAt(high, s1);
+            const bottom0 = profileAt(low, s0);
+            const bottom1 = profileAt(low, s1);
+            if (top0 - bottom0 < 1e-6 && top1 - bottom1 < 1e-6) continue;
+            const p0 = end(base, t0 + s0);
+            const p1 = end(base, t0 + s1);
+            faces.push({
+              points: [
+                [p0[0], bottom0, p0[1]],
+                [p1[0], bottom1, p1[1]],
+                [p1[0], top1, p1[1]],
+                [p0[0], top0, p0[1]],
+              ],
+              normal: [f.ux * inward, 0, f.uz * inward],
+            });
+          }
+        }
+      }
+  }
+  return faces;
+}

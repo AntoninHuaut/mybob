@@ -16,7 +16,7 @@ import type { Level, Opening, Point2, Wall } from '../model/types';
 import { alongWall, pointInPolygon, wallLength, wallSections } from '../model/geometry';
 import type { Materials } from './materials';
 import { beveledBox, facetsData, slopedPrismFacets } from './beveledBox';
-import { ceilingHeightAt, ceilingProfile, ceilingTriangles } from '../model/ceiling';
+import { ceilingHeightAt, ceilingProfile, ceilingSteps, ceilingTriangles } from '../model/ceiling';
 
 /**
  * Chamfer of a wall edge. A real plastered arris is two millimetres, but two
@@ -135,8 +135,8 @@ export function polygonMesh(
 
 /**
  * The ceiling of a level with sloping parts: flat where the flat ceiling is the
- * lowest, following each slope elsewhere. Facing down into the room, with plaster
- * UVs in metres in the plane of each facet.
+ * lowest, following each slope elsewhere, with the vertical step beside each dormer
+ * gap. Facing into the room, with plaster UVs in metres in the plane of each facet.
  */
 export function slopedCeilingMesh(level: Level, scene: Scene, holes: Point2[][] = []): Mesh {
   const facets = ceilingTriangles(level, level.outline, holes).map((points) => {
@@ -155,7 +155,7 @@ export function slopedCeilingMesh(level: Level, scene: Scene, holes: Point2[][] 
     return { points, normal: n };
   });
   const mesh = new Mesh('ceiling', scene);
-  facetsData(facets).applyToMesh(mesh);
+  facetsData([...facets, ...ceilingSteps(level)]).applyToMesh(mesh);
   return mesh;
 }
 

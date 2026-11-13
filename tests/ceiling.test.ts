@@ -6,7 +6,12 @@ import { Scene } from '@babylonjs/core/scene';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Ray } from '@babylonjs/core/Culling/ray';
-import { ceilingHeightAt, ceilingProfile, ceilingTriangles } from '../src/model/ceiling';
+import {
+  ceilingHeightAt,
+  ceilingProfile,
+  ceilingSteps,
+  ceilingTriangles,
+} from '../src/model/ceiling';
 import { validateProject } from '../src/model/validate';
 import {
   packShareDocument,
@@ -110,6 +115,21 @@ test('the ceiling surface covers the outline once and lies on the ceiling', () =
     }
     near(area, 48, 1e-6);
   }
+});
+
+test('beside a gap, a vertical step closes the ceiling from the slope up to the flat part', () => {
+  const steps = ceilingSteps(attic([{ ...NORTH, gaps: [[3, 4]] }]));
+  // Each edge of the gap (x 4.7 and 3.7) gets a triangle of 1.8 × 1.8 m: from 0.90 m at
+  // the north outline (z 0) up to 2.70 m, where the slope meets the flat ceiling (z 1.8).
+  let area = 0;
+  for (const { points } of steps) {
+    const [b0, b1, t1, t0] = points;
+    const run = Math.hypot(b1[0] - b0[0], b1[2] - b0[2]);
+    area += (run * (t0[1] - b0[1] + (t1[1] - b1[1]))) / 2;
+    assert.ok([3.7, 4.7].some((x) => Math.abs(b0[0] - x) < 1e-9));
+  }
+  near(area, 2 * 1.62, 1e-6);
+  assert.deepEqual(ceilingSteps(attic()), []);
 });
 
 function validated(level: Level) {
