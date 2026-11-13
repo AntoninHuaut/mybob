@@ -15,13 +15,16 @@ test('a pinned scale and the scales detected per view are read back', () => {
 });
 
 test('the field offers automatic and every scale from 67 % to 150 %', () => {
-  const html = renderScaleFieldHtml();
+  const html = renderScaleFieldHtml(1.5);
   assert.match(html, /<option value="auto">Automatique<\/option>/);
   assert.match(html, /value="0.67">67 %/);
   assert.match(html, /value="1.5">150 %/);
 });
 
 test('the note says what automatic found, or that a pinned scale no longer adapts', () => {
-  assert.match(renderScaleNote({ detected: { walk: 1.3 } }), /Visite 130 %/);
+  assert.match(renderScaleNote({ detected: { walk: 1.3 } }, 1.5), /Visite 130 %/);
+  assert.match(renderScaleNote({ detected: {} }, 1.25), /jusqu’à 125 % sur cet écran/);
+  assert.match(renderScaleNote({ detected: {} }, 1), /jamais au-delà de 100/);
+  assert.doesNotMatch(renderScaleFieldHtml(1.25), /value="1.5"/);
   assert.match(renderScaleNote({ fixed: 0.8, detected: {} }), /Fixée à 80 %/);
 });

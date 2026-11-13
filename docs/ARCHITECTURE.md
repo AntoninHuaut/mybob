@@ -510,16 +510,18 @@ last call, and read back at start-up.
   rejected a 150 % render dropping straight to 67 %, not the progressive steps). The owner chose that order (2026-11-13): at a low frame rate, rather
   lose the occlusion than sharpness. Plan and Extérieur have no tier and go straight to the
   resolution. A scale or tier the visit took leaves Plan sharp and Vue 3D's occlusion in
-  place. A view over 100 fps (median under 10 ms) sharpens instead, 10 % per series up to
-  150 % (`UPSCALES`, owner 2026-11-13: one rendered pixel per screen pixel on a 150 % display);
-  a slow series at an up-scale gives that bonus back before touching the occlusion. Once a view
-  has stepped down it never climbs again in the session, because changing scale resizes
-  every render target, which hitches; between 40 and 100 fps it stays put. Up-scaling needs
-  a display faster than 100 Hz: on 60 Hz the browser never draws more than 60 images per
-  second. The scale each view reached is saved per browser (`maison-atelier:render-scale:v1`,
-  `src/ui/renderScale.ts`) and is where that view starts next session; « Résolution du rendu »
-  in the Navigation panel pins one scale for every view instead (67 to 150 %), which then
-  never adapts. Switching view may resize once, next to the rebuild a switch already does. The first 30 images, the 30 after each change and the 30
+  place. A view that keeps up with the screen's refresh rate sharpens instead, one step per
+  series (owner 2026-11-13): a median frame time within 5 % of 60, 75, 90, 100, 120, 144, 165
+  or 240 Hz is the browser waiting for the screen (`refreshIntervalOf`), so a 2K screen held at
+  60 Hz may render sharper too. The cap follows the screen's device pixels (`upscaleCap`):
+  150 % on 4K (also a 4K screen scaled to 150 %), 125 % on 2K, none below; steps are 10 %
+  apart, the cap last. Falling 15 % behind the refresh at an up-scale (or, started there from
+  a saved scale, not yet seen on any refresh rate) goes back one step without touching the
+  occlusion. Once a view has stepped down it never climbs again in the session, because
+  changing scale resizes every render target, which hitches. The scale each view reached is
+  saved per browser (`maison-atelier:render-scale:v1`, `src/ui/renderScale.ts`) and is where
+  that view starts next session; « Résolution du rendu » in the Navigation panel pins one
+  scale for every view instead (67 % to this screen's cap), which then never adapts. Switching view may resize once, next to the rebuild a switch already does. The first 30 images, the 30 after each change and the 30
   after entering a view are not measured. Pending shader compilation or asset loading
   discards the partial series and restarts that warm-up, including when new programs appear
   after the initial preparation. A gap over 5 s between two images is a stall,

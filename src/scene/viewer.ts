@@ -61,7 +61,7 @@ import {
   warmFrames,
 } from './shaderWarmup';
 import { pluginSummary, shaderLog } from './shaderLog';
-import { EFFECT_TIERS, MAX_PIXEL_RATIO, ViewResolutions } from './adaptiveResolution';
+import { EFFECT_TIERS, MAX_PIXEL_RATIO, upscaleCap, ViewResolutions } from './adaptiveResolution';
 import {
   AUTO_CUT_HEIGHT,
   buildWallCutaway,
@@ -258,6 +258,7 @@ export class HouseViewer {
   onPreparingProgress?: (fraction: number) => void;
   private readonly resolutions = new ViewResolutions(
     Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO),
+    upscaleCap(window.screen?.width ?? 0, window.screen?.height ?? 0, window.devicePixelRatio || 1),
   );
   /** The current view's dynamic resolution (`ViewResolutions`). */
   private get adaptiveResolution() {
