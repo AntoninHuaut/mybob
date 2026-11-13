@@ -32,10 +32,11 @@ export interface UnpackedShare {
 /**
  * Revision 2: glazing and leaves of openings, dormers and roof windows. Revision 3: the
  * length of each shower panel. Revision 4: a CRC-32 closes the pack, so a link altered by
- * one character is refused instead of decoding into another valid project. Reading still
- * accepts revisions 1 to 3 (links already shared); writing always produces 4.
+ * one character is refused instead of decoding into another valid project. Revision 5: the
+ * sloping parts of each level's ceiling. Reading still accepts revisions 1 to 4 (links
+ * already shared); writing always produces 5.
  */
-export const LINK_PACK_VERSION = 4;
+export const LINK_PACK_VERSION = 5;
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -412,6 +413,20 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
     }
     packer.point(level.spawn.position);
     packer.angle(level.spawn.yaw);
+    const slopes = level.ceilingSlopes ?? [];
+    packer.u(slopes.length);
+    for (const slope of slopes) {
+      packer.point(slope.start);
+      packer.point(slope.end);
+      packer.mm(slope.height);
+      packer.mm(slope.rise);
+      const gaps = slope.gaps ?? [];
+      packer.u(gaps.length);
+      for (const [from, to] of gaps) {
+        packer.mm(from);
+        packer.mm(to);
+      }
+    }
   }
   if (project.site) {
     const site = project.site;
@@ -740,6 +755,27 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
       });
     }
     level.spawn = { position: reader.point(), yaw: reader.angle() };
+    if (version >= 5) {
+      const slopeCount = reader.count(20);
+      if (slopeCount) {
+        level.ceilingSlopes = [];
+        for (let s = 0; s < slopeCount; s++) {
+          const slope: NonNullable<HouseProject['levels'][number]['ceilingSlopes']>[number] = {
+            id: `rampant-${l}-${s}`,
+            start: reader.point(),
+            end: reader.point(),
+            height: reader.mm(),
+            rise: reader.mm(),
+          };
+          const gapCount = reader.count(20);
+          if (gapCount) {
+            slope.gaps = [];
+            for (let g = 0; g < gapCount; g++) slope.gaps.push([reader.mm(), reader.mm()]);
+          }
+          level.ceilingSlopes.push(slope);
+        }
+      }
+    }
     project.levels.push(level);
   }
   if (flags & 1) {

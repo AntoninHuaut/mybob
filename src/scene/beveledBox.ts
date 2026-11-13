@@ -189,13 +189,13 @@ export function windsWithNormal(
   return cross[0] * normal[0] + cross[1] * normal[1] + cross[2] * normal[2] > 0;
 }
 
-/** The mesh data of a chamfered box, ready for `VertexData.applyToMesh`. */
-export function beveledBoxData(width: number, height: number, depth: number, bevel: number) {
+/** Mesh data of flat-shaded facets, wound for Babylon, with world-scale UVs. */
+export function facetsData(facets: Facet[]) {
   const positions: number[] = [];
   const normals: number[] = [];
   const uvs: number[] = [];
   const indices: number[] = [];
-  for (const facet of beveledBoxFacets(width, height, depth, bevel)) {
+  for (const facet of facets) {
     const points = windsWithNormal(facet.points, facet.normal)
       ? [...facet.points].reverse()
       : facet.points;
@@ -213,6 +213,54 @@ export function beveledBoxData(width: number, height: number, depth: number, bev
   data.uvs = uvs;
   data.indices = indices;
   return data;
+}
+
+/** The mesh data of a chamfered box, ready for `VertexData.applyToMesh`. */
+export function beveledBoxData(width: number, height: number, depth: number, bevel: number) {
+  return facetsData(beveledBoxFacets(width, height, depth, bevel));
+}
+
+/**
+ * A wall piece whose top follows a ceiling slope: a prism from `x0` to `x1` along
+ * the wall, from `bottom` up to `top0` at `x0` and `top1` at `x1`, `depth` thick and
+ * centred on z = 0. Its faces are those of a box, the top one tilted.
+ */
+export function slopedPrismFacets(
+  x0: number,
+  x1: number,
+  bottom: number,
+  top0: number,
+  top1: number,
+  depth: number,
+): Facet[] {
+  const h = depth / 2;
+  const p = (x: number, y: number, z: number): [number, number, number] => [x, y, z];
+  return [
+    {
+      points: [p(x0, bottom, -h), p(x1, bottom, -h), p(x1, bottom, h), p(x0, bottom, h)],
+      normal: [0, -1, 0],
+    },
+    {
+      points: [p(x0, top0, -h), p(x1, top1, -h), p(x1, top1, h), p(x0, top0, h)],
+      normal: unit(top0 - top1, x1 - x0, 0),
+    },
+    {
+      points: [p(x0, bottom, -h), p(x1, bottom, -h), p(x1, top1, -h), p(x0, top0, -h)],
+      normal: [0, 0, -1],
+    },
+    {
+      points: [p(x0, bottom, h), p(x1, bottom, h), p(x1, top1, h), p(x0, top0, h)],
+      normal: [0, 0, 1],
+    },
+    {
+      points: [p(x0, bottom, -h), p(x0, bottom, h), p(x0, top0, h), p(x0, top0, -h)],
+      normal: [-1, 0, 0],
+    },
+    {
+      points: [p(x1, bottom, -h), p(x1, bottom, h), p(x1, top1, h), p(x1, top1, -h)],
+      normal: [1, 0, 0],
+    },
+  ];
 }
 
 /** A chamfered box centred on the origin, like `MeshBuilder.CreateBox`. */

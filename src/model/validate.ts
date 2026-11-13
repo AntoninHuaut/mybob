@@ -1,5 +1,7 @@
-import type { HouseProject, Room, Point2, ProjectSite } from './types';
+import type { CeilingSlope, HouseProject, Level, Room, Point2, ProjectSite } from './types';
+import { ceilingHeightAt, ceilingProfile, slopeDistance } from './ceiling';
 import {
+  alongWall,
   bounds,
   pointInPolygon,
   polygonArea,
@@ -95,6 +97,54 @@ function validRoofFace(face: unknown, vertices: [number, number, number][]): boo
   );
 }
 
+/**
+ * Sloping ceiling parts of a level: a foot line, a height under the flat ceiling,
+ * a rise towards the inside of the level, and ordered gaps along the foot line.
+ */
+function validateCeilingSlopes(l: Level, id: (value: unknown) => void) {
+  if (l.ceilingSlopes === undefined) return;
+  if (!Array.isArray(l.ceilingSlopes) || l.ceilingSlopes.length > 20)
+    fail(`Rampants invalides : ${l.id}`);
+  const box = bounds(l.outline);
+  const centre: Point2 = [(box.minX + box.maxX) / 2, (box.minZ + box.maxZ) / 2];
+  for (const slope of l.ceilingSlopes as unknown[]) {
+    if (!record(slope)) fail(`Chaque rampant du niveau ${l.id} doit être un objet.`);
+    id((slope as Record<string, unknown>).id);
+    const s = slope as unknown as CeilingSlope;
+    const length =
+      point(s.start) && point(s.end) ? Math.hypot(s.end[0] - s.start[0], s.end[1] - s.start[1]) : 0;
+    if (
+      length < 0.1 ||
+      !positive(s.height) ||
+      s.height > l.ceilingHeight ||
+      !positive(s.rise) ||
+      s.rise > 20
+    )
+      fail(`Rampant invalide : ${s.id}`);
+    // The middle of the plan must lie on the rising side, or the slope is drawn backwards.
+    if (slopeDistance(s, centre) <= 0)
+      fail(`Un rampant doit monter vers l’intérieur du niveau, à gauche de son tracé : ${s.id}`);
+    if (s.gaps !== undefined) {
+      if (!Array.isArray(s.gaps) || s.gaps.length > 20)
+        fail(`Interruptions de rampant invalides : ${s.id}`);
+      let previous = 0;
+      for (const gap of s.gaps as unknown[]) {
+        if (
+          !Array.isArray(gap) ||
+          gap.length !== 2 ||
+          !finite(gap[0]) ||
+          !finite(gap[1]) ||
+          gap[0] < previous ||
+          gap[1] - gap[0] < 0.1 ||
+          gap[1] > length + 0.001
+        )
+          fail(`Interruptions de rampant invalides : ${s.id}`);
+        previous = (gap as [number, number])[1];
+      }
+    }
+  }
+}
+
 export function validateProject(
   input: unknown,
   { allowRoomOverlap = false }: { allowRoomOverlap?: boolean } = {},
@@ -164,6 +214,7 @@ export function validateProject(
       !simplePolygon(l.outline)
     )
       fail('Contour de niveau invalide.');
+    validateCeilingSlopes(l, id);
     if (
       !Array.isArray(l.walls) ||
       l.walls.length > 2000 ||
@@ -201,6 +252,21 @@ export function validateProject(
           o.height + (o.sill ?? 0) > (w.height ?? l.ceilingHeight) + 0.001
         )
           fail(`Dimensions d’ouverture invalides : ${o.id}`);
+        // A dormer back wall rises through the covering: its window is not under the slope.
+        if (
+          l.ceilingSlopes?.length &&
+          !dormerWallIds.has(w.id) &&
+          o.height + (o.sill ?? 0) >
+            Math.min(
+              ...ceilingProfile(
+                l,
+                alongWall(w, o.offset),
+                alongWall(w, o.offset + o.width),
+              ).flatMap((run) => [run.from, run.to]),
+            ) +
+              0.001
+        )
+          fail(`L’ouverture dépasse le plafond en pente : ${o.id}`);
         if (o.width < MIN_OPENING_SIZE || o.height < MIN_OPENING_SIZE)
           fail(
             `Une ouverture doit mesurer au moins 10 cm de large et de haut pour les profils du modèle : ${o.id}`,
@@ -254,6 +320,10 @@ export function validateProject(
         );
       if (r.note !== undefined && typeof r.note !== 'string')
         fail(`La note de pièce doit être un texte : ${r.id}`);
+      if (ceilingHeightAt(l, r.viewpoint) - (r.floorOffset ?? 0) < MIN_CEILING_HEIGHT)
+        fail(
+          `Le point de visite doit être sous au moins 1,80 m de plafond, hors du rampant : ${r.id}`,
+        );
       const floorOffset = r.floorOffset;
       if (floorOffset !== undefined) {
         if (!finite(floorOffset) || floorOffset < -1 || floorOffset > 0)

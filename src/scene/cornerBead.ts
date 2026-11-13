@@ -4,6 +4,7 @@ import type { Material } from '@babylonjs/core/Materials/material';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Level, Point2, Wall } from '../model/types';
 import { pointInPolygon } from '../model/geometry';
+import { ceilingHeightAt } from '../model/ceiling';
 import { project, windsWithNormal, type Facet } from './beveledBox';
 
 /**
@@ -126,7 +127,7 @@ export function roomCorners(level: Level): CornerBead[] {
       if (seen.has(key)) continue;
       seen.add(key);
       const height = Math.min(
-        level.ceilingHeight,
+        ceilingHeightAt(level, corner),
         a.height ?? level.ceilingHeight,
         b.height ?? level.ceilingHeight,
       );

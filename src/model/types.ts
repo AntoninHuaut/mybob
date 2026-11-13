@@ -49,11 +49,35 @@ export interface Stair {
   rise: number;
   note?: string;
 }
+/**
+ * A sloping part of a level's ceiling, under a roof slope. Along the foot line the
+ * ceiling stands `height` above the level floor, and it rises by `rise` metres per
+ * metre on the left of `start → end` as drawn on the plan (x to the right, z
+ * downwards), until it meets the flat `ceilingHeight`. The slope runs the whole
+ * length of the level; `gaps` interrupt it where a dormer opens the roof.
+ */
+export interface CeilingSlope {
+  id: string;
+  start: Point2;
+  end: Point2;
+  /** Ceiling height above the level floor along the foot line, in metres. */
+  height: number;
+  /** Rise per metre of horizontal distance from the foot line (1 for 45°). */
+  rise: number;
+  /**
+   * Intervals along the foot line, in metres from `start`, where the slope does not
+   * apply: under a dormer the ceiling stays at the flat height.
+   */
+  gaps?: [number, number][];
+}
 export interface Level {
   id: string;
   name: string;
   elevation: number;
+  /** Flat ceiling height above the level floor; a sloping part lowers it locally. */
   ceilingHeight: number;
+  /** Sloping parts of the ceiling, under the roof slopes of an attic level. */
+  ceilingSlopes?: CeilingSlope[];
   outline: Point2[];
   walls: Wall[];
   rooms: Room[];

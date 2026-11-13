@@ -121,6 +121,20 @@ Categories are `living`, `bedroom`, `bathroom`, `circulation`, `garage`, `storag
 
 A room may declare `floorOffset`, between −1 and 0 m, for a floor lower than the level. The reference surface is then actually cut out, then replaced by a floor at that height; collisions and the viewpoint follow that floor. The ceiling keeps its level height: a lowered room therefore gains headroom under an unchanged ceiling. Thresholds up to 20 cm get a local stepping aid if no door or wall blocks the way. Beyond that, a flight declared in `stairs` describes the crossing.
 
+## Sloping ceilings
+
+An attic level keeps a flat `ceilingHeight` and declares its sloping parts in `ceilingSlopes`. Each slope has a foot line `start` → `end`, the ceiling `height` above the level floor along that line, and a `rise` per metre (1 for 45°). The ceiling rises on the **left** of `start → end` as drawn on the plan (x to the right, z downwards) — east to west for a slope rising south from a north knee wall — and validation refuses a slope whose rising side does not hold the middle of the plan. The slope runs the whole length of the level: the ceiling at a point is the lowest of the flat ceiling and of every slope. `gaps`, in metres along the foot line from `start`, interrupt the slope where a dormer opens the roof: there the ceiling stays flat.
+
+```json
+"ceilingSlopes": [
+  { "id": "rampant-nord", "start": [12.06, 1.27], "end": [0.34, 1.27], "height": 1.24, "rise": 1 },
+  { "id": "rampant-sud", "start": [0.34, 7.23], "end": [12.06, 7.23], "height": 1.24, "rise": 1,
+    "gaps": [[1.82, 2.72]] }
+]
+```
+
+The ceiling and the top of every wall follow the slopes (`src/model/ceiling.ts`); a dormer back wall, the only wall allowed above the flat ceiling, is not trimmed. A fixture hangs from the ceiling above it. An opening must fit under the ceiling over its whole width, and a room's walk point needs 1.80 m of ceiling above it. The ceiling is not a collider: the walk camera can still lean into a low slope. Furniture is refused when its top passes the lowest ceiling over its corners.
+
 ## Stairs and floor openings
 
 A level may declare `stairs`, a list of straight flights rising to the level above. Each flight carries `start` and `end` (the axis, from the first to the last nosing), `width` (clear width, centred on the axis), `steps` (number of steps) and `rise` (total height climbed, from this level's floor to the floor of the level above). The going is the axis length divided by `steps`. Validation rejects a going under 15 cm, a step over 25 cm, and a flight with an end outside the level outline.

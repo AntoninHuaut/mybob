@@ -696,9 +696,11 @@ Preserve identifiers, reference levels and the frame when correcting an existing
 up and inventory identifiers and changes before replacing. Never import a regeneration over the
 owner's browser arrangement, nor invent furniture from repository data.
 
-Distinguish the footprint, usable height and declared living area. The schema has horizontal
-ceilings, straight flights (`stairs`) and floor openings (`floorVoids`), but no roof window nor
-sloping interior ceiling. Roof meshes represent exterior envelopes, not these missing elements.
+Distinguish the footprint, usable height and declared living area. The schema has a flat
+ceiling lowered by declared slopes (`ceilingSlopes`, see
+[PROJECT-FORMAT](../../../docs/PROJECT-FORMAT.md)), straight flights (`stairs`), floor openings
+(`floorVoids`), and roof windows and dormers on the roof. Roof meshes represent exterior
+envelopes; the interior slope is the level's own `ceilingSlopes`, read on the section.
 Record the source location of every unsupported element and its effect on fidelity. Never
 replace a floor opening with a wall, a roof window with a façade window, nor a sloping level
 with a full-height box declared faithful. A winding flight, a landing or a curved flight is
