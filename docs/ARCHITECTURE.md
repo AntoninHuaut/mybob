@@ -42,7 +42,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Headset visit           | `src/scene/xrWalk.ts`                                                        | WebXR session of the walk: sticks, snap turn, teleport, doors; loaded on demand                                     |
 | Orbit controls          | `src/scene/orbitNavigation.ts`, `orbitPointerInput.ts`                       | Keyboard pan in screen directions; one-finger pan and pinch zoom in Plan                                            |
 | Wall cutaway            | `src/scene/wallCutaway.ts`                                                   | `auto` / `full` / `low`, clipping planes per material                                                               |
-| Shadow map              | `src/scene/shadowRefresh.ts`                                                 | Sun map redrawn only when a shadow changes                                                                          |
+| Shadow map              | `src/scene/shadowRefresh.ts`, `sunShadowSkip.ts`                             | Sun map redrawn only when a shadow changes; lookup skipped where a PBR surface faces away from the sun              |
 | Idle rendering          | `src/scene/renderScheduler.ts`                                               | Frame drawn only when the scene changes; mouse moves wake it only over the canvas (`wakesScene`)                    |
 | Shader warm-up          | `src/scene/shaderWarmup.ts`, `shaderLog.ts`                                  | Links a view's shaders behind an overlay on first use; `mybob.shaders()` log of every link                          |
 | Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | Resolution steps while moving, driven by frame time                                                                 |
@@ -489,6 +489,15 @@ last call, and read back at start-up.
   overview and the exterior relink all their programs after a visit.
 - The sun shadow map is only redrawn when its casters change (`shadowRefresh.ts`): mode,
   cutaway, roof, sun, animated door and furniture changes. A new moving shadow caster calls `invalidate()`.
+- The sun shadow map is not read where a PBR surface faces away from the sun
+  (`installSunShadowSkip`, `src/scene/sunShadowSkip.ts`, called by the viewer): ceilings and
+  far-side walls. There, Babylon multiplies the sun's diffuse and specular terms by
+  `NdotL` clamped to 1e-7, so the shadow factor cannot change an 8-bit pixel; skipping the
+  lookup gives the same image for less GPU time. It patches Babylon's `lightFragment`
+  include; an include of another shape is left unpatched with a console warning.
+  `tests/sun-shadow-skip.test.ts` pins the patch to Babylon's text and checks the processed
+  PBR program: a Babylon upgrade that fails it must re-check that argument, not loosen the
+  test.
 - The public build only contains the demonstration: `vite.config.ts` and
   `scripts/check-public-build.mjs` carry the allowlist.
 - No personal data in the repository: private plans are git-ignored
