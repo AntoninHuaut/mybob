@@ -1,4 +1,6 @@
 const paths: Record<string, string> = {
+  'stairs-up': '<path d="M3 21h6v-6h6V9h6M5 13V3m-3 3 3-3 3 3"/>',
+  'stairs-down': '<path d="M3 21h6v-6h6V9h6M5 3v10m-3-3 3 3 3-3"/>',
   copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
   'wall-snap': '<path d="M3 3v18M7 5h14v14H7m10-7H7m4-4-4 4 4 4"/>',
   circulation:

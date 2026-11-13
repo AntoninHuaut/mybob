@@ -66,6 +66,7 @@ import {
   sceneLabelsHtml,
 } from './ui/roomPanels';
 import { ViewportProjection } from './ui/viewportProjection';
+import { StairNavigation } from './ui/stairNavigation';
 import { exportSceneImage } from './ui/imageExport';
 import {
   FurnitureHistory,
@@ -2283,6 +2284,12 @@ async function start() {
       measureBar,
       (project) => furnitureLayer?.getLabelObstacles(project) ?? [],
     );
+    const stairNavigation = new StairNavigation(el('#stair-navigation'), (levelId) =>
+      loadProject(current.id, levelId, undefined, {
+        mode: viewer.mode,
+        exterior: viewer.exteriorView,
+      }),
+    );
     viewer.onFrame = () => {
       if (!current) return;
       frameRate.update(performance.now(), viewer.engine.getFps());
@@ -2297,6 +2304,7 @@ async function start() {
         selectedRoomId: selectedRoom?.id,
         northAngleDeg: solarPanel.settings?.northAngleDeg ?? 0,
       });
+      stairNavigation.update(current, viewer, frame.cameraMoved !== false);
     };
     renderProjectOptions();
     let initial = builtins[0].id;
