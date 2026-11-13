@@ -519,6 +519,31 @@ export function fenceMeshData(size = 64): SurfaceMapData {
   return { size, data };
 }
 
+/** Metres covered by one tile of the slatted infill: a 12 cm slat and a 2 cm gap. */
+export const FENCE_SLATS_TILE = 0.14;
+
+/**
+ * Horizontal slats (PVC or wood) with a gap between them, opaque in alpha on the
+ * slat, with a slightly darker groove along each edge so the slats read apart.
+ */
+export function fenceSlatsData(size = 64): SurfaceMapData {
+  const data = new Uint8Array(size * size * 4);
+  const gap = Math.round(size / 7); // 2 cm of 14
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const i = (y * size + x) * 4;
+      const edge = y === gap || y === size - 1;
+      data[i] = data[i + 1] = data[i + 2] = edge ? 200 : 255;
+      data[i + 3] = y < gap ? 0 : 255;
+    }
+  return { size, data };
+}
+
+/** The slatted infill texture, uploaded only for a plot with slatted fences. */
+export function createFenceSlats(scene: Scene): RawTexture {
+  return upload(scene, 'fence-slats', fenceSlatsData());
+}
+
 /** The fence mesh texture, uploaded only for a plot with a fence. */
 export function createFenceMesh(scene: Scene): RawTexture {
   return upload(scene, 'fence-mesh', fenceMeshData());

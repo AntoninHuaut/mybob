@@ -153,6 +153,8 @@ export interface SiteBoundary {
   height: number;
   /** Width across the line; defaults per kind (`BOUNDARY_THICKNESS`). */
   thickness?: number;
+  /** Fence or gate only: a wire `mesh` (default) or horizontal `slats` with gaps (PVC, wood). */
+  infill?: 'mesh' | 'slats';
 }
 export interface ProjectSite {
   /** Parcel in the same x/z coordinate system as the floor plan. */

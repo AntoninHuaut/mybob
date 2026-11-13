@@ -685,6 +685,7 @@ test('#259: terraces, lawn, garden walls, fences and hedges survive a share link
       id: 'portillon',
       kind: 'gate',
       height: 1.4,
+      infill: 'slats',
       points: [
         [-9, 4],
         [-9, 5],
@@ -710,5 +711,6 @@ test('#259: terraces, lawn, garden walls, fences and hedges survive a share link
   assert.equal(decoded.document.site!.surfaces![2].height, 0.15);
   assert.equal(decoded.document.site!.boundaries![3].thickness, 0.8);
   assert.equal(decoded.document.site!.boundaries![2].kind, 'gate');
+  assert.equal(decoded.document.site!.boundaries![2].infill, 'slats');
   assert.equal(decoded.document.site!.boundaries![1].thickness, undefined);
 });

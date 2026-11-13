@@ -37,10 +37,10 @@ export interface UnpackedShare {
  * one character is refused instead of decoding into another valid project. Revision 5: the
  * sloping parts of each level's ceiling. Revision 6: kitchens. Revision 7: optional
  * microwave. Revision 8: terrace and lawn surfaces, a terrace's slab height, and garden
- * boundaries (walls, fences, hedges, gates). Reading accepts revisions 1 to 7; writing always
- * produces 8.
+ * boundaries (walls, fences, hedges, gates). Revision 9: a fence's infill (mesh or slats).
+ * Reading accepts revisions 1 to 8; writing always produces 9.
  */
-export const LINK_PACK_VERSION = 8;
+export const LINK_PACK_VERSION = 9;
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -68,6 +68,7 @@ const ROOM_KINDS: RoomKind[] = [
 // Append only: a kind's index is its code in every link already shared.
 const SURFACE_KINDS = ['gravel', 'path', 'terrace', 'lawn'] as const;
 const BOUNDARY_KINDS = ['wall', 'fence', 'hedge', 'gate'] as const;
+const FENCE_INFILLS = ['mesh', 'slats'] as const;
 const FURNITURE_KIND_ORDER: FurnitureKind[] = [
   'sofa',
   'table',
@@ -477,6 +478,7 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
       packer.polygon(line.points);
       packer.mm(line.height);
       packer.optMM(line.thickness);
+      packer.u(line.infill === undefined ? 0 : enumInt(FENCE_INFILLS, line.infill) + 1);
     }
     const roofs = site.roofs ?? [];
     packer.u(roofs.length);
@@ -853,6 +855,10 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
           };
           const thickness = reader.optMM();
           if (thickness !== undefined) line.thickness = thickness;
+          if (version >= 9) {
+            const infill = reader.u();
+            if (infill) line.infill = enumValue(FENCE_INFILLS, infill - 1);
+          }
           site.boundaries.push(line);
         }
       }

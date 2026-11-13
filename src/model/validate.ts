@@ -456,6 +456,13 @@ export function validateProject(
           (!finite(line.thickness) || line.thickness < 0.02 || line.thickness > 2)
         )
           fail(`L’épaisseur doit être comprise entre 2 cm et 2 m : ${line.id}`);
+        if (
+          line.infill !== undefined &&
+          (!['mesh', 'slats'].includes(line.infill) || !['fence', 'gate'].includes(line.kind))
+        )
+          fail(
+            `Seuls une clôture ou un portillon ont un remplissage, grillage ou lames : ${line.id}`,
+          );
       }
     }
     if (site.roofs !== undefined) {

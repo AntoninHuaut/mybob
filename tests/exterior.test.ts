@@ -1116,6 +1116,12 @@ test('#259: garden surfaces and boundaries reject what the engine cannot draw', 
   bad((p) => {
     (p.site!.boundaries![2] as { kind: string }).kind = 'door';
   });
+  bad((p) => {
+    p.site!.boundaries![0].infill = 'slats'; // a wall has no infill
+  });
+  bad((p) => {
+    (p.site!.boundaries![1] as { infill: string }).infill = 'glass';
+  });
 });
 
 test('a garden gate is drawn like a fence and lets the visitor through', () => {
@@ -1124,6 +1130,7 @@ test('a garden gate is drawn like a fence and lets the visitor through', () => {
     id: 'portillon',
     kind: 'gate',
     height: 1.4,
+    infill: 'slats',
     points: [
       [-9, 4],
       [-9, 5],
@@ -1134,6 +1141,11 @@ test('a garden gate is drawn like a fence and lets the visitor through', () => {
     scene.getMeshByName(name)!,
   );
   assert.ok(gate.every(Boolean), 'panel and posts are built');
+  assert.equal(gate[0].material!.name, 'garden-fence-slats');
+  assert.equal(
+    scene.getMeshByName('site-boundary:cloture-est')!.material!.name,
+    'garden-fence-mesh',
+  );
   assert.ok(
     gate.every((mesh) => !mesh.checkCollisions && built.boundaryMeshes.some((m) => m === mesh)),
   );

@@ -28,6 +28,8 @@ import { polygonMesh, wallFloorSpan, worldScaleUvs } from './buildHouse';
 import {
   createExteriorTextures,
   createFenceMesh,
+  createFenceSlats,
+  FENCE_SLATS_TILE,
   createHedgeNormal,
   FENCE_MESH_TILE,
   LAWN_DETAIL_TILE,
@@ -411,6 +413,18 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     m.twoSidedLighting = true;
     return m;
   });
+  // Horizontal slats (PVC, wood): the same cut-out, a lighter grey.
+  const fenceSlats = once(() => {
+    const m = material('garden-fence-slats', '#6b7072');
+    m.roughness = 0.5;
+    m.albedoTexture = tiled(createFenceSlats(scene), FENCE_SLATS_TILE);
+    m.useAlphaFromAlbedoTexture = true;
+    m.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHATEST;
+    m.alphaCutOff = 0.5;
+    m.backFaceCulling = false;
+    m.twoSidedLighting = true;
+    return m;
+  });
   const hedge = once(() => {
     const m = material('hedge', '#4d6a3b');
     m.bumpTexture = tiled(createHedgeNormal(scene), 0.35);
@@ -474,7 +488,13 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     const [body, posts] = boundaryMesh(line, site.elevation, scene);
     add(
       body,
-      line.kind === 'wall' ? plaster : line.kind === 'hedge' ? hedge() : fenceMesh(),
+      line.kind === 'wall'
+        ? plaster
+        : line.kind === 'hedge'
+          ? hedge()
+          : line.infill === 'slats'
+            ? fenceSlats()
+            : fenceMesh(),
       'boundary',
     );
     if (posts) add(posts, fence(), 'boundary');
