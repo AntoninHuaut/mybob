@@ -36,7 +36,8 @@ import {
  * - room-scale steps (the headset itself moving) meet the same walls;
  * - right stick sideways: smooth turn; pushed forward then released: teleport; aimed at a
  *   stair tread, the teleport takes the stair to the next level, behind the loading veil;
- * - trigger, either hand: open or close the door the controller points at.
+ * - trigger, either hand: open or close the door the controller points at;
+ * - A or X: seated mode on or off (the eyes raised to the walk's eye height).
  *
  * While the stick walks or turns, a comfort vignette (`XrVignette`, `xrHud.ts`) darkens the
  * edges of the view: the visual motion the inner ear does not feel is what makes people sick,
@@ -45,8 +46,8 @@ import {
  * The session opens behind a loading veil (`xrHud.ts`) until the house's shaders are linked,
  * like the page's overlay for the other views; the controls wait for it.
  *
- * The session renders without post-processing or sun shadows and with the strongest
- * fixed foveation the headset offers: the edges of each lens, blurred by the optics
+ * The session renders without post-processing or sun shadows and with the medium
+ * fixed foveation: the edges of each lens, blurred by the optics
  * anyway, are drawn at a lower resolution.
  *
  * A small counter carried by the head shows the frame rate, and how many times the visit was
@@ -66,8 +67,12 @@ import {
 export const XR_WALK_SPEED = 1.3;
 /** Smooth turn rate at full stick deflection, in degrees per second. */
 export const XR_TURN_DEGREES_PER_SECOND = 75;
-/** Strongest fixed foveation: the cheapest frame, blur confined to the lens edges. */
-export const XR_FIXED_FOVEATION = 1;
+/**
+ * Medium fixed foveation. The strongest (1) shimmered on the textured walls with every
+ * micro-movement of a still head, which the owner saw as flicker on a Quest 2; medium keeps
+ * most of the saving at the lens edges, blurred by the optics anyway.
+ */
+export const XR_FIXED_FOVEATION = 0.5;
 export const STICK_DEADZONE = 0.2;
 /** How far a controller reaches a door, like the keyboard's E (2.4 m) plus an arm. */
 export const XR_DOOR_REACH = 3;
@@ -75,22 +80,17 @@ export const XR_TELEPORT_REACH = 12;
 /** Body collider below the head: walls stop the visitor, a 20 cm step does not. */
 export const XR_BODY_HALF_HEIGHT = 0.5;
 export const XR_BODY_DROP = 0.6;
-/**
- * A head lower than this above the real floor when the visit opens is a seated visitor:
- * the floor is lowered so the eyes stand at the walk's eye height instead.
- */
-export const XR_SEATED_HEAD_MAX = 1.35;
 /** The highest display rate asked of the headset; the session falls back when it cannot hold it. */
 export const XR_TARGET_FRAME_RATE = 90;
 /** Frame-rate windows in a row below the target before the next lower rate is asked. */
 export const XR_RATE_FALLBACK_WINDOWS = 3;
 
 /**
- * How much a seated visitor is raised: the walk's eye height minus the real head height,
- * or nothing for a visitor standing up (or crouching when the visit opened above the limit).
+ * How much the seated mode raises the visitor: the walk's eye height minus the real head
+ * height when the mode is switched on. Never lowers.
  */
 export function seatedLift(headHeight: number, eyeHeight: number): number {
-  if (!Number.isFinite(headHeight) || headHeight >= XR_SEATED_HEAD_MAX) return 0;
+  if (!Number.isFinite(headHeight)) return 0;
   return Math.max(0, eyeHeight - Math.max(0, headHeight));
 }
 
@@ -197,17 +197,20 @@ export interface ControllerState {
   x: number;
   y: number;
   trigger: boolean;
+  /** The lower face button: A on the right controller, X on the left. */
+  face: boolean;
 }
 
-/** xr-standard mapping: thumbstick on axes 2-3, trigger on button 0. */
+/** xr-standard mapping: thumbstick on axes 2-3, trigger on button 0, A/X on button 4. */
 export function readControllerGamepad(gamepad: Gamepad | null | undefined): ControllerState {
-  if (!gamepad) return { x: 0, y: 0, trigger: false };
+  if (!gamepad) return { x: 0, y: 0, trigger: false, face: false };
   const axes = gamepad.axes;
   const stick = axes.length >= 4 ? 2 : 0;
   return {
     x: applyDeadzone(axes[stick] ?? 0),
     y: applyDeadzone(axes[stick + 1] ?? 0),
     trigger: !!gamepad.buttons[0]?.pressed,
+    face: !!gamepad.buttons[4]?.pressed,
   };
 }
 
@@ -216,7 +219,7 @@ export interface ImmersiveHost {
   /** The displayed level, read each frame: taking a stair changes it. */
   readonly level: Level;
   site?: ProjectSite;
-  /** The walk's eye height, given to a seated visitor. */
+  /** The walk's eye height, given to the visitor in seated mode. */
   eyeHeight: number;
   /** Where the screen walk stands and looks when the headset takes over. */
   start: { point: Point2; yaw: number };
@@ -238,6 +241,7 @@ interface Pointer {
   root: Mesh;
   ray: Mesh;
   trigger: boolean;
+  face: boolean;
 }
 
 const READY = new Color3(0.92, 0.92, 0.88);
@@ -274,8 +278,8 @@ export class ImmersiveWalk {
   private readiness = new PreparationProgress();
   private readonly counter = new FrameCounter();
   private governor?: FrameRateGovernor;
-  /** Added to the floor for a seated visitor, decided once when the veil first lifts. */
-  private seatedRaise?: number;
+  /** Added to the floor in seated mode (A or X), in metres. */
+  private seatedRaise = 0;
   private limitHits = 0;
   private collider?: Collider;
   private aiming = false;
@@ -340,7 +344,7 @@ export class ImmersiveWalk {
     this.followPose();
     const fps = this.counter.tick(performance.now());
     if (fps !== undefined) {
-      this.hud.show(fps, this.limitHits);
+      this.hud.show(fps, this.limitHits, this.seatedOffset > 0);
       const lower = this.governor?.observe(fps);
       if (lower !== undefined) this.setFrameRate(lower);
     }
@@ -365,6 +369,8 @@ export class ImmersiveWalk {
       pointer.ray.scaling.z = hit?.hit ? hit.distance : XR_DOOR_REACH;
       if (state.trigger && !pointer.trigger && door) this.host.toggleDoor(door);
       pointer.trigger = state.trigger;
+      if (state.face && !pointer.face) this.toggleSeated();
+      pointer.face = state.face;
     }
 
     let motion = 0;
@@ -428,9 +434,6 @@ export class ImmersiveWalk {
     this.camera.layerMask = XR_DEFAULT_LAYERS;
     this.veil?.dispose();
     this.veil = undefined;
-    // The head is tracked by now: a seated visitor is raised to the walk's eye height.
-    this.seatedRaise ??= seatedLift(this.camera.position.y, this.host.eyeHeight);
-    this.followFloor();
     return true;
   }
 
@@ -552,13 +555,24 @@ export class ImmersiveWalk {
   private followFloor() {
     const head = this.head();
     this.rig.position.y =
-      groundElevationAt(this.host.level, this.host.site, [head.x, head.z]) +
-      (this.seatedRaise ?? 0);
+      groundElevationAt(this.host.level, this.host.site, [head.x, head.z]) + this.seatedRaise;
   }
 
-  /** Raised above the real floor for a seated visitor, in metres. */
+  /** Raised above the real floor in seated mode, in metres. */
   get seatedOffset(): number {
-    return this.seatedRaise ?? 0;
+    return this.seatedRaise;
+  }
+
+  /**
+   * A or X: seated mode on or off. On, the floor is lowered so the eyes stand at the walk's
+   * eye height from the current head height; off, the real height comes back. Switched by
+   * hand, not guessed: a crouching or a tall visitor would be misread.
+   */
+  toggleSeated() {
+    this.seatedRaise =
+      this.seatedRaise > 0 ? 0 : seatedLift(this.camera.position.y, this.host.eyeHeight);
+    this.followFloor();
+    this.lastHead = this.head();
   }
 
   /** Asks the headset for the highest display rate up to the target; ignored where unsupported. */
@@ -672,6 +686,7 @@ export class ImmersiveWalk {
       root,
       ray,
       trigger: false,
+      face: false,
     };
     this.pointers.set(source, pointer);
     return pointer;

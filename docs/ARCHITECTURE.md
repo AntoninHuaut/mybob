@@ -385,13 +385,13 @@ walk where the headset left the visitor and restores the camera of the current m
   stick sideways turns smoothly (75°/s at full deflection, on the spot around the head; a push
   more forward than sideways never turns), pushed forward aims a teleport validated like a walk destination
   (`isSceneVisitDestination` or `isParcelDestination`), or aimed at a stair tread takes the
-  stair (`takeStair`); trigger on a door toggles it.
+  stair (`takeStair`); trigger on a door toggles it; A or X switches seated mode (the counter shows « mode assis »).
 - **Comfort vignette** (`XrVignette`, `scene/xrHud.ts`): while a stick walks or turns, a plane
   carried by the head darkens the view past about 28° off axis (fully dark at 50°, 0.9 opacity
   at full deflection), fading in and out over 0.2 s. Seen motion the inner ear does not feel is
   what makes smooth locomotion sickening, and most of it is seen in the periphery. Teleports
   and room-scale steps do not trigger it; the loading veil hides it.
-- `local-floor` reference space: the real head height replaces the eye-height setting, except for a **seated visitor** (head under `XR_SEATED_HEAD_MAX`, 1.35 m, when the veil first lifts), whose floor is lowered once so the eyes stand at the eye-height setting (`seatedLift`); and the
+- `local-floor` reference space: the real head height replaces the eye-height setting, except in **seated mode**: A or X switches it on or off by hand (never guessed: a crouching or tall visitor would be misread), and while it is on the floor is lowered so the eyes stand at the eye-height setting from the head height measured at the press (`seatedLift`); and the
   real floor is kept on `groundElevationAt` every frame. Room-scale moves (the headset itself
   moving, the emulator's ZQSD) go through the stick's collider every frame (`followPose`): the
   rig takes back what a wall refused, so the head stops at the wall. A jump over 0.5 m in one
@@ -406,7 +406,7 @@ walk where the headset left the visitor and restores the camera of the current m
   The shadow lookup is costly too, and a shadow map's soft, jagged edges show more in a
   headset (`updateShadowPolicy` suppresses shadows while `immersive` is set). The session also
   asks for the highest **display rate** up to 90 Hz the headset supports (`pickFrameRate`; the Quest 2 defaults to 72), and steps down to the next supported rate after three frame-rate windows under 90 % of it (`FrameRateGovernor`): a missed frame is shown twice by the headset, which flickers. It
-  asks for the strongest **fixed foveation** (`XR_FIXED_FOVEATION`): the lens edges, blurred by
+  asks for medium **fixed foveation** (`XR_FIXED_FOVEATION`, 0.5; the strongest shimmered on textured walls, seen as flicker with a still head): the lens edges, blurred by
   the optics anyway, are drawn at a lower resolution; browsers without it ignore the request.
 - The session opens behind a **loading veil** (`XrVeil`, `scene/xrHud.ts`, with a bar: the share of visible meshes ready to draw), the headset's
   counterpart of the page overlay of `prepareView`, which a headset never shows: turning the

@@ -23,7 +23,6 @@ import {
   FrameRateGovernor,
   pickFrameRate,
   seatedLift,
-  XR_SEATED_HEAD_MAX,
   XR_WALK_SPEED,
 } from '../src/scene/xrWalk';
 import { createWalkCamera } from '../src/scene/walkCamera';
@@ -153,7 +152,16 @@ test('controllers are read from the xr-standard gamepad, without a controller mo
   assert.ok(Math.abs(state.x - 0.5) < 1e-9);
   assert.equal(state.y, -1);
   assert.equal(state.trigger, true);
-  assert.deepEqual(readControllerGamepad(null), { x: 0, y: 0, trigger: false });
+  // Button 4 is A or X; button 5 (B or Y) is not read.
+  assert.equal(state.face, false);
+  assert.equal(
+    readControllerGamepad({
+      ...gamepad,
+      buttons: [0, 1, 2, 3, 4].map((i) => pressed(i === 4)),
+    } as unknown as Gamepad).face,
+    true,
+  );
+  assert.deepEqual(readControllerGamepad(null), { x: 0, y: 0, trigger: false, face: false });
 });
 
 test('leaving the headset keeps the gaze direction on the screen walk camera', () => {
@@ -378,29 +386,27 @@ test('the headset session starts with the veil alone in its camera layers', () =
   session.dispose();
 });
 
-test('a seated visitor is raised to the eye height, a standing one keeps the real height', () => {
+test('A or X switches seated mode: the eyes go to the eye height, then back to the real height', () => {
   assert.ok(Math.abs(seatedLift(1.11, 1.65) - 0.54) < 1e-9);
-  assert.equal(seatedLift(XR_SEATED_HEAD_MAX, 1.65), 0);
-  assert.equal(seatedLift(1.72, 1.65), 0);
-  assert.equal(seatedLift(1.3, 1.2), 0, 'never lowered');
+  assert.equal(seatedLift(1.8, 1.65), 0, 'never lowered');
   assert.equal(seatedLift(Number.NaN, 1.65), 0);
   const session = headsetWalk({ point: [4, 4.2], yaw: 0 });
   session.camera.position.y = 1.11;
-  const walk = session.walk as unknown as {
-    lift(): boolean;
-    head(): Vector3;
-    seatedOffset: number;
-  };
-  let lifted = false;
-  for (let i = 0; i < 20 && !lifted; i++) lifted = walk.lift();
-  assert.ok(lifted, 'the veil lifts');
+  const walk = session.walk;
+  const floor = walk.rig.position.y;
+  assert.equal(walk.seatedOffset, 0, 'standing by default, nothing guessed');
+  walk.toggleSeated();
   assert.ok(Math.abs(walk.seatedOffset - 0.54) < 1e-9, `offset ${walk.seatedOffset}`);
-  const floor = session.walk.rig.position.y - walk.seatedOffset;
   assert.ok(Math.abs(walk.head().y - floor - 1.65) < 1e-6, 'eyes at the walk eye height');
-  // Standing up later raises the head with it: the offset is decided once.
-  session.camera.position.y = 1.7;
-  assert.ok(Math.abs(walk.head().y - floor - 2.24) < 1e-6);
+  walk.toggleSeated();
+  assert.equal(walk.seatedOffset, 0);
+  assert.ok(Math.abs(walk.head().y - floor - 1.11) < 1e-6, 'real height back');
   session.dispose();
+});
+
+test('the headset counter names the seated mode', () => {
+  assert.deepEqual(hudLines(72, 0, true).slice(1), ['mode assis']);
+  assert.deepEqual(hudLines(72, 2, true).slice(1), ['mode assis · limite du terrain ×2']);
 });
 
 test('the headset asks for the highest rate up to 90 Hz and steps down when it cannot hold it', () => {
