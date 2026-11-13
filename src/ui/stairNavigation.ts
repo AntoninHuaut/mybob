@@ -74,16 +74,13 @@ export class StairNavigation {
       );
       return true;
     };
-    let up = false,
-      down = false;
-    for (const stair of level.stairs ?? []) up = addStair(stair, 'up') || up;
-    for (const { stair } of stairsDown(project, level)) down = addStair(stair, 'down') || down;
-    // A level may have no modelled access (for example an unfinished attic). Offer
-    // a shortcut beside the level selector, without inventing a stair or void.
+    for (const stair of level.stairs ?? []) addStair(stair, 'up');
+    for (const { stair } of stairsDown(project, level)) addStair(stair, 'down');
+    // Keep menu navigation consistent whether a physical stair is modelled or not.
     const above = levelAbove(project, level),
       below = levelBelow(project, level);
-    if (!up && above) add(above, 'up', level.spawn.position, 0.12, false);
-    if (!down && below) add(below, 'down', level.spawn.position, 0.12, false);
+    if (above) add(above, 'up', level.spawn.position, 0.12, false);
+    if (below) add(below, 'down', level.spawn.position, 0.12, false);
   }
 
   update(project: HouseProject, viewer: StairView, cameraMoved = true): void {

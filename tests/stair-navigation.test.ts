@@ -162,7 +162,7 @@ test('unconnected levels use a view shortcut and project switches leave no stale
   assert.equal(container.childElementCount, 1);
   assert.equal(container.querySelector('button')!.title, 'Voir Étage');
   navigation.update(project, view, false);
-  assert.equal(container.childElementCount, 1);
+  assert.equal(container.childElementCount, 2);
 });
 
 test('a stairless attic has a round trip without adding geometry or treating it as a physical stair', () => {
@@ -217,4 +217,26 @@ test('stairless level actions mount beside the selector instead of over the livi
   assert.equal(sidebar.hidden, true);
   button.click();
   assert.deepEqual(visits, ['upper']);
+});
+
+test('menu shortcuts remain available in both directions when a physical stair is modelled', () => {
+  const { project, view, window, container } = setup();
+  const sidebar = window.document.createElement('div');
+  window.document.body.append(sidebar);
+  const navigation = new StairNavigation(
+    container as unknown as HTMLElement,
+    (id) => {
+      view.level = project.levels.find((l) => l.id === id)!;
+    },
+    sidebar as unknown as HTMLElement,
+  );
+  navigation.update(project, view);
+  assert.equal(container.querySelector('button')!.title, 'Monter vers Étage');
+  assert.equal(sidebar.querySelector('button')!.title, 'Voir Étage');
+  sidebar.querySelector('button')!.click();
+  navigation.update(project, view);
+  assert.equal(container.querySelector('button')!.title, 'Descendre vers Rez-de-chaussée');
+  assert.equal(sidebar.querySelector('button')!.title, 'Voir Rez-de-chaussée');
+  sidebar.querySelector('button')!.click();
+  assert.equal(view.level.id, 'ground');
 });
