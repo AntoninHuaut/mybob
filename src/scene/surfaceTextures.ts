@@ -498,6 +498,32 @@ export function createExteriorTextures(scene: Scene): ExteriorTextures {
   };
 }
 
+/** Metres covered by one tile of the fence mesh texture. */
+export const FENCE_MESH_TILE = 0.2;
+
+/**
+ * A welded wire panel: vertical wires every 5 cm, horizontal ones every 20 cm,
+ * opaque in alpha where a wire runs and clear between them. The fence is
+ * alpha-tested, so the garden shows through it as through a real mesh.
+ */
+export function fenceMeshData(size = 64): SurfaceMapData {
+  const data = new Uint8Array(size * size * 4);
+  const vertical = size / 4; // 5 cm in a 20 cm tile
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const wire = x % vertical < 2 || y < 3;
+      const i = (y * size + x) * 4;
+      data[i] = data[i + 1] = data[i + 2] = 255;
+      data[i + 3] = wire ? 255 : 0;
+    }
+  return { size, data };
+}
+
+/** The fence mesh texture, uploaded only for a plot with a fence. */
+export function createFenceMesh(scene: Scene): RawTexture {
+  return upload(scene, 'fence-mesh', fenceMeshData());
+}
+
 /** The plaster relief again, for hedges, tiled finer as a leafy grain. Uploaded only for a hedge. */
 export function createHedgeNormal(scene: Scene): RawTexture {
   return upload(scene, 'hedge-normal', surfaceMapData().plasterNormal);

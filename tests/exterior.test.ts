@@ -1052,17 +1052,23 @@ test('#259: terrace, gravel drive, boundary wall and fence render at their posit
   near(wall.minimumWorld.z, 14.8);
   near(wall.maximumWorld.z, 15);
   near(wall.minimumWorld.x, -9.1);
-  const fence = box('site-boundary:cloture-est');
+  const fence = box('site-boundary-posts:cloture-est');
   near(fence.maximumWorld.y, 1.2);
   near(fence.minimumWorld.z, -3.04);
   near(fence.maximumWorld.z, 14.84);
   near((fence.minimumWorld.x + fence.maximumWorld.x) / 2, 14.98);
+  const panel = box('site-boundary:cloture-est');
+  assert.ok(panel.maximumWorld.x - panel.minimumWorld.x < 0.01, 'a single plane of mesh');
+  const wire = scene.getMeshByName('site-boundary:cloture-est')!.material as PBRMaterial;
+  assert.equal(wire.transparencyMode, 1, 'the wire panel is alpha-tested');
+  assert.ok(wire.useAlphaFromAlbedoTexture && wire.albedoTexture, 'cut out by the mesh texture');
   const hedge = box('site-boundary:haie-sud');
   near(hedge.maximumWorld.y, 1.5);
   near(hedge.minimumWorld.z, -3);
   near(hedge.maximumWorld.x, 5.4);
 
-  assert.equal(built.boundaryMeshes.length, 3);
+  // The wall, the hedge, and the fence's panels and posts.
+  assert.equal(built.boundaryMeshes.length, 4);
   assert.ok(built.boundaryMeshes.every((mesh) => mesh.checkCollisions));
   built.dispose();
   scene.dispose();

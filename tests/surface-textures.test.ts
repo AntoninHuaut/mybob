@@ -7,6 +7,7 @@ import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { worldScaleUvs } from '../src/scene/buildHouse';
 import {
+  fenceMeshData,
   greyFromField,
   normalFromHeight,
   createSurfaceTextures,
@@ -218,4 +219,15 @@ test('the lawn varies over metres and its detail map stays neutral on average', 
     const mean = sum / lawnDetail.size / lawnDetail.size;
     assert.ok(Math.abs(mean - 128) < 8, `detail channel ${c} is neutral on average, got ${mean}`);
   }
+});
+
+test('the fence mesh is mostly open, with wires that meet across the tile seam', () => {
+  const { size, data } = fenceMeshData();
+  let open = 0;
+  for (let i = 3; i < data.length; i += 4) if (data[i] === 0) open++;
+  const ratio = open / (size * size);
+  assert.ok(ratio > 0.6 && ratio < 0.9, `open share ${ratio}`);
+  // A wire at the first column and row: repeated tiles keep an unbroken grid.
+  for (let y = 0; y < size; y++) assert.equal(data[y * size * 4 + 3], 255);
+  for (let x = 0; x < size; x++) assert.equal(data[x * 4 + 3], 255);
 });

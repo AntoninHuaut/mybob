@@ -1208,8 +1208,6 @@ export class HouseViewer {
   private updateRoofVisibility() {
     const visible = this.mode === 'walk' || (this.exteriorView && this.mode === 'overview');
     this.exterior?.roofMeshes.forEach((mesh) => mesh.setEnabled(visible));
-    // A garden wall near a façade would hide Vue 3D's cutaway: it shows with the roof.
-    this.exterior?.boundaryMeshes.forEach((mesh) => mesh.setEnabled(visible));
     this.shadowRefresh?.invalidate();
   }
 
