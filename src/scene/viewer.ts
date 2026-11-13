@@ -37,7 +37,7 @@ import {
   type HouseScene,
 } from './buildHouse';
 import { createMaterials, type Materials } from './materials';
-import { buildExterior, type ExteriorScene } from './buildExterior';
+import { buildExterior, poseGate, type ExteriorScene } from './buildExterior';
 import {
   applyLookSensitivity,
   createWalkCamera,
@@ -1103,7 +1103,8 @@ export class HouseViewer {
   }
 
   toggleDoor(id: string) {
-    const door = this.house.doors.find((d) => d.id === id);
+    const door =
+      this.house.doors.find((d) => d.id === id) ?? this.exterior?.gates.find((g) => g.id === id);
     if (door) {
       door.open = !door.open;
       door.target = door.open ? 1 : 0;
@@ -1808,6 +1809,7 @@ export class HouseViewer {
       this.orbitTour !== undefined ||
       this.capturing ||
       !!this.house?.doors.some((door) => Math.abs(door.progress - door.target) > 0.001) ||
+      !!this.exterior?.gates.some((gate) => Math.abs(gate.progress - gate.target) > 0.001) ||
       (this.shadowRefresh !== undefined && !this.shadowRefresh.settled) ||
       !this.engine.areAllEffectsReady() ||
       this.scene.getWaitingItemsCount() > 0
@@ -1853,6 +1855,16 @@ export class HouseViewer {
           Math.sign(door.target - door.progress) *
           Math.min(Math.abs(door.target - door.progress), dt * 2.5);
         poseDoor(door);
+        doorsMoved = true;
+        this.shadowRefresh?.invalidate();
+      }
+    }
+    for (const gate of this.exterior?.gates ?? []) {
+      if (Math.abs(gate.progress - gate.target) > 0.001) {
+        gate.progress +=
+          Math.sign(gate.target - gate.progress) *
+          Math.min(Math.abs(gate.target - gate.progress), dt * 2.5);
+        poseGate(gate);
         doorsMoved = true;
         this.shadowRefresh?.invalidate();
       }

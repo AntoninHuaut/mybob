@@ -54,8 +54,10 @@ export interface ExteriorScene {
   roofMeshes: Mesh[];
   /** Match metadata.wallId to the interior wall's cutaway visibility. */
   facadeMeshes: Mesh[];
-  /** Garden walls, fences (panels and posts) and hedges: they cast sun shadows. */
+  /** Garden walls, fences (panels and posts), hedges and gate leaves: they cast sun shadows. */
   boundaryMeshes: Mesh[];
+  /** Garden gates, opened and closed like doors by the visit. */
+  gates: GateInstance[];
   bounds: ReturnType<typeof bounds>;
   /** Maximum height above the level datum, including the roof. */
   height: number;
@@ -184,10 +186,12 @@ export function boundaryMesh(line: SiteBoundary, ground: number, scene: Scene): 
       parts.push(box(`${line.id}-${i}`, length + thickness, thickness, line.height, middle, angle));
       return;
     }
-    // Panel between the posts, slightly lower so their tops show.
-    parts.push(
-      box(`${line.id}-${i}`, length, FENCE_PANEL_DEPTH, line.height - 0.04, middle, angle),
-    );
+    // Panel between the posts, slightly lower so their tops show. A gate's leaf is
+    // built apart (`gateLeaf`), because it swings.
+    if (line.kind === 'fence')
+      parts.push(
+        box(`${line.id}-${i}`, length, FENCE_PANEL_DEPTH, line.height - 0.04, middle, angle),
+      );
     const count = Math.max(1, Math.ceil(length / FENCE_POST_SPACING));
     for (let k = i === 0 ? 0 : 1; k <= count; k++) {
       const t = k / count;
@@ -203,12 +207,58 @@ export function boundaryMesh(line: SiteBoundary, ground: number, scene: Scene): 
       );
     }
   });
+  const postMesh = posts.length ? Mesh.MergeMeshes(posts, true, true)! : undefined;
+  if (postMesh) postMesh.name = `site-boundary-posts:${line.id}`;
+  if (!parts.length) return [postMesh!];
   const mesh = Mesh.MergeMeshes(parts, true, true)!;
   mesh.name = `site-boundary:${line.id}`;
-  if (!posts.length) return [mesh];
-  const postMesh = Mesh.MergeMeshes(posts, true, true)!;
-  postMesh.name = `site-boundary-posts:${line.id}`;
-  return [mesh, postMesh];
+  return postMesh ? [mesh, postMesh] : [mesh];
+}
+
+/** A garden gate's leaf, hinged on its first post. `poseGate` swings it. */
+export interface GateInstance {
+  /** `gate:<boundary id>`, the id the visit's door toggle receives. */
+  id: string;
+  pivot: TransformNode;
+  leaf: Mesh;
+  /** The leaf's heading when closed, in radians about y. */
+  closed: number;
+  open: boolean;
+  progress: number;
+  target: number;
+}
+
+/**
+ * The leaf of a two-point gate: a panel between its two posts, under a pivot on the
+ * first post. It is picked like a door (`metadata.kind === 'door'`) and swings a
+ * quarter turn towards (-dz, dx), (dx, dz) running from the first point to the second.
+ */
+export function gateLeaf(line: SiteBoundary, ground: number, scene: Scene): GateInstance {
+  const [start, end] = line.points;
+  const dx = end[0] - start[0],
+    dz = end[1] - start[1];
+  const length = Math.hypot(dx, dz) - FENCE_POST;
+  const height = line.height - 0.04;
+  const id = `gate:${line.id}`;
+  const pivot = new TransformNode(`site-gate-hinge:${line.id}`, scene);
+  const along = FENCE_POST / 2 / Math.hypot(dx, dz);
+  pivot.position.set(start[0] + dx * along, ground, start[1] + dz * along);
+  const closed = -Math.atan2(dz, dx);
+  pivot.rotation.y = closed;
+  const leaf = metricBox(
+    CreateBox(
+      `site-boundary:${line.id}`,
+      { width: length, depth: FENCE_PANEL_DEPTH, height },
+      scene,
+    ),
+  );
+  leaf.parent = pivot;
+  leaf.position.set(length / 2, height / 2, 0);
+  return { id, pivot, leaf, closed, open: false, progress: 0, target: 0 };
+}
+
+export function poseGate(gate: GateInstance) {
+  gate.pivot.rotation.y = gate.closed - gate.progress * Math.PI * 0.5;
 }
 
 function faceMesh(
@@ -340,6 +390,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     roofMeshes: Mesh[] = [],
     facadeMeshes: Mesh[] = [],
     boundaryMeshes: Mesh[] = [];
+  const gates: GateInstance[] = [];
   const materials: PBRMaterial[] = [];
   const site = project.site;
   const result: ExteriorScene = {
@@ -348,6 +399,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     roofMeshes,
     facadeMeshes,
     boundaryMeshes,
+    gates,
     bounds: bounds(site?.boundary ?? level.outline),
     height: Math.max(
       level.ceilingHeight,
@@ -485,22 +537,31 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       );
   }
   for (const line of site.boundaries ?? []) {
+    const infill = () => (line.infill === 'slats' ? fenceSlats() : fenceMesh());
+    if (line.kind === 'gate') {
+      const [posts] = boundaryMesh(line, site.elevation, scene);
+      add(posts, fence(), 'boundary').checkCollisions = true;
+      const gate = gateLeaf(line, site.elevation, scene);
+      add(gate.leaf, infill(), 'boundary');
+      gate.pivot.parent = root;
+      gate.leaf.parent = gate.pivot;
+      // Picked like a door, and solid like one: closed, it bars the path.
+      gate.leaf.isPickable = true;
+      gate.leaf.checkCollisions = true;
+      gate.leaf.metadata = { ...gate.leaf.metadata, kind: 'door', id: gate.id };
+      boundaryMeshes.push(posts, gate.leaf);
+      gates.push(gate);
+      continue;
+    }
     const [body, posts] = boundaryMesh(line, site.elevation, scene);
     add(
       body,
-      line.kind === 'wall'
-        ? plaster
-        : line.kind === 'hedge'
-          ? hedge()
-          : line.infill === 'slats'
-            ? fenceSlats()
-            : fenceMesh(),
+      line.kind === 'wall' ? plaster : line.kind === 'hedge' ? hedge() : infill(),
       'boundary',
     );
     if (posts) add(posts, fence(), 'boundary');
     for (const mesh of posts ? [body, posts] : [body]) {
-      // A gate stands open to the visit, like an exterior door.
-      mesh.checkCollisions = line.kind !== 'gate';
+      mesh.checkCollisions = true;
       boundaryMeshes.push(mesh);
     }
   }
@@ -991,5 +1052,6 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
   }
   roofMeshes.forEach((mesh) => mesh.setEnabled(false));
   for (const mesh of meshes) mesh.freezeWorldMatrix();
+  for (const gate of gates) gate.leaf.unfreezeWorldMatrix();
   return result;
 }
