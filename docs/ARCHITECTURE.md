@@ -388,7 +388,7 @@ walk where the headset left the visitor and restores the camera of the current m
   (`teleportArc`, about 8 m of reach, dots drawn as thin instances) to the first surface it
   meets, validated like a walk destination (`isSceneVisitDestination` or
   `isParcelDestination`), or aimed at a stair tread takes the stair (`takeStair`); trigger on a
-  door toggles it; A switches seated mode (the counter shows « mode assis »); X shows or hides
+  door toggles it and trigger on a stair takes it; A switches seated mode (the counter shows « mode assis »); X shows or hides
   the counter.
 - **Teleport-only mode** (B or Y; the counter shows « téléportation »): no stick glides the
   visitor, for people sick even with the vignette. Either stick pushed forward aims a teleport,

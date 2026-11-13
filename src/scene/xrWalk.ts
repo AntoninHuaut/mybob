@@ -48,7 +48,7 @@ import {
  * - right stick sideways: smooth turn; pushed forward then released: teleport along an arc;
  *   aimed at a stair tread, the teleport takes the stair to the next level, behind the
  *   loading veil;
- * - trigger, either hand: open or close the door the controller points at;
+ * - trigger, either hand: open or close the aimed door, or take the aimed stair;
  * - A: seated mode on or off (the eyes raised to the walk's eye height);
  * - X: frame counter shown or hidden;
  * - B or Y: teleport-only mode on or off. In it no stick glides the visitor: either stick
@@ -636,10 +636,15 @@ export class ImmersiveWalk {
       const hand: XRHandedness = source.handedness === 'left' ? 'left' : 'right';
       states.set(hand, state);
       const hit = this.pick(pointer, XR_DOOR_REACH);
-      const door = hit?.pickedMesh?.metadata?.kind === 'door' ? hit.pickedMesh.metadata.id : '';
+      const target = hit?.pickedMesh?.metadata;
       pointer.ray.scaling.z = hit?.hit ? hit.distance : XR_DOOR_REACH;
-      if (state.trigger && !pointer.trigger && door) this.host.toggleDoor(door);
+      const pressed = state.trigger && !pointer.trigger;
       pointer.trigger = state.trigger;
+      if (pressed && target?.kind === 'door') this.host.toggleDoor(target.id);
+      else if (pressed && target?.kind === 'stair') {
+        this.cancelAim();
+        this.host.takeStair(target.id, target.direction);
+      }
       if (state.face && !pointer.face) {
         if (hand === 'left') this.toggleCounter();
         else this.toggleSeated();

@@ -14,7 +14,7 @@ interface StairButton {
   element: HTMLButtonElement;
   point: Point2;
   height: number;
-  offsetX: number;
+  physical: boolean;
 }
 
 /** Camera-projected level shortcuts, separate from optional room labels. */
@@ -27,10 +27,12 @@ export class StairNavigation {
   constructor(
     private readonly container: HTMLElement,
     private readonly changeLevel: (levelId: string) => void,
+    private readonly floorContainer: HTMLElement = container,
   ) {}
 
   private mount(project: HouseProject, level: Level): void {
     this.container.replaceChildren();
+    if (this.floorContainer !== this.container) this.floorContainer.replaceChildren();
     this.buttons = [];
     const add = (
       target: Level,
@@ -41,7 +43,7 @@ export class StairNavigation {
     ) => {
       const element = this.container.ownerDocument.createElement('button');
       element.type = 'button';
-      element.className = 'stair-level-button';
+      element.className = physical ? 'stair-level-button' : 'floor-level-button';
       element.hidden = true;
       element.title = physical
         ? `${direction === 'up' ? 'Monter' : 'Descendre'} vers ${target.name}`
@@ -50,10 +52,11 @@ export class StairNavigation {
       element.innerHTML = icon(`${physical ? 'stairs' : 'level'}-${direction}`, 24);
       element.addEventListener('click', (event) => {
         event.stopPropagation();
-        if (!this.container.hidden && !element.hidden) this.changeLevel(target.id);
+        if (!(physical ? this.container : this.floorContainer).hidden && !element.hidden)
+          this.changeLevel(target.id);
       });
-      this.container.append(element);
-      const button = { element, point, height, offsetX: 0 };
+      (physical ? this.container : this.floorContainer).append(element);
+      const button = { element, point, height, physical };
       this.buttons.push(button);
       return button;
     };
@@ -76,16 +79,11 @@ export class StairNavigation {
     for (const stair of level.stairs ?? []) up = addStair(stair, 'up') || up;
     for (const { stair } of stairsDown(project, level)) down = addStair(stair, 'down') || down;
     // A level may have no modelled access (for example an unfinished attic). Offer
-    // a view shortcut at its known interior start, without inventing a stair or void.
-    const fallback: StairButton[] = [];
+    // a shortcut beside the level selector, without inventing a stair or void.
     const above = levelAbove(project, level),
       below = levelBelow(project, level);
-    if (!up && above) fallback.push(add(above, 'up', level.spawn.position, 0.12, false));
-    if (!down && below) fallback.push(add(below, 'down', level.spawn.position, 0.12, false));
-    if (fallback.length === 2) {
-      fallback[0].offsetX = -24;
-      fallback[1].offsetX = 24;
-    }
+    if (!up && above) add(above, 'up', level.spawn.position, 0.12, false);
+    if (!down && below) add(below, 'down', level.spawn.position, 0.12, false);
   }
 
   update(project: HouseProject, viewer: StairView, cameraMoved = true): void {
@@ -103,12 +101,19 @@ export class StairNavigation {
     const becameVisible = visible && !this.visible;
     this.visible = visible;
     this.container.hidden = !visible;
+    this.floorContainer.hidden = !visible;
     if (!visible || (!changed && !cameraMoved && !becameVisible)) return;
-    const projectPoint = viewer.projector();
-    for (const { element, point, height, offsetX } of this.buttons) {
+    const projectPoint = this.buttons.some((button) => button.physical)
+      ? viewer.projector()
+      : undefined;
+    for (const { element, point, height, physical } of this.buttons) {
+      if (!projectPoint || !physical) {
+        element.hidden = false;
+        continue;
+      }
       const position = projectPoint(point, height);
       element.hidden = !position.visible;
-      element.style.left = `${position.x + offsetX}px`;
+      element.style.left = `${position.x}px`;
       element.style.top = `${position.y}px`;
     }
   }

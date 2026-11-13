@@ -2284,11 +2284,14 @@ async function start() {
       measureBar,
       (project) => furnitureLayer?.getLabelObstacles(project) ?? [],
     );
-    const stairNavigation = new StairNavigation(el('#stair-navigation'), (levelId) =>
-      loadProject(current.id, levelId, undefined, {
-        mode: viewer.mode,
-        exterior: viewer.exteriorView,
-      }),
+    const stairNavigation = new StairNavigation(
+      el('#stair-navigation'),
+      (levelId) =>
+        loadProject(current.id, levelId, undefined, {
+          mode: viewer.mode,
+          exterior: viewer.exteriorView,
+        }),
+      el('#floor-navigation'),
     );
     viewer.onFrame = () => {
       if (!current) return;

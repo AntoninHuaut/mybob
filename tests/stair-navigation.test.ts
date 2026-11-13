@@ -171,7 +171,7 @@ test('a stairless attic has a round trip without adding geometry or treating it 
   const before = structuredClone(project);
   navigation.update(project, view);
   assert.equal(button().title, 'Voir Étage');
-  assert.deepEqual(points.at(-1), { point: ground.spawn.position, height: 0.12 });
+  assert.equal(points.length, 0, 'a floor shortcut is not projected into the room');
   button().click();
   navigation.update(project, view);
   assert.equal(button().title, 'Voir Rez-de-chaussée');
@@ -191,5 +191,30 @@ test('fallback buttons to both adjacent floors remain separate on a middle level
   assert.equal(buttons.length, 2);
   assert.equal(buttons[0].title, 'Voir Combles');
   assert.equal(buttons[1].title, 'Voir Rez-de-chaussée');
-  assert.notEqual(buttons[0].style.left, buttons[1].style.left);
+  assert.ok(buttons.every((button) => button.classList.contains('floor-level-button')));
+  assert.ok(buttons.every((button) => button.style.left === ''));
+});
+
+test('stairless level actions mount beside the selector instead of over the living room', () => {
+  const { project, ground, view, window, container } = setup();
+  ground.stairs = [];
+  const sidebar = window.document.createElement('div');
+  window.document.body.append(sidebar);
+  const visits: string[] = [];
+  const navigation = new StairNavigation(
+    container as unknown as HTMLElement,
+    (id) => visits.push(id),
+    sidebar as unknown as HTMLElement,
+  );
+  navigation.update(project, view);
+  assert.equal(container.querySelector('button'), null);
+  const button = sidebar.querySelector('button')!;
+  assert.equal(button.title, 'Voir Étage');
+  button.click();
+  assert.deepEqual(visits, ['upper']);
+  view.mode = 'walk';
+  navigation.update(project, view, false);
+  assert.equal(sidebar.hidden, true);
+  button.click();
+  assert.deepEqual(visits, ['upper']);
 });

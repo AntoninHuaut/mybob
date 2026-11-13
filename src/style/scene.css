@@ -485,6 +485,24 @@
   z-index: 3;
   pointer-events: none;
 }
+.floor-navigation {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.floor-level-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 30px;
+  padding: 0;
+  border-radius: 5px;
+  color: var(--green);
+  background: #eef7e1;
+}
+.floor-level-button:hover {
+  background: #dce5d0;
+}
 .stair-level-button {
   position: absolute;
   display: grid;
