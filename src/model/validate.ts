@@ -436,7 +436,7 @@ export function validateProject(
         id(line.id);
         const points: unknown = line.points;
         if (
-          !['wall', 'fence', 'hedge'].includes(line.kind) ||
+          !['wall', 'fence', 'hedge', 'gate'].includes(line.kind) ||
           !Array.isArray(points) ||
           points.length < 2 ||
           points.length > 200 ||

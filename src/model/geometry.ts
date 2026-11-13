@@ -92,7 +92,7 @@ export function floorElevationAt(level: Level, point: Point2): number {
 }
 
 /** Default width across a garden boundary line, per kind, in metres. */
-export const BOUNDARY_THICKNESS = { wall: 0.2, fence: 0.04, hedge: 0.6 } as const;
+export const BOUNDARY_THICKNESS = { wall: 0.2, fence: 0.04, hedge: 0.6, gate: 0.04 } as const;
 
 /** Height of the declared terrain above the flat parcel: the highest terrace slab under the point. */
 export function siteSurfaceHeightAt(site: ProjectSite | undefined, point: Point2): number {
