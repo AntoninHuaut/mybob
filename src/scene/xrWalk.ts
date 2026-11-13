@@ -88,41 +88,85 @@ export const XR_TELEPORT_REACH = 12;
 /** Body collider below the head: walls stop the visitor, a 20 cm step does not. */
 export const XR_BODY_HALF_HEIGHT = 0.5;
 export const XR_BODY_DROP = 0.6;
-/** The highest display rate asked of the headset; the session falls back when it cannot hold it. */
+/** The display rate a session opens at; the session falls back when it cannot hold it. */
 export const XR_TARGET_FRAME_RATE = 90;
-/** Frame-rate windows in a row below the target before the next lower rate is asked. */
-export const XR_RATE_FALLBACK_WINDOWS = 3;
+/**
+ * The highest display rate probed: a Quest 2 offers 120 Hz in its own browser. Once the
+ * session holds its rate for `XR_RATE_PROBE_WINDOWS`, the next higher one is tried; one that
+ * does not hold sends it back, for the rest of the session.
+ */
+export const XR_MAX_FRAME_RATE = 120;
+/** Windows (500 ms) at 97 % of the rate before a higher one is tried: 5 s. */
+export const XR_RATE_PROBE_WINDOWS = 10;
+/**
+ * Frame-rate windows (500 ms each) in a row below the rate before the next lower one is
+ * asked: 3 s. At 1.5 s the hitches after loading pushed a Quest 2 down to 60 Hz for good.
+ */
+export const XR_RATE_FALLBACK_WINDOWS = 6;
+/** Windows ignored after the session opens: shaders and textures still settle (3 s). */
+export const XR_RATE_WARMUP_WINDOWS = 6;
+/**
+ * The lowest display rate ever asked. At 60 Hz a Quest 2's low-persistence screen flickers
+ * over the whole image (owner, 2026-11-13: « the whole image flickers », a steady 60 fps in
+ * the Quest Browser); 72 Hz is the headset's own default for that reason. A headset that
+ * offers nothing at or above it keeps its own rates.
+ */
+export const XR_MIN_FRAME_RATE = 72;
+
+/** The most the seated mode moves the visitor, up or down, in metres. */
+export const XR_SEATED_MAX_RAISE = 1.2;
+export const XR_SEATED_MAX_DROP = 1;
 
 /**
- * How much the seated mode raises the visitor: the walk's eye height minus the real head
- * height when the mode is switched on. Never lowers.
+ * How much the seated mode (A) moves the visitor: the walk's eye height minus the real head
+ * height when it is switched on. It raises a seated visitor, and lowers one whose floor the
+ * runtime misplaced (a seated owner once read 2.20 m over Link), within limits.
  */
 export function seatedLift(headHeight: number, eyeHeight: number): number {
-  if (!Number.isFinite(headHeight)) return 0;
-  return Math.max(0, eyeHeight - Math.max(0, headHeight));
+  if (!Number.isFinite(headHeight) || !Number.isFinite(eyeHeight)) return 0;
+  return Math.max(-XR_SEATED_MAX_DROP, Math.min(XR_SEATED_MAX_RAISE, eyeHeight - headHeight));
 }
+
+/** How long the button hint shows once the headset view opens, in seconds. */
+export const XR_HINT_SECONDS = 8;
+export const XR_HINT = 'A : assis · B : téléportation · X : compteur';
 
 /** The display rate to ask for: the highest supported one up to the target, if above the default. */
 export function pickFrameRate(
   supported: ArrayLike<number> | undefined,
   target = XR_TARGET_FRAME_RATE,
 ): number | undefined {
-  const rates = Array.from(supported ?? []).filter((rate) => rate <= target + 0.5);
+  const rates = flickerFree(Array.from(supported ?? [])).filter((rate) => rate <= target + 0.5);
   return rates.length ? Math.max(...rates) : undefined;
 }
 
+/** The rates at or above `XR_MIN_FRAME_RATE`, or all of them if none is. */
+export function flickerFree(rates: number[]): number[] {
+  const steady = rates.filter((rate) => rate >= XR_MIN_FRAME_RATE - 0.5);
+  return steady.length ? steady : rates;
+}
+
 /**
- * Lowers the asked display rate when the house cannot be drawn at it: three frame-rate
- * windows in a row under 90 % of the rate select the next lower supported one. A missed
- * frame is shown again by the headset, which reads as flicker; a lower steady rate does not.
+ * Adapts the asked display rate. Slow windows in a row under 90 % of the rate select the
+ * next lower supported one: a missed frame is shown again by the headset, which reads as
+ * flicker, a lower steady rate does not. Windows held at the rate try the next higher one,
+ * up to `XR_MAX_FRAME_RATE`, until a rate had to be lowered. Each change is followed by a
+ * warm-up, the time the headset takes to switch.
  */
 export class FrameRateGovernor {
   private slow = 0;
+  private steady = 0;
+  /** A rate had to be lowered: no more probing upwards in this session. */
+  private settled = false;
+  private warmup = XR_RATE_WARMUP_WINDOWS;
+  private readonly supported: number[];
 
   constructor(
     private rate: number | undefined,
-    private readonly supported: number[],
-  ) {}
+    supported: number[],
+  ) {
+    this.supported = flickerFree(supported);
+  }
 
   get current(): number | undefined {
     return this.rate;
@@ -131,13 +175,33 @@ export class FrameRateGovernor {
   /** The new rate to ask for after this window, if it changes. */
   observe(fps: number): number | undefined {
     if (this.rate === undefined) return undefined;
+    if (this.warmup > 0) {
+      this.warmup--;
+      return undefined;
+    }
     this.slow = fps < this.rate * 0.9 ? this.slow + 1 : 0;
-    if (this.slow < XR_RATE_FALLBACK_WINDOWS) return undefined;
-    this.slow = 0;
-    const lower = this.supported.filter((rate) => rate < this.rate! - 0.5);
-    if (!lower.length) return undefined;
-    this.rate = Math.max(...lower);
-    return this.rate;
+    this.steady = fps >= this.rate * 0.97 ? this.steady + 1 : 0;
+    if (this.slow >= XR_RATE_FALLBACK_WINDOWS) {
+      this.slow = 0;
+      this.steady = 0;
+      this.settled = true;
+      const lower = this.supported.filter((rate) => rate < this.rate! - 0.5);
+      if (!lower.length) return undefined;
+      this.rate = Math.max(...lower);
+      this.warmup = XR_RATE_WARMUP_WINDOWS;
+      return this.rate;
+    }
+    if (this.steady >= XR_RATE_PROBE_WINDOWS && !this.settled) {
+      this.steady = 0;
+      const higher = this.supported.filter(
+        (rate) => rate > this.rate! + 0.5 && rate <= XR_MAX_FRAME_RATE + 0.5,
+      );
+      if (!higher.length) return undefined;
+      this.rate = Math.min(...higher);
+      this.warmup = XR_RATE_WARMUP_WINDOWS;
+      return this.rate;
+    }
+    return undefined;
   }
 }
 
@@ -391,6 +455,8 @@ export class ImmersiveWalk {
   private readiness = new PreparationProgress();
   private readonly counter = new FrameCounter();
   private governor?: FrameRateGovernor;
+  /** Seconds left of the button hint (`XR_HINT`). */
+  private hintSeconds = XR_HINT_SECONDS;
   /** Added to the floor in seated mode (A or X), in metres. */
   private seatedRaise = 0;
   private limitHits = 0;
@@ -468,12 +534,18 @@ export class ImmersiveWalk {
     if (this.veil && !this.lift()) return;
     this.followPose();
     this.blink.update(seconds);
+    if (this.hintSeconds > 0) {
+      // The buttons, named once as the view opens; the counter keeps its own choice after.
+      this.hintSeconds -= seconds;
+      this.hud.visible = this.hintSeconds > 0 || this.preferences.counter;
+      this.showHud();
+    }
     const fps = this.counter.tick(performance.now());
     if (fps !== undefined) {
       this.lastFps = fps;
       this.showHud();
-      const lower = this.governor?.observe(fps);
-      if (lower !== undefined) this.setFrameRate(lower);
+      const rate = this.governor?.observe(fps);
+      if (rate !== undefined) this.setFrameRate(rate);
     }
     if (this.hudFlash > 0) {
       this.hudFlash -= seconds;
@@ -720,7 +792,7 @@ export class ImmersiveWalk {
    */
   toggleSeated() {
     this.seatedRaise =
-      this.seatedRaise > 0 ? 0 : seatedLift(this.camera.position.y, this.host.eyeHeight);
+      this.seatedRaise !== 0 ? 0 : seatedLift(this.camera.position.y, this.host.eyeHeight);
     this.followFloor();
     this.lastHead = this.head();
     this.flashHud();
@@ -763,7 +835,14 @@ export class ImmersiveWalk {
   }
 
   private showHud() {
-    this.hud.show(this.lastFps, this.limitHits, this.seatedOffset > 0, this.preferences.teleport);
+    this.hud.show(
+      this.lastFps,
+      this.limitHits,
+      this.seatedOffset !== 0,
+      this.preferences.teleport,
+      undefined,
+      this.hintSeconds > 0 ? XR_HINT : undefined,
+    );
   }
 
   /** Asks the headset for the highest display rate up to the target; ignored where unsupported. */

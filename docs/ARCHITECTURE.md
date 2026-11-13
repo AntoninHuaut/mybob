@@ -401,7 +401,7 @@ walk where the headset left the visitor and restores the camera of the current m
   at full deflection), fading in and out over 0.2 s. Seen motion the inner ear does not feel is
   what makes smooth locomotion sickening, and most of it is seen in the periphery. Teleports
   and room-scale steps do not trigger it; the loading veil hides it.
-- `local-floor` reference space: the real head height replaces the eye-height setting, except in **seated mode**: A switches it on or off by hand (never guessed: a crouching or tall visitor would be misread), and while it is on the floor is lowered so the eyes stand at the eye-height setting from the head height measured at the press (`seatedLift`); and the
+- `local-floor` reference space: the real head height replaces the eye-height setting, except in **seated mode**: A switches it on or off by hand (never guessed: a crouching or tall visitor would be misread), and while it is on the floor is lowered so the eyes stand at the eye-height setting from the head height measured at the press (`seatedLift`), raising or lowering within 1.2 m up and 1 m down, so a floor the runtime misplaced (a seated owner once read 2.20 m over Link) is corrected too; the counter names the buttons for the first 8 s of a session (`XR_HINT`); and the
   real floor is kept on `groundElevationAt` every frame. Room-scale moves (the headset itself
   moving, the emulator's ZQSD) go through the stick's collider every frame (`followPose`): the
   rig takes back what a wall refused, so the head stops at the wall. A jump over 0.5 m in one
@@ -415,7 +415,7 @@ walk where the headset left the visitor and restores the camera of the current m
   TAA jitter flickered between the eyes, an unbearable view the visitor could not easily leave.
   The shadow lookup is costly too, and a shadow map's soft, jagged edges show more in a
   headset (`updateShadowPolicy` suppresses shadows while `immersive` is set). The session also
-  asks for the highest **display rate** up to 90 Hz the headset supports (`pickFrameRate`; the Quest 2 defaults to 72), and steps down to the next supported rate after three frame-rate windows under 90 % of it (`FrameRateGovernor`): a missed frame is shown twice by the headset, which flickers. It
+  asks for the highest **display rate** up to 90 Hz the headset supports (`pickFrameRate`; the Quest 2 defaults to 72), and steps down to the next supported rate after 3 s of frame-rate windows under 90 % of it, ignoring the first 3 s of the session (`FrameRateGovernor`): a missed frame is shown twice by the headset, which flickers. A session holding its rate for 5 s tries the next higher one, up to 120 Hz (`XR_MAX_FRAME_RATE`; a Quest 2 offers it in its own browser), until a rate has had to be lowered; each change is followed by the 3 s warm-up. Over Link the browser cannot set the rate: it is chosen in the Meta Quest Link app's graphics preferences. It never goes below 72 Hz (`XR_MIN_FRAME_RATE`): at 60 Hz a Quest 2's screen flickers over the whole image, which the owner saw at a steady 60 fps after the loading hitches had walked a 1.5 s governor down from 90. It
   asks for medium **fixed foveation** (`XR_FIXED_FOVEATION`, 0.5; the strongest shimmered on textured walls, seen as flicker with a still head): the lens edges, blurred by
   the optics anyway, are drawn at a lower resolution; browsers without it ignore the request.
 - The session opens behind a **loading veil** (`XrVeil`, `scene/xrHud.ts`, with a bar: the share of visible meshes ready to draw), the headset's

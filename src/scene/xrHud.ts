@@ -53,8 +53,14 @@ export function hudLines(
   limitHits: number,
   seated = false,
   teleport = false,
+  renderScale?: number,
+  hint?: string,
 ): string[] {
+  if (hint) return [frameRateText(fps), hint];
   const notes = [
+    ...(renderScale !== undefined && renderScale !== 1
+      ? [`rendu ${Math.round(renderScale * 100)} %`]
+      : []),
     ...(teleport ? ['téléportation'] : []),
     ...(seated ? ['mode assis'] : []),
     ...(limitHits > 0 ? [`limite du terrain ×${limitHits}`] : []),
@@ -113,8 +119,15 @@ export class XrHud {
     return this.plane.isEnabled();
   }
 
-  show(fps: number, limitHits: number, seated = false, teleport = false) {
-    const lines = hudLines(fps, limitHits, seated, teleport);
+  show(
+    fps: number,
+    limitHits: number,
+    seated = false,
+    teleport = false,
+    renderScale?: number,
+    hint?: string,
+  ) {
+    const lines = hudLines(fps, limitHits, seated, teleport, renderScale, hint);
     const key = `${lines.join('|')}${frameRateIsLow(fps)}`;
     if (key === this.shown || !this.texture) return;
     this.shown = key;

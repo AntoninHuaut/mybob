@@ -22,6 +22,9 @@ import {
   XR_POSE_JUMP,
   FrameRateGovernor,
   pickFrameRate,
+  XR_RATE_FALLBACK_WINDOWS,
+  XR_RATE_PROBE_WINDOWS,
+  XR_RATE_WARMUP_WINDOWS,
   seatedLift,
   XR_WALK_SPEED,
   snapTurn,
@@ -418,7 +421,9 @@ test('the headset session starts with the veil alone in its camera layers', () =
 
 test('A switches seated mode: the eyes go to the eye height, then back to the real height', () => {
   assert.ok(Math.abs(seatedLift(1.11, 1.65) - 0.54) < 1e-9);
-  assert.equal(seatedLift(1.8, 1.65), 0, 'never lowered');
+  assert.ok(Math.abs(seatedLift(2.2, 1.65) + 0.55) < 1e-9, 'a misplaced floor is lowered back');
+  assert.equal(seatedLift(4, 1.65), -1, 'within limits');
+  assert.equal(seatedLift(0, 1.65), 1.2);
   assert.equal(seatedLift(Number.NaN, 1.65), 0);
   const session = headsetWalk({ point: [4, 4.2], yaw: 0 });
   session.camera.position.y = 1.11;
@@ -443,15 +448,44 @@ test('the headset asks for the highest rate up to 90 Hz and steps down when it c
   assert.equal(pickFrameRate([72, 80, 90, 120]), 90);
   assert.equal(pickFrameRate([60, 72]), 72);
   assert.equal(pickFrameRate(undefined), undefined);
-  const governor = new FrameRateGovernor(90, [72, 80, 90, 120]);
+  const governor = new FrameRateGovernor(90, [60, 72, 80, 90, 120]);
+  // The first 3 s after opening are loading hitches, not the machine.
+  for (let i = 0; i < XR_RATE_WARMUP_WINDOWS; i++) assert.equal(governor.observe(20), undefined);
   assert.equal(governor.observe(88), undefined);
-  assert.equal(governor.observe(70), undefined);
-  assert.equal(governor.observe(70), undefined);
-  assert.equal(governor.observe(70), 80, 'three slow windows in a row');
+  for (let i = 0; i < XR_RATE_FALLBACK_WINDOWS - 1; i++)
+    assert.equal(governor.observe(70), undefined);
+  assert.equal(governor.observe(70), 80, '3 s of slow windows in a row');
+  for (let i = 0; i < XR_RATE_WARMUP_WINDOWS; i++) governor.observe(20);
   assert.equal(governor.observe(79), undefined, 'holding 80 is fine');
-  for (let i = 0; i < 2; i++) governor.observe(60);
+  for (let i = 0; i < XR_RATE_FALLBACK_WINDOWS - 1; i++) governor.observe(60);
   assert.equal(governor.observe(60), 72);
-  for (let i = 0; i < 5; i++) assert.equal(governor.observe(40), undefined, 'nothing lower');
+  for (let i = 0; i < XR_RATE_WARMUP_WINDOWS; i++) governor.observe(20);
+  for (let i = 0; i < 20; i++)
+    assert.equal(governor.observe(40), undefined, 'never 60 Hz: it flickers on a Quest 2');
+  assert.equal(governor.current, 72);
+});
+
+test('a session holding 90 Hz tries 120 Hz, and goes back for good if it cannot hold it', () => {
+  const governor = new FrameRateGovernor(90, [72, 80, 90, 120]);
+  for (let i = 0; i < XR_RATE_WARMUP_WINDOWS; i++) governor.observe(90);
+  for (let i = 0; i < XR_RATE_PROBE_WINDOWS - 1; i++) assert.equal(governor.observe(90), undefined);
+  assert.equal(governor.observe(90), 120, '5 s held at 90 Hz');
+  for (let i = 0; i < XR_RATE_WARMUP_WINDOWS; i++) governor.observe(40);
+  for (let i = 0; i < XR_RATE_FALLBACK_WINDOWS - 1; i++) governor.observe(100);
+  assert.equal(governor.observe(100), 90, '120 Hz did not hold');
+  for (let i = 0; i < 40; i++) assert.equal(governor.observe(90), undefined, 'no second probe');
+  assert.equal(governor.current, 90);
+});
+
+test('a session holding 120 Hz stays there', () => {
+  const governor = new FrameRateGovernor(90, [72, 80, 90, 120]);
+  for (let i = 0; i < XR_RATE_WARMUP_WINDOWS + XR_RATE_PROBE_WINDOWS; i++) governor.observe(90);
+  assert.equal(governor.current, 120);
+  for (let i = 0; i < 60; i++) assert.equal(governor.observe(119.5), undefined);
+});
+
+test('a headset offering nothing at 72 Hz or above keeps its own rates', () => {
+  assert.equal(pickFrameRate([60]), 60);
 });
 
 test('the teleport-only turn steps 30° once per push and re-arms near the centre', () => {
