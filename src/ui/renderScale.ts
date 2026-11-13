@@ -47,12 +47,22 @@ export function parseRenderScale(raw: string | null): RenderScaleSettings {
   }
 }
 
-/** The Navigation panel's field: « Automatique », then every pinnable scale. */
-export function renderScaleFieldHtml(cap = screenCap()): string {
-  const options = pinnableScales(cap)
+/** The field's options: « Automatique », then every scale this screen may pin. */
+export function renderScaleOptionsHtml(cap = screenCap()): string {
+  return `<option value="auto">Automatique</option>${pinnableScales(cap)
     .map((scale) => `<option value="${scale}">${percent(scale)}</option>`)
-    .join('');
-  return `<label>Résolution du rendu<select id="render-scale"><option value="auto">Automatique</option>${options}</select></label><small id="render-scale-note"></small>`;
+    .join('')}`;
+}
+
+/** The Navigation panel's field. */
+export function renderScaleFieldHtml(cap = screenCap()): string {
+  return `<label>Résolution du rendu<select id="render-scale">${renderScaleOptionsHtml(cap)}</select></label><small id="render-scale-note"></small>`;
+}
+
+/** The option to show for `fixed` on a screen with `cap`: a pin above the cap shows the cap. */
+export function renderScaleValue(fixed: number | undefined, cap = screenCap()): string {
+  if (fixed === undefined) return 'auto';
+  return String(Math.min(fixed, Math.max(...pinnableScales(cap))));
 }
 
 /** The line under the field: what automatic does, and what it found on this machine. */

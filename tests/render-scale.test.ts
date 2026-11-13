@@ -1,6 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { parseRenderScale, renderScaleFieldHtml, renderScaleNote } from '../src/ui/renderScale';
+import {
+  parseRenderScale,
+  renderScaleFieldHtml,
+  renderScaleNote,
+  renderScaleValue,
+} from '../src/ui/renderScale';
 
 test('an unreadable or foreign saved value means automatic, nothing detected', () => {
   for (const raw of [null, '', 'pas du json', '[]', 'null', '{"fixed":3,"detected":{"walk":9}}'])
@@ -27,4 +32,10 @@ test('the note says what automatic found, or that a pinned scale no longer adapt
   assert.match(renderScaleNote({ detected: {} }, 1), /jamais au-delà de 100/);
   assert.doesNotMatch(renderScaleFieldHtml(1.25), /value="1.5"/);
   assert.match(renderScaleNote({ fixed: 0.8, detected: {} }), /Fixée à 80 %/);
+});
+
+test('a pin above the current screen cap shows that cap', () => {
+  assert.equal(renderScaleValue(1.5, 1), '1');
+  assert.equal(renderScaleValue(1.2, 1.5), '1.2');
+  assert.equal(renderScaleValue(undefined, 1.25), 'auto');
 });

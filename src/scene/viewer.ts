@@ -1767,6 +1767,13 @@ export class HouseViewer {
    * Render resolution: a scale pinned for every view, or `undefined` to adapt, each view
    * starting from `starts[view]`, the scale this machine reached last time.
    */
+  /** The window now sits on a screen with another cap (multi-screen): views start over. */
+  setScreenCap(cap: number) {
+    if (!this.resolutions.setCap(cap)) return;
+    this.renderScale = Number.NaN;
+    this.requestRender();
+  }
+
   setRenderScalePolicy(fixed: number | undefined, starts: Record<string, number>) {
     this.resolutions.configure(fixed, starts);
     this.renderScale = Number.NaN; // the next image applies the policy's scale

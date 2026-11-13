@@ -515,7 +515,7 @@ last call, and read back at start-up.
   or 240 Hz is the browser waiting for the screen (`refreshIntervalOf`), so a 2K screen held at
   60 Hz may render sharper too. The cap follows the screen's device pixels (`upscaleCap`):
   150 % on 4K (also a 4K screen scaled to 150 %), 125 % on 2K, none below; steps are 10 %
-  apart, the cap last. Falling 15 % behind the refresh at an up-scale (or, started there from
+  apart, the cap last. With several screens the cap is read again when the window changes screen (`screen` `change`, resize, focus, and a 2 s check, since two screens of the same scale fire nothing): every view starts over under the new cap. A headset session skips all of this: the desktop render scale is never applied in XR. Falling 15 % behind the refresh at an up-scale (or, started there from
   a saved scale, not yet seen on any refresh rate) goes back one step without touching the
   occlusion. Once a view has stepped down it never climbs again in the session, because
   changing scale resizes every render target, which hitches. The scale each view reached is

@@ -263,8 +263,20 @@ export class ViewResolutions {
   /** `cap`: the sharpest scale this screen allows (`upscaleCap`). */
   constructor(
     private readonly pixelRatio: number,
-    private readonly cap = 1,
+    private cap = 1,
   ) {}
+
+  /**
+   * The window moved to a screen with another cap: every view starts over under it (its
+   * refresh rate may differ too). Returns whether anything changed.
+   */
+  setCap(cap: number): boolean {
+    if (cap === this.cap) return false;
+    this.cap = cap;
+    this.views.clear();
+    this.current = undefined;
+    return true;
+  }
 
   /**
    * A pinned scale for every view, or adapted views starting where this machine left them.

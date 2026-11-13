@@ -302,3 +302,12 @@ test('a new policy starts every view over', () => {
   assert.equal(views.for('walk').scale, 1.4);
   assert.equal(views.for('plan').scale, 1);
 });
+
+test('moving to a screen with another cap starts the views over under it', () => {
+  const views = new ViewResolutions(1, 1.5);
+  feed(views.for('walk'), SERIES * 20, 1000 / 60);
+  assert.equal(views.for('walk').scale, 1.5);
+  assert.equal(views.setCap(1), true);
+  assert.equal(views.for('walk').scale, 1, 'a 1080p screen never renders above 100 %');
+  assert.equal(views.setCap(1), false, 'the same cap changes nothing');
+});
