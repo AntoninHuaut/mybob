@@ -1036,7 +1036,13 @@ function syncViewChrome() {
   el('#view-eyebrow').textContent = title[0];
   el('#view-title').textContent = title[1];
   el('#view-subtitle').textContent = title[2];
-  el('#walk-start').hidden = next !== 'walk';
+  // The welcome shows on the first visit only; afterwards a click in the view
+  // captures the mouse, and the control hint keeps the keys on screen.
+  el('#walk-start').hidden = next !== 'walk' || onboarding.walkGuideSeen;
+  if (next === 'walk' && !onboarding.walkGuideSeen) {
+    onboarding = { ...onboarding, walkGuideSeen: true };
+    saveOnboarding(onboarding);
+  }
   el('#resume-walk').hidden = true;
   el('#crosshair').hidden = next !== 'walk';
   el('#scene-labels').hidden = next === 'walk' || !showLabels;

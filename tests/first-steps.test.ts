@@ -22,11 +22,30 @@ test('an absent, unreadable or other-version state starts from scratch', () => {
 });
 
 test('a card seen once stays seen after reload', () => {
-  const saved = serializeOnboarding({ version: ONBOARDING_VERSION, cardSeen: true });
+  const saved = serializeOnboarding({
+    version: ONBOARDING_VERSION,
+    cardSeen: true,
+    walkGuideSeen: false,
+  });
   const state = parseOnboarding(saved);
   assert.equal(state.cardSeen, true);
   assert.equal(shouldShowStartCard(state), false);
   assert.equal(shouldShowStartCard(parseOnboarding(null)), true);
+});
+
+test('the Visite welcome, once shown, stays dismissed after reload', () => {
+  assert.equal(parseOnboarding(null).walkGuideSeen, false);
+  // A state saved before the flag existed still shows the welcome once.
+  assert.equal(
+    parseOnboarding(`{"version":${ONBOARDING_VERSION},"cardSeen":true}`).walkGuideSeen,
+    false,
+  );
+  const saved = serializeOnboarding({
+    version: ONBOARDING_VERSION,
+    cardSeen: false,
+    walkGuideSeen: true,
+  });
+  assert.equal(parseOnboarding(saved).walkGuideSeen, true);
 });
 
 test('the start card offers three real actions and stays hidden by default', () => {
