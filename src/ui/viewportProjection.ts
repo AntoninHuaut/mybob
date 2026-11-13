@@ -194,6 +194,10 @@ export class ViewportProjection {
     }
     if (viewer.mode === 'walk') {
       el('#door-prompt').hidden = !frame.nearDoor || !el('#walk-start').hidden;
+      el('#stair-prompt').hidden = !frame.nearStair || !el('#walk-start').hidden;
+      if (frame.nearStair)
+        el('#stair-prompt-label').textContent =
+          frame.nearStair === 'up' ? 'Monter à l’étage' : 'Descendre';
       el('#furniture-edit-prompt').hidden =
         !frame.nearFurnitureId ||
         !el('#walk-start').hidden ||

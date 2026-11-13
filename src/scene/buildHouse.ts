@@ -12,7 +12,7 @@ import type { Material } from '@babylonjs/core/Materials/material';
 import type { Scene } from '@babylonjs/core/scene';
 import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import earcut from 'earcut';
-import type { Level, Opening, Point2, Wall } from '../model/types';
+import type { Level, Opening, Point2, Stair, Wall } from '../model/types';
 import { alongWall, pointInPolygon, wallLength, wallSections } from '../model/geometry';
 import type { Materials } from './materials';
 import { beveledBox, facetsData, slopedPrismFacets } from './beveledBox';
@@ -70,6 +70,11 @@ export interface HouseScene {
   doors: DoorInstance[];
   pointLights: PointLight[];
   highlights: Map<string, Mesh>;
+  /**
+   * The flight of the level below, seen and taken from this level's floor void. Only the
+   * visit shows it: Vue 3D already stacks the level below, with its own flight.
+   */
+  stairsDown: Mesh[];
 }
 
 /**
@@ -217,6 +222,8 @@ export function buildHouse(
   ceilingVoids: Point2[][] = [],
   /** Wells of the roof windows over a sloping ceiling (`roofWindowWells`). */
   wells?: CeilingWells,
+  /** Flights of the level below landing on this one (`stairsDown`). */
+  flightsBelow: { stair: Stair; base: Level }[] = [],
 ): HouseScene {
   const root = new TransformNode(`level:${level.id}`, scene);
   root.position.y = level.elevation;
@@ -346,32 +353,44 @@ export function buildHouse(
     highlights.set(room.id, highlight);
   }
 
-  for (const stair of level.stairs ?? []) {
+  // A tread names its stair and the way it leads: the visit takes it (`stairPassage`).
+  const flight = (stair: Stair, base: number, direction: 'up' | 'down', collision: boolean) => {
     const dx = stair.end[0] - stair.start[0];
     const dz = stair.end[1] - stair.start[1];
     const run = Math.hypot(dx, dz);
     const angle = -Math.atan2(dz, dx);
     const riser = stair.rise / stair.steps;
     const tread = run / stair.steps;
+    const steps: Mesh[] = [];
     for (let i = 0; i < stair.steps; i++) {
       const height = riser * (i + 1);
       const along = tread * (i + 0.5);
       const step = box(
-        `stair:${stair.id}:${i}`,
+        `stair${direction === 'down' ? '-down' : ''}:${stair.id}:${i}`,
         tread,
         height,
         stair.width,
         stair.start[0] + (dx / run) * along,
-        height / 2,
+        base + height / 2,
         stair.start[1] + (dz / run) * along,
         // Structural tone: a wood flight would be indistinguishable from the
         // floor in the orthographic plan view, where every tread top face is
         // lit identically.
         materials.slab,
+        root,
+        collision,
       );
       step.rotation.y = angle;
+      step.metadata = { kind: 'stair', id: stair.id, direction };
+      steps.push(step);
     }
-  }
+    return steps;
+  };
+  for (const stair of level.stairs ?? []) flight(stair, 0, 'up', true);
+  // Built below this floor, inside its void; never collided, the visitor does not walk it.
+  const stairsDown = flightsBelow.flatMap(({ stair, base }) =>
+    flight(stair, base.elevation - level.elevation, 'down', false),
+  );
 
   const doors: DoorInstance[] = [];
   for (const wall of level.walls) {
@@ -885,7 +904,7 @@ export function buildHouse(
     if (!isMoving(mesh)) mesh.freezeWorldMatrix();
   }
   new FixtureLights(scene, pointLights, doors).refresh();
-  return { root, ceiling, fixtures, doors, pointLights, highlights };
+  return { root, ceiling, fixtures, doors, pointLights, highlights, stairsDown };
 }
 
 export function poseDoor(door: DoorInstance) {

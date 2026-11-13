@@ -137,6 +137,7 @@ function headsetWalk(start: { point: [number, number]; yaw: number }) {
       start,
       isDestination: () => true,
       toggleDoor: () => {},
+      takeStair: () => false,
       isReady: () => true,
       onEnd: () => {},
     },

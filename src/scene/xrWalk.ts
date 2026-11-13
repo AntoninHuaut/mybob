@@ -11,6 +11,7 @@ import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Level, Point2, ProjectSite } from '../model/types';
+import type { StairDirection } from '../model/stairs';
 import { groundElevationAt } from '../model/geometry';
 import { isVisitArea } from './navigation';
 import { VISITOR_RADIUS } from './walkCamera';
@@ -31,7 +32,8 @@ import {
  * Controls, xr-standard gamepad mapping (Quest Touch):
  * - left stick: walk, relative to where the head looks, with wall collisions;
  * - room-scale steps (the headset itself moving) meet the same walls;
- * - right stick sideways: snap turn; pushed forward then released: teleport;
+ * - right stick sideways: snap turn; pushed forward then released: teleport; aimed at a
+ *   stair tread, the teleport takes the stair to the next level, behind the loading veil;
  * - trigger, either hand: open or close the door the controller points at.
  *
  * The session opens behind a loading veil (`xrHud.ts`) until the house's shaders are linked,
@@ -145,13 +147,16 @@ export function readControllerGamepad(gamepad: Gamepad | null | undefined): Cont
 
 export interface ImmersiveHost {
   scene: Scene;
-  level: Level;
+  /** The displayed level, read each frame: taking a stair changes it. */
+  readonly level: Level;
   site?: ProjectSite;
   /** Where the screen walk stands and looks when the headset takes over. */
   start: { point: Point2; yaw: number };
   /** A floor point where the visitor may stand: inside a room or on the parcel. */
   isDestination(point: Point2): boolean;
   toggleDoor(id: string): void;
+  /** Changes the displayed level and calls `arrive`; false if the stair leads nowhere. */
+  takeStair(id: string, direction: StairDirection): boolean;
   /** Every visible mesh can be drawn; asking starts the links of those that cannot yet. */
   isReady(): boolean;
   /** The session ended, whoever ended it: the headset menu, the page or an error. */
@@ -193,13 +198,14 @@ export class ImmersiveWalk {
   private readonly marker: Mesh;
   private readonly hud: XrHud;
   private veil?: XrVeil;
-  private readonly loading = new LoadingGate();
+  private loading = new LoadingGate();
   private readonly counter = new FrameCounter();
   private limitHits = 0;
   private collider?: Collider;
   private turnArmed = true;
   private aiming = false;
   private target?: Point2;
+  private stair?: { id: string; direction: StairDirection };
   private lastValid?: Point2;
   /** Head position at the end of the previous frame, after every correction. */
   private lastHead?: Vector3;
@@ -339,6 +345,29 @@ export class ImmersiveWalk {
     return true;
   }
 
+  /**
+   * Lands on another level after a stair: the head at `point`, looking along `yaw` (the walk
+   * camera's convention), the floor under it, and the loading veil back while the new
+   * level's shaders link.
+   */
+  arrive(point: Point2, yaw: number) {
+    const forward = this.camera.getDirection(Vector3.Forward(true));
+    const current = Math.atan2(-forward.x, -forward.z);
+    // The camera's yaw grows to the left; `turn` takes a right-handed yaw about +y.
+    this.turn(yaw - current);
+    this.moveHeadTo(point);
+    this.lastValid = point;
+    this.followFloor();
+    this.lastHead = undefined;
+    this.showVeil();
+  }
+
+  private showVeil() {
+    this.veil ??= new XrVeil(this.host.scene, this.camera);
+    this.loading = new LoadingGate();
+    this.camera.layerMask = XR_VEIL_LAYER;
+  }
+
   async exit() {
     if (this.ended) return;
     await this.helper.exitXRAsync();
@@ -449,7 +478,12 @@ export class ImmersiveWalk {
         hit?.pickedPoint && normal && normal.y > 0.7
           ? [hit.pickedPoint.x, hit.pickedPoint.z]
           : undefined;
-      this.target = point && this.host.isDestination(point) ? point : undefined;
+      const metadata = hit?.pickedMesh?.metadata;
+      this.stair =
+        point && metadata?.kind === 'stair'
+          ? { id: metadata.id, direction: metadata.direction }
+          : undefined;
+      this.target = point && (this.stair || this.host.isDestination(point)) ? point : undefined;
       pointer.ray.scaling.z = hit?.hit ? hit.distance : XR_TELEPORT_REACH;
       this.material.emissiveColor = this.target ? VALID : INVALID;
       this.marker.setEnabled(!!point);
@@ -463,8 +497,15 @@ export class ImmersiveWalk {
     this.marker.setEnabled(false);
     this.material.emissiveColor = READY;
     const target = this.target;
+    const stair = this.stair;
     this.target = undefined;
+    this.stair = undefined;
     if (aim.y < -0.2 || !target) return;
+    if (stair) {
+      // The host rebuilds the level and calls `arrive`, which places the visitor.
+      this.host.takeStair(stair.id, stair.direction);
+      return;
+    }
     this.moveHeadTo(target);
     this.lastValid = target;
     this.followFloor();

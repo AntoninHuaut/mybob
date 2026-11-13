@@ -1060,6 +1060,7 @@ function syncViewChrome() {
   el('#width-label').hidden = !showDimensions || next === 'walk';
   el('#depth-label').hidden = !showDimensions || next === 'walk';
   el('#door-prompt').hidden = true;
+  el('#stair-prompt').hidden = true;
   el('#furniture-edit-prompt').hidden = true;
 }
 
@@ -2170,6 +2171,24 @@ async function start() {
     };
     viewer.onDestinationRejected = () =>
       toast('Choisissez un point libre, à distance des murs et des meubles.');
+    // A stair taken in the visit changed the displayed level inside the same scene.
+    viewer.onLevelChange = () => {
+      furnitureLayer?.dispose();
+      furnitureLayer = undefined;
+      selectedRoom = undefined;
+      mountFurniture();
+      el<HTMLInputElement>('#section-height').max = String(viewer.level.ceilingHeight);
+      el<HTMLSelectElement>('#level-select').value = viewer.level.id;
+      el('#header-level').textContent = viewer.level.name;
+      el('#room-count').textContent = String(viewer.level.rooms.length).padStart(2, '0');
+      renderRooms();
+      renderLabels();
+      renderMinimap();
+      renderRoomDetail();
+      syncSelection();
+      if (!readOnlyLink) scheduleLinkHashUpdate();
+      toast(`Niveau : ${viewer.level.name}`);
+    };
     viewer.onImmersiveChange = (active) => {
       el('#viewport').classList.toggle('immersive', active);
       el('#enter-immersive').setAttribute('aria-pressed', String(active));
