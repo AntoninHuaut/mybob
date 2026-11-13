@@ -85,6 +85,7 @@ import {
 import { ViewEffects } from './viewEffects';
 import type { OcclusionState } from './diagnostics';
 import type { ImmersiveWalk } from './xrWalk';
+import { roofWindowWells } from '../model/ceiling';
 
 export type ViewMode = 'overview' | 'plan' | 'walk';
 
@@ -463,6 +464,7 @@ export class HouseViewer {
       createMaterials(scene, project.finishes),
       shadow,
       above?.floorVoids ?? [],
+      roofWindowWells(project, level),
     );
     // The exterior is the building's, not the displayed level's: the façades
     // are those of the lowest level, the roof covers the rest, and the upper

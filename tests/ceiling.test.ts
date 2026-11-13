@@ -11,6 +11,7 @@ import {
   ceilingProfile,
   ceilingSteps,
   ceilingTriangles,
+  roofWindowWells,
 } from '../src/model/ceiling';
 import { validateProject } from '../src/model/validate';
 import {
@@ -230,4 +231,53 @@ test('scene: a fixture under the slope hangs from the slope', () => {
   level.lights = [{ id: 'l', position: [4, 1] }];
   const { house } = scene(level);
   near(house.fixtures[0].position.y, 1.9 - 0.025, 1e-6);
+});
+
+test('a roof window opens a well through the sloping ceiling, up to the roof face', () => {
+  const project = studio();
+  project.levels[0] = attic();
+  // A north slope rising 1 m per metre, 2.20 m high at z −0.5, over the whole plan.
+  project.site = {
+    boundary: [
+      [-2, -2],
+      [10, -2],
+      [10, 8],
+      [-2, 8],
+    ],
+    elevation: 0,
+    notes: [],
+    roofs: [
+      {
+        id: 'toit',
+        vertices: [
+          [-1, 2.2, -0.5],
+          [9, 2.2, -0.5],
+          [9, 5.7, 3],
+          [-1, 5.7, 3],
+        ],
+        faces: [[0, 1, 2, 3]],
+        windows: [{ id: 'velux', center: [4, 1], width: 0.8, height: 0.8 }],
+      },
+    ],
+  };
+  const wells = roofWindowWells(project, project.levels[0]);
+  assert.equal(wells.cutouts.length, 1);
+  // 0.80 wide, 0.80 × cos 45° deep in plan.
+  const depth = 0.8 * Math.SQRT1_2;
+  let area = 0;
+  for (const [a, b, c] of ceilingTriangles(project.levels[0], undefined, [], wells.cutouts))
+    area += Math.abs((b[0] - a[0]) * (c[2] - a[2]) - (c[0] - a[0]) * (b[2] - a[2])) / 2;
+  near(area, 48 - 0.8 * depth, 1e-6);
+  // Four sides, each from the ceiling up to the roof face (2.70 + z above the floor).
+  assert.equal(wells.reveals.length, 4);
+  for (const { points } of wells.reveals) {
+    const [b0, b1, t1, t0] = points;
+    near(b0[1], ceilingHeightAt(project.levels[0], [b0[0], b0[2]]), 1e-6);
+    near(b1[1], ceilingHeightAt(project.levels[0], [b1[0], b1[2]]), 1e-6);
+    near(t0[1], 2.7 + t0[2], 1e-6);
+    near(t1[1], 2.7 + t1[2], 1e-6);
+  }
+  // A level with a flat ceiling gets no well.
+  project.levels[0] = studio().levels[0];
+  assert.deepEqual(roofWindowWells(project, project.levels[0]), { cutouts: [], reveals: [] });
 });

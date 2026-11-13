@@ -16,7 +16,13 @@ import type { Level, Opening, Point2, Wall } from '../model/types';
 import { alongWall, pointInPolygon, wallLength, wallSections } from '../model/geometry';
 import type { Materials } from './materials';
 import { beveledBox, facetsData, slopedPrismFacets } from './beveledBox';
-import { ceilingHeightAt, ceilingProfile, ceilingSteps, ceilingTriangles } from '../model/ceiling';
+import {
+  ceilingHeightAt,
+  ceilingProfile,
+  ceilingSteps,
+  ceilingTriangles,
+  type CeilingWells,
+} from '../model/ceiling';
 
 /**
  * Chamfer of a wall edge. A real plastered arris is two millimetres, but two
@@ -138,8 +144,13 @@ export function polygonMesh(
  * lowest, following each slope elsewhere, with the vertical step beside each dormer
  * gap. Facing into the room, with plaster UVs in metres in the plane of each facet.
  */
-export function slopedCeilingMesh(level: Level, scene: Scene, holes: Point2[][] = []): Mesh {
-  const facets = ceilingTriangles(level, level.outline, holes).map((points) => {
+export function slopedCeilingMesh(
+  level: Level,
+  scene: Scene,
+  holes: Point2[][] = [],
+  wells: CeilingWells = { cutouts: [], reveals: [] },
+): Mesh {
+  const facets = ceilingTriangles(level, level.outline, holes, wells.cutouts).map((points) => {
     const [a, b, c] = points;
     const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]];
     const e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
@@ -155,7 +166,7 @@ export function slopedCeilingMesh(level: Level, scene: Scene, holes: Point2[][] 
     return { points, normal: n };
   });
   const mesh = new Mesh('ceiling', scene);
-  facetsData([...facets, ...ceilingSteps(level)]).applyToMesh(mesh);
+  facetsData([...facets, ...ceilingSteps(level), ...wells.reveals]).applyToMesh(mesh);
   return mesh;
 }
 
@@ -198,6 +209,8 @@ export function buildHouse(
   materials: Materials,
   shadow?: ShadowGenerator,
   ceilingVoids: Point2[][] = [],
+  /** Wells of the roof windows over a sloping ceiling (`roofWindowWells`). */
+  wells?: CeilingWells,
 ): HouseScene {
   const root = new TransformNode(`level:${level.id}`, scene);
   root.position.y = level.elevation;
@@ -776,7 +789,7 @@ export function buildHouse(
   }
 
   const ceiling = sloped
-    ? slopedCeilingMesh(level, scene, ceilingVoids)
+    ? slopedCeilingMesh(level, scene, ceilingVoids, wells)
     : polygonMesh(
         'ceiling',
         level.outline,
