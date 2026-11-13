@@ -383,15 +383,25 @@ walk where the headset left the visitor and restores the camera of the current m
 - Controls, xr-standard mapping: left stick walks where the head looks (1.3 m/s, walls collide
   through an ellipsoid hung under the head, resolved on the rig, a 20 cm step does not); right
   stick sideways turns smoothly (75°/s at full deflection, on the spot around the head; a push
-  more forward than sideways never turns), pushed forward aims a teleport validated like a walk destination
-  (`isSceneVisitDestination` or `isParcelDestination`), or aimed at a stair tread takes the
-  stair (`takeStair`); trigger on a door toggles it; A or X switches seated mode (the counter shows « mode assis »).
+  more forward than sideways never turns), pushed forward aims a teleport along an arc
+  (`teleportArc`, about 8 m of reach, dots drawn as thin instances) to the first surface it
+  meets, validated like a walk destination (`isSceneVisitDestination` or
+  `isParcelDestination`), or aimed at a stair tread takes the stair (`takeStair`); trigger on a
+  door toggles it; A switches seated mode (the counter shows « mode assis »); X shows or hides
+  the counter.
+- **Teleport-only mode** (B or Y; the counter shows « téléportation »): no stick glides the
+  visitor, for people sick even with the vignette. Either stick pushed forward aims a teleport,
+  sideways turns by 30° steps (`snapTurn`, re-armed near the centre), and both the jump and the
+  turn happen behind a short blink to black (`XrBlink`, 0.08 s out, 0.12 s in): a cut between
+  two still images shows no motion. A stair still goes behind the loading veil. This choice and
+  the counter's visibility are kept in `maison-atelier:headset:v1` (`XR_PREFERENCES`); a mode
+  change shows a hidden counter for 2.5 s so the new mode is read.
 - **Comfort vignette** (`XrVignette`, `scene/xrHud.ts`): while a stick walks or turns, a plane
   carried by the head darkens the view past about 28° off axis (fully dark at 50°, 0.9 opacity
   at full deflection), fading in and out over 0.2 s. Seen motion the inner ear does not feel is
   what makes smooth locomotion sickening, and most of it is seen in the periphery. Teleports
   and room-scale steps do not trigger it; the loading veil hides it.
-- `local-floor` reference space: the real head height replaces the eye-height setting, except in **seated mode**: A or X switches it on or off by hand (never guessed: a crouching or tall visitor would be misread), and while it is on the floor is lowered so the eyes stand at the eye-height setting from the head height measured at the press (`seatedLift`); and the
+- `local-floor` reference space: the real head height replaces the eye-height setting, except in **seated mode**: A switches it on or off by hand (never guessed: a crouching or tall visitor would be misread), and while it is on the floor is lowered so the eyes stand at the eye-height setting from the head height measured at the press (`seatedLift`); and the
   real floor is kept on `groundElevationAt` every frame. Room-scale moves (the headset itself
   moving, the emulator's ZQSD) go through the stick's collider every frame (`followPose`): the
   rig takes back what a wall refused, so the head stops at the wall. A jump over 0.5 m in one
@@ -416,7 +426,7 @@ walk where the headset left the visitor and restores the camera of the current m
   `viewer.immersiveReady` asks every enabled, visible mesh whether it can draw, which starts
   all their links at once. The veil lifts after three ready images in a row, or after 20 s
   (`LoadingGate`); the controls wait for it.
-- A counter plane (`scene/xrHud.ts`) is carried by the head, lower left of the view: the frame
+- A counter plane (`scene/xrHud.ts`) is carried by the head, lower right of the view: the frame
   rate over 500 ms windows, in red under 24 fps (the page's own counter is DOM, which a headset
   never shows). A second line, `limite du terrain ×N`, appears once the `isVisitArea` guard has
   sent the visitor back inside the modelled ground: it tells a rollback from that guard apart

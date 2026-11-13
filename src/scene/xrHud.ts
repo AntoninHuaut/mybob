@@ -48,15 +48,21 @@ export class FrameCounter {
  * Text lines of the counter. The second line only exists once the visit has been sent back
  * inside the modelled ground, so a wall of the terrain that pushes the visitor back is named.
  */
-export function hudLines(fps: number, limitHits: number, seated = false): string[] {
+export function hudLines(
+  fps: number,
+  limitHits: number,
+  seated = false,
+  teleport = false,
+): string[] {
   const notes = [
+    ...(teleport ? ['téléportation'] : []),
     ...(seated ? ['mode assis'] : []),
     ...(limitHits > 0 ? [`limite du terrain ×${limitHits}`] : []),
   ];
   return notes.length ? [frameRateText(fps), notes.join(' · ')] : [frameRateText(fps)];
 }
 
-const TEXTURE_WIDTH = 256;
+const TEXTURE_WIDTH = 288;
 const TEXTURE_HEIGHT = 96;
 const READY = '#ffffff';
 const LOW = '#ff9a8a';
@@ -67,9 +73,9 @@ export class XrHud {
   private readonly texture?: DynamicTexture;
   private shown = '';
 
-  /** `camera` carries the plane: it follows the head, in the lower left of the view. */
+  /** `camera` carries the plane: it follows the head, in the lower right of the view. */
   constructor(scene: Scene, camera: Camera) {
-    this.plane = CreatePlane('xr-hud', { width: 0.16, height: 0.06 }, scene);
+    this.plane = CreatePlane('xr-hud', { width: 0.12, height: 0.04 }, scene);
     this.material = new StandardMaterial('xr-hud', scene);
     this.material.disableLighting = true;
     this.material.emissiveColor = Color3.White();
@@ -95,11 +101,20 @@ export class XrHud {
     this.plane.alwaysSelectAsActiveMesh = true;
     this.plane.parent = camera;
     // The right-handed scene looks down -z: in front of the head is a negative z.
-    this.plane.position.set(-0.14, -0.17, -0.6);
+    this.plane.position.set(0.16, -0.17, -0.6);
   }
 
-  show(fps: number, limitHits: number, seated = false) {
-    const lines = hudLines(fps, limitHits, seated);
+  /** Shown or hidden by hand (X); the figure keeps being counted while hidden. */
+  set visible(visible: boolean) {
+    this.plane.setEnabled(visible);
+  }
+
+  get visible(): boolean {
+    return this.plane.isEnabled();
+  }
+
+  show(fps: number, limitHits: number, seated = false, teleport = false) {
+    const lines = hudLines(fps, limitHits, seated, teleport);
     const key = `${lines.join('|')}${frameRateIsLow(fps)}`;
     if (key === this.shown || !this.texture) return;
     this.shown = key;
@@ -112,8 +127,8 @@ export class XrHud {
     context.fillText(lines[0], 16, 52);
     if (lines[1]) {
       context.fillStyle = READY;
-      context.font = '22px sans-serif';
-      context.fillText(lines[1], 16, 82);
+      context.font = '24px sans-serif';
+      context.fillText(lines[1], 16, 84, TEXTURE_WIDTH - 24);
     }
     this.texture.update();
   }
@@ -378,6 +393,97 @@ export class XrVignette {
   dispose() {
     this.plane.dispose();
     this.texture.dispose();
+    this.material.dispose();
+  }
+}
+
+/** Time for the teleport blink to go dark, then to clear again, in seconds. */
+export const BLINK_OUT_SECONDS = 0.08;
+export const BLINK_IN_SECONDS = 0.12;
+
+/**
+ * The teleport blink: the view goes dark, the visitor is moved while nothing is seen, and the
+ * view clears again. A cut between two still images gives the eyes no motion to read, which
+ * is what makes a teleport or a snap turn comfortable. Pure: the frame time is passed in.
+ */
+export class BlinkFade {
+  private alpha = 0;
+  private closing = false;
+  private pending?: () => void;
+
+  /** Darkens the view and runs `action` once it is fully dark. */
+  start(action: () => void) {
+    const previous = this.pending;
+    this.pending = previous
+      ? () => {
+          previous();
+          action();
+        }
+      : action;
+    this.closing = true;
+  }
+
+  get active(): boolean {
+    return this.closing || this.alpha > 0;
+  }
+
+  /** The darkness after `seconds` more, 0 to 1. */
+  tick(seconds: number): number {
+    if (this.closing) {
+      this.alpha = Math.min(1, this.alpha + seconds / BLINK_OUT_SECONDS);
+      if (this.alpha >= 1) {
+        this.closing = false;
+        const action = this.pending;
+        this.pending = undefined;
+        action?.();
+      }
+    } else if (this.alpha > 0) {
+      this.alpha = Math.max(0, this.alpha - seconds / BLINK_IN_SECONDS);
+    }
+    return this.alpha;
+  }
+}
+
+/** The dark sphere of the blink, carried by the head, drawn over the house like the vignette. */
+export class XrBlink {
+  private readonly sphere: Mesh;
+  private readonly material: StandardMaterial;
+  private readonly fade = new BlinkFade();
+
+  constructor(scene: Scene, camera: Camera) {
+    this.material = new StandardMaterial('xr-blink', scene);
+    this.material.disableLighting = true;
+    this.material.emissiveColor = Color3.Black();
+    this.material.backFaceCulling = false;
+    this.material.depthFunction = Constants.ALWAYS;
+    this.material.disableDepthWrite = true;
+    this.material.alpha = 0;
+    this.sphere = CreateSphere('xr-blink', { diameter: 0.5, segments: 8 }, scene);
+    this.sphere.material = this.material;
+    this.sphere.parent = camera;
+    this.sphere.renderingGroupId = 3;
+    this.sphere.isPickable = false;
+    this.sphere.alwaysSelectAsActiveMesh = true;
+    this.sphere.setEnabled(false);
+  }
+
+  start(action: () => void) {
+    this.fade.start(action);
+  }
+
+  get active(): boolean {
+    return this.fade.active;
+  }
+
+  update(seconds: number) {
+    if (!this.fade.active) return;
+    const alpha = this.fade.tick(seconds);
+    this.material.alpha = alpha;
+    this.sphere.setEnabled(alpha > 0.001);
+  }
+
+  dispose() {
+    this.sphere.dispose();
     this.material.dispose();
   }
 }
