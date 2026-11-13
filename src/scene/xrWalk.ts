@@ -22,6 +22,7 @@ import {
   XR_VEIL_LAYER,
   XrHud,
   XrVeil,
+  XrVignette,
 } from './xrHud';
 
 /**
@@ -32,9 +33,13 @@ import {
  * Controls, xr-standard gamepad mapping (Quest Touch):
  * - left stick: walk, relative to where the head looks, with wall collisions;
  * - room-scale steps (the headset itself moving) meet the same walls;
- * - right stick sideways: snap turn; pushed forward then released: teleport; aimed at a
+ * - right stick sideways: smooth turn; pushed forward then released: teleport; aimed at a
  *   stair tread, the teleport takes the stair to the next level, behind the loading veil;
  * - trigger, either hand: open or close the door the controller points at.
+ *
+ * While the stick walks or turns, a comfort vignette (`XrVignette`, `xrHud.ts`) darkens the
+ * edges of the view: the visual motion the inner ear does not feel is what makes people sick,
+ * and most of it is seen in the periphery.
  *
  * The session opens behind a loading veil (`xrHud.ts`) until the house's shaders are linked,
  * like the page's overlay for the other views; the controls wait for it.
@@ -56,11 +61,12 @@ import {
  * the visitor at the origin of the plan, outside the house.
  */
 
-/** Headset walking speed. Slower than the keyboard default: fast smooth motion makes people sick. */
-export const XR_WALK_SPEED = 1.6;
+/** Headset walking speed, a calm human walk: fast smooth motion makes people sick. */
+export const XR_WALK_SPEED = 1.3;
+/** Smooth turn rate at full stick deflection, in degrees per second. */
+export const XR_TURN_DEGREES_PER_SECOND = 75;
 /** Strongest fixed foveation: the cheapest frame, blur confined to the lens edges. */
 export const XR_FIXED_FOVEATION = 1;
-export const SNAP_TURN_DEGREES = 30;
 export const STICK_DEADZONE = 0.2;
 /** How far a controller reaches a door, like the keyboard's E (2.4 m) plus an arm. */
 export const XR_DOOR_REACH = 3;
@@ -79,14 +85,11 @@ export function applyDeadzone(value: number, threshold = STICK_DEADZONE): number
 }
 
 /**
- * One snap per push: the stick must come back near the centre before the next turn.
- * Returns the turn direction (+1 right, -1 left) and whether the next push counts.
+ * The right stick's turn axis: its sideways deflection, unless the push is mostly forward or
+ * back, which aims a teleport. A diagonal push therefore never turns and aims at once.
  */
-export function snapTurn(axis: number, armed: boolean): { turn: -1 | 0 | 1; armed: boolean } {
-  if (!armed) return { turn: 0, armed: Math.abs(axis) < 0.3 };
-  if (axis > 0.7) return { turn: 1, armed: false };
-  if (axis < -0.7) return { turn: -1, armed: false };
-  return { turn: 0, armed: true };
+export function turnAxis(x: number, y: number): number {
+  return Math.abs(x) > Math.abs(y) ? x : 0;
 }
 
 /**
@@ -122,9 +125,13 @@ export function turnAround(rig: Vector3, head: Vector3, angle: number): Vector3 
   return new Vector3(head.x + dx * cos + dz * sin, rig.y, head.z - dx * sin + dz * cos);
 }
 
-/** Snap turn as a yaw delta, in radians. Right-handed y-up: turning right is negative. */
-export function snapTurnAngle(turn: -1 | 0 | 1): number {
-  return turn === 0 ? 0 : (-turn * SNAP_TURN_DEGREES * Math.PI) / 180;
+/**
+ * Smooth turn for one frame as a yaw delta, in radians, from the stick's sideways axis
+ * (dead zone already applied). Right-handed y-up: turning right (axis > 0) is negative.
+ */
+export function smoothTurnAngle(axis: number, seconds: number): number {
+  if (axis === 0) return 0;
+  return (-axis * XR_TURN_DEGREES_PER_SECOND * Math.PI * seconds) / 180;
 }
 
 export interface ControllerState {
@@ -197,12 +204,12 @@ export class ImmersiveWalk {
   private readonly material: StandardMaterial;
   private readonly marker: Mesh;
   private readonly hud: XrHud;
+  private readonly vignette: XrVignette;
   private veil?: XrVeil;
   private loading = new LoadingGate();
   private readonly counter = new FrameCounter();
   private limitHits = 0;
   private collider?: Collider;
-  private turnArmed = true;
   private aiming = false;
   private target?: Point2;
   private stair?: { id: string; direction: StairDirection };
@@ -237,6 +244,7 @@ export class ImmersiveWalk {
     this.marker.isPickable = false;
     this.marker.setEnabled(false);
     this.hud = new XrHud(scene, camera);
+    this.vignette = new XrVignette(scene, camera);
     this.veil = new XrVeil(scene, camera);
     camera.layerMask = XR_VEIL_LAYER;
     helper.sessionManager.onXRSessionEnded.addOnce(() => this.end());
@@ -287,16 +295,21 @@ export class ImmersiveWalk {
       pointer.trigger = state.trigger;
     }
 
+    let motion = 0;
     if (move && (move.x || move.y)) {
       const forward = this.camera.getDirection(Vector3.Forward(true));
       this.walk(stickDisplacement(forward, move.x, move.y, XR_WALK_SPEED, seconds));
+      motion = Math.min(1, Math.hypot(move.x, move.y));
     }
     if (aim) {
-      const turn = snapTurn(this.aiming ? 0 : aim.x, this.turnArmed);
-      this.turnArmed = turn.armed;
-      if (turn.turn) this.turn(snapTurnAngle(turn.turn));
+      const axis = this.aiming ? 0 : turnAxis(aim.x, aim.y);
+      if (axis) {
+        this.turn(smoothTurnAngle(axis, seconds));
+        motion = Math.max(motion, Math.abs(axis));
+      }
       this.updateTeleport(aim);
     }
+    this.vignette.update(motion, seconds);
 
     // Walls stop room-scale walking (`followPose`); the open edge of the modelled
     // ground has no wall, so the visit is sent back inside it.
@@ -364,6 +377,7 @@ export class ImmersiveWalk {
 
   private showVeil() {
     this.veil ??= new XrVeil(this.host.scene, this.camera);
+    this.vignette.hide();
     this.loading = new LoadingGate();
     this.camera.layerMask = XR_VEIL_LAYER;
   }
@@ -392,6 +406,7 @@ export class ImmersiveWalk {
     this.marker.dispose();
     this.material.dispose();
     this.hud.dispose();
+    this.vignette.dispose();
     this.veil?.dispose();
     this.veil = undefined;
     this.camera.layerMask = XR_DEFAULT_LAYERS;
@@ -438,7 +453,7 @@ export class ImmersiveWalk {
     return moved;
   }
 
-  /** Snap turn on the spot: the rig rotates around the head. */
+  /** Turn on the spot: the rig rotates around the head. */
   turn(angle: number) {
     const head = this.head();
     this.rig.position.copyFrom(turnAround(this.rig.position, head, angle));

@@ -1,5 +1,7 @@
 import { Constants } from '@babylonjs/core/Engines/constants';
 import { DynamicTexture } from '@babylonjs/core/Materials/Textures/dynamicTexture';
+import { RawTexture } from '@babylonjs/core/Materials/Textures/rawTexture';
+import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Color3 } from '@babylonjs/core/Maths/math.color';
 import type { Camera } from '@babylonjs/core/Cameras/camera';
@@ -11,7 +13,7 @@ import { frameRateIsLow, frameRateText } from '../ui/frameRate';
 
 /**
  * What the headset shows on top of the house: the loading veil while the session links its
- * shaders, then the frame counter.
+ * shaders, then the frame counter, and the comfort vignette while the sticks move the visitor.
  *
  * The frame counter of the headset. The page's own counter is a DOM element, which a headset
  * never shows: a small plane carried by the head draws the same figure, so a frame rate can
@@ -226,5 +228,129 @@ export class XrVeil {
     this.texture?.dispose();
     this.sphereMaterial.dispose();
     this.labelMaterial.dispose();
+  }
+}
+
+/** Distance of the vignette plane in front of the eyes, in metres. */
+const VIGNETTE_DISTANCE = 0.3;
+/** Half the side of the plane: at 0.3 m it reaches about 67° off axis, past a Quest's lenses. */
+const VIGNETTE_HALF_SIZE = 0.7;
+/** Clear inside this angle off axis, fully dark past the outer one. */
+export const VIGNETTE_CLEAR_DEGREES = 28;
+export const VIGNETTE_DARK_DEGREES = 50;
+/** Opacity of the dark edge at full stick deflection: the room stays faintly readable. */
+export const VIGNETTE_MAX_OPACITY = 0.9;
+/** Time for the vignette to close fully or open fully, in seconds. */
+export const VIGNETTE_FADE_SECONDS = 0.2;
+const VIGNETTE_TEXTURE_SIZE = 128;
+
+/**
+ * Opacity of the vignette texture at `angle` degrees off the view axis: 0 in the clear centre,
+ * 1 past the dark edge, a smoothstep between them.
+ */
+export function vignetteAlpha(angle: number): number {
+  const t = Math.min(
+    1,
+    Math.max(
+      0,
+      (angle - VIGNETTE_CLEAR_DEGREES) / (VIGNETTE_DARK_DEGREES - VIGNETTE_CLEAR_DEGREES),
+    ),
+  );
+  return t * t * (3 - 2 * t);
+}
+
+/**
+ * The vignette strength one frame later: it follows `target` (0 to 1) at a bounded rate, so
+ * starting or stopping the stick never flashes the edges dark or clear.
+ */
+export function approachStrength(current: number, target: number, seconds: number): number {
+  const step = seconds / VIGNETTE_FADE_SECONDS;
+  const goal = Math.min(1, Math.max(0, target));
+  if (Math.abs(goal - current) <= step) return goal;
+  return current + Math.sign(goal - current) * step;
+}
+
+/** The texture of the vignette plane: black, with the alpha of `vignetteAlpha`. */
+export function vignetteTextureData(size = VIGNETTE_TEXTURE_SIZE): Uint8Array {
+  const data = new Uint8Array(size * size * 4);
+  for (let row = 0; row < size; row++) {
+    for (let column = 0; column < size; column++) {
+      // Texel centre, in metres on the plane, from its centre.
+      const x = ((column + 0.5) / size - 0.5) * 2 * VIGNETTE_HALF_SIZE;
+      const y = ((row + 0.5) / size - 0.5) * 2 * VIGNETTE_HALF_SIZE;
+      const angle = (Math.atan2(Math.hypot(x, y), VIGNETTE_DISTANCE) * 180) / Math.PI;
+      data[(row * size + column) * 4 + 3] = Math.round(vignetteAlpha(angle) * 255);
+    }
+  }
+  return data;
+}
+
+/**
+ * The comfort vignette: a plane carried by the head, clear in the middle and dark at the
+ * edges, faded in while the sticks walk or turn the visitor and out when they stop. Seen
+ * motion that the inner ear does not feel causes the nausea of smooth locomotion, and the
+ * periphery is where most of it is seen. Drawn over the house (depth test off) like the veil.
+ */
+export class XrVignette {
+  private readonly plane: Mesh;
+  private readonly material: StandardMaterial;
+  private readonly texture: RawTexture;
+  private strength = 0;
+
+  constructor(scene: Scene, camera: Camera) {
+    this.material = new StandardMaterial('xr-vignette', scene);
+    this.material.disableLighting = true;
+    this.material.emissiveColor = Color3.Black();
+    this.material.backFaceCulling = false;
+    this.material.depthFunction = Constants.ALWAYS;
+    this.material.disableDepthWrite = true;
+    this.texture = RawTexture.CreateRGBATexture(
+      vignetteTextureData(),
+      VIGNETTE_TEXTURE_SIZE,
+      VIGNETTE_TEXTURE_SIZE,
+      scene,
+      false,
+      false,
+      Texture.BILINEAR_SAMPLINGMODE,
+    );
+    this.texture.hasAlpha = true;
+    this.texture.wrapU = this.texture.wrapV = Texture.CLAMP_ADDRESSMODE;
+    this.material.diffuseTexture = this.texture;
+    this.material.useAlphaFromDiffuseTexture = true;
+    this.material.alpha = 0;
+    const size = VIGNETTE_HALF_SIZE * 2;
+    this.plane = CreatePlane('xr-vignette', { width: size, height: size }, scene);
+    this.plane.material = this.material;
+    this.plane.parent = camera;
+    // The right-handed scene looks down -z: in front of the head is a negative z.
+    this.plane.position.set(0, 0, -VIGNETTE_DISTANCE);
+    // Over the house and the counter; the loading veil hides it (`hide`) while it is up.
+    this.plane.renderingGroupId = 3;
+    this.plane.isPickable = false;
+    this.plane.alwaysSelectAsActiveMesh = true;
+    this.plane.setEnabled(false);
+  }
+
+  /** `motion`: how hard the sticks move the visitor this frame, 0 to 1. */
+  update(motion: number, seconds: number) {
+    this.strength = approachStrength(this.strength, motion, seconds);
+    this.material.alpha = this.strength * VIGNETTE_MAX_OPACITY;
+    this.plane.setEnabled(this.strength > 0.001);
+  }
+
+  hide() {
+    this.strength = 0;
+    this.material.alpha = 0;
+    this.plane.setEnabled(false);
+  }
+
+  get opacity(): number {
+    return this.plane.isEnabled() ? this.material.alpha : 0;
+  }
+
+  dispose() {
+    this.plane.dispose();
+    this.texture.dispose();
+    this.material.dispose();
   }
 }

@@ -40,7 +40,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Navigation              | `src/scene/navigation.ts`                                                    | Walk destination, section plane, wall facing the camera                                                             |
 | Stairs                  | `src/model/stairs.ts`                                                        | Where a stair leads from a level, where the visit lands; the flights going down from a floor void                   |
 | Walk camera             | `src/scene/walkCamera.ts`                                                    | Eye height, visitor radius, speed, step                                                                             |
-| Headset visit           | `src/scene/xrWalk.ts`                                                        | WebXR session of the walk: sticks, snap turn, teleport, doors; loaded on demand                                     |
+| Headset visit           | `src/scene/xrWalk.ts`                                                        | WebXR session of the walk: sticks, smooth turn, comfort vignette, teleport, doors; on demand                        |
 | Orbit controls          | `src/scene/orbitNavigation.ts`, `orbitPointerInput.ts`                       | Keyboard pan in screen directions; one-finger pan and pinch zoom in Plan                                            |
 | Wall cutaway            | `src/scene/wallCutaway.ts`                                                   | `auto` / `full` / `low`, clipping planes per material                                                               |
 | Shadow map              | `src/scene/shadowRefresh.ts`, `sunShadowSkip.ts`                             | Sun map redrawn only when a shadow changes; lookup skipped where a PBR surface faces away from the sun              |
@@ -345,13 +345,13 @@ offers them: Vue 3D occlusion was adopted (#205, described above), and three wer
   approach). Measured with « Mesurer chaque vue » on an RX 9060 XT, it saved 0.1–0.2 ms of a
   1.8 ms Visite image, and left streaky grain on plain walls even at rest: the walk's TAA
   clamps its history, so it never averages the moving noise away. Not worth a visible loss.
-  Since 2026-11-13 the occlusion takes 8 samples, walk and Vue 3D, with the same fixed noise
-  and Babylon's 16-tap bilateral blur (`OCCLUSION_BLUR_SAMPLES`): the owner tried that pair
-  on the converted houses and kept it. An 8-tap blur (#254, 0.67 of a 3.0 ms visit saved on
-  the blur) left grey blotches high on the walls once paired with the 8 samples, and was
-  put back to 16. The rotating-noise candidate above stays rejected.
-- The sun shadow map is 1024 px since 2026-11-13 (owner's trial, was 2048): a quarter of the
-  map to render and filter, slightly softer edges, judged acceptable on the converted houses.
+  The occlusion takes 16 samples with Babylon's 16-tap bilateral blur
+  (`OCCLUSION_BLUR_SAMPLES`). Trials on 2026-11-13 rejected both cheaper halves: an 8-tap blur
+  (#254, 0.67 of a 3.0 ms visit saved) left grey blotches high on the walls, and 8 samples
+  (#265) left blotchy walls and dark bands along the floor boards in the visit, even on a fast
+  desktop GPU. The rotating-noise candidate above stays rejected.
+- The sun shadow map is 2048 px. A 1024 px trial (#265) was dropped with the 8-sample
+  occlusion: the visit's floors and walls showed blotchy, banded shadows.
 - Sun shadows stay on medium PCF: contact-hardening shadows (PCSS, light size ratio 0.03)
   were compared in Extérieur with a solar preview and showed no visible difference (#204). The orbit experiment releases on mode exit and resets its controls on scene replacement.
   It remains outside production adaptive-quality policy.
@@ -371,11 +371,17 @@ walk where the headset left the visitor and restores the camera of the current m
   teleporting and following the floor move the rig, never the camera. Moving the camera would
   make Babylon offset the XR reference space, which the Immersive Web Emulator 2.0 ignores — the
   visitor then stood at the plan origin, outside the house, in an empty view.
-- Controls, xr-standard mapping: left stick walks where the head looks (1.6 m/s, walls collide
+- Controls, xr-standard mapping: left stick walks where the head looks (1.3 m/s, walls collide
   through an ellipsoid hung under the head, resolved on the rig, a 20 cm step does not); right
-  stick sideways snaps 30°, pushed forward aims a teleport validated like a walk destination
+  stick sideways turns smoothly (75°/s at full deflection, on the spot around the head; a push
+  more forward than sideways never turns), pushed forward aims a teleport validated like a walk destination
   (`isSceneVisitDestination` or `isParcelDestination`), or aimed at a stair tread takes the
   stair (`takeStair`); trigger on a door toggles it.
+- **Comfort vignette** (`XrVignette`, `scene/xrHud.ts`): while a stick walks or turns, a plane
+  carried by the head darkens the view past about 28° off axis (fully dark at 50°, 0.9 opacity
+  at full deflection), fading in and out over 0.2 s. Seen motion the inner ear does not feel is
+  what makes smooth locomotion sickening, and most of it is seen in the periphery. Teleports
+  and room-scale steps do not trigger it; the loading veil hides it.
 - `local-floor` reference space: the real head height replaces the eye-height setting, and the
   real floor is kept on `groundElevationAt` every frame. Room-scale moves (the headset itself
   moving, the emulator's ZQSD) go through the stick's collider every frame (`followPose`): the
@@ -388,7 +394,7 @@ walk where the headset left the visitor and restores the camera of the current m
   dynamic resolution is off. **No post-processing and no sun shadows in the headset**, and no
   switch to bring them back: on a Quest 2, TAA and SSAO held the visit at about 5 fps and the
   TAA jitter flickered between the eyes, an unbearable view the visitor could not easily leave.
-  The shadow lookup is costly too, and the 1024 px map's soft, jagged edges show more in a
+  The shadow lookup is costly too, and a shadow map's soft, jagged edges show more in a
   headset (`updateShadowPolicy` suppresses shadows while `immersive` is set). The session also
   asks for the strongest **fixed foveation** (`XR_FIXED_FOVEATION`): the lens edges, blurred by
   the optics anyway, are drawn at a lower resolution; browsers without it ignore the request.
