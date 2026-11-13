@@ -839,7 +839,13 @@ function renderProjectOptions() {
     .join('');
 }
 
-function loadProject(id: string, levelId?: string, override?: HouseProject) {
+function loadProject(
+  id: string,
+  levelId?: string,
+  override?: HouseProject,
+  /** The view to keep across a level change; a project change starts in Vue 3D. */
+  keep?: { mode: ViewMode; exterior: boolean },
+) {
   // A project received by link is not in `projects`: reloading it by its identifier
   // (level change) must keep its document and its read-only state, instead of falling back
   // to the demonstration.
@@ -907,6 +913,10 @@ function loadProject(id: string, levelId?: string, override?: HouseProject) {
   renderMinimap();
   renderRoomDetail();
   setMode('overview');
+  // Changing level keeps the view: Extérieur, Plan, or a visit from the new level's
+  // start (Vue 3D if no free point is found there).
+  if (keep?.exterior && p.site) viewer.setExteriorView(true);
+  else if (keep && keep.mode !== 'overview') setMode(keep.mode);
   syncSelection();
   if (!received) {
     try {
@@ -1896,7 +1906,10 @@ function wireProjectControls() {
     loadProject((event.target as HTMLSelectElement).value),
   );
   el<HTMLSelectElement>('#level-select').addEventListener('change', (event) =>
-    loadProject(current.id, (event.target as HTMLSelectElement).value),
+    loadProject(current.id, (event.target as HTMLSelectElement).value, undefined, {
+      mode: viewer.mode,
+      exterior: viewer.exteriorView,
+    }),
   );
   el('#export-project').addEventListener('click', downloadProject);
   el('#copy-link').addEventListener('click', () => void copyShareLink());
