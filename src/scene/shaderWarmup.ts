@@ -92,6 +92,30 @@ export function isSoftwareRenderer(renderer: string | undefined): boolean {
   return /swiftshader|llvmpipe|softpipe|software|basic render|warp/i.test(renderer ?? '');
 }
 
+/** The bar never shows full before the view is actually ready. */
+export const PROGRESS_CEILING = 0.95;
+
+/**
+ * Progress of a view preparation for the loading bar, from the programs it created: each
+ * state (cutaway variant) is an equal share, and inside it the share of its new programs that
+ * are linked. New programs keep appearing while it draws (a receiver relinks with its shadow),
+ * so the raw ratio can fall back: the figure shown only grows, and stays under the ceiling.
+ */
+export class PreparationProgress {
+  private shown = 0;
+
+  update(variant: number, variants: number, ready: number, total: number): number {
+    const inside = total > 0 ? ready / total : 0;
+    const raw = (variant + inside) / Math.max(1, variants);
+    this.shown = Math.max(this.shown, Math.min(PROGRESS_CEILING, raw));
+    return this.shown;
+  }
+
+  get value(): number {
+    return this.shown;
+  }
+}
+
 /** One entry per view whose shaders are linked for the current scene. */
 export function viewKey(mode: ViewMode, exterior: boolean): string {
   return exterior && mode === 'overview' ? 'overview+exterior' : mode;

@@ -324,6 +324,15 @@ handles and sectional travel; animated poses do not rebuild assignments. An empt
 intersection explicitly excludes receivers because Babylon treats an empty inclusion
 list as unrestricted. The eight-room test fixture has a clean floor-plane audit.
 
+Every refresh also tops each mesh up to the same number of point lights with
+**zero-intensity padding lights** (`fixture-pad-*`, within each material's
+`maxSimultaneousLights` minus the sky and the sun), switched on and off with the fixtures
+(`syncFixturePads`). Babylon links one program per light count, so a wall lit by one fixture
+and a wall lit by two did not share one: on a converted house this cut the PBR programs over
+all views from 44 to 19 (Vue 3D at start-up: 18 to 6), each a blocking link on ANGLE/D3D11 and
+a headset. A zero-intensity light adds exactly nothing to the image; its cost is one more
+point-light evaluation per pixel on meshes that had fewer fixtures.
+
 `scene/exteriorAmbience.ts` generates a local half-float sky, sun lobe and ground bounce.
 `ViewEffects.updateEnvironment` explicitly selects sky in overview/exterior, no environment
 in Plan, and the existing interior bounce in walk. Sky intensity is 0.25 and overview
@@ -398,7 +407,7 @@ walk where the headset left the visitor and restores the camera of the current m
   headset (`updateShadowPolicy` suppresses shadows while `immersive` is set). The session also
   asks for the strongest **fixed foveation** (`XR_FIXED_FOVEATION`): the lens edges, blurred by
   the optics anyway, are drawn at a lower resolution; browsers without it ignore the request.
-- The session opens behind a **loading veil** (`XrVeil`, `scene/xrHud.ts`), the headset's
+- The session opens behind a **loading veil** (`XrVeil`, `scene/xrHud.ts`, with a bar: the share of visible meshes ready to draw), the headset's
   counterpart of the page overlay of `prepareView`, which a headset never shows: turning the
   shadows off changes every material's defines, and each relink would otherwise freeze the
   headset on its first images. The camera first draws the veil alone (`XR_VEIL_LAYER`, two
@@ -525,7 +534,7 @@ last call, and read back at start-up.
   with a given set of defines, and a view change alters them (sky, lights, prepass, temporal
   pass); on ANGLE/D3D11 each program blocks the frame ~90 ms, so an unprepared first switch froze
   the page for seconds. The render loop spots a view not yet in `ViewWarmth`, skips drawing,
-  tells the host (`onPreparing`: `#loading`) and draws until the engine reports every effect ready and the sun shadow map has settled, three frames in a row (receivers relink once their shadow is ready). Automatic Vue 3D cutaways prepare full walls, lowered walls and the restored camera-facing cut in turn, with the actual view's lighting and shadow policy. Each state refreshes and settles the shadow map too; the camera stays in place. All states share the same 20 s budget. `tests/view-preparation.test.ts` drives the real viewer through preparation, rotation and zoom on a NullEngine and checks its shader-cache keys. Software renderers (SwiftShader, llvmpipe, WARP) skip it: they link slowly and
+  tells the host (`onPreparing`: `#loading`, with a bar fed by `onPreparingProgress`: each cutaway state an equal share, inside it the share of its new programs linked, only growing and held under 95 % until ready) and draws until the engine reports every effect ready and the sun shadow map has settled, three frames in a row (receivers relink once their shadow is ready). Automatic Vue 3D cutaways prepare full walls, lowered walls and the restored camera-facing cut in turn, with the actual view's lighting and shadow policy. Each state refreshes and settles the shadow map too; the camera stays in place. All states share the same 20 s budget. `tests/view-preparation.test.ts` drives the real viewer through preparation, rotation and zoom on a NullEngine and checks its shader-cache keys. Software renderers (SwiftShader, llvmpipe, WARP) skip it: they link slowly and
   front-loading would only multiply their work, so CI e2e keeps the on-demand behaviour.
   The start-up is the same path with the landing view, so nothing else needs to call it. A new
   scene (project or level change) releases the cached effects and makes every view cold again.

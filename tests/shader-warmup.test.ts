@@ -3,6 +3,8 @@ import test from 'node:test';
 import {
   READY_IN_A_ROW,
   isSoftwareRenderer,
+  PreparationProgress,
+  PROGRESS_CEILING,
   ViewWarmth,
   WARM_UP_MAX_MS,
   WARM_UP_MIN_FRAMES,
@@ -117,4 +119,15 @@ test('all prepared variants share one time budget', async () => {
   assert.equal(clock, WARM_UP_MAX_MS);
   assert.equal(frames, WARM_UP_MAX_MS / 100);
   assert.ok(variants > 1 && variants < 1_000, 'a variant does not restart the deadline');
+});
+
+test('the loading bar only grows, shares the cutaway states and never shows full early', () => {
+  const progress = new PreparationProgress();
+  assert.equal(progress.update(0, 3, 0, 0), 0, 'nothing created yet');
+  assert.ok(Math.abs(progress.update(0, 3, 2, 4) - 1 / 6) < 1e-9);
+  // A receiver relinks with its shadow: more programs, a lower raw ratio, the same bar.
+  assert.ok(Math.abs(progress.update(0, 3, 2, 8) - 1 / 6) < 1e-9);
+  assert.ok(Math.abs(progress.update(1, 3, 0, 0) - 1 / 3) < 1e-9);
+  assert.equal(progress.update(2, 3, 5, 5), PROGRESS_CEILING);
+  assert.equal(progress.value, PROGRESS_CEILING);
 });

@@ -2276,6 +2276,12 @@ async function start() {
       el('#loading span').textContent = 'Préparation de la vue…';
       el('#loading').hidden = !active;
     };
+    viewer.onPreparingProgress = (fraction) => {
+      const bar = el('#loading-progress');
+      const percent = Math.round(fraction * 100);
+      bar.setAttribute('aria-valuenow', String(percent));
+      bar.style.setProperty('--progress', String(fraction));
+    };
     el('#loading').hidden = true;
     onboarding = readOnboarding();
     showStartCard();

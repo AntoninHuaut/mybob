@@ -44,7 +44,7 @@ export function appTemplate(): string {
       <div class="orientation" title="Direction du haut du document de référence"><span>HAUT DU PLAN</span><svg id="orientation-arrow" width="23" height="23" viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 6 18-6-4-6 4Z" fill="currentColor"/></svg></div>
       <div class="mini-card"><div class="mini-heading"><span>VOUS REPÉRER</span><button id="mini-plan" aria-label="Ouvrir la vue en plan" title="Vue en plan">${icon('plan', 15)}</button></div><div id="minimap"></div><div class="mini-caption" id="mini-caption">Rez-de-chaussée</div></div>
       <div class="bottom-controls"><div class="control-hint" id="control-hint"><kbd>ZQSD</kbd><span>Déplacer la vue</span><i></i>${icon('mouse-left', 17)}<span>Glisser gauche pour tourner</span><i></i>${icon('mouse-right', 17)}<span>Glisser droit pour déplacer</span></div><div class="bottom-meta"><button type="button" class="software-render" id="software-render" hidden>Sans accélération graphique</button><span class="frame-rate" id="frame-rate" title="Cadence de rendu" hidden></span><div class="scale-note"><span class="scale-line"></span> Dimensions en mètres</div></div></div>
-      <div class="loading" id="loading"><div class="loading-mark">${icon('house', 35)}</div><span>Votre maison prend forme…</span></div>
+      <div class="loading" id="loading"><div class="loading-mark">${icon('house', 35)}</div><span>Votre maison prend forme…</span><div class="loading-progress" id="loading-progress" role="progressbar" aria-label="Préparation de la vue" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i></i></div></div>
       <div id="fatal-error" class="fatal-error" hidden></div>
     </main>
   </div>
