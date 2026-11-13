@@ -319,9 +319,11 @@ export function createOrbitTaa(scene: Scene, camera: Camera): TAARenderingPipeli
 }
 
 /**
- * Screen-space ambient occlusion for the visit camera only. Half-resolution AO
- * keeps the cost down. It reads the PrePass rather than the legacy geometry buffer,
- * so it shares a single auxiliary pass with the temporal antialiasing.
+ * Screen-space ambient occlusion for the visit camera only. In Babylon 9.35 the
+ * 16-sample pass runs at full resolution; `ssaoRatio` sizes the horizontal blur and
+ * `blurRatio` both the vertical blur and the combine, which writes the scene image, so
+ * it stays at 1. It reads the PrePass rather than the legacy geometry buffer, so it
+ * shares a single auxiliary pass with the temporal antialiasing.
  */
 /** Scale of an occlusion pipeline: the walk sees a room, the overview a whole house. */
 export interface OcclusionSettings {
@@ -329,6 +331,15 @@ export interface OcclusionSettings {
   radius: number;
   maxZ: number;
 }
+
+/**
+ * Taps of the bilateral blur, per direction, each one a depth and an occlusion read. The
+ * kernel spans as many texels, so fewer taps is a narrower blur. With Babylon's default of
+ * 16, the blur cost 0.67 of the 3.0 ms visit on the owner's house (desktop GPU), mostly
+ * the full-resolution vertical pass. 8 halves both passes (#246/#248 rejected a grainier
+ * 8-sample occlusion pass itself, not this blur).
+ */
+export const OCCLUSION_BLUR_SAMPLES = 8;
 
 export const WALK_OCCLUSION: OcclusionSettings = {
   name: 'interior-occlusion',
@@ -378,6 +389,7 @@ export function createInteriorOcclusion(
     pipeline.textureSamples = 1;
     // The bilateral blur is what keeps half-resolution AO from looking grainy on plaster.
     pipeline.expensiveBlur = true;
+    pipeline.bilateralSamples = OCCLUSION_BLUR_SAMPLES;
     return pipeline;
   } catch (error) {
     scene.disablePrePassRenderer();

@@ -5,6 +5,14 @@
 export const RENDER_SCALES = [1, 0.8, 0.67] as const;
 
 /**
+ * Lowest scale the visit may take even below one rendered pixel per CSS pixel. Elsewhere a
+ * screen at pixel ratio 1 stays at 100 %, and its only lever was dropping the occlusion; in
+ * the visit, slightly softer pixels at 80 % (0.64 of the pixel work) cost the eye less than
+ * losing the corner hollows. Plan, Vue 3D and Extérieur keep the one-pixel floor.
+ */
+export const VISIT_SCALE_FLOOR = 0.8;
+
+/**
  * Effect tiers, tried once the resolution is at its floor (it costs the least to the eye):
  * 1 no occlusion. The occlusion is never degraded on the way: a grainy cheap-blur version
  * is the ugliest of the states, and a look that changes by itself reads as a bug. Fewer
@@ -34,10 +42,10 @@ export const WARMUP_FRAMES = 30;
 export const STALL_MS = 5000;
 
 /**
- * Dynamic resolution, the same at rest and in motion. A machine that cannot hold 40 fps
- * renders fewer pixels, one step at a time; a machine that can never leaves full
- * resolution. The scale only goes down, and is kept for the session: changing it resizes
- * every render target, which hitches, so it must not follow the camera.
+ * Dynamic resolution of one view, the same at rest and in motion. A machine that cannot
+ * hold 40 fps renders fewer pixels, one step at a time; a machine that can never leaves
+ * full resolution. The scale only goes down, and is kept for the session: changing it
+ * resizes every render target, which hitches, so it must not follow the camera.
  */
 export class AdaptiveResolution {
   private level = 0;
@@ -46,7 +54,14 @@ export class AdaptiveResolution {
   private samples: number[] = [];
   private warmup = WARMUP_FRAMES;
 
-  constructor(private readonly pixelRatio: number) {}
+  /**
+   * `floor`: scales at or above it are allowed whatever the pixel ratio; below it, a step
+   * must keep at least one rendered pixel per CSS pixel. 1 keeps only that rule.
+   */
+  constructor(
+    private readonly pixelRatio: number,
+    private readonly floor = 1,
+  ) {}
 
   /**
    * `frameMs` is the time since the previous image, when both were drawn in a row;
@@ -65,10 +80,8 @@ export class AdaptiveResolution {
       const median = sorted[Math.floor(sorted.length / 2)];
       this.samples = [];
       if (median > FRAME_BUDGET_MS) {
-        if (
-          this.level < RENDER_SCALES.length - 1 &&
-          RENDER_SCALES[this.level + 1] * this.pixelRatio >= 1
-        ) {
+        const next = RENDER_SCALES[this.level + 1];
+        if (next !== undefined && (next * this.pixelRatio >= 1 || next >= this.floor)) {
           this.level++;
           this.warmup = WARMUP_FRAMES;
         } else if (this.effectLevel < EFFECT_TIERS) {
@@ -104,5 +117,46 @@ export class AdaptiveResolution {
   /** The scale in use on this machine, for the diagnostic. */
   get scale(): number {
     return RENDER_SCALES[this.level];
+  }
+}
+
+/**
+ * One dynamic resolution per view (`viewKey`): the visit costs several times the plan, and
+ * a scale or a tier the visit needed must not soften the plan or take the occlusion out
+ * of a Vue 3D that holds 40 fps. Switching view already rebuilds that view's effects, so
+ * the resize it may bring costs no extra hitch. A view entered again starts with a
+ * warm-up: the images around a switch (shader links, pipeline rebuilds) are not its speed.
+ */
+export class ViewResolutions {
+  private readonly views = new Map<string, AdaptiveResolution>();
+  private current?: string;
+  private forcedTier?: number;
+
+  constructor(private readonly pixelRatio: number) {}
+
+  /** The resolution of `view`, created on first use; entering it restarts its warm-up. */
+  for(view: string): AdaptiveResolution {
+    let resolution = this.views.get(view);
+    if (!resolution) {
+      resolution = new AdaptiveResolution(this.pixelRatio, view === 'walk' ? VISIT_SCALE_FLOOR : 1);
+      resolution.force(this.forcedTier);
+      this.views.set(view, resolution);
+    }
+    if (view !== this.current) {
+      this.current = view;
+      resolution.resume();
+    }
+    return resolution;
+  }
+
+  /** The page was hidden or lost the focus: no view measures the images that follow. */
+  resume(): void {
+    for (const resolution of this.views.values()) resolution.resume();
+  }
+
+  /** Development bench only: pins the tier of every view (or hands it back). */
+  force(tier?: number): void {
+    this.forcedTier = tier;
+    for (const resolution of this.views.values()) resolution.force(tier);
   }
 }
