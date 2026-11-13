@@ -8,7 +8,12 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { buildExterior, planeUv } from '../src/scene/buildExterior';
 import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import type { Texture } from '@babylonjs/core/Materials/Textures/texture';
-import { polygonArea, resolveRoofDormer, resolveRoofWindow } from '../src/model/geometry';
+import {
+  groundElevationAt,
+  polygonArea,
+  resolveRoofDormer,
+  resolveRoofWindow,
+} from '../src/model/geometry';
 import { validateProject } from '../src/model/validate';
 import { pointInOrOnPolygon, roofFaceHeightAt, roofFacePlanOutline } from '../src/model/geometry';
 import type { HouseProject } from '../src/model/types';
@@ -948,4 +953,169 @@ test('the lawn, roof and render carry their generated maps, on metric UVs', () =
     scene.dispose();
     engine.dispose();
   }
+});
+
+/** #259: the four garden elements of the acceptance criterion, on the atelier plot. */
+function gardenProject(): HouseProject {
+  const p = structuredClone(source);
+  p.site!.surfaces = [
+    {
+      id: 'terrasse',
+      kind: 'terrace',
+      height: 0.15,
+      polygon: [
+        [0.5, 12],
+        [5.5, 12],
+        [5.5, 14],
+        [0.5, 14],
+      ],
+    },
+    {
+      id: 'allee-garage',
+      kind: 'gravel',
+      polygon: [
+        [7, 7.5],
+        [11.5, 7.5],
+        [11.5, 11],
+        [7, 11],
+      ],
+    },
+    {
+      id: 'pelouse',
+      kind: 'lawn',
+      polygon: [
+        [-8, -2],
+        [-2, -2],
+        [-2, 3],
+        [-8, 3],
+      ],
+    },
+  ];
+  p.site!.boundaries = [
+    {
+      id: 'mur-fond',
+      kind: 'wall',
+      height: 1.8,
+      points: [
+        [-9, 14.9],
+        [15, 14.9],
+      ],
+    },
+    {
+      id: 'cloture-est',
+      kind: 'fence',
+      height: 1.2,
+      points: [
+        [14.98, -3],
+        [14.98, 14.8],
+      ],
+    },
+    {
+      id: 'haie-sud',
+      kind: 'hedge',
+      height: 1.5,
+      thickness: 0.8,
+      points: [
+        [-9, -2.6],
+        [5, -2.6],
+        [5, -1],
+      ],
+    },
+  ];
+  return validateProject(p);
+}
+
+test('#259: terrace, gravel drive, boundary wall and fence render at their positions and heights', () => {
+  const project = gardenProject();
+  const { built, scene, engine } = exterior(project);
+  const box = (name: string) => {
+    const mesh = scene.getMeshByName(name)!;
+    assert.ok(mesh, `${name} is built`);
+    mesh.computeWorldMatrix(true);
+    mesh.refreshBoundingInfo({});
+    return mesh.getBoundingInfo().boundingBox;
+  };
+  const terrace = box('site-surface:terrasse');
+  near(terrace.maximumWorld.y, 0.15);
+  near(terrace.minimumWorld.x, 0.5);
+  near(terrace.maximumWorld.z, 14);
+  near(box('site-surface-edge:terrasse').minimumWorld.y, 0);
+  const drive = box('site-surface:allee-garage');
+  near(drive.minimumWorld.x, 7);
+  near(drive.maximumWorld.z, 11);
+  assert.ok(drive.maximumWorld.y < 0.01, 'the drive stays flush with the ground');
+  assert.ok(scene.getMeshByName('site-surface:pelouse'));
+
+  const wall = box('site-boundary:mur-fond');
+  near(wall.maximumWorld.y, 1.8);
+  near(wall.minimumWorld.y, 0);
+  near(wall.minimumWorld.z, 14.8);
+  near(wall.maximumWorld.z, 15);
+  near(wall.minimumWorld.x, -9.1);
+  const fence = box('site-boundary:cloture-est');
+  near(fence.maximumWorld.y, 1.2);
+  near(fence.minimumWorld.z, -3.04);
+  near(fence.maximumWorld.z, 14.84);
+  near((fence.minimumWorld.x + fence.maximumWorld.x) / 2, 14.98);
+  const hedge = box('site-boundary:haie-sud');
+  near(hedge.maximumWorld.y, 1.5);
+  near(hedge.minimumWorld.z, -3);
+  near(hedge.maximumWorld.x, 5.4);
+
+  assert.equal(built.boundaryMeshes.length, 3);
+  assert.ok(built.boundaryMeshes.every((mesh) => mesh.checkCollisions));
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
+});
+
+test('#259: the visit stands on a raised terrace, not under it', () => {
+  const project = gardenProject();
+  const level = project.levels[0];
+  near(groundElevationAt(level, project.site, [3, 13]), level.elevation + 0.15);
+  near(groundElevationAt(level, project.site, [9, 9]), level.elevation);
+  near(groundElevationAt(level, project.site, [-4, 0]), level.elevation);
+});
+
+test('#259: garden surfaces and boundaries reject what the engine cannot draw', () => {
+  const bad = (edit: (p: HouseProject) => void) => {
+    const p = structuredClone(gardenProject());
+    edit(p);
+    assert.throws(() => validateProject(p));
+  };
+  bad((p) => {
+    p.site!.surfaces![1].height = 0.2; // only a terrace has a slab
+  });
+  bad((p) => {
+    p.site!.surfaces![0].height = 2;
+  });
+  bad((p) => {
+    (p.site!.surfaces![0] as { kind: string }).kind = 'pool';
+  });
+  bad((p) => {
+    p.site!.boundaries![0].points = [[0, 14.9]];
+  });
+  bad((p) => {
+    p.site!.boundaries![0].points[1] = [30, 14.9];
+  });
+  bad((p) => {
+    p.site!.boundaries![1].points[1] = [...p.site!.boundaries![1].points[0]];
+  });
+  bad((p) => {
+    p.site!.boundaries![0].height = 5;
+  });
+  bad((p) => {
+    p.site!.boundaries![2].thickness = 0;
+  });
+  bad((p) => {
+    (p.site!.boundaries![2] as { kind: string }).kind = 'gate';
+  });
+});
+
+test('#259: a project without garden boundaries builds none', () => {
+  const { built, scene, engine } = exterior();
+  assert.equal(built.boundaryMeshes.length, 0);
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
 });

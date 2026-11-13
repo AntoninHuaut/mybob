@@ -133,6 +133,26 @@ export interface SiteRoof {
   /** Roof windows pierced in the faces of this roof. */
   windows?: RoofWindow[];
 }
+export type SiteSurfaceKind = 'gravel' | 'path' | 'terrace' | 'lawn';
+export interface SiteSurface {
+  id: string;
+  /** `gravel` also stands for a "tout-venant" drive; `lawn` is the default ground made explicit. */
+  kind: SiteSurfaceKind;
+  polygon: Point2[];
+  /** Terrace only: slab top above the terrain, in metres. Absent means flush with the ground. */
+  height?: number;
+}
+export type SiteBoundaryKind = 'wall' | 'fence' | 'hedge';
+export interface SiteBoundary {
+  id: string;
+  kind: SiteBoundaryKind;
+  /** Open polyline in plan (x, z), at least two points, inside or on the parcel. */
+  points: Point2[];
+  /** Height above the terrain, in metres. */
+  height: number;
+  /** Width across the line; defaults per kind (`BOUNDARY_THICKNESS`). */
+  thickness?: number;
+}
 export interface ProjectSite {
   /** Parcel in the same x/z coordinate system as the floor plan. */
   boundary: Point2[];
@@ -141,7 +161,9 @@ export interface ProjectSite {
   declaredArea?: number;
   facadeColor?: string;
   roofColor?: string;
-  surfaces?: { id: string; kind: 'gravel' | 'path'; polygon: Point2[] }[];
+  surfaces?: SiteSurface[];
+  /** Linear garden elements: boundary walls, fences, hedges. */
+  boundaries?: SiteBoundary[];
   roofs?: SiteRoof[];
   notes: string[];
 }

@@ -36,9 +36,11 @@ export interface UnpackedShare {
  * length of each shower panel. Revision 4: a CRC-32 closes the pack, so a link altered by
  * one character is refused instead of decoding into another valid project. Revision 5: the
  * sloping parts of each level's ceiling. Revision 6: kitchens. Revision 7: optional
- * microwave. Reading accepts revisions 1 to 6; writing always produces 7.
+ * microwave. Revision 8: terrace and lawn surfaces, a terrace's slab height, and garden
+ * boundaries (walls, fences, hedges). Reading accepts revisions 1 to 7; writing always
+ * produces 8.
  */
-export const LINK_PACK_VERSION = 7;
+export const LINK_PACK_VERSION = 8;
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -63,7 +65,9 @@ const ROOM_KINDS: RoomKind[] = [
   'garage',
   'storage',
 ];
-const SURFACE_KINDS = ['gravel', 'path'] as const;
+// Append only: a kind's index is its code in every link already shared.
+const SURFACE_KINDS = ['gravel', 'path', 'terrace', 'lawn'] as const;
+const BOUNDARY_KINDS = ['wall', 'fence', 'hedge'] as const;
 const FURNITURE_KIND_ORDER: FurnitureKind[] = [
   'sofa',
   'table',
@@ -464,6 +468,15 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
     for (const surface of surfaces) {
       packer.u(enumInt(SURFACE_KINDS, surface.kind));
       packer.polygon(surface.polygon);
+      packer.optMM(surface.height);
+    }
+    const boundaries = site.boundaries ?? [];
+    packer.u(boundaries.length);
+    for (const line of boundaries) {
+      packer.u(enumInt(BOUNDARY_KINDS, line.kind));
+      packer.polygon(line.points);
+      packer.mm(line.height);
+      packer.optMM(line.thickness);
     }
     const roofs = site.roofs ?? [];
     packer.u(roofs.length);
@@ -814,12 +827,35 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
     const surfaceCount = reader.count(100);
     if (surfaceCount) {
       site.surfaces = [];
-      for (let s = 0; s < surfaceCount; s++)
-        site.surfaces.push({
+      for (let s = 0; s < surfaceCount; s++) {
+        const surface: NonNullable<ProjectSite['surfaces']>[number] = {
           id: `surface-${s}`,
           kind: enumValue(SURFACE_KINDS, reader.u()),
           polygon: reader.polygon(),
-        });
+        };
+        if (version >= 8) {
+          const height = reader.optMM();
+          if (height !== undefined) surface.height = height;
+        }
+        site.surfaces.push(surface);
+      }
+    }
+    if (version >= 8) {
+      const boundaryCount = reader.count(100);
+      if (boundaryCount) {
+        site.boundaries = [];
+        for (let b = 0; b < boundaryCount; b++) {
+          const line: NonNullable<ProjectSite['boundaries']>[number] = {
+            id: `cloture-${b}`,
+            kind: enumValue(BOUNDARY_KINDS, reader.u()),
+            points: reader.polygon(),
+            height: reader.mm(),
+          };
+          const thickness = reader.optMM();
+          if (thickness !== undefined) line.thickness = thickness;
+          site.boundaries.push(line);
+        }
+      }
     }
     const roofCount = reader.count(30);
     if (roofCount) {

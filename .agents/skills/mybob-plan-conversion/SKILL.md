@@ -966,6 +966,16 @@ the garage access and the path to the entrance are drawn but not measured. Writi
 decision, not a reading. Declare them in `site.notes` — the « Terrain et extérieur » panel shows
 them — rather than letting them pass for dimensions.
 
+**Garden elements come from the site plan, the same way.** The plan de masse draws the terrace,
+the drive, the boundary walls, fences and hedges, and its legend usually gives their heights
+(`mur de clôture h=1.80`, `clôture grillagée h=1.20`). A script measures the polygons and
+polylines on the drawing; the AI decides the kind: a hatched slab against a French window is a
+`terrace`, a stippled access to the garage is `gravel` (tout-venant included), a thick line on
+the plot edge is a `wall`, a thin one a `fence`, a row of circles a `hedge`. Write them in
+`site.surfaces` and `site.boundaries` ([EXTERIOR](../../../docs/EXTERIOR.md)), the points half a
+thickness inside the plot edge. A height read in the legend is a reading; a height the plan
+does not give is a decision: say which in `site.notes`, as for the undimensioned surfaces.
+
 ### Rooms are computed from the walls
 
 A room polygon entered by hand is an opinion. `plan_faces.py` closes the level, cuts the plan

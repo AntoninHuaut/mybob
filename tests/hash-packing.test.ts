@@ -116,6 +116,9 @@ function renumberLikePack(doc: ShareDocument): ShareDocument {
   clone.site?.surfaces?.forEach((surface, s) => {
     surface.id = `surface-${s}`;
   });
+  clone.site?.boundaries?.forEach((line, b) => {
+    line.id = `cloture-${b}`;
+  });
   clone.site?.roofs?.forEach((roof, r) => {
     roof.id = `toit-${r}`;
   });
@@ -631,4 +634,71 @@ test('an already shared revision-6 kitchen has no microwave added implicitly', a
   );
   const slots = book.variants[0].levels[decoded.document.levels[0].id][0].kitchen!.slots;
   assert.deepEqual(slots, [{ kind: 'oven', run: 0, offset: 0, width: 0.6 }]);
+});
+
+test('#259: terraces, lawn, garden walls, fences and hedges survive a share link', async () => {
+  const project = readPlan(PLANS[0]);
+  project.site!.surfaces = [
+    ...project.site!.surfaces!,
+    {
+      id: 'terrasse',
+      kind: 'terrace',
+      height: 0.15,
+      polygon: [
+        [0.5, 12],
+        [5.5, 12],
+        [5.5, 14],
+        [0.5, 14],
+      ],
+    },
+    {
+      id: 'pelouse',
+      kind: 'lawn',
+      polygon: [
+        [-8, -2],
+        [-2, -2],
+        [-2, 3],
+        [-8, 3],
+      ],
+    },
+  ];
+  project.site!.boundaries = [
+    {
+      id: 'mur',
+      kind: 'wall',
+      height: 1.8,
+      points: [
+        [-9, 14.9],
+        [15, 14.9],
+      ],
+    },
+    {
+      id: 'cloture',
+      kind: 'fence',
+      height: 1.2,
+      points: [
+        [14.98, -3],
+        [14.98, 14.8],
+      ],
+    },
+    {
+      id: 'haie',
+      kind: 'hedge',
+      height: 1.5,
+      thickness: 0.8,
+      points: [
+        [-9, -2.6],
+        [5, -2.6],
+        [5, -1],
+      ],
+    },
+  ];
+  validateProject(project);
+  const doc = shareDocument(project, planFurnishing(project));
+  const decoded = await decodeShareLinkHash(await encodeShareLinkHash(doc));
+  validateProject(decoded.document);
+  expectDeepEqual(decoded.document, renumberLikePack(doc), 'garden');
+  assert.equal(decoded.document.site!.surfaces![2].height, 0.15);
+  assert.equal(decoded.document.site!.boundaries![2].thickness, 0.8);
+  assert.equal(decoded.document.site!.boundaries![1].thickness, undefined);
 });
