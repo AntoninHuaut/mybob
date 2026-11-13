@@ -1729,6 +1729,7 @@ export class HouseViewer {
     this.applyEffectTier();
     if (scale === this.renderScale) return;
     this.renderScale = scale;
+    this.onRenderScaleChange?.(this.currentViewKey(), scale);
     this.engine.setHardwareScalingLevel(this.baseScaling / scale);
     // The targets were resized: the image is drawn again and settled.
     this.renderScheduler.request();
@@ -1756,6 +1757,19 @@ export class HouseViewer {
     // `occlusionOn` is undefined on a viewer built from its prototype (scene tests).
     if (this.occlusionOn === false) return EFFECT_TIERS;
     return this.adaptiveResolution?.effectTier ?? 0;
+  }
+
+  /** An adapted view changed scale: the host remembers it for the next session. */
+  onRenderScaleChange?: (view: string, scale: number) => void;
+
+  /**
+   * Render resolution: a scale pinned for every view, or `undefined` to adapt, each view
+   * starting from `starts[view]`, the scale this machine reached last time.
+   */
+  setRenderScalePolicy(fixed: number | undefined, starts: Record<string, number>) {
+    this.resolutions.configure(fixed, starts);
+    this.renderScale = Number.NaN; // the next image applies the policy's scale
+    this.requestRender();
   }
 
   /** Render scale in use on this machine (1 = full resolution), for the diagnostic. */

@@ -29,8 +29,42 @@ export const VISIT_SCALE_FLOOR = 0.67;
  */
 export const EFFECT_TIERS = 1;
 
+/**
+ * Scales above full resolution, tried one at a time on a machine with headroom (owner,
+ * 2026-11-13): at 150 % a display scaled to 150 % gets one rendered pixel per screen pixel.
+ */
+export const UPSCALES = [1.1, 1.2, 1.3, 1.4, 1.5] as const;
+
+/** The whole ladder, sharpest first: up-scales, then full resolution and the steps down. */
+const LADDER: readonly number[] = [...[...UPSCALES].reverse(), ...RENDER_SCALES];
+const FULL = UPSCALES.length;
+
+/** Every scale a user may pin in the Navigation panel, lowest first. */
+export const PINNABLE_SCALES: readonly number[] = [...LADDER].reverse();
+
 /** Above this median frame time (under 40 fps), the next render scale is tried. */
 export const FRAME_BUDGET_MS = 25;
+
+/** Under this median frame time (over 100 fps), the next sharper scale is tried. */
+export const UPSCALE_FRAME_MS = 10;
+
+/** How a view's scale is chosen: measured and adapted, or pinned by the user. */
+export interface ScalePolicy {
+  /** A pinned scale: never adapted, in either direction. */
+  fixed?: number;
+  /** Where an adapted view starts: the scale this machine reached last time. */
+  start?: number;
+}
+
+/** The ladder step nearest to `scale`, full resolution when absent. */
+function stepOf(scale: number | undefined): number {
+  if (scale === undefined || !Number.isFinite(scale)) return FULL;
+  let best: number = FULL;
+  LADDER.forEach((value, index) => {
+    if (Math.abs(value - scale) < Math.abs(LADDER[best] - scale)) best = index;
+  });
+  return best;
+}
 
 /** Images measured before each decision: one slow image is not a slow machine. */
 export const FRAME_SAMPLES = 6;
@@ -51,12 +85,15 @@ export const STALL_MS = 5000;
 
 /**
  * Dynamic resolution of one view, the same at rest and in motion. A machine that cannot
- * hold 40 fps renders fewer pixels, one step at a time; a machine that can never leaves
- * full resolution. The scale only goes down, and is kept for the session: changing it
- * resizes every render target, which hitches, so it must not follow the camera.
+ * hold 40 fps renders fewer pixels, one step at a time. A machine over 100 fps renders
+ * more, 10 % at a time up to 150 %, until it falls under 100 fps. Once a view has stepped
+ * down it never climbs again in the session: changing scale resizes every render target,
+ * which hitches, so the scale must not swing with the camera. Between 40 and 100 fps it
+ * stays where it is.
  */
 export class AdaptiveResolution {
-  private level = 0;
+  private level: number;
+  private steppedDown = false;
   private effectLevel = 0;
   private forcedTier?: number;
   private samples: number[] = [];
@@ -71,7 +108,10 @@ export class AdaptiveResolution {
     private readonly pixelRatio: number,
     private readonly floor = 1,
     private readonly tiers = 0,
-  ) {}
+    private readonly policy: ScalePolicy = {},
+  ) {
+    this.level = stepOf(policy.fixed ?? policy.start);
+  }
 
   /**
    * `frameMs` is the time since the previous image, when both were drawn in a row;
@@ -79,31 +119,48 @@ export class AdaptiveResolution {
    */
   update(frameMs?: number): number {
     if (frameMs === undefined || !Number.isFinite(frameMs) || frameMs > STALL_MS)
-      return RENDER_SCALES[this.level];
+      return LADDER[this.level];
     if (this.warmup > 0) {
       this.warmup--;
-      return RENDER_SCALES[this.level];
+      return LADDER[this.level];
     }
     this.samples.push(frameMs);
     if (this.samples.length >= FRAME_SAMPLES) {
       const sorted = [...this.samples].sort((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)];
       this.samples = [];
+      const pinned = this.policy.fixed !== undefined;
       if (median > FRAME_BUDGET_MS) {
-        const next = RENDER_SCALES[this.level + 1];
-        if (this.effectLevel < this.tiers) {
+        const next = LADDER[this.level + 1];
+        // Sharpness above 100 % is a bonus: it goes before the occlusion does.
+        if (!pinned && LADDER[this.level] > 1) {
+          this.level++;
+          this.steppedDown = true;
+          this.warmup = WARMUP_FRAMES;
+        } else if (this.effectLevel < this.tiers) {
           this.effectLevel++;
           this.warmup = WARMUP_FRAMES;
         } else if (
+          !pinned &&
           next !== undefined &&
-          (this.floor < 1 ? next >= this.floor : next * this.pixelRatio >= 1)
+          (next >= 1 || (this.floor < 1 ? next >= this.floor : next * this.pixelRatio >= 1))
         ) {
           this.level++;
+          this.steppedDown = true;
           this.warmup = WARMUP_FRAMES;
         }
+      } else if (
+        median < UPSCALE_FRAME_MS &&
+        !pinned &&
+        !this.steppedDown &&
+        this.effectLevel === 0 &&
+        this.level > 0
+      ) {
+        this.level--;
+        this.warmup = WARMUP_FRAMES;
       }
     }
-    return RENDER_SCALES[this.level];
+    return LADDER[this.level];
   }
 
   /**
@@ -129,7 +186,7 @@ export class AdaptiveResolution {
 
   /** The scale in use on this machine, for the diagnostic. */
   get scale(): number {
-    return RENDER_SCALES[this.level];
+    return LADDER[this.level];
   }
 }
 
@@ -144,8 +201,21 @@ export class ViewResolutions {
   private readonly views = new Map<string, AdaptiveResolution>();
   private current?: string;
   private forcedTier?: number;
+  private fixed?: number;
+  private starts: Record<string, number> = {};
 
   constructor(private readonly pixelRatio: number) {}
+
+  /**
+   * A pinned scale for every view, or adapted views starting where this machine left them.
+   * Views already measured are dropped and start over under the new policy.
+   */
+  configure(fixed: number | undefined, starts: Record<string, number>): void {
+    this.fixed = fixed;
+    this.starts = { ...starts };
+    this.views.clear();
+    this.current = undefined;
+  }
 
   /** The resolution of `view`, created on first use; entering it restarts its warm-up. */
   for(view: string): AdaptiveResolution {
@@ -156,6 +226,7 @@ export class ViewResolutions {
         view === 'walk' ? VISIT_SCALE_FLOOR : 1,
         // Only the visit and Vue 3D carry an occlusion to drop.
         view === 'walk' || view === 'overview' ? EFFECT_TIERS : 0,
+        { fixed: this.fixed, start: this.starts[view] },
       );
       resolution.force(this.forcedTier);
       this.views.set(view, resolution);

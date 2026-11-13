@@ -47,6 +47,12 @@ import { FurnitureClipboard } from './furniture/clipboard';
 import { chairsAroundTable } from './furniture/tableChairs';
 import { snapDraggedFurniture, defaultSnapSettings } from './furniture/arrangement';
 import { MeasureBar } from './ui/measureBar';
+import {
+  parseRenderScale,
+  RENDER_SCALE_STORAGE,
+  renderScaleNote,
+  type RenderScaleSettings,
+} from './ui/renderScale';
 import { desktopHint, modeTitle, touchHint as touchHintText } from './ui/modeChrome';
 import {
   roomDetailHtml,
@@ -897,6 +903,7 @@ function loadProject(
   el('#demo-notice').hidden = p.id !== 'studio-demo';
   el('#received-banner').hidden = !received;
   applyNavigationPreferences();
+  applyRenderScale();
   el<HTMLSelectElement>('#level-select').innerHTML = p.levels
     .map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`)
     .join('');
@@ -1562,6 +1569,32 @@ async function adoptReceived(source: ShareDocument) {
 }
 
 const NAVIGATION_STORAGE = 'maison-atelier:navigation:v1';
+let renderScaleSettings: RenderScaleSettings = { detected: {} };
+function saveRenderScale() {
+  try {
+    localStorage.setItem(RENDER_SCALE_STORAGE, JSON.stringify(renderScaleSettings));
+  } catch {
+    /* optional persistence */
+  }
+  el('#render-scale-note').textContent = renderScaleNote(renderScaleSettings);
+}
+/** « Résolution du rendu »: automatic from what this machine reached, or pinned. */
+function applyRenderScale() {
+  try {
+    renderScaleSettings = parseRenderScale(localStorage.getItem(RENDER_SCALE_STORAGE));
+  } catch {
+    renderScaleSettings = { detected: {} };
+  }
+  el<HTMLSelectElement>('#render-scale').value =
+    renderScaleSettings.fixed === undefined ? 'auto' : String(renderScaleSettings.fixed);
+  el('#render-scale-note').textContent = renderScaleNote(renderScaleSettings);
+  viewer.setRenderScalePolicy(renderScaleSettings.fixed, renderScaleSettings.detected);
+  viewer.onRenderScaleChange = (view, scale) => {
+    if (renderScaleSettings.fixed !== undefined) return;
+    renderScaleSettings.detected[view] = scale;
+    saveRenderScale();
+  };
+}
 function applyNavigationPreferences() {
   try {
     const saved = JSON.parse(localStorage.getItem(NAVIGATION_STORAGE) ?? '{}');
@@ -1706,6 +1739,12 @@ function wireNavigationControls() {
   el('#walk-speed').addEventListener('input', () => updateNavigationPreferences());
   el('#look-sensitivity').addEventListener('input', () => updateNavigationPreferences());
   el('#occlusion-enable').addEventListener('change', () => updateNavigationPreferences());
+  el('#render-scale').addEventListener('change', () => {
+    const value = el<HTMLSelectElement>('#render-scale').value;
+    renderScaleSettings.fixed = value === 'auto' ? undefined : Number(value);
+    saveRenderScale();
+    viewer.setRenderScalePolicy(renderScaleSettings.fixed, renderScaleSettings.detected);
+  });
   el('#go-to').addEventListener('click', () => {
     if (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) {
       setMode('walk');

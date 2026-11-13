@@ -46,7 +46,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Shadow map              | `src/scene/shadowRefresh.ts`, `sunShadowSkip.ts`                             | Sun map redrawn only when a shadow changes; lookup skipped where a PBR surface faces away from the sun              |
 | Idle rendering          | `src/scene/renderScheduler.ts`                                               | Frame drawn only when the scene changes; mouse moves wake it only over the canvas (`wakesScene`)                    |
 | Shader warm-up          | `src/scene/shaderWarmup.ts`, `shaderLog.ts`                                  | Links a view's shaders behind an overlay on first use; `mybob.shaders()` log of every link                          |
-| Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | Per view, driven by frame time: occlusion first, then resolution steps; visit to 67 %                               |
+| Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | Per view, driven by frame time: occlusion first, then resolution steps; visit to 67 %; up to 150 % over 100 fps     |
 | Openings in plan        | `src/scene/planOpenings.ts`                                                  | Windows and doors drawn in Plan view, cut faces                                                                     |
 | Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion; bloom in the walk only                                                                   |
 | View effect lifecycle   | `src/scene/viewEffects.ts`                                                   | Scene-owned environment and pipelines, camera replacement, effect tiers and disposal                                |
@@ -510,9 +510,16 @@ last call, and read back at start-up.
   rejected a 150 % render dropping straight to 67 %, not the progressive steps). The owner chose that order (2026-11-13): at a low frame rate, rather
   lose the occlusion than sharpness. Plan and Extérieur have no tier and go straight to the
   resolution. A scale or tier the visit took leaves Plan sharp and Vue 3D's occlusion in
-  place. Each view's scale only goes down and is kept for the session, because changing it
-  resizes every render target, which hitches; switching view may resize once, next to the
-  rebuild a switch already does. The first 30 images, the 30 after each change and the 30
+  place. A view over 100 fps (median under 10 ms) sharpens instead, 10 % per series up to
+  150 % (`UPSCALES`, owner 2026-11-13: one rendered pixel per screen pixel on a 150 % display);
+  a slow series at an up-scale gives that bonus back before touching the occlusion. Once a view
+  has stepped down it never climbs again in the session, because changing scale resizes
+  every render target, which hitches; between 40 and 100 fps it stays put. Up-scaling needs
+  a display faster than 100 Hz: on 60 Hz the browser never draws more than 60 images per
+  second. The scale each view reached is saved per browser (`maison-atelier:render-scale:v1`,
+  `src/ui/renderScale.ts`) and is where that view starts next session; « Résolution du rendu »
+  in the Navigation panel pins one scale for every view instead (67 to 150 %), which then
+  never adapts. Switching view may resize once, next to the rebuild a switch already does. The first 30 images, the 30 after each change and the 30
   after entering a view are not measured. Pending shader compilation or asset loading
   discards the partial series and restarts that warm-up, including when new programs appear
   after the initial preparation. A gap over 5 s between two images is a stall,

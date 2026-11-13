@@ -5,6 +5,8 @@ import {
   EFFECT_TIERS,
   FRAME_SAMPLES,
   RENDER_SCALES,
+  PINNABLE_SCALES,
+  UPSCALES,
   ViewResolutions,
   VISIT_SCALE_FLOOR,
   WARMUP_FRAMES,
@@ -217,4 +219,52 @@ test('leaving the page restarts the warm-up of every view', () => {
   assert.equal(walk.effectTier, 0, 'the half-measured series was dropped');
   feed(walk, 1, 60);
   assert.equal(walk.effectTier, EFFECT_TIERS);
+});
+
+test('a machine over 100 fps sharpens 10 % per series, up to 150 %', () => {
+  const resolution = new AdaptiveResolution(1);
+  assert.equal(feed(resolution, SERIES, 8), 1.1);
+  feed(resolution, SERIES * 20, 8);
+  assert.equal(resolution.scale, UPSCALES.at(-1));
+  assert.equal(resolution.scale, 1.5);
+});
+
+test('it stops sharpening where the frame rate falls under 100 fps, and stays', () => {
+  const resolution = new AdaptiveResolution(1);
+  feed(resolution, SERIES * 2, 8);
+  assert.equal(resolution.scale, 1.2);
+  feed(resolution, SERIES * 10, 14); // 70 fps: neither up nor down
+  assert.equal(resolution.scale, 1.2);
+});
+
+test('too sharp for 40 fps: it steps back down, and never climbs again in the session', () => {
+  const resolution = new AdaptiveResolution(1, 1, EFFECT_TIERS);
+  feed(resolution, SERIES * 3, 8);
+  assert.equal(resolution.scale, 1.3);
+  feed(resolution, SERIES, 30);
+  assert.equal(resolution.scale, 1.2, 'the bonus sharpness goes first');
+  assert.equal(resolution.effectTier, 0, 'the occlusion stays');
+  feed(resolution, SERIES * 10, 8);
+  assert.equal(resolution.scale, 1.2);
+});
+
+test('an adapted view starts where this machine left it; a pinned one never moves', () => {
+  assert.equal(new AdaptiveResolution(1, 1, 0, { start: 1.3 }).scale, 1.3);
+  const pinned = new AdaptiveResolution(1, 1, 0, { fixed: 1.2 });
+  feed(pinned, SERIES * 10, 8);
+  assert.equal(pinned.scale, 1.2);
+  feed(pinned, SERIES * 10, 60);
+  assert.equal(pinned.scale, 1.2);
+  assert.deepEqual(PINNABLE_SCALES, [0.67, 0.8, 0.9, 1, 1.1, 1.2, 1.3, 1.4, 1.5]);
+});
+
+test('a new policy starts every view over', () => {
+  const views = new ViewResolutions(1);
+  feed(views.for('walk'), SERIES * 2, 8);
+  assert.equal(views.for('walk').scale, 1.2);
+  views.configure(0.8, {});
+  assert.equal(views.for('walk').scale, 0.8);
+  views.configure(undefined, { walk: 1.4 });
+  assert.equal(views.for('walk').scale, 1.4);
+  assert.equal(views.for('plan').scale, 1);
 });
