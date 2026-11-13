@@ -229,9 +229,14 @@ export class XrVeil {
     const context = this.texture.getContext();
     context.clearRect(0, 0, VEIL_TEXTURE_WIDTH, VEIL_TEXTURE_HEIGHT);
     context.fillStyle = '#ffffff';
-    context.font = 'bold 48px sans-serif';
     const text = 'Préparation de la visite…';
-    const width = context.measureText(text).width;
+    // The headset's font may be wider than expected: the size shrinks until the message fits.
+    let size = 48;
+    let width: number;
+    do {
+      context.font = `bold ${size}px sans-serif`;
+      width = context.measureText(text).width;
+    } while (width > VEIL_TEXTURE_WIDTH - 32 && --size > 20);
     context.fillText(text, (VEIL_TEXTURE_WIDTH - width) / 2, 70);
     const barWidth = 360;
     const left = (VEIL_TEXTURE_WIDTH - barWidth) / 2;
