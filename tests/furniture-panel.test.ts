@@ -1162,3 +1162,43 @@ test('adding a kitchen run preserves the exact unedited first run', () => {
     cleanup();
   }
 });
+
+test('the oven column microwave is an optional popup draft', () => {
+  const { window, editor, panel, setItems, getItems, cleanup } = setup(false, 'kitchen');
+  try {
+    const kitchen = createFurniture({
+      kind: 'kitchen',
+      id: 'sofa',
+      position: [3, 3],
+      kitchen: {
+        slots: [{ kind: 'oven', run: 0, offset: 0, width: 0.6 }],
+      },
+    });
+    setItems([kitchen]);
+    panel.openEdit(kitchen.id);
+    const checkbox = editor.querySelector<DOMInput>('[name=kitchenMicrowave0]')!;
+    checkbox.checked = true;
+    editor
+      .querySelector('[data-edit-close]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.deepEqual(getItems()[0], kitchen);
+    panel.openEdit(kitchen.id);
+    const form = editor.querySelector<DOMForm>('form')!;
+    const field = (name: string) => form.elements.namedItem(name) as unknown as DOMInput;
+    assert.equal(field('kitchenKind0').value, 'oven');
+    field('kitchenMicrowave0').checked = true;
+    assert.equal(new window.FormData(form).has('kitchenMicrowave0'), true);
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(getItems()[0].kitchen?.slots[0].microwave, true);
+    panel.openEdit(kitchen.id);
+    const kind = editor.querySelector<DOMSelect>('[name=kitchenKind0]')!;
+    kind.value = 'fridge';
+    kind.dispatchEvent(new window.Event('change', { bubbles: true }));
+    const microwave = editor.querySelector<DOMInput>('[name=kitchenMicrowave0]')!;
+    assert.equal(microwave.disabled, true);
+    assert.equal(microwave.checked, false);
+  } finally {
+    cleanup();
+  }
+});

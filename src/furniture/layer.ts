@@ -771,18 +771,45 @@ export class FurnitureLayer {
               part(start, length, k.wallUnits.bottom, k.wallUnits.height, k.wallUnits.depth);
           }
           if (column.width > 0) {
-            part(column.offset, column.width, 0, h, k.runDepth);
-            if ('kind' in column && column.kind === 'oven')
-              box(
-                column.width * 0.85,
-                0.55,
-                0.012,
-                column.offset + column.width / 2,
-                1.05,
-                k.runDepth - 0.006,
-                roles.metal,
-                run,
-              );
+            if ('kind' in column && column.kind === 'oven') {
+              const scale = Math.min(1, h / 1.8);
+              // The cabinet ends behind the appliance fronts, never in their visible plane.
+              part(column.offset, column.width, 0, h, k.runDepth - 0.012);
+              const front = (
+                left: number,
+                width: number,
+                base: number,
+                height: number,
+                mat = roles.main,
+              ) =>
+                box(
+                  width,
+                  height,
+                  0.012,
+                  left + width / 2,
+                  base + height / 2,
+                  k.runDepth - 0.006,
+                  mat,
+                  run,
+                );
+              const openings = [{ bottom: 0.775 * scale, height: 0.55 * scale }];
+              if (column.microwave) openings.push({ bottom: 1.35 * scale, height: 0.4 * scale });
+              let bottom = 0;
+              for (const opening of openings) {
+                front(column.offset, column.width, bottom, opening.bottom - bottom);
+                for (const left of [column.offset, column.offset + column.width * 0.925])
+                  front(left, column.width * 0.075, opening.bottom, opening.height);
+                front(
+                  column.offset + column.width * 0.075,
+                  column.width * 0.85,
+                  opening.bottom,
+                  opening.height,
+                  roles.metal,
+                );
+                bottom = opening.bottom + opening.height;
+              }
+              front(column.offset, column.width, bottom, h - bottom);
+            } else part(column.offset, column.width, 0, h, k.runDepth);
           }
           start = column.offset + column.width;
         }

@@ -48,6 +48,8 @@ export interface KitchenSlot {
   offset: number;
   width: number;
   kind: 'sink' | 'hob' | 'oven' | 'fridge';
+  /** Oven column only: a microwave above the oven. */
+  microwave?: boolean;
 }
 export interface KitchenConfiguration extends DressingConfiguration {
   worktopHeight: number;
@@ -333,7 +335,9 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
           !finite(slot.width) ||
           slot.width < 0.2 ||
           slot.offset + slot.width > k.runs[slot.run].length + 0.000001 ||
-          !['sink', 'hob', 'oven', 'fridge'].includes(slot.kind)
+          !['sink', 'hob', 'oven', 'fridge'].includes(slot.kind) ||
+          (slot.microwave !== undefined &&
+            (slot.kind !== 'oven' || typeof slot.microwave !== 'boolean'))
         )
           fail('Un équipement doit rester dans son tronçon de cuisine.');
       }

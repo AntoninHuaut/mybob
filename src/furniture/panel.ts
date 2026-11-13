@@ -1,4 +1,9 @@
-import { kitchenFields, kitchenSlotClick } from './kitchenForm';
+import {
+  kitchenFields,
+  kitchenSlotClick,
+  kitchenSlotChange,
+  initializeKitchenSlots,
+} from './kitchenForm';
 import './panel.css';
 import type { Level, Point2 } from '../model/types';
 import { escapeHtml as esc } from '../ui/format';
@@ -386,6 +391,7 @@ export class FurniturePanel {
     this.editDialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-edit-title">${item ? `Modifier ${esc(item.name)}` : 'Retirer le meuble'}</h2><button type="button" class="icon-button" data-edit-close aria-label="Fermer">${icon('close', 20)}</button></div>${item ? this.details(item) : '<p>Le meuble sera retiré lorsque vous enregistrerez.</p><div class="furniture-edit-status" role="status"></div><div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button type="button" class="primary-button" data-save-draft>Enregistrer</button></div>'}`;
     if (item) {
       const form = this.editDialog.querySelector<HTMLFormElement>('form')!;
+      initializeKitchenSlots(form, item.kitchen?.slots ?? []);
       if (item.kind === 'dressing' || item.kind === 'kitchen')
         applyDressingRuns(form, (item.dressing ?? item.kitchen)?.runs ?? [{ length: item.width }]);
       updateSofaFields(form, item.kind);
@@ -532,6 +538,7 @@ export class FurniturePanel {
   };
 
   private change = (event: Event) => {
+    kitchenSlotChange(event.target as HTMLElement);
     const input = event.target as HTMLInputElement;
     if (input.name === 'locked' && !input.checked && this.editDialog.contains(input)) {
       const item = this.draft?.selected;
@@ -744,6 +751,7 @@ export class FurniturePanel {
   };
 
   private dialogChange = (event: Event) => {
+    kitchenSlotChange(event.target as HTMLElement);
     const input = event.target as HTMLInputElement;
     const form = this.dialog.querySelector<HTMLFormElement>('form')!;
     if (input.name === 'kind') {
