@@ -12,6 +12,27 @@
   color: #5b754c;
   font-size: 14px;
 }
+/* Start-up: the whole page, header and sidebar included, until the first view is ready. */
+.loading.loading-startup {
+  position: fixed;
+  z-index: 100;
+}
+.loading-progress {
+  width: min(240px, 60%);
+  height: 4px;
+  border-radius: 2px;
+  background: #d8e3cf;
+  overflow: hidden;
+}
+.loading-progress i {
+  display: block;
+  height: 100%;
+  background: #4b743c;
+  transform-origin: left;
+  transform: scaleX(var(--progress, 0));
+  /* Composited: it keeps gliding while a shader link stalls the page. */
+  transition: transform 0.3s ease-out;
+}
 .loading-mark {
   color: #4b743c;
   animation: breathe 1.8s ease-in-out infinite;

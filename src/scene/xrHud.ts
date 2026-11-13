@@ -171,6 +171,7 @@ export class XrVeil {
   private readonly sphereMaterial: StandardMaterial;
   private readonly labelMaterial: StandardMaterial;
   private readonly texture?: DynamicTexture;
+  private percent = -1;
 
   constructor(scene: Scene, camera: Camera) {
     this.sphereMaterial = new StandardMaterial('xr-veil', scene);
@@ -196,14 +197,7 @@ export class XrVeil {
         false,
       );
       this.texture.hasAlpha = true;
-      const context = this.texture.getContext();
-      context.clearRect(0, 0, VEIL_TEXTURE_WIDTH, VEIL_TEXTURE_HEIGHT);
-      context.fillStyle = '#ffffff';
-      context.font = 'bold 48px sans-serif';
-      const text = 'Préparation de la visite…';
-      const width = context.measureText(text).width;
-      context.fillText(text, (VEIL_TEXTURE_WIDTH - width) / 2, 78);
-      this.texture.update();
+      this.draw(0);
       this.labelMaterial.diffuseTexture = this.texture;
       this.labelMaterial.useAlphaFromDiffuseTexture = true;
     }
@@ -220,6 +214,32 @@ export class XrVeil {
       mesh.isPickable = false;
       mesh.alwaysSelectAsActiveMesh = true;
     }
+  }
+
+  /** Share of the house ready to draw, 0 to 1: the bar under the message. */
+  progress(fraction: number) {
+    const percent = Math.round(Math.min(1, Math.max(0, fraction)) * 100);
+    if (percent === this.percent) return;
+    this.draw(percent / 100);
+  }
+
+  private draw(fraction: number) {
+    this.percent = Math.round(fraction * 100);
+    if (!this.texture) return;
+    const context = this.texture.getContext();
+    context.clearRect(0, 0, VEIL_TEXTURE_WIDTH, VEIL_TEXTURE_HEIGHT);
+    context.fillStyle = '#ffffff';
+    context.font = 'bold 48px sans-serif';
+    const text = 'Préparation de la visite…';
+    const width = context.measureText(text).width;
+    context.fillText(text, (VEIL_TEXTURE_WIDTH - width) / 2, 70);
+    const barWidth = 360;
+    const left = (VEIL_TEXTURE_WIDTH - barWidth) / 2;
+    context.fillStyle = 'rgba(255, 255, 255, 0.25)';
+    context.fillRect(left, 98, barWidth, 10);
+    context.fillStyle = '#ffffff';
+    context.fillRect(left, 98, barWidth * fraction, 10);
+    this.texture.update();
   }
 
   dispose() {

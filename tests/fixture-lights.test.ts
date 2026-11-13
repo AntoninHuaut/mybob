@@ -10,7 +10,12 @@ import { Scene } from '@babylonjs/core/scene';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { FixtureLights } from '../src/scene/fixtureLights';
+import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
+import { FIXTURE_PAD_PREFIX, FixtureLights, padCounts } from '../src/scene/fixtureLights';
+
+/** The fixtures that reach a mesh, without the zero-intensity padding lights. */
+const fixtureSources = (mesh: AbstractMesh) =>
+  mesh.lightSources.filter((light) => !light.name.startsWith(FIXTURE_PAD_PREFIX));
 
 test('range assignments exclude distant fittings and refresh after range and mesh changes', () => {
   const engine = new NullEngine();
@@ -49,6 +54,54 @@ test('range assignments exclude distant fittings and refresh after range and mes
     edge.position.x = 1000;
     assignments.refresh();
     assert.equal(edge.lightSources.length, 0);
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+test('padding tops every mesh up to the same point light count, within its material', () => {
+  assert.deepEqual(padCounts([0, 1, 2, 2], [6, 6, 6, 6]), [2, 1, 0, 0]);
+  // A four-light material keeps two slots for the sky and the sun.
+  assert.deepEqual(padCounts([0, 1, 3], [4, 4, 6]), [2, 1, 0]);
+  assert.deepEqual(padCounts([0, 0], [4, 4]), [0, 0]);
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  try {
+    const lights = [0, 1].map((i) => new PointLight(`lamp-${i}`, new Vector3(i * 3, 2, 0), scene));
+    lights.forEach((l) => (l.range = 2));
+    const material = new PBRMaterial('wall', scene);
+    material.maxSimultaneousLights = 6;
+    const meshes = [-10, 0, 1.5, 3].map((x, i) => {
+      const mesh = MeshBuilder.CreateBox(`wall-${i}`, { size: 1 }, scene);
+      mesh.position.x = x;
+      mesh.material = material;
+      return mesh;
+    });
+    const assignments = new FixtureLights(scene, lights, []);
+    assignments.refresh();
+    assert.deepEqual(
+      meshes.map((mesh) => fixtureSources(mesh).length),
+      [0, 1, 2, 1],
+    );
+    assert.deepEqual(
+      meshes.map((mesh) => mesh.lightSources.length),
+      [2, 2, 2, 2],
+      'one program for every mesh',
+    );
+    const pads = scene.lights.filter((light) => light.name.startsWith(FIXTURE_PAD_PREFIX));
+    assert.ok(
+      pads.every((pad) => pad.intensity === 0),
+      'padding adds no light',
+    );
+    lights.forEach((light) => light.setEnabled(false));
+    assignments.syncPads();
+    assert.ok(
+      pads.every((pad) => !pad.isEnabled(false)),
+      'padding follows the fixtures',
+    );
+    // A rebuilt level replaces the assignment and its padding.
+    new FixtureLights(scene, [], []).refresh();
+    assert.ok(pads.every((pad) => pad.isDisposed()));
   } finally {
     scene.dispose();
     engine.dispose();
@@ -96,25 +149,25 @@ test('audited eight-room house assigns every static receiver and rebuilt furnitu
         }
         return distance <= l.range * l.range;
       });
-      assert.deepEqual(mesh.lightSources, expected, mesh.name);
+      assert.deepEqual(fixtureSources(mesh), expected, mesh.name);
     }
     const layer = new FurnitureLayer(scene, project.levels[0]);
     const item = createFurniture({ kind: 'table' });
     item.position = [4, 3];
     layer.setItems([item]);
     let mesh = scene.meshes.find((m) => m.metadata?.kind === 'furniture')!;
-    assert.deepEqual(mesh.lightSources, [house.pointLights[0]]);
+    assert.deepEqual(fixtureSources(mesh), [house.pointLights[0]]);
     item.position = [60, 3];
     item.width += 0.1;
     layer.setItems([item]);
     mesh = scene.meshes.find((m) => m.metadata?.kind === 'furniture')!;
-    assert.deepEqual(mesh.lightSources, [house.pointLights[7]]);
+    assert.deepEqual(fixtureSources(mesh), [house.pointLights[7]]);
     const door = house.doors[0];
-    const before = door.leaves.map((m) => [...m.lightSources]);
+    const before = door.leaves.map((m) => fixtureSources(m));
     for (const progress of [0, 0.25, 0.5, 0.75, 1]) {
       door.progress = progress;
       poseDoor(door);
-      door.leaves.forEach((m, i) => assert.deepEqual(m.lightSources, before[i]));
+      door.leaves.forEach((m, i) => assert.deepEqual(fixtureSources(m), before[i]));
     }
     layer.dispose();
   } finally {
@@ -188,10 +241,10 @@ test('swept assignment includes a mid-swing-only lamp for leaf and handle under 
     new FixtureLights(scene, [lamp, outside], [door]).refresh();
     for (const mesh of [leaf, handle]) {
       assert.ok(
-        mesh.lightSources.includes(lamp),
+        fixtureSources(mesh).includes(lamp),
         'closed-pose assignment covers intermediate swing',
       );
-      assert.ok(!mesh.lightSources.includes(outside), 'out-of-sweep lamp is excluded');
+      assert.ok(!fixtureSources(mesh).includes(outside), 'out-of-sweep lamp is excluded');
     }
   } finally {
     scene.dispose();
@@ -229,7 +282,7 @@ test('merged PBR furniture refreshes exact fitting intersections on rebuild, liv
           return Vector3.DistanceSquared(point, closest) <= light.range ** 2;
         });
         assert.deepEqual(
-          mesh.lightSources.map((light) => light.id),
+          fixtureSources(mesh).map((light) => light.id),
           expected.map((light) => light.id),
           mesh.name,
         );
@@ -267,11 +320,11 @@ test('merged PBR furniture refreshes exact fitting intersections on rebuild, liv
     x = 6.3;
     emit(PointerEventTypes.POINTERMOVE);
     assertIntersections();
-    assert.ok(bodies().some((mesh) => mesh.lightSources.includes(house.pointLights[1])));
+    assert.ok(bodies().some((mesh) => fixtureSources(mesh).includes(house.pointLights[1])));
     house.pointLights[1].range = 0.25;
     refreshFixtureLights(scene);
     assertIntersections();
-    assert.ok(bodies().every((mesh) => !mesh.lightSources.includes(house.pointLights[1])));
+    assert.ok(bodies().every((mesh) => !fixtureSources(mesh).includes(house.pointLights[1])));
     // The room-move tests cover finding this valid landing. Exercise release
     // independently, without an onChange handler rebuilding the layer afterwards.
     Object.assign(layer, {
@@ -291,8 +344,8 @@ test('merged PBR furniture refreshes exact fitting intersections on rebuild, liv
     emit(PointerEventTypes.POINTERUP);
     assert.equal(dropped, true);
     assertIntersections();
-    assert.ok(bodies().every((mesh) => mesh.lightSources.includes(house.pointLights[7])));
-    assert.ok(bodies().every((mesh) => !mesh.lightSources.includes(house.pointLights[0])));
+    assert.ok(bodies().every((mesh) => fixtureSources(mesh).includes(house.pointLights[7])));
+    assert.ok(bodies().every((mesh) => !fixtureSources(mesh).includes(house.pointLights[0])));
   } finally {
     layer.dispose();
     scene.dispose();

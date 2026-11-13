@@ -15,6 +15,7 @@ import type { StairDirection } from '../model/stairs';
 import { groundElevationAt } from '../model/geometry';
 import { isVisitArea } from './navigation';
 import { VISITOR_RADIUS } from './walkCamera';
+import { PreparationProgress } from './shaderWarmup';
 import {
   FrameCounter,
   LoadingGate,
@@ -166,6 +167,8 @@ export interface ImmersiveHost {
   takeStair(id: string, direction: StairDirection): boolean;
   /** Every visible mesh can be drawn; asking starts the links of those that cannot yet. */
   isReady(): boolean;
+  /** Share of the visible meshes ready to draw at the last `isReady`, 0 to 1. */
+  readiness?(): number;
   /** The session ended, whoever ended it: the headset menu, the page or an error. */
   onEnd(walk: ImmersiveWalk): void;
 }
@@ -207,6 +210,7 @@ export class ImmersiveWalk {
   private readonly vignette: XrVignette;
   private veil?: XrVeil;
   private loading = new LoadingGate();
+  private readiness = new PreparationProgress();
   private readonly counter = new FrameCounter();
   private limitHits = 0;
   private collider?: Collider;
@@ -350,6 +354,7 @@ export class ImmersiveWalk {
     if (phase === 'veil') return false;
     if (phase === 'compiling') {
       this.camera.layerMask = XR_DEFAULT_LAYERS | XR_VEIL_LAYER;
+      this.veil?.progress(this.readiness.update(0, 1, this.host.readiness?.() ?? 0, 1));
       return false;
     }
     this.camera.layerMask = XR_DEFAULT_LAYERS;
@@ -379,6 +384,8 @@ export class ImmersiveWalk {
     this.veil ??= new XrVeil(this.host.scene, this.camera);
     this.vignette.hide();
     this.loading = new LoadingGate();
+    this.readiness = new PreparationProgress();
+    this.veil.progress(0);
     this.camera.layerMask = XR_VEIL_LAYER;
   }
 

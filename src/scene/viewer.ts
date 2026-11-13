@@ -1,5 +1,5 @@
 import { createScreenLines } from './screenLines';
-import { refreshFixtureLights } from './fixtureLights';
+import { refreshFixtureLights, syncFixturePads } from './fixtureLights';
 import { createSkyLayer, WALK_SKY_GAIN } from './sky';
 import type { Layer } from '@babylonjs/core/Layers/layer';
 import { installCanonicalDefineOrder } from './canonicalDefines';
@@ -52,7 +52,14 @@ import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
 import { ShadowRefresh } from './shadowRefresh';
 import { furnitureRevision, furnitureObstaclesRevision } from '../furniture/layer';
 import { RenderScheduler, WAKE_EVENTS, wakesScene } from './renderScheduler';
-import { isSoftwareRenderer, nextPaint, viewKey, ViewWarmth, warmFrames } from './shaderWarmup';
+import {
+  isSoftwareRenderer,
+  nextPaint,
+  PreparationProgress,
+  viewKey,
+  ViewWarmth,
+  warmFrames,
+} from './shaderWarmup';
 import { pluginSummary, shaderLog } from './shaderLog';
 import { EFFECT_TIERS, MAX_PIXEL_RATIO, ViewResolutions } from './adaptiveResolution';
 import {
@@ -220,6 +227,8 @@ export class HouseViewer {
   /** The visit in a headset, a state of the walk: `mode` stays `walk` meanwhile. */
   private immersive?: ImmersiveWalk;
   private immersiveStarting = false;
+  /** Share of the visible meshes ready at the last headset readiness check. */
+  private immersiveReadiness = 0;
   private eyeHeight = EYE_HEIGHT;
   private walkSpeed = DEFAULT_WALK_SPEED;
   private lookSensitivity = 1;
@@ -245,6 +254,8 @@ export class HouseViewer {
   }
   /** The host shows its overlay while shaders are linked; `first` is the start-up, not a switch. */
   onPreparing?: (active: boolean, first: boolean) => void;
+  /** Share of the current preparation done, 0 to 1, for the overlay's bar. */
+  onPreparingProgress?: (fraction: number) => void;
   private readonly resolutions = new ViewResolutions(
     Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO),
   );
@@ -779,7 +790,14 @@ export class HouseViewer {
     const first = this.warmth.untouched;
     this.preparing = true;
     shaderLog.markView(key, 'start', pluginSummary(scene.materials));
+    const progress = new PreparationProgress();
+    this.onPreparingProgress?.(0);
     this.onPreparing?.(true, first);
+    // Programs that existed before this preparation are not its work.
+    const effects = () =>
+      (this.engine as unknown as { _compiledEffects?: Record<string, { isReady(): boolean }> })
+        ._compiledEffects ?? {};
+    const before = new Set(Object.keys(effects()));
     try {
       await nextPaint();
       if (scene !== this.scene || scene.isDisposed || key !== this.currentViewKey()) return;
@@ -804,6 +822,15 @@ export class HouseViewer {
           if (scene !== this.scene || scene.isDisposed) return;
           scene.render();
           this.updateOrbitBloom();
+          const fresh = Object.entries(effects()).filter(([key]) => !before.has(key));
+          this.onPreparingProgress?.(
+            progress.update(
+              variant,
+              variants.length,
+              fresh.filter(([, effect]) => effect.isReady()).length,
+              fresh.length,
+            ),
+          );
           shaderLog.mark(
             `  image ${++image} · effets ${shaderLog.effectCount} · prêts ${this.engine.areAllEffectsReady()} · ombre ${this.shadowRefresh?.settled ?? '-'} · attente ${scene.getWaitingItemsCount()} · actifs ${scene.getActiveMeshes().length}`,
           );
@@ -841,6 +868,7 @@ export class HouseViewer {
       shaderLog.markView(key, 'end', pluginSummary(scene.materials));
       this.preparing = false;
       this.requestRender();
+      this.onPreparingProgress?.(1);
       this.onPreparing?.(false, first);
     }
   }
@@ -1438,6 +1466,7 @@ export class HouseViewer {
       l.range = range;
     });
     if (rangesChanged) refreshFixtureLights(this.scene);
+    syncFixturePads(this.scene);
     if (plan) {
       this.planLighting ??= {
         diffuse: this.hemispheric.diffuse?.clone() ?? Color3.White(),
@@ -1562,6 +1591,7 @@ export class HouseViewer {
         toggleDoor: (id) => this.toggleDoor(id),
         takeStair: (id, direction) => this.takeStair(id, direction),
         isReady: () => this.immersiveReady(scene),
+        readiness: () => this.immersiveReadiness,
         onEnd: (ended) => this.leaveImmersive(ended),
       });
       // A project load or a mode change may have happened while the session started.
@@ -1587,10 +1617,15 @@ export class HouseViewer {
   private immersiveReady(scene: Scene): boolean {
     if (scene !== this.scene || scene.isDisposed) return true;
     let ready = true;
+    let total = 0;
+    let done = 0;
     for (const mesh of scene.meshes) {
       if (!mesh.isEnabled() || !mesh.isVisible || !mesh.subMeshes?.length) continue;
-      if (!mesh.isReady(true)) ready = false;
+      total++;
+      if (mesh.isReady(true)) done++;
+      else ready = false;
     }
+    this.immersiveReadiness = total ? done / total : 1;
     return ready && this.engine.areAllEffectsReady() && scene.getWaitingItemsCount() === 0;
   }
 
