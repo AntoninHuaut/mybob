@@ -513,6 +513,52 @@ test('kitchen renders the two runs, tall column and separate worktop finish with
   }
 });
 
+test('a continuous recessed kitchen plinth reaches the floor under base units and both columns', async () => {
+  const { createFurniture } = await import('../src/furniture/model');
+  const { layer, scene, cleanup } = setup();
+  try {
+    const kitchen = createFurniture({
+      id: 'plinth',
+      kind: 'kitchen',
+      position: [7, 7],
+      kitchen: {
+        runDepth: 0.6,
+        runs: [{ length: 2.4 }],
+        slots: [
+          { kind: 'fridge', run: 0, offset: 0, width: 0.6 },
+          { kind: 'oven', run: 0, offset: 0.6, width: 0.6 },
+        ],
+      },
+    });
+    layer.setItems([kitchen]);
+    scene.meshes.forEach((m) => m.computeWorldMatrix(true));
+    const frontAt = (x: number, y: number) =>
+      scene.pickWithRay(
+        new Ray(new Vector3(x, level.elevation + y, 8), new Vector3(0, 0, -1)),
+        (m) => m.metadata?.id === 'plinth' && m.isPickable,
+      )?.pickedPoint;
+    // Probe the fridge, oven and base units, including their boundaries: no gaps
+    // or individual feet underneath, and the same straight recess all along.
+    for (const x of [6.1, 6.4, 6.7, 7, 7.6, 8.1]) {
+      const low = frontAt(x, 0.05),
+        body = frontAt(x, 0.2);
+      assert.ok(low && body);
+      assert.ok(Math.abs(low.z - 7.26) < 0.001);
+      // Chamfered cabinet seams may sit slightly behind the main front plane.
+      assert.ok(body.z - low.z > 0.035 && body.z - low.z < 0.041);
+    }
+    assert.ok(frontAt(7.6, 0.005), 'plinth must reach the finished floor');
+    // The exposed island back is recessed too, rather than flush with its carcass.
+    const back = scene.pickWithRay(
+      new Ray(new Vector3(7.6, level.elevation + 0.05, 6), new Vector3(0, 0, 1)),
+      (m) => m.metadata?.id === 'plinth' && m.isPickable,
+    )?.pickedPoint;
+    assert.ok(back && Math.abs(back.z - 6.74) < 0.001);
+  } finally {
+    cleanup();
+  }
+});
+
 test('the oven front has no cabinet surface at the same depth', async () => {
   const { createFurniture } = await import('../src/furniture/model');
   const { layer, scene, cleanup } = setup();

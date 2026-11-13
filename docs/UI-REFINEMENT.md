@@ -12,6 +12,14 @@ Plan now lays out room names avoiding the selected piece, distance tags and over
 
 Plan pans with a simple drag (mouse or finger) and zooms with a pinch or the wheel. 3D gestures stay Babylon's. On a short viewport the tool column scrolls so that every control stays reachable. Navigation hints adapt to touch pointers; walking in Visite still requires a keyboard. Confirming a variant's unchanged name closes its form without a needless write.
 
+In Vue 3D, a round stair icon at the flight's midpoint switches to the connected level; on the
+upper floor it offers the return trip over the stairwell. Its tooltip and accessible name say
+which level it leads to. This shortcut stays available when room labels are off and follows the
+same level-switch path as the selector, including furniture and received projects. It is hidden
+in Plan, Visite, Extérieur and while measuring. Level icons beside the sidebar's level selector
+also offer « Voir [niveau] » and the return trip, whether or not a stair is modelled. They do not
+add a stair or floor opening. Two such buttons on a middle level sit side by side.
+
 In Meubles, the variant selector, Dupliquer and Renommer come before adding. Variants cover all levels and keep the camera when switching. The Placement précis pane gathers multiple selection, alignment, distribution and the optional grid/wall snapping. The individual edit popup keeps its transactional behaviour.
 
 The Image button exports a PNG of the current camera, without the interface, with optional names/areas and exterior dimensions. A title block identifies the project, level and variant. The capture restores the current display, stays local and uses the scene resolution, capped at 2400 × 1800.

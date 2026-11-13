@@ -133,6 +133,11 @@ An attic level keeps a flat `ceilingHeight` and declares its sloping parts in `c
 ]
 ```
 
+For a concave floor whose bounding-box centre lies outside the outline, a slope limited by
+`gaps` may rise into one wing even though that centre lies on its falling side. Validation then
+requires every active outline vertex to lie on the rising side or foot line, and at least one
+strictly on the rising side. This exception does not allow reversed slopes on rectangular floors.
+
 The ceiling and the top of every wall follow the slopes (`src/model/ceiling.ts`); a dormer back wall, the only wall allowed above the flat ceiling, is not trimmed. A fixture hangs from the ceiling above it. An opening must fit under the ceiling over its whole width, and a room's walk point needs 1.80 m of ceiling above it. A roof window (`site.roofs[].windows`) over a level with slopes opens a well in the ceiling, as attic plans draw it: under the window, then on towards the ridge until the ceiling reaches the height of the window's top edge. Its sides rise vertically from the ceiling to the roof face, or to that height beyond the window, where a flat top closes it, so the window shows from inside. The ceiling is not a collider: the walk camera can still lean into a low slope. Furniture is refused when its top passes the lowest ceiling over its corners.
 
 ## Stairs and floor openings

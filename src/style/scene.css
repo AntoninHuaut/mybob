@@ -479,6 +479,49 @@
 .scene-label.selected > span {
   color: #315e26;
 }
+.stair-navigation {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+.floor-navigation {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.floor-level-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 30px;
+  padding: 0;
+  border-radius: 5px;
+  color: var(--green);
+  background: #eef7e1;
+}
+.floor-level-button:hover {
+  background: #dce5d0;
+}
+.stair-level-button {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  transform: translate(-50%, -50%);
+  border: 1px solid #dce5d0;
+  border-radius: 50%;
+  color: #fffef4;
+  background: var(--green);
+  box-shadow: 0 2px 8px #263b3133;
+  pointer-events: auto;
+}
+.stair-level-button:hover {
+  color: #fffef4;
+  background: var(--green-dark);
+}
 .dimension-label {
   position: absolute;
   transform: translate(-50%, -50%);

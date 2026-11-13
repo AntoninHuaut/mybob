@@ -222,6 +222,8 @@ function headsetWalk(
   scene.collisionsEnabled = true;
   const manager = new WebXRSessionManager(scene);
   const camera = new WebXRCamera('xr', scene, manager);
+  const stairActions: { id: string; direction: 'up' | 'down' }[] = [];
+  const doorActions: string[] = [];
   const helper = {
     camera,
     sessionManager: manager,
@@ -234,8 +236,13 @@ function headsetWalk(
       start,
       eyeHeight: 1.65,
       isDestination: () => true,
-      toggleDoor: () => {},
-      takeStair: () => false,
+      toggleDoor: (id) => {
+        doorActions.push(id);
+      },
+      takeStair: (id, direction) => {
+        stairActions.push({ id, direction });
+        return true;
+      },
       isReady: () => true,
       onEnd: () => {},
       storage,
@@ -249,6 +256,9 @@ function headsetWalk(
     walk,
     camera,
     scene,
+    manager,
+    stairActions,
+    doorActions,
     dispose() {
       walk.dispose();
       scene.dispose();
@@ -256,6 +266,78 @@ function headsetWalk(
     },
   };
 }
+
+test('the controller trigger takes the aimed stair once per press and respects occluding walls', () => {
+  const session = headsetWalk({ point: [4, 4.2], yaw: 0 });
+  try {
+    const internals = session.walk as unknown as { veil?: { dispose(): void } };
+    internals.veil?.dispose();
+    internals.veil = undefined;
+    const trigger = { pressed: false, value: 0, touched: false };
+    const source = {
+      targetRayMode: 'tracked-pointer',
+      handedness: 'right',
+      targetRaySpace: {},
+      gamepad: { axes: [0, 0, 0, 0], buttons: [trigger] },
+    } as unknown as XRInputSource;
+    session.manager.session = { inputSources: [source] } as unknown as XRSession;
+    session.manager.currentFrame = {
+      getPose: () => ({
+        transform: { position: { x: 0, y: 1.2, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+      }),
+    } as unknown as XRFrame;
+    const stair = MeshBuilder.CreateBox(
+      'stair-target',
+      { width: 1, height: 1, depth: 0.2 },
+      session.scene,
+    );
+    stair.position.set(4, 1.2, 2.2);
+    stair.metadata = { kind: 'stair', id: 'flight', direction: 'up' };
+    stair.computeWorldMatrix(true);
+    const step = (pressed: boolean) => {
+      trigger.pressed = pressed;
+      session.walk.step(1 / 90);
+    };
+    step(true);
+    step(true);
+    assert.deepEqual(session.stairActions, [{ id: 'flight', direction: 'up' }]);
+    step(false);
+    stair.metadata.direction = 'down';
+    step(true);
+    assert.deepEqual(session.stairActions.at(-1), { id: 'flight', direction: 'down' });
+    const wall = MeshBuilder.CreateBox(
+      'occluder',
+      { width: 1, height: 2, depth: 0.2 },
+      session.scene,
+    );
+    wall.position.set(4, 1.2, 3.2);
+    wall.computeWorldMatrix(true);
+    step(false);
+    step(true);
+    assert.equal(
+      session.stairActions.length,
+      2,
+      'a wall must block interaction with the stair behind it',
+    );
+    wall.dispose();
+    stair.metadata = { kind: 'door', id: 'door' };
+    step(false);
+    step(true);
+    assert.deepEqual(session.doorActions, ['door']);
+    stair.metadata = { kind: 'stair', id: 'far', direction: 'up' };
+    stair.position.z = -2;
+    stair.computeWorldMatrix(true);
+    step(false);
+    step(true);
+    assert.equal(
+      session.stairActions.length,
+      2,
+      'stairs beyond controller reach must not activate',
+    );
+  } finally {
+    session.dispose();
+  }
+});
 
 test('the headset starts where the screen walk stood, looking the same way', () => {
   const yaw = 0.9;

@@ -731,6 +731,7 @@ export class FurnitureLayer {
       }
     } else if (item.kind === 'kitchen' && item.kitchen) {
       const k = item.kitchen;
+      const plinthHeight = 0.1;
       const bounds = dressingBounds(k.runDepth, k.runs);
       const top = material('worktop', Color3.FromHexString(k.worktopColor));
       const appliance = () => {
@@ -761,11 +762,24 @@ export class FurnitureLayer {
           .filter((slot) => slot.run === index)
           .sort((a, b) => a.offset - b.offset);
         const columns = slots.filter((slot) => slot.kind === 'oven' || slot.kind === 'fridge');
+        // One straight recessed base per run, including under tall columns.
+        // Recess all edges so an exposed island has no floating underside either.
+        const recess = Math.min(0.04, k.runDepth / 4, placement.length / 4);
+        box(
+          placement.length - 2 * recess,
+          plinthHeight,
+          k.runDepth - 2 * recess,
+          placement.length / 2,
+          plinthHeight / 2,
+          k.runDepth / 2,
+          roles.main,
+          run,
+        );
         let start = 0;
         for (const column of [...columns, { offset: placement.length, width: 0 }]) {
           const length = column.offset - start;
           if (length > 0) {
-            part(start, length, 0.1, k.worktopHeight - 0.14, k.runDepth);
+            part(start, length, plinthHeight, k.worktopHeight - 0.04 - plinthHeight, k.runDepth);
             part(start, length, k.worktopHeight - 0.04, 0.04, k.runDepth, top);
             if (k.wallUnits)
               part(start, length, k.wallUnits.bottom, k.wallUnits.height, k.wallUnits.depth);
@@ -774,7 +788,7 @@ export class FurnitureLayer {
             if ('kind' in column && column.kind === 'oven') {
               const scale = Math.min(1, h / 1.8);
               // The cabinet ends behind the appliance fronts, never in their visible plane.
-              part(column.offset, column.width, 0, h, k.runDepth - 0.012);
+              part(column.offset, column.width, plinthHeight, h - plinthHeight, k.runDepth - 0.012);
               const front = (
                 left: number,
                 width: number,
@@ -794,7 +808,7 @@ export class FurnitureLayer {
                 );
               const openings = [{ bottom: 0.775 * scale, height: 0.55 * scale }];
               if (column.microwave) openings.push({ bottom: 1.35 * scale, height: 0.4 * scale });
-              let bottom = 0;
+              let bottom = plinthHeight;
               for (const opening of openings) {
                 front(column.offset, column.width, bottom, opening.bottom - bottom);
                 for (const left of [column.offset, column.offset + column.width * 0.925])
@@ -809,7 +823,7 @@ export class FurnitureLayer {
                 bottom = opening.bottom + opening.height;
               }
               front(column.offset, column.width, bottom, h - bottom);
-            } else part(column.offset, column.width, 0, h, k.runDepth);
+            } else part(column.offset, column.width, plinthHeight, h - plinthHeight, k.runDepth);
           }
           start = column.offset + column.width;
         }
