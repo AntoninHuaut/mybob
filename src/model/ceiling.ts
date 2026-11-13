@@ -546,6 +546,59 @@ export function roofWindowWells(project: HouseProject, level: Level): CeilingWel
           }
         }
       });
+      // Over a knee wall, the window's lower edge stands beyond the floor: close the
+      // well there, from the edge of the floor at the ceiling up to that lower edge,
+      // with a triangle on each side.
+      const entry = (corner: Point2, towards: Point2): Point2 | undefined => {
+        if (pointInside(corner, level.outline)) return undefined;
+        const length = Math.hypot(towards[0] - corner[0], towards[1] - corner[1]);
+        if (length < 1e-6) return undefined;
+        const u: Point2 = [(towards[0] - corner[0]) / length, (towards[1] - corner[1]) / length];
+        const first = insideIntervals(level.outline, corner, u, reach).find(
+          ([t0, t1]) => t1 > 0 && t0 < length,
+        );
+        if (!first) return undefined;
+        const t = Math.max(0, first[0]);
+        return [corner[0] + u[0] * t, corner[1] + u[1] * t];
+      };
+      const c0 = entry(a0, shift(u0));
+      const c1 = entry(a1, shift(u1));
+      if (c0 && c1) {
+        const at = (p: Point2, y: number): [number, number, number] => [p[0], y, p[1]];
+        const sill = [at(c0, ceilingHeightAt(level, c0)), at(c1, ceilingHeightAt(level, c1))];
+        const lowEdge = [at(a1, roofHeight(a1[0], a1[1])), at(a0, roofHeight(a0[0], a0[1]))];
+        const e1 = [sill[1][0] - sill[0][0], sill[1][1] - sill[0][1], sill[1][2] - sill[0][2]];
+        const e2 = [
+          lowEdge[1][0] - sill[0][0],
+          lowEdge[1][1] - sill[0][1],
+          lowEdge[1][2] - sill[0][2],
+        ];
+        let n: [number, number, number] = [
+          e1[1] * e2[2] - e1[2] * e2[1],
+          e1[2] * e2[0] - e1[0] * e2[2],
+          e1[0] * e2[1] - e1[1] * e2[0],
+        ];
+        const length = Math.hypot(...n) || 1;
+        n = n.map((v) => v / length) as [number, number, number];
+        if (n[1] < 0) n = [-n[0], -n[1], -n[2]];
+        wells.reveals.push({ points: [sill[0], sill[1], lowEdge[0], lowEdge[1]], normal: n });
+        for (const [c, a] of [
+          [c0, a0],
+          [c1, a1],
+        ] as const) {
+          const top = roofHeight(c[0], c[1]);
+          const bottom = ceilingHeightAt(level, c);
+          if (top - bottom < 1e-6) continue;
+          const u: Point2 = [a[0] - c[0], a[1] - c[1]];
+          const length = Math.hypot(u[0], u[1]) || 1;
+          let side: [number, number, number] = [-u[1] / length, 0, u[0] / length];
+          if (side[0] * (cx - c[0]) + side[2] * (cz - c[1]) < 0) side = [-side[0], 0, -side[2]];
+          wells.reveals.push({
+            points: [at(c, bottom), at(a, roofHeight(a[0], a[1])), at(c, top)],
+            normal: side,
+          });
+        }
+      }
       // The flat top of the well, from the window's top edge to where the ceiling
       // reaches it.
       if (reachIn > 1e-6)
