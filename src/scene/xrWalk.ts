@@ -217,6 +217,12 @@ export class FrameRateGovernor {
 export const XR_AIM_PUSH = 0.6;
 /** Stick back under this deflection: the aim is released, and the jump happens. */
 export const XR_AIM_RELEASE = 0.2;
+/**
+ * The longest a teleport aim holds in the band between the thresholds, in seconds. A
+ * released stick crosses it in a few hundredths; a thumb resting on the stick, or drift,
+ * can sit in it, and an endless hold blocked the other hand with a red ray.
+ */
+export const XR_AIM_HOLD_MAX = 0.3;
 
 /**
  * What the stick's forward axis (`y`, negative forward) does to a teleport aim. Between the
@@ -494,6 +500,8 @@ export class ImmersiveWalk {
   private readiness = new PreparationProgress();
   private readonly counter = new FrameCounter();
   private governor?: FrameRateGovernor;
+  /** Seconds the current aim has spent in the hold band (`XR_AIM_HOLD_MAX`). */
+  private aimHold = 0;
   /** Seconds left of the button hint (`XR_HINT`). */
   private hintSeconds = XR_HINT_SECONDS;
   /** Added to the floor in seated mode (A or X), in metres. */
@@ -635,7 +643,7 @@ export class ImmersiveWalk {
         const snap = snapTurn(pointer.snapArmed, this.aiming ? 0 : turnAxis(state.x, state.y));
         pointer.snapArmed = snap.armed;
         if (snap.angle) this.blink.start(() => this.turn(snap.angle));
-        this.updateTeleport(state, hand);
+        this.updateTeleport(state, hand, seconds);
       }
     } else {
       const move = states.get('left');
@@ -651,7 +659,7 @@ export class ImmersiveWalk {
           this.turn(smoothTurnAngle(axis, seconds));
           motion = Math.max(motion, Math.abs(axis));
         }
-        this.updateTeleport(aim, 'right');
+        this.updateTeleport(aim, 'right', seconds);
       }
     }
     this.vignette.update(motion, seconds);
@@ -947,13 +955,20 @@ export class ImmersiveWalk {
    * The stick of `hand` pushed forward aims a teleport along an arc; released, the visitor
    * lands on the last valid point. One hand aims at a time.
    */
-  private updateTeleport(aim: ControllerState, hand: XRHandedness) {
+  private updateTeleport(aim: ControllerState, hand: XRHandedness, seconds: number) {
     if (this.aiming && this.aiming !== hand) return;
     const pointer = this.pointerFor(hand);
     if (!pointer) return;
     const phase = aimPhase(aim.y, this.aiming === hand);
-    if (phase === 'idle' || phase === 'hold') return;
+    if (phase === 'idle') return;
+    if (phase === 'hold') {
+      // A spring-back passes; a stick left half-pushed drops the aim without jumping.
+      this.aimHold += seconds;
+      if (this.aimHold > XR_AIM_HOLD_MAX) this.cancelAim();
+      return;
+    }
     if (phase === 'aim') {
+      this.aimHold = 0;
       this.aiming = hand;
       pointer.ray.setEnabled(false);
       const hit = this.pickArc(pointer);

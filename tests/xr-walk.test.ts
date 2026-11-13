@@ -30,6 +30,7 @@ import {
   snapTurn,
   teleportArc,
   aimPhase,
+  XR_AIM_HOLD_MAX,
   readXrPreferences,
   XR_PREFERENCES,
   XR_ARC_SEGMENTS,
@@ -495,6 +496,12 @@ test('a released stick springing back through the middle still jumps', () => {
   // The spring-back, frame by frame at 120 fps: hold, hold, then release near the centre.
   const frames = [-0.9, -0.55, -0.35, -0.21, -0.05].map((y) => aimPhase(y, true));
   assert.deepEqual(frames, ['aim', 'hold', 'hold', 'hold', 'release']);
+});
+
+test('the hold outlasts a spring-back but not a thumb resting on the stick', () => {
+  // Three frames at 72 Hz cross the band; a resting thumb stays there for seconds.
+  assert.ok(XR_AIM_HOLD_MAX > 3 / 72);
+  assert.ok(XR_AIM_HOLD_MAX <= 0.5);
 });
 
 test('the teleport-only turn steps 30° once per push and re-arms near the centre', () => {
