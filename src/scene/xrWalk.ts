@@ -205,6 +205,22 @@ export class FrameRateGovernor {
   }
 }
 
+/** Stick pushed forward past this deflection: the teleport aims. */
+export const XR_AIM_PUSH = 0.6;
+/** Stick back under this deflection: the aim is released, and the jump happens. */
+export const XR_AIM_RELEASE = 0.2;
+
+/**
+ * What the stick's forward axis (`y`, negative forward) does to a teleport aim. Between the
+ * two thresholds the aim holds: a released stick springs back through that band, and at
+ * 120 fps there is nearly always a frame in it, which used to cancel nine jumps in ten.
+ */
+export function aimPhase(y: number, aiming: boolean): 'aim' | 'hold' | 'release' | 'idle' {
+  if (y < -XR_AIM_PUSH) return 'aim';
+  if (!aiming) return 'idle';
+  return y < -XR_AIM_RELEASE ? 'hold' : 'release';
+}
+
 /** Turn step of the teleport-only mode, in degrees. */
 export const XR_SNAP_DEGREES = 30;
 /** A snap turn fires past this deflection and re-arms once the stick is back under the lower one. */
@@ -897,7 +913,9 @@ export class ImmersiveWalk {
     if (this.aiming && this.aiming !== hand) return;
     const pointer = this.pointerFor(hand);
     if (!pointer) return;
-    if (aim.y < -0.6) {
+    const phase = aimPhase(aim.y, this.aiming === hand);
+    if (phase === 'idle' || phase === 'hold') return;
+    if (phase === 'aim') {
       this.aiming = hand;
       pointer.ray.setEnabled(false);
       const hit = this.pickArc(pointer);
@@ -918,12 +936,11 @@ export class ImmersiveWalk {
         this.marker.position.copyFrom(hit.pickedPoint).addInPlaceFromFloats(0, 0.01, 0);
       return;
     }
-    if (this.aiming !== hand) return;
     // Stick released: jump if the last aimed point was valid.
     const target = this.target;
     const stair = this.stair;
     this.cancelAim();
-    if (aim.y < -0.2 || !target) return;
+    if (!target) return;
     if (stair) {
       // The host rebuilds the level and calls `arrive`, which places the visitor behind the veil.
       this.host.takeStair(stair.id, stair.direction);
