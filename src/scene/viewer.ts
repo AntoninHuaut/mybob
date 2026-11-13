@@ -53,7 +53,7 @@ import { furnitureRevision, furnitureObstaclesRevision } from '../furniture/laye
 import { RenderScheduler, WAKE_EVENTS, wakesScene } from './renderScheduler';
 import { isSoftwareRenderer, nextPaint, viewKey, ViewWarmth, warmFrames } from './shaderWarmup';
 import { pluginSummary, shaderLog } from './shaderLog';
-import { EFFECT_TIERS, ViewResolutions } from './adaptiveResolution';
+import { EFFECT_TIERS, MAX_PIXEL_RATIO, ViewResolutions } from './adaptiveResolution';
 import {
   AUTO_CUT_HEIGHT,
   buildWallCutaway,
@@ -233,13 +233,15 @@ export class HouseViewer {
   }
   /** The host shows its overlay while shaders are linked; `first` is the start-up, not a switch. */
   onPreparing?: (active: boolean, first: boolean) => void;
-  private readonly resolutions = new ViewResolutions(Math.min(window.devicePixelRatio || 1, 1.6));
+  private readonly resolutions = new ViewResolutions(
+    Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO),
+  );
   /** The current view's dynamic resolution (`ViewResolutions`). */
   private get adaptiveResolution() {
     return this.resolutions.for(this.currentViewKey());
   }
-  /** Hardware scaling at full resolution: the screen's pixel ratio, capped. */
-  private readonly baseScaling = 1 / Math.min(window.devicePixelRatio || 1, 1.6);
+  /** Hardware scaling at full resolution: the screen's pixel ratio, capped (`MAX_PIXEL_RATIO`). */
+  private readonly baseScaling = 1 / Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
   private renderScale = 1;
   private lastRenderAt?: number;
   /** Open `holdRendering` calls: every image is drawn while one is held. */

@@ -1,4 +1,11 @@
 /**
+ * Full resolution is one rendered pixel per CSS pixel, never the screen's own ratio: on a
+ * display scaled to 150 % that would draw 2.25 times the pixels for a sharpness the owner
+ * does not see (2026-11-13).
+ */
+export const MAX_PIXEL_RATIO = 1;
+
+/**
  * Render scales tried, from full resolution down. Never below two thirds: under that,
  * textures turn visibly blurry.
  */

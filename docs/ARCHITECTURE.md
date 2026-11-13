@@ -444,9 +444,12 @@ last call, and read back at start-up.
   view** (`ViewResolutions`, keyed by `viewKey`): if the median frame time exceeds 25 ms
   (under 40 fps), a view that has an occlusion (the visit, Vue 3D) first drops it — its one
   effect tier, which fades out over 0.8 s rather than blinking off — and only then lowers
-  the rendering one step per series (100, 90, 80, 67 %), without going below one rendered pixel
-  per CSS pixel, except the visit, which goes down to 80 % whatever the pixel ratio and never
-  to 67 % (`VISIT_SCALE_FLOOR`; 67 % made the visit look ugly). The owner chose that order (2026-11-13): at a low frame rate, rather
+  the rendering one step per series (100, 90, 80, 67 %). Full resolution is one rendered
+  pixel per CSS pixel, never the screen's ratio (`MAX_PIXEL_RATIO`: a display scaled to
+  150 % would cost 2.25 times the pixels). Views never go below one rendered pixel per CSS
+  pixel, so Plan, Vue 3D and Extérieur stay at 100 % on a normal screen, except the visit,
+  which goes down to 80 % and never to 67 % (`VISIT_SCALE_FLOOR`; 67 % made the visit look
+  ugly). The owner chose that order (2026-11-13): at a low frame rate, rather
   lose the occlusion than sharpness. Plan and Extérieur have no tier and go straight to the
   resolution. A scale or tier the visit took leaves Plan sharp and Vue 3D's occlusion in
   place. Each view's scale only goes down and is kept for the session, because changing it
