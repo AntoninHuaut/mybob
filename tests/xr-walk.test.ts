@@ -29,6 +29,7 @@ import {
   XR_WALK_SPEED,
   snapTurn,
   teleportArc,
+  aimPhase,
   readXrPreferences,
   XR_PREFERENCES,
   XR_ARC_SEGMENTS,
@@ -486,6 +487,14 @@ test('a session holding 120 Hz stays there', () => {
 
 test('a headset offering nothing at 72 Hz or above keeps its own rates', () => {
   assert.equal(pickFrameRate([60]), 60);
+});
+
+test('a released stick springing back through the middle still jumps', () => {
+  assert.equal(aimPhase(-0.9, false), 'aim');
+  assert.equal(aimPhase(-0.4, false), 'idle', 'a half push does not start an aim');
+  // The spring-back, frame by frame at 120 fps: hold, hold, then release near the centre.
+  const frames = [-0.9, -0.55, -0.35, -0.21, -0.05].map((y) => aimPhase(y, true));
+  assert.deepEqual(frames, ['aim', 'hold', 'hold', 'hold', 'release']);
 });
 
 test('the teleport-only turn steps 30° once per push and re-arms near the centre', () => {
