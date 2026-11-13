@@ -15,6 +15,7 @@ import type { StairDirection } from '../model/stairs';
 import { groundElevationAt } from '../model/geometry';
 import { isVisitArea } from './navigation';
 import { VISITOR_RADIUS } from './walkCamera';
+import { XrDiagnostics } from './xrDiagnostics';
 import { PreparationProgress } from './shaderWarmup';
 import {
   FrameCounter,
@@ -208,6 +209,7 @@ export class ImmersiveWalk {
   private readonly marker: Mesh;
   private readonly hud: XrHud;
   private readonly vignette: XrVignette;
+  private diagnostics?: XrDiagnostics;
   private veil?: XrVeil;
   private loading = new LoadingGate();
   private readiness = new PreparationProgress();
@@ -260,6 +262,12 @@ export class ImmersiveWalk {
    * tracked pose from then on.
    */
   placeCamera() {
+    this.diagnostics ??= new XrDiagnostics(
+      this.host.scene,
+      this.camera,
+      this.helper.sessionManager,
+      this.rig,
+    );
     const camera = this.camera;
     camera.parent = this.rig;
     camera.position.setAll(0);
@@ -272,6 +280,7 @@ export class ImmersiveWalk {
     const frame = manager.currentFrame;
     const session = manager.session;
     if (!frame || !session || this.ended) return;
+    this.diagnostics?.update(performance.now());
     if (this.veil && !this.lift()) return;
     this.followPose();
     const fps = this.counter.tick(performance.now());
@@ -414,6 +423,7 @@ export class ImmersiveWalk {
     this.material.dispose();
     this.hud.dispose();
     this.vignette.dispose();
+    this.diagnostics?.dispose();
     this.veil?.dispose();
     this.veil = undefined;
     this.camera.layerMask = XR_DEFAULT_LAYERS;
