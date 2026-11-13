@@ -375,7 +375,7 @@ walk where the headset left the visitor and restores the camera of the current m
   between the eyes, an unbearable view the visitor could not easily leave. The session also
   asks for the strongest **fixed foveation** (`XR_FIXED_FOVEATION`): the lens edges, blurred by
   the optics anyway, are drawn at a lower resolution; browsers without it ignore the request.
-iew: the frame
+  iew: the frame
   rate over 500 ms windows, in red under 24 fps (the page's own counter is DOM, which a headset
   never shows). A second line, `limite du terrain ×N`, appears once the `isVisitArea` guard has
   sent the visitor back inside the modelled ground: it tells a rollback from that guard apart
