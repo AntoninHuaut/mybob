@@ -444,6 +444,48 @@ test('a flat dormer roof clears the top of its back wall instead of sharing its 
   engine.dispose();
 });
 
+test('gables and wall bands stand in the facade skin plane, clear of the upper walls', () => {
+  // An upper level's exterior wall shown with the roof shares the wall plane: a gable or a
+  // band left in it flickered. Both stand at the skin's outer face, 0.012 + 0.018 / 2 out.
+  const skin = 0.021;
+  const project = dormerProject();
+  const { built, scene, engine } = exterior(validateProject(project));
+  const gables = built.roofMeshes.filter((mesh) => mesh.name.startsWith('gable:'));
+  assert.equal(gables.length, 2);
+  const xs = gables.map((gable) => {
+    const positions = Array.from(gable.getVerticesData('position')!.filter((_, i) => i % 3 === 0));
+    near(Math.min(...positions), Math.max(...positions));
+    return positions[0];
+  });
+  assert.deepEqual(
+    xs.sort((a, b) => a - b).map((x) => Math.round(x * 1000) / 1000),
+    [-skin, 10 + skin],
+  );
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
+  const atelier = exterior();
+  const walls = new Map(source.levels.flatMap((level) => level.walls).map((w) => [w.id, w]));
+  let checked = 0;
+  for (const band of atelier.built.roofMeshes.filter((m) => m.name.startsWith('roof-wall-band:'))) {
+    const wall = walls.get(band.name.slice('roof-wall-band:'.length).split(':')[0])!;
+    const alongX = Math.abs(wall.end[1] - wall.start[1]) < 1e-6;
+    if (!alongX && Math.abs(wall.end[0] - wall.start[0]) > 1e-6) continue;
+    const box = band.getBoundingInfo().boundingBox;
+    const axis = alongX ? wall.start[1] : wall.start[0];
+    const [low, high] = alongX
+      ? [box.minimumWorld.z, box.maximumWorld.z]
+      : [box.minimumWorld.x, box.maximumWorld.x];
+    const outward = Math.max(axis - low, high - axis);
+    near(outward, wall.thickness / 2 + skin, 0.0005);
+    checked++;
+  }
+  assert.ok(checked > 0);
+  atelier.built.dispose();
+  atelier.scene.dispose();
+  atelier.engine.dispose();
+});
+
 test('dormers resolve from the project data alone, whatever the house', () => {
   const project = dormerProject();
   const p = validateProject(project);
