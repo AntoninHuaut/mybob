@@ -1015,7 +1015,7 @@ export class HouseViewer {
    * Plan and Visite keep the displayed level alone.
    */
   private updateOtherLevels() {
-    for (const { level, house } of this.otherLevels)
+    for (const { level, house } of this.otherLevels ?? [])
       house.root.setEnabled(
         this.mode === 'overview' && (this.exteriorView || level.elevation < this.level.elevation),
       );
