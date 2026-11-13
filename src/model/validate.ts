@@ -3,6 +3,7 @@ import { ceilingHeightAt, ceilingProfile, slopeDistance } from './ceiling';
 import {
   alongWall,
   bounds,
+  pointInOrOnPolygon,
   pointInPolygon,
   polygonArea,
   polygonInsidePolygon,
@@ -412,11 +413,49 @@ export function validateProject(
         if (!record(surface)) fail('Une surface extérieure doit être un objet.');
         id(surface.id);
         if (
-          !['gravel', 'path'].includes(surface.kind) ||
+          !['gravel', 'path', 'terrace', 'lawn'].includes(surface.kind) ||
           !validPolygon(surface.polygon) ||
           !polygonInsidePolygon(surface.polygon, site.boundary)
         )
           fail(`Surface extérieure invalide : ${surface.id}`);
+        if (
+          surface.height !== undefined &&
+          (surface.kind !== 'terrace' ||
+            !finite(surface.height) ||
+            surface.height < 0 ||
+            surface.height > 1.5)
+        )
+          fail(`Seule une terrasse porte une hauteur, entre 0 et 1,5 m : ${surface.id}`);
+      }
+    }
+    if (site.boundaries !== undefined) {
+      if (!Array.isArray(site.boundaries) || site.boundaries.length > 100)
+        fail('Murs de clôture, clôtures et haies invalides.');
+      for (const line of site.boundaries) {
+        if (!record(line)) fail('Un mur de clôture, une clôture ou une haie doit être un objet.');
+        id(line.id);
+        const points: unknown = line.points;
+        if (
+          !['wall', 'fence', 'hedge'].includes(line.kind) ||
+          !Array.isArray(points) ||
+          points.length < 2 ||
+          points.length > 200 ||
+          !points.every(point) ||
+          !points.every((p) => pointInOrOnPolygon(p, site.boundary)) ||
+          points.some(
+            (p, i) => i > 0 && Math.hypot(p[0] - points[i - 1][0], p[1] - points[i - 1][1]) < 0.01,
+          )
+        )
+          fail(
+            `Un mur de clôture, une clôture ou une haie suit au moins deux points distincts dans la parcelle : ${line.id}`,
+          );
+        if (!finite(line.height) || line.height < 0.1 || line.height > 4)
+          fail(`La hauteur doit être comprise entre 0,1 et 4 m : ${line.id}`);
+        if (
+          line.thickness !== undefined &&
+          (!finite(line.thickness) || line.thickness < 0.02 || line.thickness > 2)
+        )
+          fail(`L’épaisseur doit être comprise entre 2 cm et 2 m : ${line.id}`);
       }
     }
     if (site.roofs !== undefined) {

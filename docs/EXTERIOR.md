@@ -6,7 +6,9 @@ The terrain is an optional `site` field of the imported project. The engine cont
 
 The terrain comes entirely from the project data: `boundary` describes the plot outline, `declaredArea` keeps the area stated in the reference document, and `elevation` sets the terrain height relative to the level's floor. The area computed from `boundary` is shown separately from `declaredArea`; a gap between the two signals an approximate entry and is never corrected by resizing the plot. These coordinates are not a land survey.
 
-The terrain is flat by default. A project may declare lower points near a boundary or a lowered room: these slopes, banks and ramps stay simplified. The `gravel` and `path` surfaces express the intent of the parking area and the footpath; their joins are indicative.
+The terrain is flat by default. A project may declare lower points near a boundary or a lowered room: these slopes, banks and ramps stay simplified. Surfaces express the intent of the garden; their joins are indicative. `gravel` covers a gravel or "tout-venant" drive, `path` a footpath, `lawn` makes the default ground explicit, and `terrace` is a slab: flush with the ground, or raised by `height` (0 to 1.5 m), with vertical sides down to the terrain. Overlapping surfaces stack lawn under gravel and path, under the terrace, a few millimetres apart, so an overlap shows the higher kind instead of flickering. The visit stands on a raised terrace: the ground under a point outside the house is the terrain plus the highest terrace slab covering it (`groundElevationAt`), and the 20 cm threshold assistance climbs onto it.
+
+`boundaries` declares linear garden elements: `wall` (rendered in the façade render, 20 cm thick by default), `fence` (a dark panel with posts at most 2.4 m apart, 4 cm by default) and `hedge` (a green block, 60 cm by default). Each is an open polyline of at least two distinct points inside or on the plot, with a height above the terrain (0.1 to 4 m) and an optional `thickness`. Each segment is a box centred on the line and lengthened by half the thickness at both ends, so corners close; put the points half a thickness inside the plot edge to keep the element on the plot. Boundaries collide in the visit, cast sun shadows, and show with the roof: in Extérieur and Visite, not in Vue 3D, where a wall near a façade would hide the cutaway. The garden materials are created only when a plot uses them. Share links carry surfaces and boundaries from pack revision 8; earlier links stay readable.
 
 The roof is described by `roofs`: vertices, planar faces and gables. The format accepts several slopes, hipped joins and any eaves and ridge heights; their projection must cover the roof envelope with no hole nor overlap. A recessed entrance is covered. Overhangs, gutters, thicknesses and framing are not represented. The declared pitch is not reproduced exactly: it stays indicative and is not presented as a verified dimension.
 
@@ -16,7 +18,7 @@ A slope may also carry roof windows in `windows`: a centre in plan, a horizontal
 
 Exterior colours come from `facadeColor` and `roofColor`, with no certified colorimetric value. Interior faces stay white. Two-tone joinery and door colours are not reproduced yet: existing joinery stays simplified.
 
-Reference documents are used to check openings and interior volumes. No fence or planting is invented: only declared surfaces are rendered. The lawn has a fine noise texture, deterministic and generated locally, with no image download.
+Reference documents are used to check openings and interior volumes. No fence or planting is invented: only declared surfaces and boundaries are rendered. The lawn has a fine noise texture, deterministic and generated locally, with no image download.
 
 ## Optional format
 
@@ -29,8 +31,16 @@ site?: {
   roofColor?: string;
   surfaces?: {
     id: string;
-    kind: 'gravel' | 'path';
+    kind: 'gravel' | 'path' | 'terrace' | 'lawn';
     polygon: [number, number][];
+    height?: number;            // terrace only: slab top above the terrain
+  }[];
+  boundaries?: {
+    id: string;
+    kind: 'wall' | 'fence' | 'hedge';
+    points: [number, number][]; // open polyline, at least two points
+    height: number;             // above the terrain, in metres
+    thickness?: number;         // across the line; default per kind
   }[];
   roofs?: {
     id: string;
@@ -57,7 +67,7 @@ site?: {
 
 This format accepts another plot and another roof envelope without rewriting the engine. Polygons must be simple, accesses stay within the plot and the ground-floor footprint must fit inside it. Roof faces must be planar, non-degenerate, non-crossing and only reference valid integer indices. Colours and numbers are checked on import. The project format stays at version 1: projects without `site` keep working.
 
-`buildExterior(project, level, scene)` returns an independent group and its meshes: terrain and accesses, façades identified by `metadata.wallId`, roof/gables initially hidden, horizontal bounds and maximum height. Slopes pierced by a dormer or a roof window are triangulated with their opening; the dormer's cheeks, roof and front, like the roof window's frame, follow the roof in visibility and shadows. The view controls the visibility of exterior faces together with that of cut walls. The lawn is hollowed out under the house, including where the wall touches the plot boundary; it therefore does not show through a lowered room.
+`buildExterior(project, level, scene)` returns an independent group and its meshes: terrain and accesses, garden boundaries (`boundaryMeshes`), façades identified by `metadata.wallId`, roof/gables initially hidden, horizontal bounds and maximum height. Slopes pierced by a dormer or a roof window are triangulated with their opening; the dormer's cheeks, roof and front, like the roof window's frame, follow the roof in visibility and shadows. The view controls the visibility of exterior faces together with that of cut walls. The lawn is hollowed out under the house, including where the wall touches the plot boundary; it therefore does not show through a lowered room.
 
 Surfaces are generated, never loaded (`src/scene/surfaceTextures.ts`). The lawn's colour varies over 4–8 m patches in a 16 m tile, and a Babylon detail map adds grain, relief and roughness every 0.73 m: the two scales never line up, so neither repeat shows. The lawn's UVs are plan metres. The roof carries slate courses (0.2 m courses of 0.3 m slates, staggered, 1.2 m tile) and per-slate roughness; the render reuses the interior plaster relief at a coarser 1 m tile. Roof, gable and dormer faces get metric UVs in their own plane, `u` along the eave and `v` up the slope (`planeUv`), so courses follow the eave; façade boxes get theirs from `worldScaleUvs`. The exterior uploads its own copies of these maps, because it disposes its materials with their textures.
 

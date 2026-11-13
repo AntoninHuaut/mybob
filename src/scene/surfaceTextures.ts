@@ -497,3 +497,8 @@ export function createExteriorTextures(scene: Scene): ExteriorTextures {
     renderNormal: upload(scene, 'render-normal', maps.plasterNormal),
   };
 }
+
+/** The plaster relief again, for hedges, tiled finer as a leafy grain. Uploaded only for a hedge. */
+export function createHedgeNormal(scene: Scene): RawTexture {
+  return upload(scene, 'hedge-normal', surfaceMapData().plasterNormal);
+}

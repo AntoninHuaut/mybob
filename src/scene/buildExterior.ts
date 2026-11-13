@@ -9,9 +9,10 @@ import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import earcut from 'earcut';
-import type { HouseProject, Level, Point2, SiteRoof, Wall } from '../model/types';
+import type { HouseProject, Level, Point2, SiteBoundary, SiteRoof, Wall } from '../model/types';
 import {
   alongWall,
+  BOUNDARY_THICKNESS,
   bounds,
   pointInOrOnPolygon,
   pointInPolygon,
@@ -24,7 +25,13 @@ import {
   wallSections,
 } from '../model/geometry';
 import { polygonMesh, wallFloorSpan, worldScaleUvs } from './buildHouse';
-import { createExteriorTextures, LAWN_DETAIL_TILE, LAWN_TILE, SLATE_TILE } from './surfaceTextures';
+import {
+  createExteriorTextures,
+  createHedgeNormal,
+  LAWN_DETAIL_TILE,
+  LAWN_TILE,
+  SLATE_TILE,
+} from './surfaceTextures';
 
 /** How far a dormer roof stays above its back wall's top: enough for the depth buffer from the plot. */
 const DORMER_ROOF_CLEARANCE = 0.02;
@@ -43,6 +50,8 @@ export interface ExteriorScene {
   roofMeshes: Mesh[];
   /** Match metadata.wallId to the interior wall's cutaway visibility. */
   facadeMeshes: Mesh[];
+  /** Garden walls, fences and hedges: shown with the roof, and casting shadows. */
+  boundaryMeshes: Mesh[];
   bounds: ReturnType<typeof bounds>;
   /** Maximum height above the level datum, including the roof. */
   height: number;
@@ -106,6 +115,83 @@ function outwardGable(
     nz = -nz;
   }
   return points.map(([x, y, z]) => [x + nx * SKIN_OUTER_FACE, y, z + nz * SKIN_OUTER_FACE]);
+}
+
+/** The vertical sides of a slab standing on `polygon`, from `bottom` to `top`. */
+function prismSides(name: string, polygon: Point2[], bottom: number, top: number, scene: Scene) {
+  const positions: number[] = [],
+    indices: number[] = [],
+    uvs: number[] = [];
+  let run = 0;
+  polygon.forEach(([x, z], i) => {
+    const [nx, nz] = polygon[(i + 1) % polygon.length];
+    const length = Math.hypot(nx - x, nz - z);
+    const base = positions.length / 3;
+    positions.push(x, bottom, z, nx, bottom, nz, nx, top, nz, x, top, z);
+    uvs.push(run, bottom, run + length, bottom, run + length, top, run, top);
+    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    run += length;
+  });
+  const normals: number[] = [];
+  VertexData.ComputeNormals(positions, indices, normals);
+  const mesh = new Mesh(name, scene);
+  Object.assign(new VertexData(), { positions, indices, normals, uvs }).applyToMesh(mesh);
+  return mesh;
+}
+
+/** Fence posts: one at each end and at least every 2.4 m along a run. */
+const FENCE_POST_SPACING = 2.4;
+const FENCE_POST = 0.08;
+
+/**
+ * A garden wall, fence or hedge as one mesh: a box per segment, lengthened by
+ * half its thickness at both ends so that corners close. A fence adds posts.
+ */
+export function boundaryMesh(line: SiteBoundary, ground: number, scene: Scene): Mesh {
+  const thickness = line.thickness ?? BOUNDARY_THICKNESS[line.kind];
+  const parts: Mesh[] = [];
+  const box = (
+    name: string,
+    length: number,
+    width: number,
+    height: number,
+    at: Point2,
+    angle: number,
+  ) => {
+    const part = CreateBox(name, { width: length, depth: width, height }, scene);
+    part.position.set(at[0], ground + height / 2, at[1]);
+    part.rotation.y = angle;
+    parts.push(metricBox(part));
+  };
+  line.points.slice(1).forEach((end, i) => {
+    const start = line.points[i];
+    const dx = end[0] - start[0],
+      dz = end[1] - start[1];
+    const length = Math.hypot(dx, dz);
+    const angle = -Math.atan2(dz, dx);
+    const middle: Point2 = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
+    if (line.kind !== 'fence') {
+      box(`${line.id}-${i}`, length + thickness, thickness, line.height, middle, angle);
+      return;
+    }
+    // Panel between the posts, slightly lower so their tops show.
+    box(`${line.id}-${i}`, length, thickness, line.height - 0.04, middle, angle);
+    const posts = Math.max(1, Math.ceil(length / FENCE_POST_SPACING));
+    for (let k = i === 0 ? 0 : 1; k <= posts; k++) {
+      const t = k / posts;
+      box(
+        `${line.id}-${i}-post-${k}`,
+        FENCE_POST,
+        Math.max(FENCE_POST, thickness),
+        line.height,
+        [start[0] + dx * t, start[1] + dz * t],
+        angle,
+      );
+    }
+  });
+  const mesh = Mesh.MergeMeshes(parts, true, true)!;
+  mesh.name = `site-boundary:${line.id}`;
+  return mesh;
 }
 
 function faceMesh(
@@ -235,7 +321,8 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
   root.position.y = level.elevation;
   const meshes: Mesh[] = [],
     roofMeshes: Mesh[] = [],
-    facadeMeshes: Mesh[] = [];
+    facadeMeshes: Mesh[] = [],
+    boundaryMeshes: Mesh[] = [];
   const materials: PBRMaterial[] = [];
   const site = project.site;
   const result: ExteriorScene = {
@@ -243,6 +330,7 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     meshes,
     roofMeshes,
     facadeMeshes,
+    boundaryMeshes,
     bounds: bounds(site?.boundary ?? level.outline),
     height: Math.max(
       level.ceilingHeight,
@@ -280,6 +368,27 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
   grass.detailMap.bumpLevel = 1;
   const gravel = material('permeable-gravel', '#a9a69c');
   const path = material('garden-path', '#c6bcaa');
+  // Garden materials are created on first use: a plot without them links no extra shader.
+  const once = <T>(make: () => T) => {
+    let value: T | undefined;
+    return () => (value ??= make());
+  };
+  const terrace = once(() => {
+    const m = material('terrace-slab', '#b8b0a2');
+    m.roughness = 0.85;
+    m.backFaceCulling = false;
+    return m;
+  });
+  const fence = once(() => {
+    const m = material('garden-fence', '#4b514c');
+    m.roughness = 0.6;
+    return m;
+  });
+  const hedge = once(() => {
+    const m = material('hedge', '#4d6a3b');
+    m.bumpTexture = tiled(createHedgeNormal(scene), 0.35);
+    return m;
+  });
   const plaster = material('exterior-render', site.facadeColor ?? '#d6c5a3');
   // The interior plaster grain at twice its tile: a render is coarser than paint.
   plaster.bumpTexture = tiled(textures.renderNormal, 1);
@@ -305,13 +414,44 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     'ground',
   );
   lawn.checkCollisions = true;
+  // Each kind floats a few millimetres over the one it is laid on, so an overlap
+  // shows the higher kind instead of flickering: lawn < gravel and path < terrace.
+  const surfaceLift = { lawn: 0.004, gravel: 0.008, path: 0.008, terrace: 0.012 } as const;
+  const surfaceMaterial = (kind: keyof typeof surfaceLift) =>
+    kind === 'lawn' ? grass : kind === 'gravel' ? gravel : kind === 'path' ? path : terrace();
   for (const surface of site.surfaces ?? []) {
+    const slab = surface.kind === 'terrace' ? (surface.height ?? 0) : 0;
+    const top = site.elevation + Math.max(slab, surfaceLift[surface.kind]);
     const mesh = add(
-      polygonMesh(`site-surface:${surface.id}`, surface.polygon, site.elevation + 0.008, scene),
-      surface.kind === 'gravel' ? gravel : path,
+      polygonMesh(
+        `site-surface:${surface.id}`,
+        surface.polygon,
+        top,
+        scene,
+        [],
+        1,
+        surface.kind === 'lawn' ? [1, 1] : undefined,
+      ),
+      surfaceMaterial(surface.kind),
       'ground',
     );
     mesh.checkCollisions = true;
+    if (slab > surfaceLift.terrace)
+      add(
+        prismSides(`site-surface-edge:${surface.id}`, surface.polygon, site.elevation, top, scene),
+        terrace(),
+        'ground',
+      );
+  }
+  for (const line of site.boundaries ?? []) {
+    const mesh = boundaryMesh(line, site.elevation, scene);
+    add(
+      mesh,
+      line.kind === 'wall' ? plaster : line.kind === 'fence' ? fence() : hedge(),
+      'boundary',
+    );
+    mesh.checkCollisions = true;
+    boundaryMeshes.push(mesh);
   }
   // Draw a discreet parcel edge, without inventing fences or hedge heights.
   const edge = CreateLines(

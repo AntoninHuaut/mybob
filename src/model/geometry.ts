@@ -91,9 +91,22 @@ export function floorElevationAt(level: Level, point: Point2): number {
   return level.elevation + (room?.floorOffset ?? 0);
 }
 
+/** Default width across a garden boundary line, per kind, in metres. */
+export const BOUNDARY_THICKNESS = { wall: 0.2, fence: 0.04, hedge: 0.6 } as const;
+
+/** Height of the declared terrain above the flat parcel: the highest terrace slab under the point. */
+export function siteSurfaceHeightAt(site: ProjectSite | undefined, point: Point2): number {
+  let height = 0;
+  for (const surface of site?.surfaces ?? [])
+    if (surface.kind === 'terrace' && surface.height && pointInPolygon(point, surface.polygon))
+      height = Math.max(height, surface.height);
+  return height;
+}
+
 /**
  * Ground under a point: the room's floor inside the house, the parcel's flat
- * terrain outside. A project without a site keeps the level datum outside.
+ * terrain outside, raised on a terrace slab. A project without a site keeps the
+ * level datum outside.
  */
 export function groundElevationAt(
   level: Level,
@@ -102,7 +115,7 @@ export function groundElevationAt(
 ): number {
   return pointInPolygon(point, level.outline)
     ? floorElevationAt(level, point)
-    : level.elevation + (site?.elevation ?? 0);
+    : level.elevation + (site?.elevation ?? 0) + siteSurfaceHeightAt(site, point);
 }
 
 export function bounds(points: Point2[]) {
