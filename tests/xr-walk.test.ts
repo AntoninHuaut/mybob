@@ -23,6 +23,7 @@ import {
   FrameRateGovernor,
   pickFrameRate,
   XR_RATE_FALLBACK_WINDOWS,
+  XR_RATE_PROBE_WINDOWS,
   XR_RATE_WARMUP_WINDOWS,
   seatedLift,
   XR_WALK_SPEED,
@@ -454,12 +455,33 @@ test('the headset asks for the highest rate up to 90 Hz and steps down when it c
   for (let i = 0; i < XR_RATE_FALLBACK_WINDOWS - 1; i++)
     assert.equal(governor.observe(70), undefined);
   assert.equal(governor.observe(70), 80, '3 s of slow windows in a row');
+  for (let i = 0; i < XR_RATE_WARMUP_WINDOWS; i++) governor.observe(20);
   assert.equal(governor.observe(79), undefined, 'holding 80 is fine');
   for (let i = 0; i < XR_RATE_FALLBACK_WINDOWS - 1; i++) governor.observe(60);
   assert.equal(governor.observe(60), 72);
+  for (let i = 0; i < XR_RATE_WARMUP_WINDOWS; i++) governor.observe(20);
   for (let i = 0; i < 20; i++)
     assert.equal(governor.observe(40), undefined, 'never 60 Hz: it flickers on a Quest 2');
   assert.equal(governor.current, 72);
+});
+
+test('a session holding 90 Hz tries 120 Hz, and goes back for good if it cannot hold it', () => {
+  const governor = new FrameRateGovernor(90, [72, 80, 90, 120]);
+  for (let i = 0; i < XR_RATE_WARMUP_WINDOWS; i++) governor.observe(90);
+  for (let i = 0; i < XR_RATE_PROBE_WINDOWS - 1; i++) assert.equal(governor.observe(90), undefined);
+  assert.equal(governor.observe(90), 120, '5 s held at 90 Hz');
+  for (let i = 0; i < XR_RATE_WARMUP_WINDOWS; i++) governor.observe(40);
+  for (let i = 0; i < XR_RATE_FALLBACK_WINDOWS - 1; i++) governor.observe(100);
+  assert.equal(governor.observe(100), 90, '120 Hz did not hold');
+  for (let i = 0; i < 40; i++) assert.equal(governor.observe(90), undefined, 'no second probe');
+  assert.equal(governor.current, 90);
+});
+
+test('a session holding 120 Hz stays there', () => {
+  const governor = new FrameRateGovernor(90, [72, 80, 90, 120]);
+  for (let i = 0; i < XR_RATE_WARMUP_WINDOWS + XR_RATE_PROBE_WINDOWS; i++) governor.observe(90);
+  assert.equal(governor.current, 120);
+  for (let i = 0; i < 60; i++) assert.equal(governor.observe(119.5), undefined);
 });
 
 test('a headset offering nothing at 72 Hz or above keeps its own rates', () => {

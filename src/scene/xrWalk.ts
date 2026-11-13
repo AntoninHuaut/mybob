@@ -88,8 +88,16 @@ export const XR_TELEPORT_REACH = 12;
 /** Body collider below the head: walls stop the visitor, a 20 cm step does not. */
 export const XR_BODY_HALF_HEIGHT = 0.5;
 export const XR_BODY_DROP = 0.6;
-/** The highest display rate asked of the headset; the session falls back when it cannot hold it. */
+/** The display rate a session opens at; the session falls back when it cannot hold it. */
 export const XR_TARGET_FRAME_RATE = 90;
+/**
+ * The highest display rate probed: a Quest 2 offers 120 Hz in its own browser. Once the
+ * session holds its rate for `XR_RATE_PROBE_WINDOWS`, the next higher one is tried; one that
+ * does not hold sends it back, for the rest of the session.
+ */
+export const XR_MAX_FRAME_RATE = 120;
+/** Windows (500 ms) at 97 % of the rate before a higher one is tried: 5 s. */
+export const XR_RATE_PROBE_WINDOWS = 10;
 /**
  * Frame-rate windows (500 ms each) in a row below the rate before the next lower one is
  * asked: 3 s. At 1.5 s the hitches after loading pushed a Quest 2 down to 60 Hz for good.
@@ -139,12 +147,17 @@ export function flickerFree(rates: number[]): number[] {
 }
 
 /**
- * Lowers the asked display rate when the house cannot be drawn at it: three frame-rate
- * windows in a row under 90 % of the rate select the next lower supported one. A missed
- * frame is shown again by the headset, which reads as flicker; a lower steady rate does not.
+ * Adapts the asked display rate. Slow windows in a row under 90 % of the rate select the
+ * next lower supported one: a missed frame is shown again by the headset, which reads as
+ * flicker, a lower steady rate does not. Windows held at the rate try the next higher one,
+ * up to `XR_MAX_FRAME_RATE`, until a rate had to be lowered. Each change is followed by a
+ * warm-up, the time the headset takes to switch.
  */
 export class FrameRateGovernor {
   private slow = 0;
+  private steady = 0;
+  /** A rate had to be lowered: no more probing upwards in this session. */
+  private settled = false;
   private warmup = XR_RATE_WARMUP_WINDOWS;
   private readonly supported: number[];
 
@@ -167,12 +180,28 @@ export class FrameRateGovernor {
       return undefined;
     }
     this.slow = fps < this.rate * 0.9 ? this.slow + 1 : 0;
-    if (this.slow < XR_RATE_FALLBACK_WINDOWS) return undefined;
-    this.slow = 0;
-    const lower = this.supported.filter((rate) => rate < this.rate! - 0.5);
-    if (!lower.length) return undefined;
-    this.rate = Math.max(...lower);
-    return this.rate;
+    this.steady = fps >= this.rate * 0.97 ? this.steady + 1 : 0;
+    if (this.slow >= XR_RATE_FALLBACK_WINDOWS) {
+      this.slow = 0;
+      this.steady = 0;
+      this.settled = true;
+      const lower = this.supported.filter((rate) => rate < this.rate! - 0.5);
+      if (!lower.length) return undefined;
+      this.rate = Math.max(...lower);
+      this.warmup = XR_RATE_WARMUP_WINDOWS;
+      return this.rate;
+    }
+    if (this.steady >= XR_RATE_PROBE_WINDOWS && !this.settled) {
+      this.steady = 0;
+      const higher = this.supported.filter(
+        (rate) => rate > this.rate! + 0.5 && rate <= XR_MAX_FRAME_RATE + 0.5,
+      );
+      if (!higher.length) return undefined;
+      this.rate = Math.min(...higher);
+      this.warmup = XR_RATE_WARMUP_WINDOWS;
+      return this.rate;
+    }
+    return undefined;
   }
 }
 
@@ -515,8 +544,8 @@ export class ImmersiveWalk {
     if (fps !== undefined) {
       this.lastFps = fps;
       this.showHud();
-      const lower = this.governor?.observe(fps);
-      if (lower !== undefined) this.setFrameRate(lower);
+      const rate = this.governor?.observe(fps);
+      if (rate !== undefined) this.setFrameRate(rate);
     }
     if (this.hudFlash > 0) {
       this.hudFlash -= seconds;
