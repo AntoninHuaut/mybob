@@ -368,7 +368,7 @@ offers them: Vue 3D occlusion was adopted (#205, described above), and three wer
 ## The visit in a headset
 
 The **Casque** button (`#enter-immersive`) only shows when
-`navigator.xr.isSessionSupported('immersive-vr')` says yes (Quest browser, desktop VR). It is a
+`navigator.xr.isSessionSupported('immersive-vr')` says yes (Quest browser, desktop VR such as Chrome with Quest Link), asked again on `navigator.xr`'s `devicechange` so a headset connected after the page opened shows it. It is a
 state of the walk, **not a fourth view mode**: `viewer.mode` stays `walk`, and
 `viewer.enterImmersive()` swaps the camera for the session's. Leaving the walk (`setMode`) ends
 the session; the end, whoever caused it, goes through `leaveImmersive`, which puts the screen
