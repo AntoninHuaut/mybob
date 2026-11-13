@@ -454,7 +454,9 @@ export class HouseViewer {
     this.captureSunPreset();
     this.sun.shadowMinZ = 0.1;
     this.sun.shadowMaxZ = 100;
-    const shadow = new ShadowGenerator(2048, this.sun);
+    // 1024 rather than 2048, on trial (owner, 2026-11-13): a quarter of the map to
+    // render and filter, softer edges.
+    const shadow = new ShadowGenerator(1024, this.sun);
     shadow.usePercentageCloserFiltering = true;
     shadow.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
     shadow.bias = 0.001;

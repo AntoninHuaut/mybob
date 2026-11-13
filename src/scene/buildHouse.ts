@@ -31,6 +31,12 @@ import {
  */
 export const WALL_BEVEL = 0.004;
 
+/**
+ * The step under a door to a lower floor stops this far under the upper floor: the
+ * finished floor runs under the walls, and a step top at the same height fought with it.
+ */
+export const THRESHOLD_SINK = 0.002;
+
 /** Fixture light defaults; the visit mode boosts them without touching the geometry. */
 export const FIXTURE_LIGHT_INTENSITY = 0.32;
 export const FIXTURE_LIGHT_RANGE = 5.5;
@@ -391,6 +397,7 @@ export function buildHouse(
             alongWall(wall, section.start),
             alongWall(wall, section.end),
             section.top,
+            wall.thickness,
           ).map((run) => ({
             ...run,
             start: run.start + section.start,
@@ -437,10 +444,10 @@ export function buildHouse(
           box(
             `threshold:${opening.id}`,
             opening.width,
-            openingBase - wallBottom,
+            openingBase - wallBottom - THRESHOLD_SINK,
             wall.thickness,
             opening.offset + opening.width / 2,
-            (openingBase + wallBottom) / 2,
+            (openingBase - THRESHOLD_SINK + wallBottom) / 2,
             0,
             materials.slab,
             group,

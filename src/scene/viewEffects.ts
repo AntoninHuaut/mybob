@@ -12,7 +12,6 @@ import {
   createInteriorEnvironment,
   createInteriorOcclusion,
   createInteriorTaa,
-  createOrbitBloom,
   createOrbitOcclusion,
   createOrbitTaa,
   INTERIOR_ENVIRONMENT_INTENSITY,
@@ -44,7 +43,9 @@ const factories: EffectFactories = {
   taa: createInteriorTaa,
   occlusion: createInteriorOcclusion,
   bloom: createInteriorBloom,
-  orbitBloom: createOrbitBloom,
+  // Bloom is the visit's alone, on trial (owner, 2026-11-13): in Vue 3D and Extérieur
+  // almost nothing crosses its threshold, and its 4x target cost a full-screen pass.
+  orbitBloom: () => undefined,
   orbitTaa: createOrbitTaa,
   orbitOcclusion: createOrbitOcclusion,
 };

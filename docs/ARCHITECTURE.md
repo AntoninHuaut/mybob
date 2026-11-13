@@ -47,7 +47,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Shader warm-up          | `src/scene/shaderWarmup.ts`, `shaderLog.ts`                                  | Links a view's shaders behind an overlay on first use; `mybob.shaders()` log of every link                          |
 | Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | Resolution steps per view, driven by frame time; the visit may go to 80 % at any pixel ratio                        |
 | Openings in plan        | `src/scene/planOpenings.ts`                                                  | Windows and doors drawn in Plan view, cut faces                                                                     |
-| Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion, bloom (walk, 3D view and Exterior)                                                       |
+| Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion; bloom in the walk only                                                                   |
 | View effect lifecycle   | `src/scene/viewEffects.ts`                                                   | Scene-owned environment and pipelines, camera replacement, effect tiers and disposal                                |
 | Diagnostics             | `src/scene/diagnostics.ts`                                                   | `mybob.diag()`: engine, GPU, frame rate, resolution, scene                                                          |
 | Frame profiler          | `src/scene/frameProfiler.ts`                                                 | `mybob.profile(s)`: GPU/CPU time and draw calls per image of the current view, loaded on demand                     |
@@ -143,6 +143,8 @@ with a migration.
   Vue 3D shows the levels under the displayed one, Extérieur shows them all (seen through
   the windows), Plan and Visite hide them (`updateOtherLevels`). They are built before the
   displayed level, whose `FixtureLights` must be the scene's last.
+- Changing level keeps the view (`loadProject(…, keep)` in `main.ts`): Extérieur, Plan, or a
+  visit restarted from the new level's start; changing project starts in Vue 3D.
 - After applying the camera, roof, section, cutaway and ambience, the viewer calls
   `onViewChange`. `main.syncViewChrome` derives buttons, titles, help and furniture policy
   from the accepted state. It never requests another transition. Ambience failures still
@@ -172,10 +174,12 @@ camera moves.
 ## Walk and rendering
 
 - Orbit temporal refinement is initialized only after a rendered scene frame establishes
-  texture-fetch support. Its 16-sample TAA precedes bloom, retains 4x MSAA on its first
-  target for motion and uses Babylon's default bypass while the camera moves. It needs
-  no velocity pre-pass. The initial bloom is replaced once to establish this order;
-  subsequent Plan round trips detach/reuse both pipelines. Plan resets the projection
+  texture-fetch support. Its 16-sample TAA retains 4x MSAA on its first target for motion
+  and uses Babylon's default bypass while the camera moves. It needs no velocity pre-pass.
+  Vue 3D and Extérieur carry no bloom since 2026-11-13 (owner's trial: almost nothing
+  crosses its threshold outside the visit, and its 4x target cost a full-screen pass); the
+  `orbitBloom` factory returns nothing, and the chain code still orders one if it comes
+  back. Plan round trips detach/reuse the pipelines. Plan resets the projection
   matrix to discard jitter. Orbit TAA stays outside walk effect tiers and does not
   request frames after initial setup: the existing 32-frame settle budget owns idle work.
   Screen overlays — room labels, dimension tags, the measure tag, export captions — project
@@ -322,14 +326,18 @@ offers them: Vue 3D occlusion was adopted (#205, described above), and three wer
   (default wall `#eeede8`), where both curves agree; they diverge on saturated colours in
   strong light, which this tool's projects rarely use (#202). The bloom thresholds and walk
   intensities, calibrated on ACES, are unchanged.
-- Occlusion stays at 16 samples with Babylon's fixed noise. The candidate took 8 samples and
+- Occlusion keeps Babylon's fixed noise. A candidate took 8 samples and
   swapped the noise among 8 patterns every image for the TAA to average (the GTAO/XeGTAO
   approach). Measured with « Mesurer chaque vue » on an RX 9060 XT, it saved 0.1–0.2 ms of a
   1.8 ms Visite image, and left streaky grain on plain walls even at rest: the walk's TAA
   clamps its history, so it never averages the moving noise away. Not worth a visible loss.
-  Its bilateral blur takes 8 taps per direction instead of Babylon's 16
-  (`OCCLUSION_BLUR_SAMPLES`): the blur, mostly its full-resolution vertical pass, cost 0.67
-  of the 3.0 ms visit on the owner's house. A narrower blur, not fewer occlusion samples.
+  Since 2026-11-13 the occlusion takes 8 samples, walk and Vue 3D, with the same fixed noise
+  and Babylon's 16-tap bilateral blur (`OCCLUSION_BLUR_SAMPLES`): the owner tried that pair
+  on the converted houses and kept it. An 8-tap blur (#254, 0.67 of a 3.0 ms visit saved on
+  the blur) left grey blotches high on the walls once paired with the 8 samples, and was
+  put back to 16. The rotating-noise candidate above stays rejected.
+- The sun shadow map is 1024 px since 2026-11-13 (owner's trial, was 2048): a quarter of the
+  map to render and filter, slightly softer edges, judged acceptable on the converted houses.
 - Sun shadows stay on medium PCF: contact-hardening shadows (PCSS, light size ratio 0.03)
   were compared in Extérieur with a solar preview and showed no visible difference (#204). The orbit experiment releases on mode exit and resets its controls on scene replacement.
   It remains outside production adaptive-quality policy.
