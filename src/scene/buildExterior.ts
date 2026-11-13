@@ -31,6 +31,7 @@ import {
   createFenceSlats,
   FENCE_SLATS_TILE,
   createHedgeTextures,
+  HEDGE_DETAIL_TILE,
   HEDGE_TILE,
   FENCE_MESH_TILE,
   LAWN_DETAIL_TILE,
@@ -483,7 +484,11 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     const m = material('hedge', '#ffffff');
     const maps = createHedgeTextures(scene);
     m.albedoTexture = tiled(maps.albedo, HEDGE_TILE);
-    m.bumpTexture = tiled(maps.normal, HEDGE_TILE);
+    m.detailMap.texture = tiled(maps.detail, HEDGE_DETAIL_TILE);
+    m.detailMap.isEnabled = true;
+    m.detailMap.diffuseBlendLevel = 0.6;
+    m.detailMap.roughnessBlendLevel = 0.4;
+    m.detailMap.bumpLevel = 1;
     m.roughness = 0.8;
     return m;
   });

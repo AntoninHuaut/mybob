@@ -233,19 +233,23 @@ test('the fence mesh is mostly open, with wires that meet across the tile seam',
   for (let x = 0; x < size; x++) assert.equal(data[x * 4 + 3], 255);
 });
 
-test('the hedge reads as foliage: dark gaps, lit leaves, a green that dominates', () => {
-  const { albedo } = hedgeMapData();
-  let dark = 0,
-    lit = 0,
+test('the hedge reads as foliage: varied greens, and leaf detail neutral on average', () => {
+  const { albedo, detail } = hedgeMapData();
+  let low = 255,
+    high = 0,
     green = 0;
   const texels = albedo.size * albedo.size;
   for (let i = 0; i < texels; i++) {
     const [r, g, b] = [albedo.data[i * 4], albedo.data[i * 4 + 1], albedo.data[i * 4 + 2]];
-    if (g < 60) dark++;
-    if (g > 120) lit++;
+    low = Math.min(low, g);
+    high = Math.max(high, g);
     if (g > r && g > b) green++;
   }
-  assert.ok(dark / texels > 0.1, `shaded gaps ${dark / texels}`);
-  assert.ok(lit / texels > 0.1, `lit leaves ${lit / texels}`);
+  assert.ok(high - low > 60, `green spread ${low}..${high}`);
   assert.equal(green, texels, 'every texel stays green');
+  // A detail map must not shift the hedge's mean colour, only modulate it.
+  let sum = 0;
+  for (let i = 0; i < detail.size * detail.size; i++) sum += detail.data[i * 4];
+  const mean = sum / (detail.size * detail.size);
+  assert.ok(Math.abs(mean - 128) < 12, `detail mean ${mean}`);
 });

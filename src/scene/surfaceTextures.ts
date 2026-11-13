@@ -549,40 +549,30 @@ export function createFenceMesh(scene: Scene): RawTexture {
   return upload(scene, 'fence-mesh', fenceMeshData());
 }
 
-/** Metres covered by one tile of the hedge maps. */
-export const HEDGE_TILE = 0.6;
-const HEDGE_SIZE = 256;
+/**
+ * The hedge takes the lawn's two scales: colour and density patches over a
+ * `HEDGE_TILE` tile, leaves in a detail map every `HEDGE_DETAIL_TILE`. The two
+ * never line up, so a long hedge shows no repeat.
+ */
+export const HEDGE_TILE = 4.7;
+export const HEDGE_DETAIL_TILE = 0.43;
+const HEDGE_SIZE = 512;
+const HEDGE_DETAIL_SIZE = 256;
 
 /**
- * A clipped hedge's leaf height: clumps a dozen centimetres across, leaves of a
- * few centimetres on them. Low values are the shaded gaps between leaves.
+ * Hedge colour, sRGB bytes: clumps from half a metre down to a few centimetres,
+ * denser and sparser stretches over metres, some more yellow, some bluer.
  */
-function hedgeHeight(size: number): Float32Array {
-  const height = new Float32Array(size * size);
-  for (let y = 0; y < size; y++)
-    for (let x = 0; x < size; x++) {
-      const u = x / size;
-      const v = y / size;
-      const clump = fbm(u, v, 5, 5, 2, 211);
-      const leaf = fbm(u, v, 24, 24, 2, 223);
-      height[y * size + x] = clump * 0.45 + leaf * 0.55;
-    }
-  return height;
-}
-
-/**
- * Hedge colour, sRGB bytes: deep shade in the gaps, lit leaves on the bumps,
- * some leaves more yellow, some bluer, so the block reads as foliage.
- */
-function hedgeAlbedo(height: Float32Array, size: number): Uint8Array {
+function hedgeAlbedo(size: number): Uint8Array {
   const data = new Uint8Array(size * size * 4);
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const u = x / size;
       const v = y / size;
-      const h = height[y * size + x];
-      const light = 0.35 + 0.95 * smoothstep(0.32, 0.72, h);
-      const tint = fbm(u, v, 12, 12, 2, 229) - 0.5;
+      const clumps = fbm(u, v, 10, 10, 4, 211);
+      const broad = fbm(u, v, 2, 2, 2, 217);
+      const light = 0.5 + 0.8 * smoothstep(0.3, 0.72, clumps * 0.7 + broad * 0.3);
+      const tint = fbm(u, v, 4, 4, 2, 229) - 0.5;
       const offset = (y * size + x) * 4;
       data[offset] = Math.round(Math.min(255, Math.max(0, (72 + tint * 50) * light)));
       data[offset + 1] = Math.round(Math.min(255, (112 + tint * 22) * light));
@@ -592,24 +582,46 @@ function hedgeAlbedo(height: Float32Array, size: number): Uint8Array {
   return data;
 }
 
-let hedgeCache: { albedo: SurfaceMapData; normal: SurfaceMapData } | undefined;
+/**
+ * Leaves as a Babylon detail map (red albedo offset, green/alpha normal, blue
+ * roughness offset, neutral at 0.5): the gaps between leaves darker and rougher.
+ */
+function hedgeDetail(size: number): Uint8Array {
+  const height = new Float32Array(size * size);
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const u = x / size;
+      const v = y / size;
+      height[y * size + x] = fbm(u, v, 8, 8, 2, 223) * 0.6 + fbm(u, v, 24, 24, 2, 227) * 0.4;
+    }
+  const normal = normalFromHeight(height, size, 4);
+  const data = new Uint8Array(size * size * 4);
+  for (let i = 0; i < size * size; i++) {
+    const relief = height[i] - 0.5;
+    data[i * 4] = Math.round(Math.max(0, Math.min(255, 128 + relief * 140)));
+    data[i * 4 + 1] = normal[i * 4 + 1];
+    data[i * 4 + 2] = Math.round(128 - relief * 60);
+    data[i * 4 + 3] = normal[i * 4];
+  }
+  return data;
+}
 
-/** The hedge's colour and relief, from one height field, computed once. */
+let hedgeCache: { albedo: SurfaceMapData; detail: SurfaceMapData } | undefined;
+
+/** The hedge's colour and leaf detail, computed once. */
 export function hedgeMapData() {
-  if (hedgeCache) return hedgeCache;
-  const height = hedgeHeight(HEDGE_SIZE);
-  hedgeCache = {
-    albedo: { size: HEDGE_SIZE, data: hedgeAlbedo(height, HEDGE_SIZE) },
-    normal: { size: HEDGE_SIZE, data: normalFromHeight(height, HEDGE_SIZE, 6) },
+  hedgeCache ??= {
+    albedo: { size: HEDGE_SIZE, data: hedgeAlbedo(HEDGE_SIZE) },
+    detail: { size: HEDGE_DETAIL_SIZE, data: hedgeDetail(HEDGE_DETAIL_SIZE) },
   };
   return hedgeCache;
 }
 
 /** The hedge maps, uploaded only for a plot with a hedge. */
-export function createHedgeTextures(scene: Scene): { albedo: RawTexture; normal: RawTexture } {
+export function createHedgeTextures(scene: Scene): { albedo: RawTexture; detail: RawTexture } {
   const maps = hedgeMapData();
   return {
     albedo: upload(scene, 'hedge-albedo', maps.albedo),
-    normal: upload(scene, 'hedge-normal', maps.normal),
+    detail: upload(scene, 'hedge-detail', maps.detail),
   };
 }
