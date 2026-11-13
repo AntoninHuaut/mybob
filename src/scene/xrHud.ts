@@ -48,10 +48,12 @@ export class FrameCounter {
  * Text lines of the counter. The second line only exists once the visit has been sent back
  * inside the modelled ground, so a wall of the terrain that pushes the visitor back is named.
  */
-export function hudLines(fps: number, limitHits: number): string[] {
-  const lines = [frameRateText(fps)];
-  if (limitHits > 0) lines.push(`limite du terrain ×${limitHits}`);
-  return lines;
+export function hudLines(fps: number, limitHits: number, seated = false): string[] {
+  const notes = [
+    ...(seated ? ['mode assis'] : []),
+    ...(limitHits > 0 ? [`limite du terrain ×${limitHits}`] : []),
+  ];
+  return notes.length ? [frameRateText(fps), notes.join(' · ')] : [frameRateText(fps)];
 }
 
 const TEXTURE_WIDTH = 256;
@@ -96,8 +98,8 @@ export class XrHud {
     this.plane.position.set(-0.14, -0.17, -0.6);
   }
 
-  show(fps: number, limitHits: number) {
-    const lines = hudLines(fps, limitHits);
+  show(fps: number, limitHits: number, seated = false) {
+    const lines = hudLines(fps, limitHits, seated);
     const key = `${lines.join('|')}${frameRateIsLow(fps)}`;
     if (key === this.shown || !this.texture) return;
     this.shown = key;

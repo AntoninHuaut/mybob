@@ -20,6 +20,9 @@ import {
   turnAxis,
   XR_TURN_DEGREES_PER_SECOND,
   XR_POSE_JUMP,
+  FrameRateGovernor,
+  pickFrameRate,
+  seatedLift,
   XR_WALK_SPEED,
 } from '../src/scene/xrWalk';
 import { createWalkCamera } from '../src/scene/walkCamera';
@@ -149,7 +152,16 @@ test('controllers are read from the xr-standard gamepad, without a controller mo
   assert.ok(Math.abs(state.x - 0.5) < 1e-9);
   assert.equal(state.y, -1);
   assert.equal(state.trigger, true);
-  assert.deepEqual(readControllerGamepad(null), { x: 0, y: 0, trigger: false });
+  // Button 4 is A or X; button 5 (B or Y) is not read.
+  assert.equal(state.face, false);
+  assert.equal(
+    readControllerGamepad({
+      ...gamepad,
+      buttons: [0, 1, 2, 3, 4].map((i) => pressed(i === 4)),
+    } as unknown as Gamepad).face,
+    true,
+  );
+  assert.deepEqual(readControllerGamepad(null), { x: 0, y: 0, trigger: false, face: false });
 });
 
 test('leaving the headset keeps the gaze direction on the screen walk camera', () => {
@@ -185,6 +197,7 @@ function headsetWalk(start: { point: [number, number]; yaw: number }) {
       scene,
       level,
       start,
+      eyeHeight: 1.65,
       isDestination: () => true,
       toggleDoor: () => {},
       takeStair: () => false,
@@ -371,4 +384,42 @@ test('the headset session starts with the veil alone in its camera layers', () =
   assert.equal(session.camera.layerMask, XR_DEFAULT_LAYERS);
   assert.ok(session.scene.meshes.every((mesh) => !mesh.name.startsWith('xr-veil')));
   session.dispose();
+});
+
+test('A or X switches seated mode: the eyes go to the eye height, then back to the real height', () => {
+  assert.ok(Math.abs(seatedLift(1.11, 1.65) - 0.54) < 1e-9);
+  assert.equal(seatedLift(1.8, 1.65), 0, 'never lowered');
+  assert.equal(seatedLift(Number.NaN, 1.65), 0);
+  const session = headsetWalk({ point: [4, 4.2], yaw: 0 });
+  session.camera.position.y = 1.11;
+  const walk = session.walk;
+  const floor = walk.rig.position.y;
+  assert.equal(walk.seatedOffset, 0, 'standing by default, nothing guessed');
+  walk.toggleSeated();
+  assert.ok(Math.abs(walk.seatedOffset - 0.54) < 1e-9, `offset ${walk.seatedOffset}`);
+  assert.ok(Math.abs(walk.head().y - floor - 1.65) < 1e-6, 'eyes at the walk eye height');
+  walk.toggleSeated();
+  assert.equal(walk.seatedOffset, 0);
+  assert.ok(Math.abs(walk.head().y - floor - 1.11) < 1e-6, 'real height back');
+  session.dispose();
+});
+
+test('the headset counter names the seated mode', () => {
+  assert.deepEqual(hudLines(72, 0, true).slice(1), ['mode assis']);
+  assert.deepEqual(hudLines(72, 2, true).slice(1), ['mode assis · limite du terrain ×2']);
+});
+
+test('the headset asks for the highest rate up to 90 Hz and steps down when it cannot hold it', () => {
+  assert.equal(pickFrameRate([72, 80, 90, 120]), 90);
+  assert.equal(pickFrameRate([60, 72]), 72);
+  assert.equal(pickFrameRate(undefined), undefined);
+  const governor = new FrameRateGovernor(90, [72, 80, 90, 120]);
+  assert.equal(governor.observe(88), undefined);
+  assert.equal(governor.observe(70), undefined);
+  assert.equal(governor.observe(70), undefined);
+  assert.equal(governor.observe(70), 80, 'three slow windows in a row');
+  assert.equal(governor.observe(79), undefined, 'holding 80 is fine');
+  for (let i = 0; i < 2; i++) governor.observe(60);
+  assert.equal(governor.observe(60), 72);
+  for (let i = 0; i < 5; i++) assert.equal(governor.observe(40), undefined, 'nothing lower');
 });
