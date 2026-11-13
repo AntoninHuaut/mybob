@@ -98,7 +98,6 @@ function setup() {
     active: true,
     camera: screen,
     headset: false,
-    effectsEnabled: true,
     effectTier: 0,
   };
   return { engine, scene, screen, headset, effects, state, environment, calls, resources };
@@ -136,7 +135,7 @@ test('walk effects release their environment on exit and preserve a later owner'
   }
 });
 
-test('camera switches dispose the old chain before rebuilding in order, with no headset bloom', () => {
+test('the headset drops the screen chain and builds no post-processing of its own', () => {
   const { engine, scene, effects, state, headset, calls, resources } = setup();
   try {
     effects.updateWalk(state);
@@ -146,10 +145,9 @@ test('camera switches dispose the old chain before rebuilding in order, with no 
       'dispose:occlusion:screen',
       'dispose:taa:screen',
       'dispose:bloom:screen',
-      'taa:headset',
-      'occlusion:headset',
     ]);
-    effects.updateWalk({ ...state, camera: headset, headset: true, effectsEnabled: false });
+    effects.updateWalk({ ...state, camera: headset, headset: true });
+    assert.equal(calls.length, 3, 'staying in the headset builds nothing');
     assert.ok(resources.every((resource) => resource.disposals === 1));
     effects.updateWalk(state);
     assert.deepEqual(calls.slice(-3), ['taa:screen', 'occlusion:screen', 'bloom:screen']);
@@ -220,7 +218,7 @@ test('unavailable environment and occlusion are remembered only for their scene'
         bloom: () => undefined,
         orbitBloom: () => undefined,
       });
-      const state = { active: true, camera, headset: false, effectsEnabled: true, effectTier: 0 };
+      const state = { active: true, camera, headset: false, effectTier: 0 };
       for (let entry = 0; entry < 3; entry++) {
         effects.updateWalk(state);
         assert.deepEqual(effects.status(true), { environment: false, occlusion: 'unavailable' });
@@ -601,7 +599,6 @@ test('leaving the walk switches the temporal jitter plugin off before the pipeli
       active: true,
       camera,
       headset: false,
-      effectsEnabled: true,
       effectTier: 0,
     });
     effects.releaseWalkPipelines();

@@ -360,8 +360,7 @@ walk where the headset left the visitor and restores the camera of the current m
 - Controls, xr-standard mapping: left stick walks where the head looks (1.6 m/s, walls collide
   through an ellipsoid hung under the head, resolved on the rig, a 20 cm step does not); right
   stick sideways snaps 30°, pushed forward aims a teleport validated like a walk destination
-  (`isSceneVisitDestination` or `isParcelDestination`); trigger on a door toggles it; B/Y
-  switches the walk post-processing, to compare frame rates in the headset.
+  (`isSceneVisitDestination` or `isParcelDestination`); trigger on a door toggles it.
 - `local-floor` reference space: the real head height replaces the eye-height setting, and the
   real floor is kept on `groundElevationAt` every frame. Room-scale moves (the headset itself
   moving, the emulator's ZQSD) go through the stick's collider every frame (`followPose`): the
@@ -370,13 +369,13 @@ walk where the headset left the visitor and restores the camera of the current m
   wall: there, the `isVisitArea` guard sends the visitor back.
 - No controller model is downloaded: gamepads are read directly and the pointers are drawn
   locally.
-- In a session the render loop draws every frame (a skipped frame judders in a headset) and the
-  dynamic resolution is off. TAA and SSAO are rebuilt on the session camera at its **first
-  frame**, once the framebuffer has its size. The bloom stays off in the headset: on the session
-  camera it renders into a zero-size target every frame (`INVALID_FRAMEBUFFER_OPERATION`) and
-  adds nothing. Whether TAA and SSAO hold the frame rate on a Quest 2 is still to be measured on
-  the device.
-- A counter plane (`scene/xrHud.ts`) is carried by the head, lower left of the view: the frame
+- In a session the render loop draws every frame (a skipped frame judders in a h- In a session the render loop draws every frame (a skipped frame judders in a headset) and the
+  dynamic resolution is off. **No post-processing in the headset**, and no switch to bring it
+  back: on a Quest 2, TAA and SSAO held the visit at about 5 fps and the TAA jitter flickered
+  between the eyes, an unbearable view the visitor could not easily leave. The session also
+  asks for the strongest **fixed foveation** (`XR_FIXED_FOVEATION`): the lens edges, blurred by
+  the optics anyway, are drawn at a lower resolution; browsers without it ignore the request.
+  iew: the frame
   rate over 500 ms windows, in red under 24 fps (the page's own counter is DOM, which a headset
   never shows). A second line, `limite du terrain ×N`, appears once the `isVisitArea` guard has
   sent the visitor back inside the modelled ground: it tells a rollback from that guard apart
