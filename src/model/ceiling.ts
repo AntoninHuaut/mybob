@@ -1,5 +1,6 @@
 import earcut from 'earcut';
-import type { CeilingSlope, Level, Point2 } from './types';
+import type { CeilingSlope, HouseProject, Level, Point2 } from './types';
+import { resolveRoofWindow, roofFaceHeightAt } from './geometry';
 
 /**
  * Ceiling of a level under its roof slopes. The ceiling is the lowest of the flat
@@ -237,6 +238,34 @@ function lowerBy(piece: CeilingPiece, slope: CeilingSlope): CeilingPiece[] {
   return result;
 }
 
+/** The inside half-planes of a convex polygon, each as `fn ≤ 0`. */
+function halfPlanes(polygon: Polygon): Linear[] {
+  const cx = polygon.reduce((sum, p) => sum + p[0], 0) / polygon.length;
+  const cz = polygon.reduce((sum, p) => sum + p[1], 0) / polygon.length;
+  return polygon.map((p, i) => {
+    const q = polygon[(i + 1) % polygon.length];
+    // Zero on the edge, signed so that the centre is inside.
+    const cxEdge = q[1] - p[1];
+    const czEdge = -(q[0] - p[0]);
+    const fn: Linear = { c: -(cxEdge * p[0] + czEdge * p[1]), cx: cxEdge, cz: czEdge };
+    return evaluate(fn, cx, cz) > 0 ? negate(fn) : fn;
+  });
+}
+
+/** A convex piece minus a convex cutout: at most one piece per side of the cutout. */
+function cutAway(piece: CeilingPiece, cutout: Polygon): CeilingPiece[] {
+  const result: CeilingPiece[] = [];
+  let rest = piece.polygon;
+  for (const plane of halfPlanes(cutout)) {
+    if (rest.length < 3) break;
+    const outside = clip(rest, negate(plane));
+    if (outside.length >= 3 && Math.abs(area(outside)) > 1e-10)
+      result.push({ polygon: outside, plane: piece.plane });
+    rest = clip(rest, plane);
+  }
+  return result;
+}
+
 /** A triangle of the ceiling surface, its vertices as [x, height, z]. */
 export type CeilingTriangle = [
   [number, number, number],
@@ -253,6 +282,8 @@ export function ceilingTriangles(
   level: Level,
   outline: Point2[] = level.outline,
   holes: Point2[][] = [],
+  /** Convex polygons cut out of the ceiling, such as the well of a roof window. */
+  cutouts: Point2[][] = [],
 ): CeilingTriangle[] {
   const points = [...outline];
   const holeIndices: number[] = [];
@@ -272,6 +303,7 @@ export function ceilingTriangles(
     ];
     for (const slope of level.ceilingSlopes ?? [])
       pieces = pieces.flatMap((piece) => lowerBy(piece, slope));
+    for (const cutout of cutouts) pieces = pieces.flatMap((piece) => cutAway(piece, cutout));
     for (const { polygon, plane } of pieces)
       for (let k = 1; k + 1 < polygon.length; k++) {
         const vertex = (p: Point2): [number, number, number] => [
@@ -399,4 +431,74 @@ export function ceilingSteps(
       }
   }
   return faces;
+}
+
+/** What a roof window does to the ceiling under it: a hole, and the well's sides. */
+export interface CeilingWells {
+  /** Plan footprints of the wells, convex, cut out of the ceiling. */
+  cutouts: Point2[][];
+  /** Vertical sides of the wells, from the ceiling up to the roof face. */
+  reveals: { points: [number, number, number][]; normal: [number, number, number] }[];
+}
+
+/**
+ * The wells of the roof windows above a level with sloping ceilings. Each window
+ * opens the ceiling over its plan footprint, and its sides rise vertically from the
+ * ceiling to the roof face, where the frame sits: from inside, the window shows at
+ * the top of its well instead of being hidden behind the slope. Only the part of a
+ * footprint over the level's floor is opened.
+ */
+export function roofWindowWells(project: HouseProject, level: Level): CeilingWells {
+  const wells: CeilingWells = { cutouts: [], reveals: [] };
+  if (!level.ceilingSlopes?.length) return wells;
+  const reach =
+    4 * level.outline.reduce((r, [x, z]) => Math.max(r, Math.abs(x), Math.abs(z)), 0) + 10;
+  for (const roof of project.site?.roofs ?? [])
+    for (const window of roof.windows ?? []) {
+      const resolved = resolveRoofWindow(roof.vertices, roof.faces, window);
+      if (!resolved.frame) continue;
+      const face = roof.faces[resolved.frame.faceIndex];
+      const footprint: Polygon = resolved.frame.corners.map(([x, , z]) => [x, z]);
+      // Only where the footprint is over the floor.
+      let over: Polygon = level.outline;
+      for (const plane of halfPlanes(footprint)) over = clip(over, plane);
+      if (over.length < 3 || Math.abs(area(over)) < 1e-4) continue;
+      wells.cutouts.push(footprint);
+      const roofHeight = (x: number, z: number) =>
+        roofFaceHeightAt(roof.vertices, face, x, z) - level.elevation;
+      const cx = footprint.reduce((sum, p) => sum + p[0], 0) / footprint.length;
+      const cz = footprint.reduce((sum, p) => sum + p[1], 0) / footprint.length;
+      footprint.forEach((p, i) => {
+        const q = footprint[(i + 1) % footprint.length];
+        const length = Math.hypot(q[0] - p[0], q[1] - p[1]);
+        if (length < 1e-6) return;
+        const u: Point2 = [(q[0] - p[0]) / length, (q[1] - p[1]) / length];
+        // Into the well.
+        let normal: [number, number, number] = [-u[1], 0, u[0]];
+        if (normal[0] * (cx - p[0]) + normal[2] * (cz - p[1]) < 0) normal = [u[1], 0, -u[0]];
+        for (const [t0, t1] of insideIntervals(level.outline, p, u, reach)) {
+          const s0 = Math.max(0, t0);
+          const s1 = Math.min(length, t1);
+          if (s1 - s0 < 1e-6) continue;
+          const at = (t: number): Point2 => [p[0] + u[0] * t, p[1] + u[1] * t];
+          for (const run of ceilingProfile(level, at(s0), at(s1))) {
+            const a = at(s0 + run.start);
+            const b = at(s0 + run.end);
+            const topA = roofHeight(a[0], a[1]);
+            const topB = roofHeight(b[0], b[1]);
+            if (topA - run.from < 1e-6 && topB - run.to < 1e-6) continue;
+            wells.reveals.push({
+              points: [
+                [a[0], run.from, a[1]],
+                [b[0], run.to, b[1]],
+                [b[0], Math.max(topB, run.to), b[1]],
+                [a[0], Math.max(topA, run.from), a[1]],
+              ],
+              normal,
+            });
+          }
+        }
+      });
+    }
+  return wells;
 }
