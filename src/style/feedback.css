@@ -12,6 +12,17 @@
   color: #5b754c;
   font-size: 14px;
 }
+/* While a view prepares, the chrome outside the overlay waits visibly instead of freezing:
+   no clicks (queued ones would land seconds later), dimmed after a short delay so a quick
+   preparation does not flash. Opacity animates off the main thread, through the stalls. */
+body.view-preparing {
+  cursor: progress;
+}
+body.view-preparing .app-header,
+body.view-preparing .sidebar {
+  pointer-events: none;
+  opacity: 0.55;
+}
 .loading-mark {
   color: #4b743c;
   animation: breathe 1.8s ease-in-out infinite;

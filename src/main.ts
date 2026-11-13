@@ -2275,6 +2275,9 @@ async function start() {
     viewer.onPreparing = (active) => {
       el('#loading span').textContent = 'Préparation de la vue…';
       el('#loading').hidden = !active;
+      // Linking shaders stalls the page between images: the header and the sidebar,
+      // outside the overlay, would look alive but answer nothing. They wait visibly.
+      document.body.classList.toggle('view-preparing', active);
     };
     el('#loading').hidden = true;
     onboarding = readOnboarding();

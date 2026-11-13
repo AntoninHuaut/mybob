@@ -94,6 +94,10 @@ button svg {
   position: relative;
   z-index: 50;
   background: var(--paper);
+  transition: opacity 0.25s;
+}
+body.view-preparing .app-header {
+  transition: opacity 0.25s 0.15s;
 }
 .brand {
   display: flex;
@@ -208,7 +212,15 @@ button svg {
   z-index: 10;
   transition:
     width 0.18s,
-    flex-basis 0.18s;
+    flex-basis 0.18s,
+    opacity 0.25s;
+}
+body.view-preparing .sidebar {
+  /* Dimmed only after a short delay: a quick view preparation does not flash. */
+  transition:
+    width 0.18s,
+    flex-basis 0.18s,
+    opacity 0.25s 0.15s;
 }
 .sidebar > * {
   flex-shrink: 0;
