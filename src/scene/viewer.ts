@@ -1155,7 +1155,10 @@ export class HouseViewer {
     // Every caller changed the mode, the cut, the sun or the walls on show.
     this.shadowRefresh?.invalidate();
     const explicitSection = this.sectionHeight !== undefined && Number.isFinite(this.sectionHeight);
+    // The headset has no sun shadows: their lookup is too costly for a Quest 2, and the
+    // 1024 px map's soft, jagged edges show more in a headset than on a screen.
     const suppressed =
+      !!this.immersive ||
       this.mode === 'plan' ||
       (this.mode === 'overview' &&
         !this.exteriorView &&
@@ -1446,6 +1449,7 @@ export class HouseViewer {
           isSceneVisitDestination(scene, this.level, point) ||
           isParcelDestination(this.level, this.site, point),
         toggleDoor: (id) => this.toggleDoor(id),
+        isReady: () => this.immersiveReady(scene),
         onEnd: (ended) => this.leaveImmersive(ended),
       });
       // A project load or a mode change may have happened while the session started.
@@ -1455,12 +1459,27 @@ export class HouseViewer {
       }
       this.immersive = walk;
       this.updateSky();
+      this.updateShadowPolicy();
       // The screen walk's pipelines are bound to its camera: dropped until the headset is ready.
       this.viewEffects?.releaseWalkPipelines();
       this.onImmersiveChange?.(true);
     } finally {
       this.immersiveStarting = false;
     }
+  }
+
+  /**
+   * The headset veil may lift: every enabled, visible mesh is ready to draw. Each mesh is
+   * asked, not only up to the first refusal, so that all their links start together.
+   */
+  private immersiveReady(scene: Scene): boolean {
+    if (scene !== this.scene || scene.isDisposed) return true;
+    let ready = true;
+    for (const mesh of scene.meshes) {
+      if (!mesh.isEnabled() || !mesh.isVisible || !mesh.subMeshes?.length) continue;
+      if (!mesh.isReady(true)) ready = false;
+    }
+    return ready && this.engine.areAllEffectsReady() && scene.getWaitingItemsCount() === 0;
   }
 
   async exitImmersive() {
@@ -1475,6 +1494,7 @@ export class HouseViewer {
     this.immersive = undefined;
     walk.dispose();
     this.updateSky();
+    this.updateShadowPolicy();
     if (!this.scene || !this.walk) return;
     this.walk.position.set(x, groundElevationAt(this.level, this.site, [x, z]) + this.eyeHeight, z);
     this.walk.rotation.set(0, yawFromDirection(forward), 0);
