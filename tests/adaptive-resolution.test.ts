@@ -70,15 +70,23 @@ test('a single slow frame does not lower the resolution', () => {
   assert.equal(scale, 1);
 });
 
-test('effects are lowered one tier per series, only once the resolution is at its floor', () => {
-  const resolution = new AdaptiveResolution(1.5);
-  feed(resolution, SERIES * (RENDER_SCALES.length - 1), 45);
-  assert.equal(resolution.scale, RENDER_SCALES.at(-1));
-  assert.equal(resolution.effectTier, 0, 'the scale went first');
+test('the occlusion goes first, then the resolution, one step per series', () => {
+  const resolution = new AdaptiveResolution(1.5, 1, EFFECT_TIERS);
   feed(resolution, SERIES, 45);
-  assert.equal(resolution.effectTier, 1);
+  assert.equal(resolution.effectTier, 1, 'the occlusion went first');
+  assert.equal(resolution.scale, 1);
+  feed(resolution, SERIES, 45);
+  assert.equal(resolution.scale, RENDER_SCALES[1]);
   feed(resolution, SERIES * 10, 45);
   assert.equal(resolution.effectTier, EFFECT_TIERS);
+  assert.equal(resolution.scale, RENDER_SCALES.at(-1));
+});
+
+test('a view without occlusion has no tier to drop: its resolution goes first', () => {
+  const resolution = new AdaptiveResolution(1.5);
+  feed(resolution, SERIES * 10, 45);
+  assert.equal(resolution.effectTier, 0);
+  assert.equal(resolution.scale, RENDER_SCALES.at(-1));
 });
 
 test('a machine holding the frame rate never leaves tier 0', () => {
@@ -93,7 +101,7 @@ test('outside the visit, resolution never falls below one pixel per CSS pixel', 
     [1.25, 0.8],
     [1.5, 0.67],
   ] as const) {
-    const resolution = new AdaptiveResolution(ratio);
+    const resolution = new AdaptiveResolution(ratio, 1, EFFECT_TIERS);
     feed(resolution, SERIES * 10, 40);
     assert.equal(resolution.scale, expected);
     assert.equal(resolution.effectTier, EFFECT_TIERS);
@@ -140,20 +148,21 @@ test('the bench can pin a tier and hand it back', () => {
 });
 
 test('a slow but running machine, like software rendering at under 2 fps, is still measured', () => {
-  const resolution = new AdaptiveResolution(1.6);
+  const resolution = new AdaptiveResolution(1.6, 1, EFFECT_TIERS);
   feed(resolution, SERIES * 5, 800);
   assert.equal(resolution.scale, RENDER_SCALES.at(-1));
   assert.ok(resolution.effectTier > 0);
 });
 
-test('the visit may go down to its floor below one pixel per CSS pixel, then drops its tier', () => {
+test('the visit drops its occlusion, then may go down to its floor below one pixel per CSS pixel', () => {
   for (const [ratio, expected] of [
     [1, VISIT_SCALE_FLOOR],
     [1.25, 0.8],
     [1.5, 0.67],
   ] as const) {
-    const resolution = new AdaptiveResolution(ratio, VISIT_SCALE_FLOOR);
-    assert.equal(feed(resolution, SERIES, 40), RENDER_SCALES[1], 'the first step comes first');
+    const resolution = new AdaptiveResolution(ratio, VISIT_SCALE_FLOOR, EFFECT_TIERS);
+    assert.equal(feed(resolution, SERIES, 40), 1, 'the occlusion goes first');
+    assert.equal(resolution.effectTier, EFFECT_TIERS);
     feed(resolution, SERIES * 10, 40);
     assert.equal(resolution.scale, expected);
     assert.equal(resolution.effectTier, EFFECT_TIERS);
@@ -180,7 +189,9 @@ test('entering a view again restarts its warm-up: the images around a switch are
   views.for('plan');
   assert.equal(views.for('walk'), walk, 'the same resolution comes back');
   assert.equal(feed(walk, WARMUP_FRAMES + FRAME_SAMPLES - 1, 60), 1);
-  assert.equal(feed(walk, 1, 60), RENDER_SCALES[1]);
+  feed(walk, 1, 60);
+  assert.equal(walk.effectTier, EFFECT_TIERS, 'the occlusion goes first');
+  assert.equal(feed(walk, WARMUP_FRAMES + FRAME_SAMPLES, 60), RENDER_SCALES[1]);
   // Asking again for the current view is no switch: only the resize's own warm-up applies.
   views.for('walk');
   assert.equal(feed(walk, WARMUP_FRAMES + FRAME_SAMPLES, 60), RENDER_SCALES[2]);
@@ -201,6 +212,8 @@ test('leaving the page restarts the warm-up of every view', () => {
   const walk = views.for('walk');
   feed(walk, WARMUP_FRAMES + FRAME_SAMPLES - 1, 60);
   views.resume();
-  assert.equal(feed(walk, WARMUP_FRAMES + FRAME_SAMPLES - 1, 60), 1);
-  assert.equal(feed(walk, 1, 60), RENDER_SCALES[1]);
+  feed(walk, WARMUP_FRAMES + FRAME_SAMPLES - 1, 60);
+  assert.equal(walk.effectTier, 0, 'the half-measured series was dropped');
+  feed(walk, 1, 60);
+  assert.equal(walk.effectTier, EFFECT_TIERS);
 });

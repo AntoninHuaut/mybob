@@ -5,19 +5,18 @@
 export const RENDER_SCALES = [1, 0.8, 0.67] as const;
 
 /**
- * Lowest scale the visit may take even below one rendered pixel per CSS pixel. Elsewhere a
- * screen at pixel ratio 1 stays at 100 %, and its only lever was dropping the occlusion; in
- * the visit, slightly softer pixels at 80 % (0.64 of the pixel work) cost the eye less than
- * losing the corner hollows. Plan, Vue 3D and Extérieur keep the one-pixel floor.
+ * Lowest scale the visit may take even below one rendered pixel per CSS pixel, once its
+ * occlusion is gone. Plan, Vue 3D and Extérieur keep the one-pixel floor.
  */
 export const VISIT_SCALE_FLOOR = 0.8;
 
 /**
- * Effect tiers, tried once the resolution is at its floor (it costs the least to the eye):
- * 1 no occlusion. The occlusion is never degraded on the way: a grainy cheap-blur version
- * is the ugliest of the states, and a look that changes by itself reads as a bug. Fewer
- * temporal antialiasing samples is no tier: the count only sets the length of the jitter
- * sequence, each image costs the same.
+ * Effect tiers, dropped **before** the resolution (owner, 2026-11-13: when the frame rate is
+ * low, rather lose the occlusion than sharpness): 1 no occlusion. Only the views that have
+ * one (the visit, Vue 3D) have a tier to drop. The occlusion is never degraded on the way:
+ * a grainy cheap-blur version is the ugliest of the states, and a look that changes by
+ * itself reads as a bug. Fewer temporal antialiasing samples is no tier: the count only
+ * sets the length of the jitter sequence, each image costs the same.
  */
 export const EFFECT_TIERS = 1;
 
@@ -57,10 +56,12 @@ export class AdaptiveResolution {
   /**
    * `floor`: scales at or above it are allowed whatever the pixel ratio; below it, a step
    * must keep at least one rendered pixel per CSS pixel. 1 keeps only that rule.
+   * `tiers`: effect tiers this view can drop, first (0 for a view without occlusion).
    */
   constructor(
     private readonly pixelRatio: number,
     private readonly floor = 1,
+    private readonly tiers = 0,
   ) {}
 
   /**
@@ -81,11 +82,11 @@ export class AdaptiveResolution {
       this.samples = [];
       if (median > FRAME_BUDGET_MS) {
         const next = RENDER_SCALES[this.level + 1];
-        if (next !== undefined && (next * this.pixelRatio >= 1 || next >= this.floor)) {
-          this.level++;
-          this.warmup = WARMUP_FRAMES;
-        } else if (this.effectLevel < EFFECT_TIERS) {
+        if (this.effectLevel < this.tiers) {
           this.effectLevel++;
+          this.warmup = WARMUP_FRAMES;
+        } else if (next !== undefined && (next * this.pixelRatio >= 1 || next >= this.floor)) {
+          this.level++;
           this.warmup = WARMUP_FRAMES;
         }
       }
@@ -138,7 +139,12 @@ export class ViewResolutions {
   for(view: string): AdaptiveResolution {
     let resolution = this.views.get(view);
     if (!resolution) {
-      resolution = new AdaptiveResolution(this.pixelRatio, view === 'walk' ? VISIT_SCALE_FLOOR : 1);
+      resolution = new AdaptiveResolution(
+        this.pixelRatio,
+        view === 'walk' ? VISIT_SCALE_FLOOR : 1,
+        // Only the visit and Vue 3D carry an occlusion to drop.
+        view === 'walk' || view === 'overview' ? EFFECT_TIERS : 0,
+      );
       resolution.force(this.forcedTier);
       this.views.set(view, resolution);
     }

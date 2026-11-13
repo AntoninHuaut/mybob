@@ -53,7 +53,7 @@ import { furnitureRevision, furnitureObstaclesRevision } from '../furniture/laye
 import { RenderScheduler, WAKE_EVENTS, wakesScene } from './renderScheduler';
 import { isSoftwareRenderer, nextPaint, viewKey, ViewWarmth, warmFrames } from './shaderWarmup';
 import { pluginSummary, shaderLog } from './shaderLog';
-import { ViewResolutions } from './adaptiveResolution';
+import { EFFECT_TIERS, ViewResolutions } from './adaptiveResolution';
 import {
   AUTO_CUT_HEIGHT,
   buildWallCutaway,
@@ -269,6 +269,8 @@ export class HouseViewer {
   private solarPosition?: SolarPosition;
   private baseSun?: { direction: Vector3; position: Vector3; diffuse: Color3 };
   private lightOn = true;
+  /** « Ombres des angles » in the navigation panel: off, no view builds an occlusion. */
+  private occlusionOn = true;
   private dimensionOn = false;
   private paused = false;
   private capturing = false;
@@ -952,6 +954,15 @@ export class HouseViewer {
     this.lightOn = enabled;
     this.updateLighting();
   }
+  /** The visitor's switch for the occlusion: on is the full look, off is none at all. */
+  setOcclusion(enabled: boolean) {
+    if (this.occlusionOn === enabled) return;
+    this.occlusionOn = enabled;
+    if (!this.scene) return;
+    this.rebuildWalkPipelines();
+    this.updateOrbitBloom();
+    this.requestRender();
+  }
   setDimensions(enabled: boolean) {
     this.dimensionOn = enabled;
     this.dimensions.forEach((m) => m.setEnabled(enabled && this.mode !== 'walk'));
@@ -1467,7 +1478,7 @@ export class HouseViewer {
   private updateOrbitBloom() {
     if (!this.scene || !this.orbit) return;
     this.viewEffects?.updateOrbit(this.mode === 'overview', this.orbit, {
-      occlusion: !this.exteriorView && this.hardwareRenderer,
+      occlusion: !this.exteriorView && this.hardwareRenderer && this.occlusionOn !== false,
       effectTier: this.currentEffectTier,
     });
   }
@@ -1543,6 +1554,8 @@ export class HouseViewer {
 
   /** Effect tier in use on this machine (0 = full quality), for the diagnostic. */
   get currentEffectTier(): number {
+    // `occlusionOn` is undefined on a viewer built from its prototype (scene tests).
+    if (this.occlusionOn === false) return EFFECT_TIERS;
     return this.adaptiveResolution?.effectTier ?? 0;
   }
 

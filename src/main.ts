@@ -1554,6 +1554,8 @@ function applyNavigationPreferences() {
       el<HTMLInputElement>('#look-sensitivity').value = String(
         Math.max(50, Math.min(200, saved.sensitivity)),
       );
+    if (typeof saved?.occlusion === 'boolean')
+      el<HTMLInputElement>('#occlusion-enable').checked = saved.occlusion;
   } catch {
     /* Use the defaults if preferences are unavailable. */
   }
@@ -1562,13 +1564,15 @@ function applyNavigationPreferences() {
 function updateNavigationPreferences(save = true) {
   const speed = Number(el<HTMLInputElement>('#walk-speed').value);
   const sensitivity = Number(el<HTMLInputElement>('#look-sensitivity').value);
+  const occlusion = el<HTMLInputElement>('#occlusion-enable').checked;
   viewer.setWalkSpeed(speed);
+  viewer.setOcclusion(occlusion);
   viewer.setLookSensitivity(sensitivity / 100);
   el('#walk-speed-value').textContent = `${number(speed)} m/s`;
   el('#look-sensitivity-value').textContent = `${sensitivity} %`;
   if (save) {
     try {
-      localStorage.setItem(NAVIGATION_STORAGE, JSON.stringify({ speed, sensitivity }));
+      localStorage.setItem(NAVIGATION_STORAGE, JSON.stringify({ speed, sensitivity, occlusion }));
     } catch {
       /* Preferences are optional; scene and project still work. */
     }
@@ -1684,6 +1688,7 @@ function wireNavigationControls() {
   responsiveSidebar.addEventListener('change', () => setSidebar(responsiveSidebar.matches));
   el('#walk-speed').addEventListener('input', () => updateNavigationPreferences());
   el('#look-sensitivity').addEventListener('input', () => updateNavigationPreferences());
+  el('#occlusion-enable').addEventListener('change', () => updateNavigationPreferences());
   el('#go-to').addEventListener('click', () => {
     if (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) {
       setMode('walk');
