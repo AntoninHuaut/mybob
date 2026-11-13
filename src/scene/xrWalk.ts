@@ -431,6 +431,12 @@ export interface ImmersiveHost {
   storage?: Pick<Storage, 'getItem' | 'setItem'>;
 }
 
+/** The controllers this walk still holds that the session no longer reports. */
+export function staleSources<T>(held: Iterable<T>, live: Iterable<T>): T[] {
+  const current = new Set(live);
+  return [...held].filter((source) => !current.has(source));
+}
+
 interface Pointer {
   handedness: XRHandedness;
   root: Mesh;
@@ -605,6 +611,14 @@ export class ImmersiveWalk {
     if (this.hudFlash > 0) {
       this.hudFlash -= seconds;
       if (this.hudFlash <= 0) this.hud.visible = this.preferences.counter;
+    }
+    // A headset waking from standby hands over new controllers; the old ones would stay
+    // frozen where they were, and a frozen pointer aimed through a wall (always red).
+    for (const source of staleSources(this.pointers.keys(), session.inputSources)) {
+      const pointer = this.pointers.get(source)!;
+      if (this.aiming === pointer.handedness) this.cancelAim();
+      pointer.root.dispose();
+      this.pointers.delete(source);
     }
     const states = new Map<XRHandedness, ControllerState>();
     for (const source of session.inputSources) {
@@ -935,8 +949,10 @@ export class ImmersiveWalk {
     this.host.onEnd(this);
   }
 
+  /** The hand's controller, a tracked one first. */
   private pointerFor(hand: XRHandedness): Pointer | undefined {
-    return [...this.pointers.values()].find((p) => p.handedness === hand);
+    const hands = [...this.pointers.values()].filter((p) => p.handedness === hand);
+    return hands.find((p) => p.root.isEnabled()) ?? hands[0];
   }
 
   /** Drops an aim in progress without jumping. */

@@ -30,6 +30,7 @@ import {
   snapTurn,
   teleportArc,
   aimPhase,
+  staleSources,
   XR_AIM_HOLD_MAX,
   readXrPreferences,
   XR_PREFERENCES,
@@ -496,6 +497,14 @@ test('a released stick springing back through the middle still jumps', () => {
   // The spring-back, frame by frame at 120 fps: hold, hold, then release near the centre.
   const frames = [-0.9, -0.55, -0.35, -0.21, -0.05].map((y) => aimPhase(y, true));
   assert.deepEqual(frames, ['aim', 'hold', 'hold', 'hold', 'release']);
+});
+
+test('controllers the session no longer reports, after standby, are dropped', () => {
+  const asleep = { handedness: 'right' };
+  const awake = { handedness: 'right' };
+  const left = { handedness: 'left' };
+  assert.deepEqual(staleSources([asleep, left], [awake, left]), [asleep]);
+  assert.deepEqual(staleSources([awake], [awake]), []);
 });
 
 test('the hold outlasts a spring-back but not a thumb resting on the stick', () => {
