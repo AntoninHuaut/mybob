@@ -7,7 +7,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Ray } from '@babylonjs/core/Culling/ray';
 import '@babylonjs/core/Collisions/collisionCoordinator';
-import { buildHouse, polygonMesh, poseDoor } from '../src/scene/buildHouse';
+import { buildHouse, polygonMesh, poseDoor, THRESHOLD_SINK } from '../src/scene/buildHouse';
 import type { Materials } from '../src/scene/materials';
 import type { HouseProject, Level } from '../src/model/types';
 import { polygonArea } from '../src/model/geometry';
@@ -141,7 +141,8 @@ test('garage walls reach the lower floor and service-door datum remains the high
   const threshold = scene.getMeshByName('threshold:porte-service')!;
   assert.equal(threshold.checkCollisions, true);
   near(threshold.getBoundingInfo().boundingBox.minimumWorld.y, -0.12);
-  near(threshold.getBoundingInfo().boundingBox.maximumWorld.y, 0);
+  // Just under the upper floor, which runs under the wall: no fight between the two tops.
+  near(threshold.getBoundingInfo().boundingBox.maximumWorld.y, -THRESHOLD_SINK);
   scene.dispose();
   engine.dispose();
 });
