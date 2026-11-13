@@ -66,8 +66,9 @@ stays within 25% of the fastest over three consecutive successful `main` runs.
 `e2e/antialias.spec.ts` exports the reset overview camera as a transparent PNG without
 labels or a header. The first opaque silhouette edge in each column must contain
 partially covered pixels. This tests raster coverage rather than material colours,
-and needs no platform-specific screenshot baseline. Setting orbit bloom samples to 1
-must make the scenario fail. It covers the overview silhouette, not Plan lines or walk TAA.
+and needs no platform-specific screenshot baseline. The overview's coverage comes from the
+orbit TAA's 4x first target (the overview has no bloom since 2026-11-13); setting its
+`msaaSamples` to 1 should make the scenario fail. It covers the overview silhouette, not Plan lines or walk TAA.
 
 `tests/scene-budget.test.ts` builds the ground level, real material factories, exterior
 and one default piece of every furniture kind on each public fixture using NullEngine.

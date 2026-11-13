@@ -320,7 +320,7 @@ export function createOrbitTaa(scene: Scene, camera: Camera): TAARenderingPipeli
 
 /**
  * Screen-space ambient occlusion for the visit camera only. In Babylon 9.35 the
- * 16-sample pass runs at full resolution; `ssaoRatio` sizes the horizontal blur and
+ * 8-sample pass runs at full resolution; `ssaoRatio` sizes the horizontal blur and
  * `blurRatio` both the vertical blur and the combine, which writes the scene image, so
  * it stays at 1. It reads the PrePass rather than the legacy geometry buffer, so it
  * shares a single auxiliary pass with the temporal antialiasing.
