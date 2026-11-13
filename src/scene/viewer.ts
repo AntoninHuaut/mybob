@@ -3,6 +3,7 @@ import { refreshFixtureLights } from './fixtureLights';
 import { createSkyLayer, WALK_SKY_GAIN } from './sky';
 import type { Layer } from '@babylonjs/core/Layers/layer';
 import { installCanonicalDefineOrder } from './canonicalDefines';
+import { installSunShadowSkip } from './sunShadowSkip';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Camera } from '@babylonjs/core/Cameras/camera';
 import { HouseOrbitPointersInput } from './orbitPointerInput';
@@ -288,6 +289,7 @@ export class HouseViewer {
     engine: AbstractEngine,
   ) {
     installCanonicalDefineOrder();
+    installSunShadowSkip();
     this.engine = engine;
     this.engine.setHardwareScalingLevel(this.baseScaling);
     shaderLog.attach(engine);
