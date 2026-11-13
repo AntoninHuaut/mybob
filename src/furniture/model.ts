@@ -9,6 +9,7 @@ export type FurnitureKind =
   | 'bed'
   | 'wardrobe'
   | 'dressing'
+  | 'kitchen'
   | 'desk'
   | 'cabinet'
   | 'custom'
@@ -42,6 +43,18 @@ export interface DressingConfiguration {
   runDepth: number;
   runs: DressingRun[];
 }
+export interface KitchenSlot {
+  run: number;
+  offset: number;
+  width: number;
+  kind: 'sink' | 'hob' | 'oven' | 'fridge';
+}
+export interface KitchenConfiguration extends DressingConfiguration {
+  worktopHeight: number;
+  worktopColor: string;
+  wallUnits?: { bottom: number; height: number; depth: number };
+  slots: KitchenSlot[];
+}
 /** Shower only: a side of the volume that can carry a glass panel. */
 export type ShowerPanelSide = 'left' | 'right' | 'front' | 'back';
 /**
@@ -72,6 +85,7 @@ export interface FurnitureItem {
   elevation?: number;
   sofa?: SofaConfiguration;
   dressing?: DressingConfiguration;
+  kitchen?: KitchenConfiguration;
   /** Shower only: tray height in metres; 0 is a walk-in shower with no tray. */
   showerTray?: number;
   /** Shower only: sides closed by a glass panel. */
@@ -108,6 +122,7 @@ export const FURNITURE_PRESETS: Record<
   chair: { name: 'Chaise', width: 0.45, depth: 0.5, height: 0.85 },
   bed: { name: 'Lit', width: 1.6, depth: 2, height: 0.55 },
   wardrobe: { name: 'Armoire', width: 1.2, depth: 0.6, height: 2 },
+  kitchen: { name: 'Cuisine', width: 3.2, depth: 0.6, height: 2.2 },
   dressing: { name: 'Dressing', width: 1.8, depth: 0.6, height: 2.2 },
   desk: { name: 'Bureau', width: 1.2, depth: 0.6, height: 0.75 },
   cabinet: { name: 'Commode', width: 0.9, depth: 0.45, height: 0.9 },
@@ -139,6 +154,7 @@ export const FURNITURE_CATEGORIES: { title: string; kinds: FurnitureKind[] }[] =
   },
   { title: 'Salle à manger', kinds: ['table', 'chair'] },
   { title: 'Chambre', kinds: ['bed', 'wardrobe', 'cabinet'] },
+  { title: 'Cuisine', kinds: ['kitchen'] },
   { title: 'Dressing', kinds: ['dressing'] },
   { title: 'Bureau', kinds: ['desk'] },
   { title: 'Salle de bain', kinds: ['toilet', 'shower', 'bathtub', 'vanity'] },
@@ -243,12 +259,12 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
           'Vérifiez les mesures : la profondeur totale du côté allongé doit dépasser celle du corps du canapé, et la largeur du retour doit être inférieure à la largeur totale.',
         );
     }
-    if (item.dressing !== undefined) {
-      const dressing = item.dressing;
+    if (item.dressing !== undefined || item.kitchen !== undefined) {
+      const dressing = item.dressing ?? item.kitchen!;
+      if (!record(dressing)) fail('La configuration des tronçons est invalide.');
       const runs = dressing.runs;
       if (
-        item.kind !== 'dressing' ||
-        !record(dressing) ||
+        (item.dressing !== undefined ? item.kind !== 'dressing' : item.kind !== 'kitchen') ||
         !finite(dressing.runDepth) ||
         dressing.runDepth < 0.2 ||
         dressing.runDepth > 20 ||
@@ -267,14 +283,67 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
         )
       )
         fail(
-          'Un dressing décrit un à douze tronçons de 20 cm à 20 m, avec un angle uniquement entre deux tronçons.',
+          'Décrivez un à douze tronçons de 20 cm à 20 m, avec un angle uniquement entre deux tronçons.',
         );
       const bounds = dressingBounds(dressing.runDepth, runs);
       if (
         Math.abs(bounds.width - item.width) > 0.001 ||
         Math.abs(bounds.depth - item.depth) > 0.001
       )
-        fail('Les dimensions hors tout du dressing ne correspondent pas à ses tronçons.');
+        fail('Les dimensions hors tout ne correspondent pas aux tronçons.');
+    }
+    if (item.kind === 'kitchen' && item.kitchen === undefined)
+      fail('Décrivez les tronçons de la cuisine.');
+    if (item.kitchen !== undefined && item.dressing !== undefined)
+      fail('Une cuisine ne décrit pas un dressing.');
+    if (item.kitchen !== undefined) {
+      const k = item.kitchen;
+      if (
+        item.kind !== 'kitchen' ||
+        !record(k) ||
+        !finite(k.worktopHeight) ||
+        k.worktopHeight < 0.3 ||
+        k.worktopHeight > item.height ||
+        typeof k.worktopColor !== 'string' ||
+        !/^#[\da-f]{6}$/i.test(k.worktopColor) ||
+        !Array.isArray(k.slots) ||
+        k.slots.length > 48
+      )
+        fail('Vérifiez le plan de travail et les équipements de la cuisine.');
+      if (
+        k.wallUnits !== undefined &&
+        (!record(k.wallUnits) ||
+          !finite(k.wallUnits.bottom) ||
+          !finite(k.wallUnits.height) ||
+          !finite(k.wallUnits.depth) ||
+          k.wallUnits.bottom < k.worktopHeight ||
+          k.wallUnits.height < 0.1 ||
+          k.wallUnits.bottom + k.wallUnits.height > item.height ||
+          k.wallUnits.depth < 0.1 ||
+          k.wallUnits.depth > k.runDepth)
+      )
+        fail('Vérifiez les dimensions des meubles hauts.');
+      for (const slot of k.slots) {
+        if (
+          !record(slot) ||
+          !Number.isInteger(slot.run) ||
+          !k.runs[slot.run] ||
+          !finite(slot.offset) ||
+          slot.offset < 0 ||
+          !finite(slot.width) ||
+          slot.width < 0.2 ||
+          slot.offset + slot.width > k.runs[slot.run].length + 0.000001 ||
+          !['sink', 'hob', 'oven', 'fridge'].includes(slot.kind)
+        )
+          fail('Un équipement doit rester dans son tronçon de cuisine.');
+      }
+      for (let i = 0; i < k.slots.length; i++)
+        for (let j = i + 1; j < k.slots.length; j++) {
+          const a = k.slots[i],
+            b = k.slots[j];
+          if (a.run === b.run && a.offset < b.offset + b.width && b.offset < a.offset + a.width)
+            fail('Deux équipements de cuisine se chevauchent.');
+        }
     }
     if (item.showerTray !== undefined) {
       if (
@@ -353,9 +422,10 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
   return structuredClone(items);
 }
 
-export type FurnitureInput = Omit<Partial<FurnitureItem>, 'sofa' | 'dressing'> & {
+export type FurnitureInput = Omit<Partial<FurnitureItem>, 'sofa' | 'dressing' | 'kitchen'> & {
   sofa?: Partial<SofaConfiguration>;
   dressing?: Partial<DressingConfiguration>;
+  kitchen?: Partial<KitchenConfiguration>;
 };
 
 export function createFurniture(input: FurnitureInput = {}): FurnitureItem {
@@ -409,6 +479,19 @@ export function createFurniture(input: FurnitureInput = {}): FurnitureItem {
       ...input.dressing,
     };
     const bounds = dressingBounds(item.dressing.runDepth, item.dressing.runs);
+    item.width = bounds.width;
+    item.depth = bounds.depth;
+  }
+  if (kind === 'kitchen') {
+    item.kitchen = {
+      runDepth: 0.6,
+      runs: [{ length: item.width }],
+      worktopHeight: 0.9,
+      worktopColor: '#b58d62',
+      slots: [],
+      ...input.kitchen,
+    };
+    const bounds = dressingBounds(item.kitchen.runDepth, item.kitchen.runs);
     item.width = bounds.width;
     item.depth = bounds.depth;
   }
@@ -533,8 +616,8 @@ export function footprintParts(item: FurnitureItem): Point2[][] {
     const { seatDepth, returnWidth, side } = item.sofa;
     return cornerParts(item, seatDepth, returnWidth, side);
   }
-  if (item.kind === 'dressing' && item.dressing) {
-    const { runDepth, runs } = item.dressing;
+  if (item.dressing || item.kitchen) {
+    const { runDepth, runs } = (item.dressing ?? item.kitchen)!;
     const { centerX, centerZ } = dressingBounds(runDepth, runs);
     return dressingStrips(runDepth, runs).map((strip) =>
       strip.map(([x, z]) => localToWorld(item, x - centerX, z - centerZ)),

@@ -151,6 +151,8 @@ Saving is local to the browser: no synchronisation between devices. Exporting th
 
 The export may include `furnishing: {version: 1, levels: {...}}`, with the furniture per level identifier. This data is validated and saved separately on import to avoid duplicating photos in the plans' storage.
 
+A furniture item of kind `kitchen` carries `kitchen: {runDepth, runs, worktopHeight, worktopColor, slots, wallUnits?}`. Runs use `{length, turn?: "left" | "right"}`, with a turn only between runs. The overall `width`/`depth` must match the chain bounds. Each slot is `{kind: "sink" | "hob" | "oven" | "fridge", run, offset, width}` with a zero-based run index and metre measurements. Optional `wallUnits` is `{bottom, height, depth}` in metres; it and the worktop must fit below the item's overall `height`. `color` is the front finish and `worktopColor` is an independent hex colour. Kitchen transport starts at share-pack revision 6; earlier links remain readable.
+
 `furnishing.variants` is optional and contains `{version: 1, activeId, variants: [{id, name, levels: {...}}]}`. It accepts one to ten variants, unique identifiers, names of 1 to 60 characters and only the project's levels. Each furniture list is validated. When this object is provided, it is the complete set to restore; `furnishing.levels` stays a mirror of its active variant for compatibility. An older file without `variants` updates the provided levels in the active variant and keeps the other named variants. A variant's name is not an identifier. A full export of the older levels can also be used to restore an unreadable local variant store.
 
 ## Optional sun

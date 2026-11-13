@@ -1,6 +1,7 @@
 import type { HouseProject, Opening, ProjectSite, Point2, RoofDormer } from './types';
 import type {
   DressingConfiguration,
+  DressingRun,
   FurnitureItem,
   FurnitureKind,
   ShowerPanelSide,
@@ -33,10 +34,10 @@ export interface UnpackedShare {
  * Revision 2: glazing and leaves of openings, dormers and roof windows. Revision 3: the
  * length of each shower panel. Revision 4: a CRC-32 closes the pack, so a link altered by
  * one character is refused instead of decoding into another valid project. Revision 5: the
- * sloping parts of each level's ceiling. Reading still accepts revisions 1 to 4 (links
- * already shared); writing always produces 5.
+ * sloping parts of each level's ceiling. Reading still accepts revisions 1 to 5 (links
+ * already shared); Revision 6 adds kitchen configurations; writing always produces 6.
  */
-export const LINK_PACK_VERSION = 5;
+export const LINK_PACK_VERSION = 6;
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -82,6 +83,7 @@ const FURNITURE_KIND_ORDER: FurnitureKind[] = [
   'shower',
   'bathtub',
   'vanity',
+  'kitchen',
 ];
 
 const enumInt = <T extends string>(list: readonly T[], value: T): number => {
@@ -249,6 +251,26 @@ function packFurnitureItem(packer: Packer, item: FurnitureItem, groupFirstIndex:
   else {
     packer.u(1);
     packDressing(packer, item.dressing);
+  }
+  packer.u(item.kitchen ? 1 : 0);
+  if (item.kitchen) {
+    const k = item.kitchen;
+    packDressing(packer, k);
+    packer.mm(k.worktopHeight);
+    packer.u(parseIntColor(k.worktopColor));
+    packer.u(k.wallUnits ? 1 : 0);
+    if (k.wallUnits) {
+      packer.mm(k.wallUnits.bottom);
+      packer.mm(k.wallUnits.height);
+      packer.mm(k.wallUnits.depth);
+    }
+    packer.u(k.slots.length);
+    for (const slot of k.slots) {
+      packer.u(slot.run);
+      packer.mm(slot.offset);
+      packer.mm(slot.width);
+      packer.u(enumInt(['sink', 'hob', 'oven', 'fridge'], slot.kind));
+    }
   }
   packer.optMM(item.showerTray);
   if (item.showerPanels === undefined) packer.u(0);
@@ -900,6 +922,37 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
                 if (index < item.dressing!.runs.length - 1)
                   run.turn = turn === 1 ? 'left' : 'right';
             });
+          }
+          if (version >= 6 && reader.u() === 1) {
+            const runDepth = reader.mm();
+            const runs = Array.from(
+              { length: reader.count(12) },
+              () => ({ length: 0 }) as DressingRun,
+            );
+            const turns = runs.map(() => reader.u());
+            runs.forEach((run, i) => {
+              run.length = reader.mm();
+              if (turns[i] !== 0) run.turn = enumValue(['left', 'right'] as const, turns[i] - 1);
+            });
+            item.kitchen = {
+              runDepth,
+              runs,
+              worktopHeight: reader.mm(),
+              worktopColor: `#${reader.u().toString(16).padStart(6, '0')}`,
+              slots: [],
+            };
+            if (reader.u() === 1)
+              item.kitchen.wallUnits = {
+                bottom: reader.mm(),
+                height: reader.mm(),
+                depth: reader.mm(),
+              };
+            item.kitchen.slots = Array.from({ length: reader.count(48) }, () => ({
+              run: reader.u(),
+              offset: reader.mm(),
+              width: reader.mm(),
+              kind: enumValue(['sink', 'hob', 'oven', 'fridge'] as const, reader.u()),
+            }));
           }
           item.showerTray = reader.optMM();
           if (reader.u() === 1) {

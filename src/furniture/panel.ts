@@ -1,3 +1,4 @@
+import { kitchenFields, kitchenSlotClick } from './kitchenForm';
 import './panel.css';
 import type { Level, Point2 } from '../model/types';
 import { escapeHtml as esc } from '../ui/format';
@@ -57,6 +58,7 @@ const KINDS: Record<FurnitureItem['kind'], string> = {
   bed: 'Lit',
   wardrobe: 'Armoire',
   dressing: 'Dressing',
+  kitchen: 'Cuisine',
   desk: 'Bureau',
   cabinet: 'Commode',
   custom: 'Volume sur mesure',
@@ -103,7 +105,7 @@ function dimensionsFields(item: FurnitureItem) {
 }
 function depthLabel(kind: string) {
   if (kind === 'sofa') return 'Profondeur du corps';
-  if (kind === 'dressing') return 'Profondeur hors tout';
+  if (kind === 'dressing' || kind === 'kitchen') return 'Profondeur hors tout';
   return 'Profondeur';
 }
 function syncDepthLabel(form: HTMLFormElement, kind: string) {
@@ -155,15 +157,20 @@ function updateSofaFields(form: HTMLFormElement, kind: string, expandDepth = fal
 
 function dressingRunRow(run: DressingRun, index: number, count: number) {
   const last = index === count - 1;
-  return `<div class="dressing-run" data-dressing-run="${index}"><span class="dressing-run-index">${index + 1}</span><label class="furniture-field">Longueur <span>cm</span><input name="dressingRunLength${index}" type="number" min="20" max="2000" step="0.1" value="${cm(run.length)}" required></label><label class="furniture-field">Ensuite<select name="dressingRunTurn${index}"${last ? ' disabled' : ''}><option value="end"${!run.turn ? ' selected' : ''}>Fin</option><option value="left"${run.turn === 'left' ? ' selected' : ''}>Angle à gauche</option><option value="right"${run.turn === 'right' ? ' selected' : ''}>Angle à droite</option></select></label>${count > 1 ? `<button type="button" class="dressing-remove-run" data-dressing-remove="${index}" aria-label="Retirer le tronçon ${index + 1}" title="Retirer ce tronçon">${icon('close', 14)}</button>` : ''}</div>`;
+  return `<div class="dressing-run" data-dressing-run="${index}"><span class="dressing-run-index">${index + 1}</span><label class="furniture-field">Longueur <span>cm</span><input name="dressingRunLength${index}" data-exact-length="${run.length}" type="number" min="20" max="2000" step="0.1" value="${cm(run.length)}" required></label><label class="furniture-field">Ensuite<select name="dressingRunTurn${index}"${last ? ' disabled' : ''}><option value="end"${!run.turn ? ' selected' : ''}>Fin</option><option value="left"${run.turn === 'left' ? ' selected' : ''}>Angle à gauche</option><option value="right"${run.turn === 'right' ? ' selected' : ''}>Angle à droite</option></select></label>${count > 1 ? `<button type="button" class="dressing-remove-run" data-dressing-remove="${index}" aria-label="Retirer le tronçon ${index + 1}" title="Retirer ce tronçon">${icon('close', 14)}</button>` : ''}</div>`;
 }
 function dressingFields(item: FurnitureItem) {
-  return `<fieldset class="furniture-shape-fields" data-dressing-fields${item.locked ? ' disabled' : ''}${item.kind === 'dressing' ? '' : ' hidden'}><legend>Tronçons du dressing</legend><label class="furniture-field">Profondeur <span>cm</span><input name="dressingRunDepth" type="number" min="20" max="2000" step="0.1" value="${cm(item.dressing?.runDepth ?? 0.6)}"></label><div class="dressing-runs" data-dressing-runs></div><button type="button" class="dressing-add-run" data-dressing-add>Ajouter un tronçon</button><p class="furniture-form-note">Chaque tronçon longe un mur ; l’angle part à gauche ou à droite en avançant. Les tronçons partagent leur angle et gardent la même profondeur.</p><div class="shape-diagram" data-dressing-diagram></div></fieldset>`;
+  return `<fieldset class="furniture-shape-fields" data-dressing-fields${item.locked ? ' disabled' : ''}${item.kind === 'dressing' || item.kind === 'kitchen' ? '' : ' hidden'}><legend>${item.kind === 'kitchen' ? 'Tronçons de la cuisine' : 'Tronçons du dressing'}</legend><label class="furniture-field">Profondeur <span>cm</span><input name="dressingRunDepth" type="number" min="20" max="2000" step="0.1" value="${cm((item.dressing ?? item.kitchen)?.runDepth ?? 0.6)}"></label><div class="dressing-runs" data-dressing-runs></div><button type="button" class="dressing-add-run" data-dressing-add>Ajouter un tronçon</button><p class="furniture-form-note">Chaque tronçon longe un mur ; l’angle part à gauche ou à droite en avançant. Les tronçons partagent leur angle et gardent la même profondeur.</p><div class="shape-diagram" data-dressing-diagram></div></fieldset>`;
 }
 function readRunsFromForm(form: HTMLFormElement): DressingRun[] {
   return readDressingRuns(
     (name) => (form.elements.namedItem(name) as HTMLInputElement | null)?.value ?? null,
-  );
+  ).map((run, index) => {
+    const input = form.elements.namedItem(`dressingRunLength${index}`) as HTMLInputElement;
+    return input.dataset.exactLength && input.value === input.defaultValue
+      ? { ...run, length: Number(input.dataset.exactLength) }
+      : run;
+  });
 }
 /** Renders the run rows and sets each corner select explicitly. */
 function applyDressingRuns(form: HTMLFormElement, runs: DressingRun[], syncTotals = true) {
@@ -195,13 +202,18 @@ function updateDressingFields(form: HTMLFormElement, kind: string) {
   const fields = form.querySelector<HTMLFieldSetElement>('[data-dressing-fields]');
   if (!fields) return;
   const locked = form.dataset.geometryLocked === 'true';
-  fields.hidden = kind !== 'dressing';
-  fields.disabled = kind !== 'dressing' || locked;
+  const kitchen = form.querySelector<HTMLFieldSetElement>('[data-kitchen-fields]');
+  if (kitchen) {
+    kitchen.hidden = kind !== 'kitchen';
+    kitchen.disabled = kind !== 'kitchen' || locked;
+  }
+  fields.hidden = kind !== 'dressing' && kind !== 'kitchen';
+  fields.disabled = (kind !== 'dressing' && kind !== 'kitchen') || locked;
   for (const name of ['width', 'depth']) {
     const input = form.elements.namedItem(name) as HTMLInputElement | null;
-    if (input) input.disabled = locked || kind === 'dressing';
+    if (input) input.disabled = locked || kind === 'dressing' || kind === 'kitchen';
   }
-  if (kind === 'dressing') syncDressingTotals(form);
+  if (kind === 'dressing' || kind === 'kitchen') syncDressingTotals(form);
 }
 
 const SHOWER_PANEL_LABELS: Record<ShowerPanelSide, string> = {
@@ -322,7 +334,7 @@ export class FurniturePanel {
         <label class="furniture-field furniture-tone-field">Teinte du volume<input name="color" type="color" value="${esc(item.color.toLowerCase())}"></label>
         ${dimensionsFields(item)}
         ${sofaFields(item)}
-        ${dressingFields(item)}
+        ${dressingFields(item)}${kitchenFields(item)}
         ${showerFields(item)}
         <details class="furniture-placement"><summary>Placement et options</summary>
         <label class="furniture-field">Hauteur de pose au-dessus du sol <span>cm</span><input name="elevation" type="number" min="0" max="2000" step="0.1" value="${cm(item.elevation ?? 0)}"${disabled(item.locked)}></label>
@@ -374,8 +386,8 @@ export class FurniturePanel {
     this.editDialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-edit-title">${item ? `Modifier ${esc(item.name)}` : 'Retirer le meuble'}</h2><button type="button" class="icon-button" data-edit-close aria-label="Fermer">${icon('close', 20)}</button></div>${item ? this.details(item) : '<p>Le meuble sera retiré lorsque vous enregistrerez.</p><div class="furniture-edit-status" role="status"></div><div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button type="button" class="primary-button" data-save-draft>Enregistrer</button></div>'}`;
     if (item) {
       const form = this.editDialog.querySelector<HTMLFormElement>('form')!;
-      if (item.kind === 'dressing')
-        applyDressingRuns(form, item.dressing?.runs ?? [{ length: item.width }]);
+      if (item.kind === 'dressing' || item.kind === 'kitchen')
+        applyDressingRuns(form, (item.dressing ?? item.kitchen)?.runs ?? [{ length: item.width }]);
       updateSofaFields(form, item.kind);
       updateDressingFields(form, item.kind);
       updateShowerFields(form, item.kind);
@@ -417,6 +429,7 @@ export class FurniturePanel {
 
   /** Adding or removing a run rebuilds only the run rows, never the whole form. */
   private dressingRunClick(target: HTMLElement): boolean {
+    if (kitchenSlotClick(target)) return true;
     const form = target.closest<HTMLFormElement>('form');
     if (!form) return false;
     if (target.closest('[data-dressing-add]')) {
@@ -603,23 +616,20 @@ export class FurniturePanel {
       }
       return field.value === field.defaultValue;
     };
-    if (item.kind !== 'dressing' && unchanged('width')) next.width = item.width;
+    if (item.kind !== 'dressing' && item.kind !== 'kitchen' && unchanged('width'))
+      next.width = item.width;
     if (unchanged('height')) next.height = item.height;
     if (unchanged('elevation')) next.elevation = item.elevation;
     if (next.sofa) {
       if (unchanged('depth')) next.sofa.seatDepth = item.sofa?.seatDepth ?? item.depth;
       if (item.sofa && unchanged('returnWidth')) next.sofa.returnWidth = item.sofa.returnWidth;
       if (item.sofa && unchanged('returnDepth')) next.depth = item.depth;
-    } else if (next.dressing) {
-      // Width and depth follow the runs; untouched runs keep their exact stored metres.
-      if (item.dressing && item.dressing.runs.length === next.dressing.runs.length) {
-        next.dressing.runs = next.dressing.runs.map((run, index) => {
-          const original = item.dressing!.runs[index];
-          return unchanged(`dressingRunLength${index}`) ? { ...run, length: original.length } : run;
-        });
-        if (unchanged('dressingRunDepth')) next.dressing.runDepth = item.dressing.runDepth;
-      }
-      const bounds = dressingBounds(next.dressing.runDepth, next.dressing.runs);
+    } else if (next.dressing || next.kitchen) {
+      const chain = (next.dressing ?? next.kitchen)!;
+      const originalChain = item.dressing ?? item.kitchen;
+      chain.runs = readRunsFromForm(form);
+      if (originalChain && unchanged('dressingRunDepth')) chain.runDepth = originalChain.runDepth;
+      const bounds = dressingBounds(chain.runDepth, chain.runs);
       next.width = bounds.width;
       next.depth = bounds.depth;
     } else if (unchanged('depth')) next.depth = bodyDepth(item);
@@ -630,6 +640,32 @@ export class FurniturePanel {
         if (before && after && unchanged(showerPanelLengthField(side)))
           after.length = before.length;
       }
+    }
+    if (next.kitchen && item.kitchen) {
+      const k = next.kitchen,
+        before = item.kitchen;
+      if (unchanged('worktopHeight')) k.worktopHeight = before.worktopHeight;
+      if (unchanged('worktopColor')) k.worktopColor = before.worktopColor;
+      if (k.wallUnits && before.wallUnits) {
+        for (const [key, field] of [
+          ['bottom', 'kitchenWallBottom'],
+          ['height', 'kitchenWallHeight'],
+          ['depth', 'kitchenWallDepth'],
+        ] as const)
+          if (unchanged(field)) k.wallUnits[key] = before.wallUnits[key];
+      }
+      k.slots.forEach((slot, i) => {
+        const field = form.elements.namedItem(`kitchenOffset${i}`) as HTMLInputElement;
+        const originalIndex =
+          field.closest<HTMLElement>('[data-kitchen-slot]')?.dataset.originalSlot;
+        const old =
+          originalIndex !== undefined && originalIndex !== ''
+            ? before.slots[Number(originalIndex)]
+            : undefined;
+        if (!old || old.kind !== slot.kind || old.run !== slot.run) return;
+        if (unchanged(`kitchenOffset${i}`)) slot.offset = old.offset;
+        if (unchanged(`kitchenWidth${i}`)) slot.width = old.width;
+      });
     }
     // The colour control reports lowercase hex: an untouched one keeps the stored spelling.
     if (unchanged('color')) next.color = item.color;
@@ -686,7 +722,7 @@ export class FurniturePanel {
     if (this.editDialog.open) this.editDialog.close();
     const initial = createFurniture({ kind: 'sofa' });
     this.dialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-add-title">Ajouter un meuble</h2><button type="button" class="icon-button" data-add-close aria-label="Fermer">${icon('close', 20)}</button></div><p>Renseignez ses dimensions réelles.${this.adapter.getAddRoomName?.() ? ` Placement dans : <strong>${esc(this.adapter.getAddRoomName()!)}</strong>.` : ''} Vous pourrez ensuite le déplacer dans la maison.</p>
-      <form id="furniture-add-form"><div class="furniture-field-grid two"><label class="furniture-field">Type de meuble<select name="kind">${kindOptions(initial.kind)}</select></label><label class="furniture-field">Nom<input name="name" value="${esc(initial.name)}" maxlength="100" required></label></div>${dimensionsFields(initial)}<label class="furniture-field">Hauteur de pose au-dessus du sol <span>cm</span><input name="elevation" type="number" min="0" max="2000" step="0.1" value="${cm(initial.elevation ?? 0)}"></label>${sofaFields(initial)}${dressingFields(initial)}${showerFields(initial)}<p class="furniture-form-note">Les valeurs proposées sont des exemples. Remplacez-les par les mesures du meuble, poignées et accoudoirs compris.</p><label class="furniture-field furniture-tone-field">Teinte du volume<input name="color" type="color" value="${initial.color}"><span>Une teinte de repérage pour le volume simplifié.</span></label>
+      <form id="furniture-add-form"><div class="furniture-field-grid two"><label class="furniture-field">Type de meuble<select name="kind">${kindOptions(initial.kind)}</select></label><label class="furniture-field">Nom<input name="name" value="${esc(initial.name)}" maxlength="100" required></label></div>${dimensionsFields(initial)}<label class="furniture-field">Hauteur de pose au-dessus du sol <span>cm</span><input name="elevation" type="number" min="0" max="2000" step="0.1" value="${cm(initial.elevation ?? 0)}"></label>${sofaFields(initial)}${dressingFields(initial)}${kitchenFields(initial)}${showerFields(initial)}<p class="furniture-form-note">Les valeurs proposées sont des exemples. Remplacez-les par les mesures du meuble, poignées et accoudoirs compris.</p><label class="furniture-field furniture-tone-field">Teinte du volume<input name="color" type="color" value="${initial.color}"><span>Une teinte de repérage pour le volume simplifié.</span></label>
       <div class="furniture-add-status" role="status"></div><div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-add-close>Annuler</button><button type="submit" class="primary-button">Ajouter dans la maison ${icon('arrow', 17)}</button></div></form>`;
     const form = this.dialog.querySelector<HTMLFormElement>('form')!;
     updateSofaFields(form, initial.kind);
@@ -740,13 +776,13 @@ export class FurniturePanel {
       updateTelevisionFields(form, input.value, true);
       // A fresh dressing starts as a single run matching the preset width.
       (form.elements.namedItem('dressingRunDepth') as HTMLInputElement).value = String(
-        cm(preset.dressing?.runDepth ?? 0.6),
+        cm((preset.dressing ?? preset.kitchen)?.runDepth ?? 0.6),
       );
       // Only a dressing derives its overall size from the runs; other kinds keep the preset.
       applyDressingRuns(
         form,
-        preset.dressing?.runs ?? [{ length: preset.width }],
-        input.value === 'dressing',
+        (preset.dressing ?? preset.kitchen)?.runs ?? [{ length: preset.width }],
+        input.value === 'dressing' || input.value === 'kitchen',
       );
       updateDressingFields(form, input.value);
       syncDepthLabel(form, input.value);

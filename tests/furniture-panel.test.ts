@@ -1073,3 +1073,92 @@ test('the editing popup repaints a piece only on Save, and keeps an untouched co
     cleanup();
   }
 });
+
+test('kitchen popup saves runs and equipment together and Cancel discards edits', () => {
+  const { window, editor, panel, getItems, cleanup } = setup(true, 'kitchen');
+  try {
+    const form = editor.querySelector<DOMForm>('form')!;
+    const field = (name: string) => form.elements.namedItem(name) as unknown as DOMInput;
+    field('worktopHeight').value = '92';
+    field('worktopColor').value = '#654321';
+    form
+      .querySelector('[data-dressing-add]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    field('dressingRunLength1').value = '210';
+    form
+      .querySelector('[data-kitchen-add]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    field('kitchenOffset0').value = '80';
+    field('kitchenRun0').value = '2';
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    const saved = getItems()[0];
+    assert.equal(saved.kitchen?.worktopHeight, 0.92);
+    assert.equal(saved.kitchen?.worktopColor, '#654321');
+    assert.deepEqual(saved.kitchen?.slots, [{ kind: 'sink', run: 1, offset: 0.8, width: 0.6 }]);
+    panel.openEdit(saved.id);
+    const again = editor.querySelector<DOMForm>('form')!;
+    (again.elements.namedItem('worktopHeight') as unknown as DOMInput).value = '99';
+    editor
+      .querySelector('[data-edit-close]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    assert.deepEqual(getItems()[0], saved);
+  } finally {
+    cleanup();
+  }
+});
+
+test('removing a kitchen slot preserves the exact measurements of the remaining slot', () => {
+  const { window, editor, panel, setItems, getItems, cleanup } = setup(false, 'kitchen');
+  try {
+    const kitchen = createFurniture({
+      kind: 'kitchen',
+      id: 'sofa',
+      position: [3, 3],
+      kitchen: {
+        slots: [
+          { kind: 'sink', run: 0, offset: 0.12345, width: 0.5 },
+          { kind: 'sink', run: 0, offset: 1.23456, width: 0.51234 },
+        ],
+      },
+    });
+    setItems([kitchen]);
+    panel.openEdit(kitchen.id);
+    const form = editor.querySelector<DOMForm>('form')!;
+    form
+      .querySelector('[data-kitchen-remove="0"]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.deepEqual(getItems()[0].kitchen?.slots, [kitchen.kitchen!.slots[1]]);
+  } finally {
+    cleanup();
+  }
+});
+
+test('adding a kitchen run preserves the exact unedited first run', () => {
+  const { window, editor, panel, setItems, getItems, cleanup } = setup(false, 'kitchen');
+  try {
+    const kitchen = createFurniture({
+      kind: 'kitchen',
+      id: 'sofa',
+      position: [3, 3],
+      kitchen: {
+        runs: [{ length: 3.23456 }],
+        runDepth: 0.61234,
+      },
+    });
+    setItems([kitchen]);
+    panel.openEdit(kitchen.id);
+    const form = editor.querySelector<DOMForm>('form')!;
+    form
+      .querySelector('[data-dressing-add]')!
+      .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+    form.reportValidity = () => true;
+    form.dispatchEvent(new window.Event('submit', { bubbles: true, cancelable: true }));
+    assert.equal(getItems()[0].kitchen?.runs[0].length, 3.23456);
+    assert.equal(getItems()[0].kitchen?.runDepth, 0.61234);
+  } finally {
+    cleanup();
+  }
+});

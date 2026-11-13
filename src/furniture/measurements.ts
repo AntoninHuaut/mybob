@@ -1,3 +1,4 @@
+import { kitchenSlotsFromForm } from './kitchenForm';
 import {
   dressingBounds,
   dressingStrips,
@@ -37,6 +38,7 @@ export function measurementsFromForm(
   | 'elevation'
   | 'sofa'
   | 'dressing'
+  | 'kitchen'
   | 'showerTray'
   | 'showerPanels'
   | 'showerPanelSpans'
@@ -44,7 +46,7 @@ export function measurementsFromForm(
 > {
   const height = Number(data.get('height')) / 100;
   const elevation = Number(data.get('elevation') ?? 0) / 100;
-  if (kind === 'dressing') {
+  if (kind === 'dressing' || kind === 'kitchen') {
     // Overall width and depth are derived from the runs, never typed directly.
     const runDepth = Number(data.get('dressingRunDepth')) / 100;
     const runs = readDressingRuns((name) => (data.has(name) ? String(data.get(name)) : null));
@@ -54,7 +56,26 @@ export function measurementsFromForm(
       depth: bounds.depth,
       height,
       elevation,
-      dressing: { runDepth: Number.isFinite(runDepth) && runDepth > 0 ? runDepth : 0.6, runs },
+      dressing: kind === 'dressing' ? { runDepth, runs } : undefined,
+      kitchen:
+        kind === 'kitchen'
+          ? {
+              runDepth,
+              runs,
+              worktopHeight: Number(data.get('worktopHeight')) / 100,
+              worktopColor: String(data.get('worktopColor')),
+              slots: kitchenSlotsFromForm(data),
+              ...(data.has('kitchenWallUnits')
+                ? {
+                    wallUnits: {
+                      bottom: Number(data.get('kitchenWallBottom')) / 100,
+                      height: Number(data.get('kitchenWallHeight')) / 100,
+                      depth: Number(data.get('kitchenWallDepth')) / 100,
+                    },
+                  }
+                : {}),
+            }
+          : undefined,
       sofa: undefined,
       showerTray: undefined,
       showerPanels: undefined,
@@ -84,6 +105,7 @@ export function measurementsFromForm(
         }
       : undefined,
     dressing: undefined,
+    kitchen: undefined,
     showerTray: kind === 'shower' ? Number(data.get('showerTray') ?? 0) / 100 : undefined,
     showerPanels:
       kind === 'shower'
