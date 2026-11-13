@@ -6,7 +6,7 @@
 
 Read [AGENTS.md](AGENTS.md), then [the code map](docs/ARCHITECTURE.md) and [the maintenance skill](.agents/skills/mybob-maintenance/SKILL.md). **Export your project from the current browser before switching to local**: the repository does not contain the arrangement saved in that browser.
 
-Parametric kitchens support corner runs, separate worktop and front colours, wall units and equipment markers. See [furniture configurations](docs/FURNITURE.md#types-and-configurations).
+Parametric kitchens support corner runs, separate worktop and front colours, wall units and equipment markers, including an optional microwave above the oven. See [furniture configurations](docs/FURNITURE.md#types-and-configurations).
 
 ## Getting started
 

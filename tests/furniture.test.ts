@@ -309,3 +309,19 @@ test('an L kitchen fits against two walls without filling the free inside corner
   const throughWall = { ...kitchen, position: [1.9, 1.3] as [number, number] };
   assert.ok(checkFurniture([throughWall], room).some((i) => i.severity === 'error'));
 });
+
+test('only oven columns accept a boolean microwave option', () => {
+  const kitchen = createFurniture({
+    kind: 'kitchen',
+    kitchen: {
+      slots: [{ kind: 'oven', run: 0, offset: 0, width: 0.6, microwave: true }],
+    },
+  });
+  for (const slot of [
+    { kind: 'fridge', run: 0, offset: 0, width: 0.6, microwave: true },
+    { kind: 'oven', run: 0, offset: 0, width: 0.6, microwave: 'yes' },
+  ])
+    assert.throws(() =>
+      validateFurnitureList([{ ...kitchen, kitchen: { ...kitchen.kitchen, slots: [slot] } }]),
+    );
+});

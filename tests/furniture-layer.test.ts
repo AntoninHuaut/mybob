@@ -512,3 +512,66 @@ test('kitchen renders the two runs, tall column and separate worktop finish with
     cleanup();
   }
 });
+
+test('the oven front has no cabinet surface at the same depth', async () => {
+  const { createFurniture } = await import('../src/furniture/model');
+  const { layer, scene, cleanup } = setup();
+  try {
+    layer.setItems([
+      createFurniture({
+        id: 'oven',
+        kind: 'kitchen',
+        position: [6, 6],
+        kitchen: {
+          runs: [{ length: 1.8 }],
+          slots: [{ kind: 'oven', run: 0, offset: 0.6, width: 0.6 }],
+        },
+      }),
+    ]);
+    for (const mesh of scene.meshes) mesh.computeWorldMatrix(true);
+    const hits = scene.multiPickWithRay(
+      new Ray(new Vector3(6, level.elevation + 1.05, 8), new Vector3(0, 0, -1)),
+      (mesh) => mesh.metadata?.id === 'oven' && mesh.isPickable,
+    )!;
+    const frontHits = hits.filter((hit) => hit.hit).sort((a, b) => a.distance - b.distance);
+    assert.ok(frontHits.length >= 2);
+    assert.ok(
+      frontHits[1].distance - frontHits[0].distance > 0.005,
+      `competing front surfaces are ${frontHits[1].distance - frontHits[0].distance} m apart`,
+    );
+  } finally {
+    cleanup();
+  }
+});
+
+test('an optional microwave is visible above the oven without competing cabinet faces', async () => {
+  const { createFurniture } = await import('../src/furniture/model');
+  const { layer, scene, cleanup } = setup();
+  try {
+    for (const microwave of [true, false]) {
+      const kitchen = createFurniture({
+        id: 'stack',
+        kind: 'kitchen',
+        position: [6, 6],
+        kitchen: {
+          runs: [{ length: 1.8 }],
+          slots: [{ kind: 'oven', run: 0, offset: 0.6, width: 0.6, microwave }],
+        },
+      });
+      layer.setItems([kitchen]);
+      for (const mesh of scene.meshes) mesh.computeWorldMatrix(true);
+      const hits = scene
+        .multiPickWithRay(
+          new Ray(new Vector3(6, level.elevation + 1.55, 8), new Vector3(0, 0, -1)),
+          (mesh) => mesh.metadata?.id === 'stack' && mesh.isPickable,
+        )!
+        .filter((hit) => hit.hit)
+        .sort((a, b) => a.distance - b.distance);
+      const finish = hits[0].pickedMesh!.material as PBRMaterial;
+      assert.equal(finish.albedoColor.toHexString() !== kitchen.color.toUpperCase(), microwave);
+      if (microwave) assert.ok(hits[1].distance - hits[0].distance > 0.005);
+    }
+  } finally {
+    cleanup();
+  }
+});

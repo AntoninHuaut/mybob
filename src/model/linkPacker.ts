@@ -4,6 +4,7 @@ import type {
   DressingRun,
   FurnitureItem,
   FurnitureKind,
+  KitchenSlot,
   ShowerPanelSide,
   ShowerPanelSpan,
   SofaConfiguration,
@@ -34,10 +35,10 @@ export interface UnpackedShare {
  * Revision 2: glazing and leaves of openings, dormers and roof windows. Revision 3: the
  * length of each shower panel. Revision 4: a CRC-32 closes the pack, so a link altered by
  * one character is refused instead of decoding into another valid project. Revision 5: the
- * sloping parts of each level's ceiling. Reading still accepts revisions 1 to 5 (links
- * already shared); Revision 6 adds kitchen configurations; writing always produces 6.
+ * sloping parts of each level's ceiling. Revision 6: kitchens. Revision 7: optional
+ * microwave. Reading accepts revisions 1 to 6; writing always produces 7.
  */
-export const LINK_PACK_VERSION = 6;
+export const LINK_PACK_VERSION = 7;
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -270,6 +271,7 @@ function packFurnitureItem(packer: Packer, item: FurnitureItem, groupFirstIndex:
       packer.mm(slot.offset);
       packer.mm(slot.width);
       packer.u(enumInt(['sink', 'hob', 'oven', 'fridge'], slot.kind));
+      packer.u(slot.microwave === undefined ? 0 : slot.microwave ? 2 : 1);
     }
   }
   packer.optMM(item.showerTray);
@@ -947,12 +949,20 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
                 height: reader.mm(),
                 depth: reader.mm(),
               };
-            item.kitchen.slots = Array.from({ length: reader.count(48) }, () => ({
-              run: reader.u(),
-              offset: reader.mm(),
-              width: reader.mm(),
-              kind: enumValue(['sink', 'hob', 'oven', 'fridge'] as const, reader.u()),
-            }));
+            item.kitchen.slots = Array.from({ length: reader.count(48) }, () => {
+              const slot: KitchenSlot = {
+                run: reader.u(),
+                offset: reader.mm(),
+                width: reader.mm(),
+                kind: enumValue(['sink', 'hob', 'oven', 'fridge'] as const, reader.u()),
+              };
+              if (version >= 7) {
+                const microwave = reader.u();
+                if (microwave > 2) throw new LinkPackError('Option micro-ondes invalide.');
+                if (microwave > 0) slot.microwave = microwave === 2;
+              }
+              return slot;
+            });
           }
           item.showerTray = reader.optMM();
           if (reader.u() === 1) {

@@ -22,6 +22,7 @@ function slotRow(slot: KitchenSlot, i: number, original = false): string {
     ${numberField(`kitchenRun${i}`, 'Tronçon (numéro)', slot.run + 1, 1, 12)}
     ${numberField(`kitchenOffset${i}`, 'Position (cm)', cm(slot.offset))}
     ${numberField(`kitchenWidth${i}`, 'Largeur (cm)', cm(slot.width), 20)}
+    <label data-kitchen-microwave${slot.kind === 'oven' ? '' : ' hidden'}><input type="checkbox" name="kitchenMicrowave${i}"${slot.microwave ? ' checked' : ''}${slot.kind === 'oven' ? '' : ' disabled'}> Micro-ondes au-dessus du four</label>
     <button type="button" data-kitchen-remove="${i}">Retirer cet équipement</button></div>`;
 }
 export function kitchenSlotClick(target: HTMLElement): boolean {
@@ -48,6 +49,25 @@ export function kitchenSlotClick(target: HTMLElement): boolean {
   );
   return true;
 }
+export function initializeKitchenSlots(form: HTMLFormElement, slots: KitchenSlot[]): void {
+  slots.forEach((slot, i) => {
+    const select = form.elements.namedItem(`kitchenKind${i}`) as HTMLSelectElement;
+    select.value = slot.kind;
+    kitchenSlotChange(select);
+  });
+}
+export function kitchenSlotChange(target: HTMLElement): void {
+  const select = target as HTMLSelectElement;
+  if (!select.name?.startsWith('kitchenKind')) return;
+  const row = select.closest('[data-kitchen-slot]');
+  const label = row?.querySelector<HTMLElement>('[data-kitchen-microwave]');
+  const input = label?.querySelector<HTMLInputElement>('input');
+  if (!label || !input) return;
+  const oven = select.value === 'oven';
+  label.hidden = !oven;
+  input.disabled = !oven;
+  if (!oven) input.checked = false;
+}
 export function kitchenSlotsFromForm(data: FormData): KitchenSlot[] {
   const slots: KitchenSlot[] = [];
   for (let i = 0; data.has(`kitchenKind${i}`); i++)
@@ -56,6 +76,9 @@ export function kitchenSlotsFromForm(data: FormData): KitchenSlot[] {
       run: Number(data.get(`kitchenRun${i}`)) - 1,
       offset: Number(data.get(`kitchenOffset${i}`)) / 100,
       width: Number(data.get(`kitchenWidth${i}`)) / 100,
+      ...(data.get(`kitchenKind${i}`) === 'oven' && data.has(`kitchenMicrowave${i}`)
+        ? { microwave: true }
+        : {}),
     });
   return slots;
 }
