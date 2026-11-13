@@ -12,6 +12,11 @@
   color: #5b754c;
   font-size: 14px;
 }
+/* Start-up: the whole page, header and sidebar included, until the first view is ready. */
+.loading.loading-startup {
+  position: fixed;
+  z-index: 100;
+}
 .loading-progress {
   width: min(240px, 60%);
   height: 4px;

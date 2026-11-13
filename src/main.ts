@@ -2269,26 +2269,30 @@ async function start() {
       },
     );
     wireEvents();
-    // The first view links its shaders behind the loading overlay; the other views
-    // do the same, with a shorter message, the first time they are opened.
-    await viewer.whenReady();
-    viewer.onPreparing = (active) => {
-      el('#loading span').textContent = 'Préparation de la vue…';
-      el('#loading').hidden = !active;
-    };
     viewer.onPreparingProgress = (fraction) => {
       const bar = el('#loading-progress');
       const percent = Math.round(fraction * 100);
       bar.setAttribute('aria-valuenow', String(percent));
       bar.style.setProperty('--progress', String(fraction));
     };
+    // The first view links its shaders behind the start-up screen, which covers the whole
+    // page: the header and the sidebar would otherwise look alive while the links stall
+    // the page. The other views do the same over the viewport only, with a shorter
+    // message, the first time they are opened.
+    await viewer.whenReady();
+    viewer.onPreparing = (active) => {
+      el('#loading span').textContent = 'Préparation de la vue…';
+      el('#loading').hidden = !active;
+    };
     el('#loading').hidden = true;
+    el('#loading').classList.remove('loading-startup');
     onboarding = readOnboarding();
     showStartCard();
     if (unreadableProjects > 0) showQuarantineBanner(unreadableProjects);
     if (reportRequested(location.search)) void measureForReport();
   } catch (error) {
     el('#loading').hidden = true;
+    el('#loading').classList.remove('loading-startup');
     el('#fatal-error').hidden = false;
     el('#fatal-error').innerHTML =
       `${icon('info', 30)}<h2>La vue 3D n’a pas pu démarrer.</h2><p>${esc(userMessage(error, 'Erreur de chargement.'))}</p><p>Utilisez une version récente de Chrome, Firefox ou Edge, avec l’accélération graphique activée.</p><button class="primary-button" id="reload">Réessayer</button>`;
