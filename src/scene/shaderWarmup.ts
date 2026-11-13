@@ -46,6 +46,8 @@ export const nextPaint = () =>
 export interface WarmTarget {
   renderFrame(): void;
   effectsReady(): boolean;
+  /** Select the next state to prepare; false once the visible state is settled. */
+  nextVariant?(): boolean;
 }
 
 /**
@@ -54,7 +56,7 @@ export interface WarmTarget {
  * alters them (sky environment, lights and shadows, prepass outputs, temporal pass):
  * on ANGLE/D3D11 each program blocks the frame about 90 ms, so a first switch to a
  * view froze the page for seconds. Done behind an overlay, the same wait is explained.
- * Returns the number of frames drawn.
+ * Each variant settles in turn under the same time budget. Returns the total frames drawn.
  */
 export async function warmFrames(
   target: WarmTarget,
@@ -64,12 +66,18 @@ export async function warmFrames(
   const deadline = now() + WARM_UP_MAX_MS;
   let ready = 0;
   let frames = 0;
+  let variantFrames = 0;
   while (now() < deadline) {
     target.renderFrame();
     frames++;
+    variantFrames++;
     await yieldToBrowser();
     ready = target.effectsReady() ? ready + 1 : 0;
-    if (frames >= WARM_UP_MIN_FRAMES && ready >= READY_IN_A_ROW) break;
+    if (variantFrames >= WARM_UP_MIN_FRAMES && ready >= READY_IN_A_ROW) {
+      if (!target.nextVariant?.()) break;
+      ready = 0;
+      variantFrames = 0;
+    }
   }
   return frames;
 }
