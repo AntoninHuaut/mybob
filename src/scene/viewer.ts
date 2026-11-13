@@ -206,8 +206,6 @@ export class HouseViewer {
   /** The visit in a headset, a state of the walk: `mode` stays `walk` meanwhile. */
   private immersive?: ImmersiveWalk;
   private immersiveStarting = false;
-  /** Walk post-processing in the headset; B or Y switches it to compare frame rates. */
-  private immersiveEffects = true;
   private eyeHeight = EYE_HEIGHT;
   private walkSpeed = DEFAULT_WALK_SPEED;
   private lookSensitivity = 1;
@@ -1404,7 +1402,6 @@ export class HouseViewer {
       active: this.mode === 'walk',
       camera: this.immersive?.camera ?? this.walk,
       headset: Boolean(this.immersive),
-      effectsEnabled: this.immersiveEffects,
       effectTier: this.currentEffectTier,
     });
     this.viewEffects.updateEnvironment(this.mode, this.sun.direction);
@@ -1449,15 +1446,6 @@ export class HouseViewer {
           isSceneVisitDestination(scene, this.level, point) ||
           isParcelDestination(this.level, this.site, point),
         toggleDoor: (id) => this.toggleDoor(id),
-        toggleEffects: () => {
-          this.immersiveEffects = !this.immersiveEffects;
-          this.rebuildWalkPipelines();
-        },
-        // Built on the first headset frame: before it, the framebuffer may have no size
-        // yet and the pipelines' textures would be created empty, hiding the whole scene.
-        onReady: (ready) => {
-          if (this.immersive === ready) this.rebuildWalkPipelines();
-        },
         onEnd: (ended) => this.leaveImmersive(ended),
       });
       // A project load or a mode change may have happened while the session started.

@@ -25,8 +25,11 @@ import { FrameCounter, XrHud } from './xrHud';
  * - left stick: walk, relative to where the head looks, with wall collisions;
  * - room-scale steps (the headset itself moving) meet the same walls;
  * - right stick sideways: snap turn; pushed forward then released: teleport;
- * - trigger, either hand: open or close the door the controller points at;
- * - B or Y: switch the walk post-processing on or off, to judge its cost.
+ * - trigger, either hand: open or close the door the controller points at.
+ *
+ * The session renders without post-processing (`viewEffects.ts`) and with the strongest
+ * fixed foveation the headset offers: the edges of each lens, blurred by the optics
+ * anyway, are drawn at a lower resolution.
  *
  * A small counter carried by the head shows the frame rate, and how many times the visit was
  * sent back inside the modelled ground (`xrHud.ts`).
@@ -43,6 +46,8 @@ import { FrameCounter, XrHud } from './xrHud';
 
 /** Headset walking speed. Slower than the keyboard default: fast smooth motion makes people sick. */
 export const XR_WALK_SPEED = 1.6;
+/** Strongest fixed foveation: the cheapest frame, blur confined to the lens edges. */
+export const XR_FIXED_FOVEATION = 1;
 export const SNAP_TURN_DEGREES = 30;
 export const STICK_DEADZONE = 0.2;
 /** How far a controller reaches a door, like the keyboard's E (2.4 m) plus an arm. */
@@ -114,19 +119,17 @@ export interface ControllerState {
   x: number;
   y: number;
   trigger: boolean;
-  secondary: boolean;
 }
 
-/** xr-standard mapping: thumbstick on axes 2-3, trigger on button 0, B/Y on button 5. */
+/** xr-standard mapping: thumbstick on axes 2-3, trigger on button 0. */
 export function readControllerGamepad(gamepad: Gamepad | null | undefined): ControllerState {
-  if (!gamepad) return { x: 0, y: 0, trigger: false, secondary: false };
+  if (!gamepad) return { x: 0, y: 0, trigger: false };
   const axes = gamepad.axes;
   const stick = axes.length >= 4 ? 2 : 0;
   return {
     x: applyDeadzone(axes[stick] ?? 0),
     y: applyDeadzone(axes[stick + 1] ?? 0),
     trigger: !!gamepad.buttons[0]?.pressed,
-    secondary: !!gamepad.buttons[5]?.pressed,
   };
 }
 
@@ -139,9 +142,6 @@ export interface ImmersiveHost {
   /** A floor point where the visitor may stand: inside a room or on the parcel. */
   isDestination(point: Point2): boolean;
   toggleDoor(id: string): void;
-  toggleEffects(): void;
-  /** First headset frame: the framebuffer has its real size, post-processing can be built. */
-  onReady(walk: ImmersiveWalk): void;
   /** The session ended, whoever ended it: the headset menu, the page or an error. */
   onEnd(walk: ImmersiveWalk): void;
 }
@@ -151,7 +151,6 @@ interface Pointer {
   root: Mesh;
   ray: Mesh;
   trigger: boolean;
-  secondary: boolean;
 }
 
 const READY = new Color3(0.92, 0.92, 0.88);
@@ -163,6 +162,8 @@ export async function startImmersiveWalk(host: ImmersiveHost): Promise<Immersive
   const walk = new ImmersiveWalk(host, helper);
   try {
     await helper.enterXRAsync('immersive-vr', 'local-floor');
+    // 0 to 1; ignored by a browser or layer without fixed foveation.
+    helper.sessionManager.fixedFoveation = XR_FIXED_FOVEATION;
   } catch (error) {
     walk.dispose();
     throw error;
@@ -229,9 +230,6 @@ export class ImmersiveWalk {
     camera.parent = this.rig;
     camera.position.setAll(0);
     camera.rotationQuaternion.set(0, 0, 0, 1);
-    this.helper.sessionManager.onXRFrameObservable.addOnce(() => {
-      if (!this.ended) this.host.onReady(this);
-    });
   }
 
   /** Called once per frame by the viewer, inside the headset frame. */
@@ -263,9 +261,7 @@ export class ImmersiveWalk {
       const door = hit?.pickedMesh?.metadata?.kind === 'door' ? hit.pickedMesh.metadata.id : '';
       pointer.ray.scaling.z = hit?.hit ? hit.distance : XR_DOOR_REACH;
       if (state.trigger && !pointer.trigger && door) this.host.toggleDoor(door);
-      if (state.secondary && !pointer.secondary) this.host.toggleEffects();
       pointer.trigger = state.trigger;
-      pointer.secondary = state.secondary;
     }
 
     if (move && (move.x || move.y)) {
@@ -479,7 +475,6 @@ export class ImmersiveWalk {
       root,
       ray,
       trigger: false,
-      secondary: false,
     };
     this.pointers.set(source, pointer);
     return pointer;

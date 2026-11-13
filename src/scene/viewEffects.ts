@@ -97,7 +97,6 @@ export class ViewEffects {
     active: boolean;
     camera: Camera;
     headset: boolean;
-    effectsEnabled: boolean;
     effectTier: number;
   }): void {
     if (this.disposed) return;
@@ -118,7 +117,9 @@ export class ViewEffects {
     }
     if (this.camera !== state.camera) this.releaseWalkPipelines();
     this.camera = state.camera;
-    if (state.headset && !state.effectsEnabled) {
+    // No post-processing in a headset: on a Quest 2 the TAA and SSAO passes held the visit
+    // at about 5 fps, and the TAA jitter flickered between the eyes.
+    if (state.headset) {
       this.releaseWalkPipelines();
       return;
     }
@@ -129,8 +130,7 @@ export class ViewEffects {
       this.occlusionUnavailable = !this.occlusion;
     }
     this.applyEffectTier(state.effectTier);
-    // Headset bloom would render into a zero-size target.
-    if (!state.headset) this.bloom ??= this.create.bloom(this.scene, state.camera);
+    this.bloom ??= this.create.bloom(this.scene, state.camera);
   }
 
   /** Select the current mode's sky explicitly; debounce only changes to solar direction. */

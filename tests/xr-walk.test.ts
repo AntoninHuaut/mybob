@@ -89,8 +89,7 @@ test('controllers are read from the xr-standard gamepad, without a controller mo
   assert.ok(Math.abs(state.x - 0.5) < 1e-9);
   assert.equal(state.y, -1);
   assert.equal(state.trigger, true);
-  assert.equal(state.secondary, true);
-  assert.deepEqual(readControllerGamepad(null), { x: 0, y: 0, trigger: false, secondary: false });
+  assert.deepEqual(readControllerGamepad(null), { x: 0, y: 0, trigger: false });
 });
 
 test('leaving the headset keeps the gaze direction on the screen walk camera', () => {
@@ -128,8 +127,6 @@ function headsetWalk(start: { point: [number, number]; yaw: number }) {
       start,
       isDestination: () => true,
       toggleDoor: () => {},
-      toggleEffects: () => {},
-      onReady: () => {},
       onEnd: () => {},
     },
     helper,
