@@ -404,7 +404,7 @@ export function ceilingSteps(
           base[0] + f.ux * side * 1e-5,
           base[1] + f.uz * side * 1e-5,
         ];
-        for (const [t0, t1] of insideIntervals(level.outline, base, across, reach)) {
+        for (const [t0, t1] of insideIntervals(level.outline, shift(inward), across, reach)) {
           const end = (origin: Point2, t: number): Point2 => [
             origin[0] + across[0] * t,
             origin[1] + across[1] * t,
