@@ -329,7 +329,9 @@ export function auditPlan(project: HouseProject) {
       if (wall.exterior || !solids.length) continue;
       const total = solids.reduce((sum, solid) => sum + polygonArea(solid), 0);
       const inside = solids.reduce((sum, solid) => sum + intersectionArea(level.outline, solid), 0);
-      if (inside >= OUTLINE_FLOOR_TOLERANCE) continue;
+      // A short door host can consist of two tiny jambs whose combined area is
+      // below the contact threshold. Fully supported solids cannot be floating.
+      if (inside >= OUTLINE_FLOOR_TOLERANCE || total - inside < 1e-8) continue;
       issues.push({
         level: level.id,
         kind: 'interior-wall-outside-outline',
