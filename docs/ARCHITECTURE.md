@@ -45,7 +45,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Shadow map              | `src/scene/shadowRefresh.ts`, `sunShadowSkip.ts`                             | Sun map redrawn only when a shadow changes; lookup skipped where a PBR surface faces away from the sun              |
 | Idle rendering          | `src/scene/renderScheduler.ts`                                               | Frame drawn only when the scene changes; mouse moves wake it only over the canvas (`wakesScene`)                    |
 | Shader warm-up          | `src/scene/shaderWarmup.ts`, `shaderLog.ts`                                  | Links a view's shaders behind an overlay on first use; `mybob.shaders()` log of every link                          |
-| Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | Resolution steps per view, driven by frame time; the visit may go to 80 % at any pixel ratio                        |
+| Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | Per view, driven by frame time: occlusion first, then resolution steps; visit to 67 %                               |
 | Openings in plan        | `src/scene/planOpenings.ts`                                                  | Windows and doors drawn in Plan view, cut faces                                                                     |
 | Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion; bloom in the walk only                                                                   |
 | View effect lifecycle   | `src/scene/viewEffects.ts`                                                   | Scene-owned environment and pipelines, camera replacement, effect tiers and disposal                                |
@@ -450,29 +450,34 @@ last call, and read back at start-up.
   tells the scheduler.
 - Dynamic resolution (`adaptiveResolution.ts`), the same at rest and in motion, **one per
   view** (`ViewResolutions`, keyed by `viewKey`): if the median frame time exceeds 25 ms
-  (under 40 fps), rendering drops one step (100, 80, 67 %) without going below one rendered
-  pixel per CSS pixel — except the visit, which may go down to 80 % whatever the pixel
-  ratio (`VISIT_SCALE_FLOOR`) before it drops its tier: softer pixels cost the eye less
-  than losing the corner hollows. A scale or tier the visit took leaves Plan sharp and
-  Vue 3D's occlusion in place. Each view's scale only goes down and is kept for the session,
-  because changing it resizes every render target, which hitches; switching view may resize
-  once, next to the rebuild a switch already does. The first 30 images, the 30 after each
-  change and the 30 after entering a view are not measured.
-  A gap over 5 s between two images is a stall, never a measurement, and hiding the
-  page, losing or regaining the focus restarts that warm-up and drops the half-measured
-  series: the slow images after an alt-tab are not the machine, and a tier is never lifted.
-  Once at the resolution floor and still over budget, the visit drops its one effect tier:
-  no occlusion (the walk's and Vue 3D's), which fades out over 0.8 s rather than blinking off. The occlusion is never
-  degraded on the way (fewer samples, cheap blur): a look that changes by itself reads as a
-  bug. Fewer TAA samples is no tier: the count only sets the length of the jitter sequence,
-  each image costs the same. A tier is never lifted. A PC that holds the frame rate never
-  leaves 100 % nor tier 0. At dpr 1 the floor is 100 % outside the visit, so the tier is
-  the only lever there; on an
-  integrated GPU at 75 Hz the walk can run at 63–70 fps (frames missing one refresh), measured
-  above the 40 fps budget and left as it is: no single effect costs more than the run-to-run
-  noise, only half the resolution holds 75 fps.
-  `mybob.diag()` shows the current view's scale and tier (`effets palier n/1`). Neither is
-  stored between sessions.
+  (under 40 fps), a view that has an occlusion (the visit, Vue 3D) first drops it — its one
+  effect tier, which fades out over 0.8 s rather than blinking off — and only then lowers
+  the rendering one step per series (100, 90, 80, 67 %). Full resolution is one rendered
+  pixel per CSS pixel, never the screen's ratio (`MAX_PIXEL_RATIO`: a display scaled to
+  150 % would cost 2.25 times the pixels). Views never go below one rendered pixel per CSS
+  pixel, so Plan, Vue 3D and Extérieur stay at 100 % on a normal screen, except the visit,
+  which takes every step down to 67 %, one per series (`VISIT_SCALE_FLOOR`; the owner
+  rejected a 150 % render dropping straight to 67 %, not the progressive steps). The owner chose that order (2026-11-13): at a low frame rate, rather
+  lose the occlusion than sharpness. Plan and Extérieur have no tier and go straight to the
+  resolution. A scale or tier the visit took leaves Plan sharp and Vue 3D's occlusion in
+  place. Each view's scale only goes down and is kept for the session, because changing it
+  resizes every render target, which hitches; switching view may resize once, next to the
+  rebuild a switch already does. The first 30 images, the 30 after each change and the 30
+  after entering a view are not measured. A gap over 5 s between two images is a stall,
+  never a measurement, and hiding the page, losing or regaining the focus restarts that
+  warm-up and drops the half-measured series: the slow images after an alt-tab are not the
+  machine, and a tier is never lifted. The occlusion is never degraded on the way (fewer
+  samples, cheap blur): a look that changes by itself reads as a bug. Fewer TAA samples is
+  no tier: the count only sets the length of the jitter sequence, each image costs the same.
+  A PC that holds the frame rate never leaves 100 % nor tier 0. On an integrated GPU at
+  75 Hz the walk can run at 63–70 fps (frames missing one refresh), measured above the
+  40 fps budget and left as it is: no single effect costs more than the run-to-run noise,
+  only half the resolution holds 75 fps. `mybob.diag()` shows the current view's scale and
+  tier (`effets palier n/1`). Neither is stored between sessions.
+- The navigation panel's « Ombres des angles » switch (`viewer.setOcclusion`, stored with
+  the walk speed in `maison-atelier:navigation:v1`) turns the occlusion off in every view:
+  on is the full look, off is none. Off reports tier 1 to the effects; on again rebuilds the
+  pipelines, unless the frame rate already dropped the tier for the session.
 - Static house and exterior meshes freeze their world matrices after construction. Moving
   door leaves and every descendant of a moving pivot stay unfrozen. House shell and trim
   merge separately per wall, material, picking and collision policy; trim keeps a name outside

@@ -53,7 +53,7 @@ import { furnitureRevision, furnitureObstaclesRevision } from '../furniture/laye
 import { RenderScheduler, WAKE_EVENTS, wakesScene } from './renderScheduler';
 import { isSoftwareRenderer, nextPaint, viewKey, ViewWarmth, warmFrames } from './shaderWarmup';
 import { pluginSummary, shaderLog } from './shaderLog';
-import { ViewResolutions } from './adaptiveResolution';
+import { EFFECT_TIERS, MAX_PIXEL_RATIO, ViewResolutions } from './adaptiveResolution';
 import {
   AUTO_CUT_HEIGHT,
   buildWallCutaway,
@@ -233,13 +233,15 @@ export class HouseViewer {
   }
   /** The host shows its overlay while shaders are linked; `first` is the start-up, not a switch. */
   onPreparing?: (active: boolean, first: boolean) => void;
-  private readonly resolutions = new ViewResolutions(Math.min(window.devicePixelRatio || 1, 1.6));
+  private readonly resolutions = new ViewResolutions(
+    Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO),
+  );
   /** The current view's dynamic resolution (`ViewResolutions`). */
   private get adaptiveResolution() {
     return this.resolutions.for(this.currentViewKey());
   }
-  /** Hardware scaling at full resolution: the screen's pixel ratio, capped. */
-  private readonly baseScaling = 1 / Math.min(window.devicePixelRatio || 1, 1.6);
+  /** Hardware scaling at full resolution: the screen's pixel ratio, capped (`MAX_PIXEL_RATIO`). */
+  private readonly baseScaling = 1 / Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
   private renderScale = 1;
   private lastRenderAt?: number;
   /** Open `holdRendering` calls: every image is drawn while one is held. */
@@ -269,6 +271,8 @@ export class HouseViewer {
   private solarPosition?: SolarPosition;
   private baseSun?: { direction: Vector3; position: Vector3; diffuse: Color3 };
   private lightOn = true;
+  /** « Ombres des angles » in the navigation panel: off, no view builds an occlusion. */
+  private occlusionOn = true;
   private dimensionOn = false;
   private paused = false;
   private capturing = false;
@@ -954,6 +958,15 @@ export class HouseViewer {
     this.lightOn = enabled;
     this.updateLighting();
   }
+  /** The visitor's switch for the occlusion: on is the full look, off is none at all. */
+  setOcclusion(enabled: boolean) {
+    if (this.occlusionOn === enabled) return;
+    this.occlusionOn = enabled;
+    if (!this.scene) return;
+    this.rebuildWalkPipelines();
+    this.updateOrbitBloom();
+    this.requestRender();
+  }
   setDimensions(enabled: boolean) {
     this.dimensionOn = enabled;
     this.dimensions.forEach((m) => m.setEnabled(enabled && this.mode !== 'walk'));
@@ -1469,7 +1482,7 @@ export class HouseViewer {
   private updateOrbitBloom() {
     if (!this.scene || !this.orbit) return;
     this.viewEffects?.updateOrbit(this.mode === 'overview', this.orbit, {
-      occlusion: !this.exteriorView && this.hardwareRenderer,
+      occlusion: !this.exteriorView && this.hardwareRenderer && this.occlusionOn !== false,
       effectTier: this.currentEffectTier,
     });
   }
@@ -1545,6 +1558,8 @@ export class HouseViewer {
 
   /** Effect tier in use on this machine (0 = full quality), for the diagnostic. */
   get currentEffectTier(): number {
+    // `occlusionOn` is undefined on a viewer built from its prototype (scene tests).
+    if (this.occlusionOn === false) return EFFECT_TIERS;
     return this.adaptiveResolution?.effectTier ?? 0;
   }
 
