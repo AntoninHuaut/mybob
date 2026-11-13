@@ -8,6 +8,7 @@ import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { worldScaleUvs } from '../src/scene/buildHouse';
 import {
   fenceMeshData,
+  hedgeMapData,
   greyFromField,
   normalFromHeight,
   createSurfaceTextures,
@@ -230,4 +231,21 @@ test('the fence mesh is mostly open, with wires that meet across the tile seam',
   // A wire at the first column and row: repeated tiles keep an unbroken grid.
   for (let y = 0; y < size; y++) assert.equal(data[y * size * 4 + 3], 255);
   for (let x = 0; x < size; x++) assert.equal(data[x * 4 + 3], 255);
+});
+
+test('the hedge reads as foliage: dark gaps, lit leaves, a green that dominates', () => {
+  const { albedo } = hedgeMapData();
+  let dark = 0,
+    lit = 0,
+    green = 0;
+  const texels = albedo.size * albedo.size;
+  for (let i = 0; i < texels; i++) {
+    const [r, g, b] = [albedo.data[i * 4], albedo.data[i * 4 + 1], albedo.data[i * 4 + 2]];
+    if (g < 60) dark++;
+    if (g > 120) lit++;
+    if (g > r && g > b) green++;
+  }
+  assert.ok(dark / texels > 0.1, `shaded gaps ${dark / texels}`);
+  assert.ok(lit / texels > 0.1, `lit leaves ${lit / texels}`);
+  assert.equal(green, texels, 'every texel stays green');
 });

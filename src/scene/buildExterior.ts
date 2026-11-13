@@ -30,7 +30,8 @@ import {
   createFenceMesh,
   createFenceSlats,
   FENCE_SLATS_TILE,
-  createHedgeNormal,
+  createHedgeTextures,
+  HEDGE_TILE,
   FENCE_MESH_TILE,
   LAWN_DETAIL_TILE,
   LAWN_TILE,
@@ -478,8 +479,12 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     return m;
   });
   const hedge = once(() => {
-    const m = material('hedge', '#4d6a3b');
-    m.bumpTexture = tiled(createHedgeNormal(scene), 0.35);
+    // The colour lives in the generated leaves; the factor stays white.
+    const m = material('hedge', '#ffffff');
+    const maps = createHedgeTextures(scene);
+    m.albedoTexture = tiled(maps.albedo, HEDGE_TILE);
+    m.bumpTexture = tiled(maps.normal, HEDGE_TILE);
+    m.roughness = 0.8;
     return m;
   });
   const plaster = material('exterior-render', site.facadeColor ?? '#d6c5a3');
