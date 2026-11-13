@@ -418,6 +418,14 @@ walk where the headset left the visitor and restores the camera of the current m
   asks for the highest **display rate** up to 90 Hz the headset supports (`pickFrameRate`; the Quest 2 defaults to 72), and steps down to the next supported rate after 3 s of frame-rate windows under 90 % of it, ignoring the first 3 s of the session (`FrameRateGovernor`): a missed frame is shown twice by the headset, which flickers. A session holding its rate for 5 s tries the next higher one, up to 120 Hz (`XR_MAX_FRAME_RATE`; a Quest 2 offers it in its own browser), until a rate has had to be lowered; each change is followed by the 3 s warm-up. Over Link the browser cannot set the rate: it is chosen in the Meta Quest Link app's graphics preferences. It never goes below 72 Hz (`XR_MIN_FRAME_RATE`): at 60 Hz a Quest 2's screen flickers over the whole image, which the owner saw at a steady 60 fps after the loading hitches had walked a 1.5 s governor down from 90. It
   asks for medium **fixed foveation** (`XR_FIXED_FOVEATION`, 0.5; the strongest shimmered on textured walls, seen as flicker with a still head): the lens edges, blurred by
   the optics anyway, are drawn at a lower resolution; browsers without it ignore the request.
+  A headset driven by a PC browser (Chrome + Quest Link; `isTetheredHeadset`, anything but a
+  standalone headset's own browser) gets a sharper **render scale** (`src/scene/xrScale.ts`):
+  the XR layer's `framebufferScaleFactor` opens at 120 %, or at what the last session earned.
+  The layer is fixed for a session (a new one hitches), so `XrScaleTuner` watches the frame-rate
+  windows: ten windows at 97 % of the display rate make the next session 10 % sharper, up to
+  150 %; three in a row under 90 %, or a lowered display rate, make it 10 % softer, never under
+  100 %. Saved per browser in `maison-atelier:xr-scale:v1`; the headset counter shows « rendu
+  N % ». A standalone headset (Quest Browser) stays at 100 %: its GPU has no room for more.
 - The session opens behind a **loading veil** (`XrVeil`, `scene/xrHud.ts`, with a bar: the share of visible meshes ready to draw), the headset's
   counterpart of the page overlay of `prepareView`, which a headset never shows: turning the
   shadows off changes every material's defines, and each relink would otherwise freeze the
