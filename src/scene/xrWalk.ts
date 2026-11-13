@@ -75,6 +75,64 @@ export const XR_TELEPORT_REACH = 12;
 /** Body collider below the head: walls stop the visitor, a 20 cm step does not. */
 export const XR_BODY_HALF_HEIGHT = 0.5;
 export const XR_BODY_DROP = 0.6;
+/**
+ * A head lower than this above the real floor when the visit opens is a seated visitor:
+ * the floor is lowered so the eyes stand at the walk's eye height instead.
+ */
+export const XR_SEATED_HEAD_MAX = 1.35;
+/** The highest display rate asked of the headset; the session falls back when it cannot hold it. */
+export const XR_TARGET_FRAME_RATE = 90;
+/** Frame-rate windows in a row below the target before the next lower rate is asked. */
+export const XR_RATE_FALLBACK_WINDOWS = 3;
+
+/**
+ * How much a seated visitor is raised: the walk's eye height minus the real head height,
+ * or nothing for a visitor standing up (or crouching when the visit opened above the limit).
+ */
+export function seatedLift(headHeight: number, eyeHeight: number): number {
+  if (!Number.isFinite(headHeight) || headHeight >= XR_SEATED_HEAD_MAX) return 0;
+  return Math.max(0, eyeHeight - Math.max(0, headHeight));
+}
+
+/** The display rate to ask for: the highest supported one up to the target, if above the default. */
+export function pickFrameRate(
+  supported: ArrayLike<number> | undefined,
+  target = XR_TARGET_FRAME_RATE,
+): number | undefined {
+  const rates = Array.from(supported ?? []).filter((rate) => rate <= target + 0.5);
+  return rates.length ? Math.max(...rates) : undefined;
+}
+
+/**
+ * Lowers the asked display rate when the house cannot be drawn at it: three frame-rate
+ * windows in a row under 90 % of the rate select the next lower supported one. A missed
+ * frame is shown again by the headset, which reads as flicker; a lower steady rate does not.
+ */
+export class FrameRateGovernor {
+  private slow = 0;
+
+  constructor(
+    private rate: number | undefined,
+    private readonly supported: number[],
+  ) {}
+
+  get current(): number | undefined {
+    return this.rate;
+  }
+
+  /** The new rate to ask for after this window, if it changes. */
+  observe(fps: number): number | undefined {
+    if (this.rate === undefined) return undefined;
+    this.slow = fps < this.rate * 0.9 ? this.slow + 1 : 0;
+    if (this.slow < XR_RATE_FALLBACK_WINDOWS) return undefined;
+    this.slow = 0;
+    const lower = this.supported.filter((rate) => rate < this.rate! - 0.5);
+    if (!lower.length) return undefined;
+    this.rate = Math.max(...lower);
+    return this.rate;
+  }
+}
+
 /** A head move larger than this in one frame is a tracking reset, not a step: it is not collided. */
 export const XR_POSE_JUMP = 0.5;
 
@@ -158,6 +216,8 @@ export interface ImmersiveHost {
   /** The displayed level, read each frame: taking a stair changes it. */
   readonly level: Level;
   site?: ProjectSite;
+  /** The walk's eye height, given to a seated visitor. */
+  eyeHeight: number;
   /** Where the screen walk stands and looks when the headset takes over. */
   start: { point: Point2; yaw: number };
   /** A floor point where the visitor may stand: inside a room or on the parcel. */
@@ -196,6 +256,7 @@ export async function startImmersiveWalk(host: ImmersiveHost): Promise<Immersive
     throw error;
   }
   walk.placeCamera();
+  walk.requestFrameRate();
   return walk;
 }
 
@@ -212,6 +273,9 @@ export class ImmersiveWalk {
   private loading = new LoadingGate();
   private readiness = new PreparationProgress();
   private readonly counter = new FrameCounter();
+  private governor?: FrameRateGovernor;
+  /** Added to the floor for a seated visitor, decided once when the veil first lifts. */
+  private seatedRaise?: number;
   private limitHits = 0;
   private collider?: Collider;
   private aiming = false;
@@ -275,7 +339,11 @@ export class ImmersiveWalk {
     if (this.veil && !this.lift()) return;
     this.followPose();
     const fps = this.counter.tick(performance.now());
-    if (fps !== undefined) this.hud.show(fps, this.limitHits);
+    if (fps !== undefined) {
+      this.hud.show(fps, this.limitHits);
+      const lower = this.governor?.observe(fps);
+      if (lower !== undefined) this.setFrameRate(lower);
+    }
     let move: ControllerState | undefined;
     let aim: ControllerState | undefined;
     for (const source of session.inputSources) {
@@ -360,6 +428,9 @@ export class ImmersiveWalk {
     this.camera.layerMask = XR_DEFAULT_LAYERS;
     this.veil?.dispose();
     this.veil = undefined;
+    // The head is tracked by now: a seated visitor is raised to the walk's eye height.
+    this.seatedRaise ??= seatedLift(this.camera.position.y, this.host.eyeHeight);
+    this.followFloor();
     return true;
   }
 
@@ -480,7 +551,36 @@ export class ImmersiveWalk {
   /** The real floor stays on the ground under the head: room floor, step or lawn. */
   private followFloor() {
     const head = this.head();
-    this.rig.position.y = groundElevationAt(this.host.level, this.host.site, [head.x, head.z]);
+    this.rig.position.y =
+      groundElevationAt(this.host.level, this.host.site, [head.x, head.z]) +
+      (this.seatedRaise ?? 0);
+  }
+
+  /** Raised above the real floor for a seated visitor, in metres. */
+  get seatedOffset(): number {
+    return this.seatedRaise ?? 0;
+  }
+
+  /** Asks the headset for the highest display rate up to the target; ignored where unsupported. */
+  requestFrameRate() {
+    const session = this.helper.sessionManager.session as
+      | (XRSession & {
+          supportedFrameRates?: Float32Array;
+          updateTargetFrameRate?: (rate: number) => Promise<void>;
+        })
+      | undefined;
+    if (!session?.updateTargetFrameRate) return;
+    const supported = Array.from(session.supportedFrameRates ?? []);
+    const rate = pickFrameRate(supported);
+    if (rate === undefined) return;
+    this.governor = new FrameRateGovernor(rate, supported);
+    this.setFrameRate(rate);
+  }
+
+  private setFrameRate(rate: number) {
+    const session = this.helper.sessionManager.session as
+      (XRSession & { updateTargetFrameRate?: (rate: number) => Promise<void> }) | undefined;
+    session?.updateTargetFrameRate?.(rate).catch(() => undefined);
   }
 
   private end() {

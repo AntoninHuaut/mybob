@@ -20,6 +20,10 @@ import {
   turnAxis,
   XR_TURN_DEGREES_PER_SECOND,
   XR_POSE_JUMP,
+  FrameRateGovernor,
+  pickFrameRate,
+  seatedLift,
+  XR_SEATED_HEAD_MAX,
   XR_WALK_SPEED,
 } from '../src/scene/xrWalk';
 import { createWalkCamera } from '../src/scene/walkCamera';
@@ -185,6 +189,7 @@ function headsetWalk(start: { point: [number, number]; yaw: number }) {
       scene,
       level,
       start,
+      eyeHeight: 1.65,
       isDestination: () => true,
       toggleDoor: () => {},
       takeStair: () => false,
@@ -371,4 +376,44 @@ test('the headset session starts with the veil alone in its camera layers', () =
   assert.equal(session.camera.layerMask, XR_DEFAULT_LAYERS);
   assert.ok(session.scene.meshes.every((mesh) => !mesh.name.startsWith('xr-veil')));
   session.dispose();
+});
+
+test('a seated visitor is raised to the eye height, a standing one keeps the real height', () => {
+  assert.ok(Math.abs(seatedLift(1.11, 1.65) - 0.54) < 1e-9);
+  assert.equal(seatedLift(XR_SEATED_HEAD_MAX, 1.65), 0);
+  assert.equal(seatedLift(1.72, 1.65), 0);
+  assert.equal(seatedLift(1.3, 1.2), 0, 'never lowered');
+  assert.equal(seatedLift(Number.NaN, 1.65), 0);
+  const session = headsetWalk({ point: [4, 4.2], yaw: 0 });
+  session.camera.position.y = 1.11;
+  const walk = session.walk as unknown as {
+    lift(): boolean;
+    head(): Vector3;
+    seatedOffset: number;
+  };
+  let lifted = false;
+  for (let i = 0; i < 20 && !lifted; i++) lifted = walk.lift();
+  assert.ok(lifted, 'the veil lifts');
+  assert.ok(Math.abs(walk.seatedOffset - 0.54) < 1e-9, `offset ${walk.seatedOffset}`);
+  const floor = session.walk.rig.position.y - walk.seatedOffset;
+  assert.ok(Math.abs(walk.head().y - floor - 1.65) < 1e-6, 'eyes at the walk eye height');
+  // Standing up later raises the head with it: the offset is decided once.
+  session.camera.position.y = 1.7;
+  assert.ok(Math.abs(walk.head().y - floor - 2.24) < 1e-6);
+  session.dispose();
+});
+
+test('the headset asks for the highest rate up to 90 Hz and steps down when it cannot hold it', () => {
+  assert.equal(pickFrameRate([72, 80, 90, 120]), 90);
+  assert.equal(pickFrameRate([60, 72]), 72);
+  assert.equal(pickFrameRate(undefined), undefined);
+  const governor = new FrameRateGovernor(90, [72, 80, 90, 120]);
+  assert.equal(governor.observe(88), undefined);
+  assert.equal(governor.observe(70), undefined);
+  assert.equal(governor.observe(70), undefined);
+  assert.equal(governor.observe(70), 80, 'three slow windows in a row');
+  assert.equal(governor.observe(79), undefined, 'holding 80 is fine');
+  for (let i = 0; i < 2; i++) governor.observe(60);
+  assert.equal(governor.observe(60), 72);
+  for (let i = 0; i < 5; i++) assert.equal(governor.observe(40), undefined, 'nothing lower');
 });

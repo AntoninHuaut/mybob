@@ -1584,6 +1584,7 @@ export class HouseViewer {
           return viewer.level;
         },
         site: this.site,
+        eyeHeight: this.eyeHeight,
         start: { point: [this.walk.position.x, this.walk.position.z], yaw: this.walk.rotation.y },
         isDestination: (point) =>
           isSceneVisitDestination(scene, this.level, point) ||
