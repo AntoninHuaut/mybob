@@ -154,7 +154,7 @@ test('a slow but running machine, like software rendering at under 2 fps, is sti
   assert.ok(resolution.effectTier > 0);
 });
 
-test('the visit drops its occlusion, then goes down to its fixed floor, never 67 %', () => {
+test('the visit drops its occlusion, then goes down step by step to its fixed floor', () => {
   for (const [ratio, expected] of [
     [1, VISIT_SCALE_FLOOR],
     [1.25, VISIT_SCALE_FLOOR],

@@ -12,11 +12,12 @@ export const MAX_PIXEL_RATIO = 1;
 export const RENDER_SCALES = [1, 0.9, 0.8, 0.67] as const;
 
 /**
- * The visit's fixed floor, whatever the pixel ratio, once its occlusion is gone: 80 %.
- * 67 % is what made the visit look ugly on the owner's screen (2026-11-13). Plan, Vue 3D
- * and Extérieur keep the one-rendered-pixel-per-CSS-pixel floor instead.
+ * The visit's fixed floor, whatever the pixel ratio, once its occlusion is gone: every
+ * step down to 67 %, one at a time. What the owner disliked (2026-11-13) was the jump
+ * from a 150 % render straight to 67 %, not 67 % reached step by step. Plan, Vue 3D and
+ * Extérieur keep the one-rendered-pixel-per-CSS-pixel floor instead.
  */
-export const VISIT_SCALE_FLOOR = 0.8;
+export const VISIT_SCALE_FLOOR = 0.67;
 
 /**
  * Effect tiers, dropped **before** the resolution (owner, 2026-11-13: when the frame rate is

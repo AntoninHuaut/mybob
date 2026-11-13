@@ -45,7 +45,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Shadow map              | `src/scene/shadowRefresh.ts`, `sunShadowSkip.ts`                             | Sun map redrawn only when a shadow changes; lookup skipped where a PBR surface faces away from the sun              |
 | Idle rendering          | `src/scene/renderScheduler.ts`                                               | Frame drawn only when the scene changes; mouse moves wake it only over the canvas (`wakesScene`)                    |
 | Shader warm-up          | `src/scene/shaderWarmup.ts`, `shaderLog.ts`                                  | Links a view's shaders behind an overlay on first use; `mybob.shaders()` log of every link                          |
-| Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | Per view, driven by frame time: occlusion first, then resolution steps; visit to 80 %                               |
+| Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | Per view, driven by frame time: occlusion first, then resolution steps; visit to 67 %                               |
 | Openings in plan        | `src/scene/planOpenings.ts`                                                  | Windows and doors drawn in Plan view, cut faces                                                                     |
 | Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion, bloom (walk, 3D view and Exterior)                                                       |
 | View effect lifecycle   | `src/scene/viewEffects.ts`                                                   | Scene-owned environment and pipelines, camera replacement, effect tiers and disposal                                |
@@ -448,8 +448,8 @@ last call, and read back at start-up.
   pixel per CSS pixel, never the screen's ratio (`MAX_PIXEL_RATIO`: a display scaled to
   150 % would cost 2.25 times the pixels). Views never go below one rendered pixel per CSS
   pixel, so Plan, Vue 3D and Extérieur stay at 100 % on a normal screen, except the visit,
-  which goes down to 80 % and never to 67 % (`VISIT_SCALE_FLOOR`; 67 % made the visit look
-  ugly). The owner chose that order (2026-11-13): at a low frame rate, rather
+  which takes every step down to 67 %, one per series (`VISIT_SCALE_FLOOR`; the owner
+  rejected a 150 % render dropping straight to 67 %, not the progressive steps). The owner chose that order (2026-11-13): at a low frame rate, rather
   lose the occlusion than sharpness. Plan and Extérieur have no tier and go straight to the
   resolution. A scale or tier the visit took leaves Plan sharp and Vue 3D's occlusion in
   place. Each view's scale only goes down and is kept for the session, because changing it
