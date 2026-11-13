@@ -794,7 +794,16 @@ next.
 
 ### A level under a roof slope
 
-An attic level is not read like a ground floor, and four things mislead there:
+An attic level is not read like a ground floor, and four things mislead there.
+
+**Read the floor and the slope on the section first.** The attic floor height, the knee wall
+height, the pitch and the flat ceiling are printed or drawn on the section (coupe), not on the
+attic plan. On plan B the section gives the attic floor at **+3.02** (the model said 2.75,
+guessed, for two sessions), knee walls 1.24 m high at their inner face, 45° slopes and a flat
+ceiling at 2.40 m. They become `elevation`, the knee walls' `height`, `ceilingSlopes` (foot line
+on the knee walls' inner faces, `height` 1.24, `rise` 1) and `ceilingHeight`. The check is
+arithmetic: 1.27 + (1.80 − 1.24) = 1.83 m, the printed `Limite H=1.80m` line. A wrong floor
+height moves every dormer sill, every roof window and the stair rise with it.
 
 **The floor does not reach the façade.** The drawing carries a line 1.27 m from each long
 façade: that is where the slope meets the floor. That line is the **floor limit**, not a height
@@ -858,8 +867,15 @@ wall is a wall of the attic level at its **full drawn height**: it pierces the c
 validation allows it. Its height and its window sill are not on the plan: read them on the
 elevation that faces the dormer, calibrated on the ridge (the drawn gutter sits 15–20 cm above
 the dimensioned eave). On plan B, at 1/100: window 0.90 × 1.05 with its frame measuring exactly
-1.05 (the calibration check), sill 1.365 m above the attic floor, front top +5.41, so a 2.66 m
-back wall. The previous rule — cut the back wall to 1.10 m under the covering and drop the sill —
+1.05 (the calibration check), sill 1.10 m above the +3.02 attic floor (the `All : 1.10 m` of the
+attic plan agrees), front top +5.41, so a 2.39 m back wall, rounded to the 2.40 flat ceiling.
+The dormer front is **not** on the façade plane: the plan draws it between two 20 cm piers, at
+z 7.94–8.14 on plan B, 0.36 m inside the façade, and the façade chain `1.965 | 20 | 90/1.05 |
+20` gives the piers. The back wall spans piers and window (1.30 m), the alcove stays 0.90 wide,
+and `ceilingSlopes[].gaps` keep the ceiling flat over the alcove; two thin cheek walls beside the
+gap close its sides under the slope. Roof windows are placed the same way: their top and bottom
+edges on the elevation give heights, which the roof face turns into a plan centre (plan B:
+tops at +5.23). The previous rule — cut the back wall to 1.10 m under the covering and drop the sill —
 dates from before dormers existed in the roof format, and it buried both windows under the
 eave. A dormer roof is flat or single-slope in the format: a two-pitch dormer roof is approximated
 flat at its front top, its footprint reaching back to where that height meets the slope.
@@ -895,9 +911,9 @@ lowest level and the roof covers the rest. Building the exterior from the attic 
 roof, and put the lawn at its altitude.
 
 **The walls of a level under a slope must stay under the roof.** A wall's maximum height is
-`roof(z) − floor`. On plan B, the roof at the rafter is 4.80 for a floor at 2.75: 2.05 m at
-most. A `ceilingHeight` of 2.5 let the partitions cross the covering by 42 cm, visible from
-outside.
+`roof(z) − floor`. A flat `ceilingHeight` of 2.5 let the partitions cross the covering by 42 cm,
+visible from outside. Declare the slopes in `ceilingSlopes` instead: wall tops, the ceiling and
+fixtures then follow them, and the flat `ceilingHeight` is the true flat ceiling of the section.
 
 #### Checking an exterior already in place
 
@@ -1190,7 +1206,11 @@ pnpm run backup:private
 Copies every `public/projects/private-*.json` to `reference-documents/<id>.json`. **Run it
 after every decision pass**, not only at the end: a copy three passes old is worse than no copy,
 because it looks like a backup. In a real session, the two copies had drifted by three keys and
-by ten keys — including the whole `site` of the second plan, added after the copy.
+by ten keys — including the whole `site` of the second plan, added after the copy. It happened
+again: the plan B fixes of a later session (WC walls, dormers, roof windows) lived only in a
+`private-*.json` that was then lost, and the next session found the older copy, redid the
+measurements from the PDF and found the same defects. Keep the correction script next to the
+copy (`reference-documents/historique/`): it replays the decisions on any older copy.
 
 `reference-documents/` may be a **junction** to a synced folder (kDrive, OneDrive): scripts see
 no difference, and PDFs as well as copies leave the repository. The folder is git-ignored, so
