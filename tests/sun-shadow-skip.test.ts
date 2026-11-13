@@ -79,10 +79,12 @@ test('an include of another shape is refused rather than patched blindly', () =>
 });
 
 /**
- * NullEngine links nothing, but Babylon still resolves includes and `#if` blocks in
- * JavaScript: the program it hands the driver is the one a browser would compile.
+ * NullEngine links nothing, but Babylon still inlines the includes and writes the
+ * `#define` lines: the text it hands the driver is the one a browser would compile. On
+ * WebGL the `#if` blocks are left to the driver, so the guard's text is in every program
+ * that includes `lightFragment`; the defines decide where the driver keeps it.
  */
-test('a shadow-receiving PBR surface gets the guard, a standard material does not', async () => {
+test('the driver keeps the guard for a shadowed PBR surface, not for a standard material', async () => {
   installSunShadowSkip();
   installSunShadowSkip();
   assert.equal(
@@ -109,20 +111,28 @@ test('a shadow-receiving PBR surface gets the guard, a standard material does no
       if (fragment(wall) && fragment(label)) break;
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
+    const defines = (program: string, name: string) =>
+      new RegExp(`^#define ${name}\\b`, 'm').test(program);
     const pbr = fragment(wall);
-    assert.ok(pbr.includes('NdotLUnclamped<=0.)'), 'the PBR program skips the lookup');
+    assert.ok(pbr.includes('NdotLUnclamped<=0.)'), 'the PBR program carries the guard');
     assert.ok(
       pbr.indexOf('NdotLUnclamped<=0.)') < pbr.lastIndexOf('computeShadow'),
       'before the lookup',
     );
+    // The driver keeps the guard: the shadowed sun of a plain PBR surface meets its condition.
+    for (const name of ['PBR', 'DIRLIGHT0', 'SHADOW0']) assert.ok(defines(pbr, name), name);
+    for (const name of ['SHADOWONLY', 'SS_TRANSLUCENCY', 'CLEARCOAT', 'SHEEN', 'LIGHTMAP']) {
+      assert.ok(!defines(pbr, name), `no ${name}`);
+    }
     // The patched region, from the guard to the light's bookkeeping, closes what it opens.
     const guardLine = pbr.lastIndexOf('\n', pbr.indexOf('NdotLUnclamped<=0.)'));
     const region = pbr.slice(guardLine, pbr.indexOf('aggShadow+=shadow', guardLine));
     assert.ok(region.includes('computeShadow'), 'the lookup sits inside the region');
     assert.equal(count(region, '{'), count(region, '}'));
+    // A standard material shares the include, but never defines PBR: the driver drops the guard.
     const standard = fragment(label);
-    assert.ok(standard.length > 0);
-    assert.ok(!standard.includes('NdotLUnclamped<=0.)'), 'standard materials are unchanged');
+    assert.ok(defines(standard, 'SHADOW0'), 'the standard surface is shadowed too');
+    assert.ok(!defines(standard, 'PBR'), 'standard materials never take the guard');
   } finally {
     scene.dispose();
     engine.dispose();
