@@ -1898,11 +1898,15 @@ function wireProjectControls() {
       toast('Le casque n’a pas pu ouvrir la visite. Vérifiez qu’il est allumé et autorisé.');
     }
   });
-  // Only a browser that can open a headset session shows the button.
-  void isImmersiveSupported().then((supported) => {
-    el('#enter-immersive').hidden = !supported;
-    if (supported) void preloadImmersive().catch(() => undefined);
-  });
+  // Only a browser that can open a headset session shows the button. Asked again when a
+  // headset connects or leaves: on a PC, Quest Link often starts after the page is open.
+  const checkImmersive = () =>
+    void isImmersiveSupported().then((supported) => {
+      el('#enter-immersive').hidden = !supported;
+      if (supported) void preloadImmersive().catch(() => undefined);
+    });
+  checkImmersive();
+  navigator.xr?.addEventListener?.('devicechange', checkImmersive);
   el('#view-exterior').addEventListener('click', () => {
     if (!current.site) return;
     viewer.setExteriorView(true);
