@@ -14,6 +14,7 @@ import {
   roofWindowWells,
 } from '../src/model/ceiling';
 import { validateProject } from '../src/model/validate';
+import { polygonArea } from '../src/model/geometry';
 import {
   packShareDocument,
   unpackShareDocument,
@@ -142,6 +143,60 @@ function validated(level: Level) {
 test('validation: a slope rising toward the inside of the plan is accepted', () => {
   // High enough at the north wall axis (2.25 m) for the 0.90 + 1.30 m window.
   validated(attic([{ ...NORTH, height: 2.4 }]))();
+});
+
+test('validation: a gapped slope can rise into one wing of a concave attic', () => {
+  const level = attic([]);
+  level.outline = [
+    [0, 0],
+    [7, 0],
+    [7, 7],
+    [4, 7],
+    [4, 3],
+    [0, 3],
+  ];
+  level.walls = [];
+  level.rooms = [
+    {
+      id: 'loft',
+      name: 'Combles',
+      kind: 'storage',
+      polygon: structuredClone(level.outline),
+      label: [5.5, 5],
+      viewpoint: [5.5, 5],
+    },
+  ];
+  level.spawn = { position: [5.5, 5], yaw: 0 };
+  level.ceilingSlopes = [
+    { id: 'wing', start: [4, -1], end: [4, 8], height: 1.2, rise: 1, gaps: [[0, 4.1]] },
+  ];
+  validated(level)();
+  near(ceilingHeightAt(level, [4.5, 5]), 1.7);
+  near(ceilingHeightAt(level, [1, 1]), level.ceilingHeight);
+  const area = ceilingTriangles(level).reduce(
+    (sum, [a, b, c]) =>
+      sum + Math.abs((b[0] - a[0]) * (c[2] - a[2]) - (c[0] - a[0]) * (b[2] - a[2])) / 2,
+    0,
+  );
+  near(area, polygonArea(level.outline));
+  const project = studio();
+  project.levels = [level];
+  const decoded = unpackShareDocument(packShareDocument(project as ShareDocument));
+  validateProject(decoded);
+  assert.deepEqual(decoded.levels[0].ceilingSlopes![0].gaps, [[0, 4.1]]);
+  // Without the gap, this plane would cut the other wing below the floor.
+  delete level.ceilingSlopes[0].gaps;
+  assert.throws(validated(level), /monter vers l’intérieur/);
+  // Gaps must not make an outward-facing active wing valid.
+  level.ceilingSlopes = [
+    { id: 'backwards', start: [7, 8], end: [7, -1], height: 1.2, rise: 1, gaps: [[0, 4.1]] },
+  ];
+  // Reverse it so the active floor lies entirely on the wrong side.
+  [level.ceilingSlopes[0].start, level.ceilingSlopes[0].end] = [
+    level.ceilingSlopes[0].end,
+    level.ceilingSlopes[0].start,
+  ];
+  assert.throws(validated(level), /monter vers l’intérieur/);
 });
 
 test('validation: an opening above the slope is refused, unless a gap carries it', () => {

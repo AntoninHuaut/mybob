@@ -150,7 +150,7 @@ test('still frames preserve the focused button and avoid projecting the stairs a
   assert.equal(projectorCalls(), 2);
 });
 
-test('unconnected flights and project switches leave no stale level shortcut', () => {
+test('unconnected levels use a view shortcut and project switches leave no stale buttons', () => {
   const { project, ground, navigation, view, container } = setup();
   navigation.update(project, view);
   navigation.update({ ...project, levels: [ground] }, view, false);
@@ -159,7 +159,37 @@ test('unconnected flights and project switches leave no stale level shortcut', (
   const mismatch = structuredClone(project);
   mismatch.levels.find((l) => l.id === 'upper')!.elevation = 4;
   navigation.update(mismatch, view, false);
-  assert.equal(container.childElementCount, 0);
+  assert.equal(container.childElementCount, 1);
+  assert.equal(container.querySelector('button')!.title, 'Voir Étage');
   navigation.update(project, view, false);
   assert.equal(container.childElementCount, 1);
+});
+
+test('a stairless attic has a round trip without adding geometry or treating it as a physical stair', () => {
+  const { project, ground, navigation, view, button, points, visits } = setup();
+  ground.stairs = [];
+  const before = structuredClone(project);
+  navigation.update(project, view);
+  assert.equal(button().title, 'Voir Étage');
+  assert.deepEqual(points.at(-1), { point: ground.spawn.position, height: 0.12 });
+  button().click();
+  navigation.update(project, view);
+  assert.equal(button().title, 'Voir Rez-de-chaussée');
+  button().click();
+  assert.deepEqual(visits, ['upper', 'ground']);
+  assert.deepEqual(project, before);
+});
+
+test('fallback buttons to both adjacent floors remain separate on a middle level', () => {
+  const { project, ground, navigation, view, container } = setup();
+  ground.stairs = [];
+  const top = { ...structuredClone(ground), id: 'top', name: 'Combles', elevation: 6 };
+  project.levels.push(top);
+  view.level = project.levels.find((l) => l.id === 'upper')!;
+  navigation.update(project, view);
+  const buttons = Array.from(container.querySelectorAll('button'));
+  assert.equal(buttons.length, 2);
+  assert.equal(buttons[0].title, 'Voir Combles');
+  assert.equal(buttons[1].title, 'Voir Rez-de-chaussée');
+  assert.notEqual(buttons[0].style.left, buttons[1].style.left);
 });

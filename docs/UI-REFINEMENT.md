@@ -16,8 +16,9 @@ In Vue 3D, a round stair icon at the flight's midpoint switches to the connected
 upper floor it offers the return trip over the stairwell. Its tooltip and accessible name say
 which level it leads to. This shortcut stays available when room labels are off and follows the
 same level-switch path as the selector, including furniture and received projects. It is hidden
-in Plan, Visite, Extérieur and while measuring. A stair without a modelled destination has no
-button.
+in Plan, Visite, Extérieur and while measuring. When an adjacent level has no connected stair,
+a level icon at the displayed floor's start offers « Voir [niveau] » and the return trip, without
+adding a stair or a floor opening. Two such buttons on a middle level sit side by side.
 
 In Meubles, the variant selector, Dupliquer and Renommer come before adding. Variants cover all levels and keep the camera when switching. The Placement précis pane gathers multiple selection, alignment, distribution and the optional grid/wall snapping. The individual edit popup keeps its transactional behaviour.
 

@@ -1,5 +1,5 @@
 import type { CeilingSlope, HouseProject, Level, Room, Point2, ProjectSite } from './types';
-import { ceilingHeightAt, ceilingProfile, slopeDistance } from './ceiling';
+import { ceilingHeightAt, ceilingProfile, slopeDistance, slopeHeightAt } from './ceiling';
 import {
   alongWall,
   bounds,
@@ -122,9 +122,6 @@ function validateCeilingSlopes(l: Level, id: (value: unknown) => void) {
       s.rise > 20
     )
       fail(`Rampant invalide : ${s.id}`);
-    // The middle of the plan must lie on the rising side, or the slope is drawn backwards.
-    if (slopeDistance(s, centre) <= 0)
-      fail(`Un rampant doit monter vers l’intérieur du niveau, à gauche de son tracé : ${s.id}`);
     if (s.gaps !== undefined) {
       if (!Array.isArray(s.gaps) || s.gaps.length > 20)
         fail(`Interruptions de rampant invalides : ${s.id}`);
@@ -142,6 +139,19 @@ function validateCeilingSlopes(l: Level, id: (value: unknown) => void) {
           fail(`Interruptions de rampant invalides : ${s.id}`);
         previous = (gap as [number, number])[1];
       }
+    }
+    // A concave floor's bounding-box centre can lie outside the floor altogether.
+    // For a slope restricted to one wing by gaps, check the active floor vertices
+    // instead. Keep rejecting reversed slopes on ordinary rectangular levels.
+    if (slopeDistance(s, centre) <= 0) {
+      const active = l.outline.filter((p) => Number.isFinite(slopeHeightAt(s, p)));
+      const risesIntoWing =
+        s.gaps?.length &&
+        !pointInOrOnPolygon(centre, l.outline) &&
+        active.some((p) => slopeDistance(s, p) > 0) &&
+        active.every((p) => slopeDistance(s, p) >= -0.001);
+      if (!risesIntoWing)
+        fail(`Un rampant doit monter vers l’intérieur du niveau, à gauche de son tracé : ${s.id}`);
     }
   }
 }
