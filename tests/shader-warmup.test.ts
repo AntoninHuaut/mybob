@@ -99,3 +99,22 @@ test('software renderers skip the preparation, hardware ones keep it', () => {
   );
   assert.ok(!isSoftwareRenderer(undefined));
 });
+
+test('all prepared variants share one time budget', async () => {
+  let clock = 0;
+  let variants = 0;
+  const frames = await warmFrames(
+    {
+      renderFrame() {},
+      effectsReady: () => true,
+      nextVariant: () => ++variants < 1_000,
+    },
+    async () => {
+      clock += 100;
+    },
+    () => clock,
+  );
+  assert.equal(clock, WARM_UP_MAX_MS);
+  assert.equal(frames, WARM_UP_MAX_MS / 100);
+  assert.ok(variants > 1 && variants < 1_000, 'a variant does not restart the deadline');
+});

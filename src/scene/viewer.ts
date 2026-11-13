@@ -743,7 +743,23 @@ export class HouseViewer {
     this.onPreparing?.(true, first);
     try {
       await nextPaint();
+      if (scene !== this.scene || scene.isDisposed || key !== this.currentViewKey()) return;
       let image = 0;
+      // Keep the view's lighting while drawing both wall material variants and restoring its cut.
+      const variants: Array<WallDisplay | undefined> =
+        key === 'overview' &&
+        (this.wallDisplay ?? 'auto') === 'auto' &&
+        this.sectionHeight === undefined
+          ? ['full', 'low', undefined]
+          : [undefined];
+      let variant = 0;
+      const selectVariant = () => {
+        const mode = variants[variant];
+        if (mode) this.wallCutaway?.apply(mode, [this.orbit.position.x, this.orbit.position.z]);
+        else this.updateCutaway();
+        this.shadowRefresh?.invalidate();
+      };
+      selectVariant();
       await warmFrames({
         renderFrame: () => {
           if (scene !== this.scene || scene.isDisposed) return;
@@ -756,9 +772,22 @@ export class HouseViewer {
         // Not only the effects: a receiver relinks once the sun shadow map is ready,
         // which only happens after its own settling frames.
         effectsReady: () =>
-          this.engine.areAllEffectsReady() &&
-          (this.shadowRefresh?.settled ?? true) &&
-          scene.getWaitingItemsCount() === 0,
+          scene !== this.scene ||
+          scene.isDisposed ||
+          (this.engine.areAllEffectsReady() &&
+            (this.shadowRefresh?.settled ?? true) &&
+            scene.getWaitingItemsCount() === 0),
+        nextVariant: () => {
+          if (
+            scene !== this.scene ||
+            scene.isDisposed ||
+            key !== this.currentViewKey() ||
+            ++variant >= variants.length
+          )
+            return false;
+          selectVariant();
+          return true;
+        },
       });
     } catch (error) {
       console.info(
@@ -766,7 +795,10 @@ export class HouseViewer {
       );
     } finally {
       // A scene replaced meanwhile has released its effects: it stays cold.
-      if (scene === this.scene) this.warmth.markWarm(key);
+      if (scene === this.scene && !scene.isDisposed) {
+        this.updateCutaway();
+        if (key === this.currentViewKey()) this.warmth.markWarm(key);
+      }
       shaderLog.markView(key, 'end', pluginSummary(scene.materials));
       this.preparing = false;
       this.requestRender();
@@ -1529,6 +1561,11 @@ export class HouseViewer {
    * alike: a resize hitches, so it never follows the camera (`adaptiveResolution.ts`).
    */
   private applyRenderScale(now: number, render: boolean) {
+    // A late shader or texture is preparation work, not the machine's steady frame rate.
+    if (!this.engine.areAllEffectsReady() || this.scene.getWaitingItemsCount() > 0) {
+      this.adaptiveResolution.resume();
+      return;
+    }
     const frameMs = render && this.lastRenderAt !== undefined ? now - this.lastRenderAt : undefined;
     const scale = this.adaptiveResolution.update(frameMs);
     this.applyEffectTier();
@@ -1647,7 +1684,8 @@ export class HouseViewer {
     // Prototype-based scene tests have no scheduler; treat their explicit frames
     // as fresh observations rather than reusing an untracked camera signature.
     const cameraMoved = this.renderScheduler?.cameraMoved ?? true;
-    if (cameraMoved && this.mode === 'overview' && !this.exteriorView) this.updateCutaway();
+    if (cameraMoved && !this.preparing && this.mode === 'overview' && !this.exteriorView)
+      this.updateCutaway();
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.045);
     // Match the collision displacement to frame time, including the garage step.
     this.scene.gravity.y = -15 * dt;

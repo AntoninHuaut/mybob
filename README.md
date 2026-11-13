@@ -8,6 +8,8 @@ Read [AGENTS.md](AGENTS.md), then [the code map](docs/ARCHITECTURE.md) and [the 
 
 Parametric kitchens support corner runs, separate worktop and front colours, wall units and equipment markers, including an optional microwave above the oven. See [furniture configurations](docs/FURNITURE.md#types-and-configurations).
 
+Rendering preparation and automatic quality adjustment are described in the [architecture invariants](docs/ARCHITECTURE.md#invariants-not-to-break).
+
 ## Getting started
 
 Node.js 26.13.0 and pnpm 12.18.0.

@@ -463,7 +463,9 @@ last call, and read back at start-up.
   place. Each view's scale only goes down and is kept for the session, because changing it
   resizes every render target, which hitches; switching view may resize once, next to the
   rebuild a switch already does. The first 30 images, the 30 after each change and the 30
-  after entering a view are not measured. A gap over 5 s between two images is a stall,
+  after entering a view are not measured. Pending shader compilation or asset loading
+  discards the partial series and restarts that warm-up, including when new programs appear
+  after the initial preparation. A gap over 5 s between two images is a stall,
   never a measurement, and hiding the page, losing or regaining the focus restarts that
   warm-up and drops the half-measured series: the slow images after an alt-tab are not the
   machine, and a tier is never lifted. The occlusion is never degraded on the way (fewer
@@ -493,7 +495,7 @@ last call, and read back at start-up.
   with a given set of defines, and a view change alters them (sky, lights, prepass, temporal
   pass); on ANGLE/D3D11 each program blocks the frame ~90 ms, so an unprepared first switch froze
   the page for seconds. The render loop spots a view not yet in `ViewWarmth`, skips drawing,
-  tells the host (`onPreparing`: `#loading`) and draws until the engine reports every effect ready and the sun shadow map has settled, three frames in a row (receivers relink once their shadow is ready), for at most 20 s. Software renderers (SwiftShader, llvmpipe, WARP) skip it: they link slowly and
+  tells the host (`onPreparing`: `#loading`) and draws until the engine reports every effect ready and the sun shadow map has settled, three frames in a row (receivers relink once their shadow is ready). Automatic Vue 3D cutaways prepare full walls, lowered walls and the restored camera-facing cut in turn, with the actual view's lighting and shadow policy. Each state refreshes and settles the shadow map too; the camera stays in place. All states share the same 20 s budget. `tests/view-preparation.test.ts` drives the real viewer through preparation, rotation and zoom on a NullEngine and checks its shader-cache keys. Software renderers (SwiftShader, llvmpipe, WARP) skip it: they link slowly and
   front-loading would only multiply their work, so CI e2e keeps the on-demand behaviour.
   The start-up is the same path with the landing view, so nothing else needs to call it. A new
   scene (project or level change) releases the cached effects and makes every view cold again.
