@@ -576,7 +576,7 @@ export function roofWindowWells(project: HouseProject, level: Level): CeilingWel
             const run = Math.hypot(dx, dz) || 1;
             const along = ((p[0] - wall.start[0]) * dx + (p[1] - wall.start[1]) * dz) / run;
             const off = Math.abs((p[0] - wall.start[0]) * dz - (p[1] - wall.start[1]) * dx) / run;
-            return along >= 0 && along <= run && off < wall.thickness / 2 - 1e-6;
+            return along >= 0 && along <= run && off <= wall.thickness / 2 + 1e-6;
           });
         let t = Math.max(0, first[0]);
         const stop = Math.min(length, t + 0.6);
