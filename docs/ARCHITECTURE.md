@@ -330,11 +330,11 @@ offers them: Vue 3D occlusion was adopted (#205, described above), and three wer
   approach). Measured with « Mesurer chaque vue » on an RX 9060 XT, it saved 0.1–0.2 ms of a
   1.8 ms Visite image, and left streaky grain on plain walls even at rest: the walk's TAA
   clamps its history, so it never averages the moving noise away. Not worth a visible loss.
-  Its bilateral blur takes 8 taps per direction instead of Babylon's 16
-  (`OCCLUSION_BLUR_SAMPLES`): the blur, mostly its full-resolution vertical pass, cost 0.67
-  of the 3.0 ms visit on the owner's house. Since 2026-11-13 the occlusion itself also takes
-  8 samples, walk and Vue 3D, with the same fixed noise: the owner tried it on the
-  converted houses and kept it (the rotating-noise candidate above stays rejected).
+  Since 2026-11-13 the occlusion takes 8 samples, walk and Vue 3D, with the same fixed noise
+  and Babylon's 16-tap bilateral blur (`OCCLUSION_BLUR_SAMPLES`): the owner tried that pair
+  on the converted houses and kept it. An 8-tap blur (#254, 0.67 of a 3.0 ms visit saved on
+  the blur) left grey blotches high on the walls once paired with the 8 samples, and was
+  put back to 16. The rotating-noise candidate above stays rejected.
 - The sun shadow map is 1024 px since 2026-11-13 (owner's trial, was 2048): a quarter of the
   map to render and filter, slightly softer edges, judged acceptable on the converted houses.
 - Sun shadows stay on medium PCF: contact-hardening shadows (PCSS, light size ratio 0.03)

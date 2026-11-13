@@ -336,10 +336,11 @@ export interface OcclusionSettings {
  * Taps of the bilateral blur, per direction, each one a depth and an occlusion read. The
  * kernel spans as many texels, so fewer taps is a narrower blur. With Babylon's default of
  * 16, the blur cost 0.67 of the 3.0 ms visit on the owner's house (desktop GPU), mostly
- * the full-resolution vertical pass. 8 halves both passes (#246/#248 rejected a grainier
- * 8-sample occlusion pass itself, not this blur).
+ * the full-resolution vertical pass. 8 halved both passes (#254), but together with the
+ * 8-sample occlusion pass the owner kept the narrow blur left grey blotches on the walls
+ * under the ceiling (2026-11-13): back to 16, the combination the owner tried and kept.
  */
-export const OCCLUSION_BLUR_SAMPLES = 8;
+export const OCCLUSION_BLUR_SAMPLES = 16;
 
 export const WALK_OCCLUSION: OcclusionSettings = {
   name: 'interior-occlusion',
