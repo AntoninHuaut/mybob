@@ -142,7 +142,8 @@ export interface SiteSurface {
   /** Terrace only: slab top above the terrain, in metres. Absent means flush with the ground. */
   height?: number;
 }
-export type SiteBoundaryKind = 'wall' | 'fence' | 'hedge';
+/** A `gate` is drawn like a fence but lets the visitor through. */
+export type SiteBoundaryKind = 'wall' | 'fence' | 'hedge' | 'gate';
 export interface SiteBoundary {
   id: string;
   kind: SiteBoundaryKind;

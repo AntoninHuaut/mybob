@@ -178,7 +178,7 @@ export function boundaryMesh(line: SiteBoundary, ground: number, scene: Scene): 
     const length = Math.hypot(dx, dz);
     const angle = -Math.atan2(dz, dx);
     const middle: Point2 = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
-    if (line.kind !== 'fence') {
+    if (line.kind !== 'fence' && line.kind !== 'gate') {
       parts.push(box(`${line.id}-${i}`, length + thickness, thickness, line.height, middle, angle));
       return;
     }
@@ -474,12 +474,13 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     const [body, posts] = boundaryMesh(line, site.elevation, scene);
     add(
       body,
-      line.kind === 'wall' ? plaster : line.kind === 'fence' ? fenceMesh() : hedge(),
+      line.kind === 'wall' ? plaster : line.kind === 'hedge' ? hedge() : fenceMesh(),
       'boundary',
     );
     if (posts) add(posts, fence(), 'boundary');
     for (const mesh of posts ? [body, posts] : [body]) {
-      mesh.checkCollisions = true;
+      // A gate stands open to the visit, like an exterior door.
+      mesh.checkCollisions = line.kind !== 'gate';
       boundaryMeshes.push(mesh);
     }
   }

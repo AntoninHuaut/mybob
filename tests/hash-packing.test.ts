@@ -682,6 +682,15 @@ test('#259: terraces, lawn, garden walls, fences and hedges survive a share link
       ],
     },
     {
+      id: 'portillon',
+      kind: 'gate',
+      height: 1.4,
+      points: [
+        [-9, 4],
+        [-9, 5],
+      ],
+    },
+    {
       id: 'haie',
       kind: 'hedge',
       height: 1.5,
@@ -699,6 +708,7 @@ test('#259: terraces, lawn, garden walls, fences and hedges survive a share link
   validateProject(decoded.document);
   expectDeepEqual(decoded.document, renumberLikePack(doc), 'garden');
   assert.equal(decoded.document.site!.surfaces![2].height, 0.15);
-  assert.equal(decoded.document.site!.boundaries![2].thickness, 0.8);
+  assert.equal(decoded.document.site!.boundaries![3].thickness, 0.8);
+  assert.equal(decoded.document.site!.boundaries![2].kind, 'gate');
   assert.equal(decoded.document.site!.boundaries![1].thickness, undefined);
 });

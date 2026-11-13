@@ -1114,8 +1114,32 @@ test('#259: garden surfaces and boundaries reject what the engine cannot draw', 
     p.site!.boundaries![2].thickness = 0;
   });
   bad((p) => {
-    (p.site!.boundaries![2] as { kind: string }).kind = 'gate';
+    (p.site!.boundaries![2] as { kind: string }).kind = 'door';
   });
+});
+
+test('a garden gate is drawn like a fence and lets the visitor through', () => {
+  const project = gardenProject();
+  project.site!.boundaries!.push({
+    id: 'portillon',
+    kind: 'gate',
+    height: 1.4,
+    points: [
+      [-9, 4],
+      [-9, 5],
+    ],
+  });
+  const { built, scene, engine } = exterior(validateProject(project));
+  const gate = ['site-boundary:portillon', 'site-boundary-posts:portillon'].map((name) =>
+    scene.getMeshByName(name)!,
+  );
+  assert.ok(gate.every(Boolean), 'panel and posts are built');
+  assert.ok(
+    gate.every((mesh) => !mesh.checkCollisions && built.boundaryMeshes.some((m) => m === mesh)),
+  );
+  built.dispose();
+  scene.dispose();
+  engine.dispose();
 });
 
 test('#259: a project without garden boundaries builds none', () => {
