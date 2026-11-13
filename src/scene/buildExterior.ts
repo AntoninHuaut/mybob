@@ -27,7 +27,9 @@ import {
 import { polygonMesh, wallFloorSpan, worldScaleUvs } from './buildHouse';
 import {
   createExteriorTextures,
+  createFenceMesh,
   createHedgeNormal,
+  FENCE_MESH_TILE,
   LAWN_DETAIL_TILE,
   LAWN_TILE,
   SLATE_TILE,
@@ -50,7 +52,7 @@ export interface ExteriorScene {
   roofMeshes: Mesh[];
   /** Match metadata.wallId to the interior wall's cutaway visibility. */
   facadeMeshes: Mesh[];
-  /** Garden walls, fences and hedges: shown with the roof, and casting shadows. */
+  /** Garden walls, fences (panels and posts) and hedges: they cast sun shadows. */
   boundaryMeshes: Mesh[];
   bounds: ReturnType<typeof bounds>;
   /** Maximum height above the level datum, including the roof. */
@@ -143,13 +145,19 @@ function prismSides(name: string, polygon: Point2[], bottom: number, top: number
 const FENCE_POST_SPACING = 2.4;
 const FENCE_POST = 0.08;
 
+/** Depth of a fence's wire panel: a single plane of mesh, so the two faces never double the grid. */
+const FENCE_PANEL_DEPTH = 0.006;
+
 /**
- * A garden wall, fence or hedge as one mesh: a box per segment, lengthened by
- * half its thickness at both ends so that corners close. A fence adds posts.
+ * A garden wall, fence or hedge: a box per segment, lengthened by half its
+ * thickness at both ends so that corners close. A wall or a hedge is one mesh.
+ * A fence is two: its wire panels (`site-boundary:<id>`, drawn see-through) and
+ * its posts (`site-boundary-posts:<id>`, opaque).
  */
-export function boundaryMesh(line: SiteBoundary, ground: number, scene: Scene): Mesh {
+export function boundaryMesh(line: SiteBoundary, ground: number, scene: Scene): Mesh[] {
   const thickness = line.thickness ?? BOUNDARY_THICKNESS[line.kind];
   const parts: Mesh[] = [];
+  const posts: Mesh[] = [];
   const box = (
     name: string,
     length: number,
@@ -161,7 +169,7 @@ export function boundaryMesh(line: SiteBoundary, ground: number, scene: Scene): 
     const part = CreateBox(name, { width: length, depth: width, height }, scene);
     part.position.set(at[0], ground + height / 2, at[1]);
     part.rotation.y = angle;
-    parts.push(metricBox(part));
+    return metricBox(part);
   };
   line.points.slice(1).forEach((end, i) => {
     const start = line.points[i];
@@ -171,27 +179,34 @@ export function boundaryMesh(line: SiteBoundary, ground: number, scene: Scene): 
     const angle = -Math.atan2(dz, dx);
     const middle: Point2 = [(start[0] + end[0]) / 2, (start[1] + end[1]) / 2];
     if (line.kind !== 'fence') {
-      box(`${line.id}-${i}`, length + thickness, thickness, line.height, middle, angle);
+      parts.push(box(`${line.id}-${i}`, length + thickness, thickness, line.height, middle, angle));
       return;
     }
     // Panel between the posts, slightly lower so their tops show.
-    box(`${line.id}-${i}`, length, thickness, line.height - 0.04, middle, angle);
-    const posts = Math.max(1, Math.ceil(length / FENCE_POST_SPACING));
-    for (let k = i === 0 ? 0 : 1; k <= posts; k++) {
-      const t = k / posts;
-      box(
-        `${line.id}-${i}-post-${k}`,
-        FENCE_POST,
-        Math.max(FENCE_POST, thickness),
-        line.height,
-        [start[0] + dx * t, start[1] + dz * t],
-        angle,
+    parts.push(
+      box(`${line.id}-${i}`, length, FENCE_PANEL_DEPTH, line.height - 0.04, middle, angle),
+    );
+    const count = Math.max(1, Math.ceil(length / FENCE_POST_SPACING));
+    for (let k = i === 0 ? 0 : 1; k <= count; k++) {
+      const t = k / count;
+      posts.push(
+        box(
+          `${line.id}-${i}-post-${k}`,
+          FENCE_POST,
+          Math.max(FENCE_POST, thickness),
+          line.height,
+          [start[0] + dx * t, start[1] + dz * t],
+          angle,
+        ),
       );
     }
   });
   const mesh = Mesh.MergeMeshes(parts, true, true)!;
   mesh.name = `site-boundary:${line.id}`;
-  return mesh;
+  if (!posts.length) return [mesh];
+  const postMesh = Mesh.MergeMeshes(posts, true, true)!;
+  postMesh.name = `site-boundary-posts:${line.id}`;
+  return [mesh, postMesh];
 }
 
 function faceMesh(
@@ -384,6 +399,18 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
     m.roughness = 0.6;
     return m;
   });
+  // The wire panel: the fence colour, cut out by the mesh texture's alpha.
+  const fenceMesh = once(() => {
+    const m = material('garden-fence-mesh', '#4b514c');
+    m.roughness = 0.6;
+    m.albedoTexture = tiled(createFenceMesh(scene), FENCE_MESH_TILE);
+    m.useAlphaFromAlbedoTexture = true;
+    m.transparencyMode = PBRMaterial.PBRMATERIAL_ALPHATEST;
+    m.alphaCutOff = 0.5;
+    m.backFaceCulling = false;
+    m.twoSidedLighting = true;
+    return m;
+  });
   const hedge = once(() => {
     const m = material('hedge', '#4d6a3b');
     m.bumpTexture = tiled(createHedgeNormal(scene), 0.35);
@@ -444,14 +471,17 @@ export function buildExterior(project: HouseProject, level: Level, scene: Scene)
       );
   }
   for (const line of site.boundaries ?? []) {
-    const mesh = boundaryMesh(line, site.elevation, scene);
+    const [body, posts] = boundaryMesh(line, site.elevation, scene);
     add(
-      mesh,
-      line.kind === 'wall' ? plaster : line.kind === 'fence' ? fence() : hedge(),
+      body,
+      line.kind === 'wall' ? plaster : line.kind === 'fence' ? fenceMesh() : hedge(),
       'boundary',
     );
-    mesh.checkCollisions = true;
-    boundaryMeshes.push(mesh);
+    if (posts) add(posts, fence(), 'boundary');
+    for (const mesh of posts ? [body, posts] : [body]) {
+      mesh.checkCollisions = true;
+      boundaryMeshes.push(mesh);
+    }
   }
   // Draw a discreet parcel edge, without inventing fences or hedge heights.
   const edge = CreateLines(
