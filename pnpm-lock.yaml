@@ -177,7 +177,7 @@ importers:
     dependencies:
       '@babylonjs/core':
         specifier: ^9.36.0
-        version: 9.36.0
+        version: 9.37.0
       earcut:
         specifier: ^3.2.4
         version: 3.2.4
@@ -209,8 +209,8 @@ importers:
 
 packages:
 
-  '@babylonjs/core@9.36.0':
-    resolution: {integrity: sha512-PCrCshQ6hhvyxsp/FAq7GMPrmX8asloy+fXs1+mF2SCREx0hqCb4xtfbIoyID43rqX8+1UTw5RtodixXowRp7w==}
+  '@babylonjs/core@9.37.0':
+    resolution: {integrity: sha512-6RmkNN+KxzJ9Mo+Yuk0TVtWuNo+/9wHiNknIXFL17StVT9hoz7Q2/N3hTZpsW+wVWge140+25Bm/VkWIwDALEQ==}
 
   '@emnapi/core@2.0.0-beta.2':
     resolution: {integrity: sha512-MzCVoWtcg4Pm2B3je5mMvYMvj3MmBKw+fU7vbsJc9/iT8ip6/eYIHo/Dsm/mr+wsHB6SEyJDuxB09Yy6r/8+4A==}
@@ -496,8 +496,8 @@ packages:
   '@rolldown/pluginutils@1.1.1':
     resolution: {integrity: sha512-glFIJDvLNDtJhT9qrMFWLPbvS+skxgt4L0K8Ei2YtnhPysAJnsI7nyxSJxKj4ADeKX0OLjC4ntRkwpLOoS3rwA==}
 
-  '@tybys/wasm-util@0.10.4':
-    resolution: {integrity: sha512-W3c4gRigFS0T/Ma4qIYF3GDAc5AQdHb1yL5znJT1Zv1YaD9Kitx656wBjvr19qbiosmZT8lWDM5BEMynUqX65A==}
+  '@tybys/wasm-util@0.10.5':
+    resolution: {integrity: sha512-dOGOPxlaNV+G046mZzN+9C0dAcQZeSKcXiVaM0TYy/LM4ttTmgSBDxYfovcYI8Em3+eAbiAYpvWLOv8+ZVRJKA==}
 
   '@types/node@26.6.6':
     resolution: {integrity: sha512-MzQj+8Kx3XI40OmUAE6Qoh58ZMNstNNMwn2nfd3qWsfe7nDNSqJNzes4njhz6AHwrSHOffSLwXU6yb474Q4aog==}
@@ -766,8 +766,8 @@ packages:
     engines: {node: '>=20'}
     hasBin: true
 
-  postcss@8.5.32:
-    resolution: {integrity: sha512-LJlKCCAUFKOuZxipUdYw1NzIITEsPcgyOG9LkvRJvuKj/bRzbuRY0ARXvL0pWGpsZvn8jku+LMep2eU0seHp8g==}
+  postcss@8.5.33:
+    resolution: {integrity: sha512-RVHEU9/Pp1Fnjr/MpAJsZoADukCKhfIi15OunEYiGktIkYLkPVvC1sioWolGDS7XByMTx9m/IGbro0Js13zhnQ==}
     engines: {node: ^10 || ^12 || >=14}
 
   prettier@3.10.1:
@@ -868,7 +868,7 @@ packages:
 
 snapshots:
 
-  '@babylonjs/core@9.36.0': {}
+  '@babylonjs/core@9.37.0': {}
 
   '@emnapi/core@2.0.0-beta.2':
     dependencies:
@@ -968,7 +968,7 @@ snapshots:
     dependencies:
       '@emnapi/core': 2.0.0-beta.2
       '@emnapi/runtime': 2.0.0-beta.2
-      '@tybys/wasm-util': 0.10.4
+      '@tybys/wasm-util': 0.10.5
     optional: true
 
   '@oxc-project/types@0.156.0': {}
@@ -1031,7 +1031,7 @@ snapshots:
 
   '@rolldown/pluginutils@1.1.1': {}
 
-  '@tybys/wasm-util@0.10.4':
+  '@tybys/wasm-util@0.10.5':
     dependencies:
       tslib: 2.9.1
     optional: true
@@ -1230,7 +1230,7 @@ snapshots:
     dependencies:
       playwright-core: 1.65.1
 
-  postcss@8.5.32:
+  postcss@8.5.33:
     dependencies:
       nanoid: 3.3.20
       picocolors: 1.1.1
@@ -1307,7 +1307,7 @@ snapshots:
     dependencies:
       lightningcss: 1.33.0
       picomatch: 4.0.7
-      postcss: 8.5.32
+      postcss: 8.5.33
       rolldown: 1.2.19
       tinyglobby: 0.2.17
     optionalDependencies:
