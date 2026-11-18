@@ -32,7 +32,8 @@ Checks: formatting, tests, TypeScript check, public build, then artefact check. 
 Actions only have `contents: read`, no Cloudflare secret, a 15-minute limit, and cancel runs made obsolete on the same branch.
 
 Python plan-script self-tests run in a separate job, parallel with the public build.
-That job uses Python 3.12, a requirements-keyed pip cache and one dependency installation.
+That job uses the Python version pinned in `.python-version` (also honoured by `uv` and
+`uvx` locally), a requirements-keyed pip cache and one dependency installation.
 After the public check, GitHub shares the build with three runners that run the E2E tests
 in desktop Chromium. Chromium headless shell is cached per version. The required check
 « Tests, types, build et confidentialité » aggregates the build, plan scripts and the

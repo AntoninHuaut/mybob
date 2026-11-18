@@ -45,5 +45,17 @@
       groupSlug: 'routine',
       matchUpdateTypes: ['minor', 'patch', 'digest'],
     },
+    // A Python minor (3.12 → 3.13) is an ABI change: pymupdf's binary
+    // dependencies (onnxruntime) publish wheels for a new Python months after
+    // its release, and until then pip finds no distribution at all. Inside the
+    // routine group such a bump blocked every other update (#293). It gets
+    // its own PR, held back like a major, and is merged by hand once the plan
+    // scripts job passes. Patches of the pinned minor stay routine.
+    {
+      matchDepNames: ['python'],
+      matchUpdateTypes: ['major', 'minor'],
+      groupName: null,
+      automerge: false,
+    },
   ],
 }
