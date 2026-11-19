@@ -8,9 +8,10 @@
 {
   $schema: 'https://docs.renovatebot.com/renovate-schema.json',
   // best-practices adds, on top of config:recommended: actions and Docker
-  // images pinned to digests, devDependencies pinned, a 3-day strict
-  // minimumReleaseAge on npm, weekly lock file maintenance, config
-  // migration PRs and abandoned-package warnings on the dashboard.
+  // images pinned to digests, devDependencies pinned, a strict
+  // minimumReleaseAge on npm (shortened to a day below), weekly lock file
+  // maintenance, config migration PRs and abandoned-package warnings on the
+  // dashboard.
   extends: ['config:best-practices'],
   timezone: 'Europe/Paris',
   schedule: ['* 7-12 * * 6'],
@@ -36,6 +37,16 @@
   // for a human.
   automerge: true,
   packageRules: [
+    // A day instead of the preset's three: an advisory Renovate cannot see
+    // (only GitHub's and OSV's raise a security PR) then waits one day, not
+    // three plus the next Saturday. pnpm applies the same day to lock file
+    // maintenance. matchUpdateTypes keeps the preset's opt-outs (lock file
+    // maintenance, pin, replacement), which carry no release age.
+    {
+      matchDatasources: ['npm'],
+      matchUpdateTypes: ['major', 'minor', 'patch'],
+      minimumReleaseAge: '1 day',
+    },
     {
       matchUpdateTypes: ['major'],
       automerge: false,
