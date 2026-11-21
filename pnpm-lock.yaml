@@ -176,8 +176,8 @@ importers:
   .:
     dependencies:
       '@babylonjs/core':
-        specifier: ^9.36.0
-        version: 9.37.0
+        specifier: ^9.37.1
+        version: 9.37.1
       earcut:
         specifier: ^3.2.4
         version: 3.2.4
@@ -189,8 +189,8 @@ importers:
         specifier: 26.6.6
         version: 26.6.6
       fast-check:
-        specifier: 4.10.2
-        version: 4.10.2
+        specifier: 4.10.3
+        version: 4.10.3
       happy-dom:
         specifier: 21.0.4
         version: 21.0.4
@@ -209,8 +209,8 @@ importers:
 
 packages:
 
-  '@babylonjs/core@9.37.0':
-    resolution: {integrity: sha512-6RmkNN+KxzJ9Mo+Yuk0TVtWuNo+/9wHiNknIXFL17StVT9hoz7Q2/N3hTZpsW+wVWge140+25Bm/VkWIwDALEQ==}
+  '@babylonjs/core@9.37.1':
+    resolution: {integrity: sha512-OABdYAU5FvCGmIHj6zpfK+LTLJc8zUpKOhI0QNkDYyXy2P5ROA2dnUxfZCeR/TL1oNVnS/H4w/uUSt9GHDFZWQ==}
 
   '@emnapi/core@2.0.0-beta.2':
     resolution: {integrity: sha512-MzCVoWtcg4Pm2B3je5mMvYMvj3MmBKw+fU7vbsJc9/iT8ip6/eYIHo/Dsm/mr+wsHB6SEyJDuxB09Yy6r/8+4A==}
@@ -648,8 +648,8 @@ packages:
     engines: {node: '>=18'}
     hasBin: true
 
-  fast-check@4.10.2:
-    resolution: {integrity: sha512-iK2f+YrcmoeGqk6fA0ea2bptcu/itMIm4NfEozq6N25+aG6h7s5HZbB/k1aV7b5w5sFLMCbbtRUsTVR+BgC3xw==}
+  fast-check@4.10.3:
+    resolution: {integrity: sha512-SBaU6nhh+sXxb05r2IHAKfxnR/1Pu6MqtHYaewM1BY6V5xzOxOk+4yoWO7WfeeyZG1iArFE6/DO/7iLYMUuOJg==}
     engines: {node: '>=12.17.0'}
 
   fdir@6.5.0:
@@ -868,7 +868,7 @@ packages:
 
 snapshots:
 
-  '@babylonjs/core@9.37.0': {}
+  '@babylonjs/core@9.37.1': {}
 
   '@emnapi/core@2.0.0-beta.2':
     dependencies:
@@ -1145,7 +1145,7 @@ snapshots:
       '@esbuild/win32-ia32': 0.28.2
       '@esbuild/win32-x64': 0.28.2
 
-  fast-check@4.10.2:
+  fast-check@4.10.3:
     dependencies:
       pure-rand: 8.4.2
 
