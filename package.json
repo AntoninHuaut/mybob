@@ -20,13 +20,13 @@
     "backup:private": "node scripts/backup-private.mjs"
   },
   "dependencies": {
-    "@babylonjs/core": "^9.36.0",
+    "@babylonjs/core": "^9.37.1",
     "earcut": "^3.2.4"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
     "@types/node": "26.6.6",
-    "fast-check": "4.10.2",
+    "fast-check": "4.10.3",
     "happy-dom": "21.0.4",
     "prettier": "3.10.1",
     "tsx": "4.23.15",
