@@ -5,6 +5,7 @@ import { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { PointerEventTypes, PointerInfo } from '@babylonjs/core/Events/pointerEvents';
 import { PickingInfo } from '@babylonjs/core/Collisions/pickingInfo';
+import { HeldKeys } from '../src/scene/frameMotion';
 import { HouseViewer } from '../src/scene/viewer';
 import type { Level } from '../src/model/types';
 
@@ -46,7 +47,7 @@ test('replacing scene resources clears old input observers and disposes the scen
   const viewer = Object.assign(Object.create(HouseViewer.prototype), {
     engine,
     currentMode: 'overview',
-    keyState: new Set(),
+    keys: new HeldKeys(),
     onSelectRoom() {
       selections++;
     },

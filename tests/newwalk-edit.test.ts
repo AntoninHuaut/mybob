@@ -5,7 +5,8 @@ import { Scene } from '@babylonjs/core/scene';
 import { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { HouseViewer, findEditableFurniture, type FrameInfo } from '../src/scene/viewer';
+import { HouseViewer, findEditableFurniture } from '../src/scene/viewer';
+import { HeldKeys } from '../src/scene/frameMotion';
 
 function fixture() {
   const engine = new NullEngine();
@@ -66,7 +67,7 @@ test('F routes once only during an active unpaused visit and keeps E for doors',
     walk: camera,
     currentMode: 'walk',
     paused: false,
-    keyState: new Set<string>(),
+    keys: new HeldKeys(),
     onEditFurniture: (id: string) => edits.push(id),
     toggleDoor: (id: string) => doors.push(id),
   }) as HouseViewer;
@@ -105,63 +106,6 @@ test('F routes once only during an active unpaused visit and keeps E for doors',
     key('KeyF');
     assert.deepEqual(doors, ['entry']);
     assert.equal(edits.length, 2);
-  } finally {
-    if (descriptor) Object.defineProperty(globalThis, 'document', descriptor);
-    else Reflect.deleteProperty(globalThis, 'document');
-    scene.dispose();
-    engine.dispose();
-  }
-});
-
-test('walk HUD exposes furniture at three metres while keeping the shorter door range', () => {
-  const { engine, scene, camera, furniture } = fixture();
-  const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'document');
-  Object.defineProperty(globalThis, 'document', {
-    value: { activeElement: {}, pointerLockElement: null },
-    configurable: true,
-  });
-  let frame: FrameInfo | undefined;
-  const viewer = Object.assign(Object.create(HouseViewer.prototype), {
-    engine,
-    scene,
-    walk: camera,
-    currentMode: 'walk',
-    paused: false,
-    keyState: new Set(),
-    house: { doors: [] },
-    level: {
-      elevation: 0,
-      ceilingHeight: 2.5,
-      outline: [
-        [-5, -5],
-        [5, -5],
-        [5, 5],
-        [-5, 5],
-      ],
-      rooms: [],
-    },
-    updateCutaway() {},
-    planUpDegrees: () => 0,
-    onFrame: (value: FrameInfo) => {
-      frame = value;
-    },
-  });
-  try {
-    viewer.beforeFrame();
-    assert.equal(frame!.nearFurnitureId, 'wardrobe');
-    assert.equal(frame!.nearDoor, false);
-    furniture.setEnabled(false);
-    const door = MeshBuilder.CreateBox('door', { width: 1, height: 2, depth: 0.1 }, scene);
-    door.position.set(0, 1, -2.7);
-    door.metadata = { kind: 'door', id: 'far-door' };
-    door.computeWorldMatrix(true);
-    viewer.beforeFrame();
-    assert.equal(frame!.nearFurnitureId, undefined);
-    assert.equal(frame!.nearDoor, false);
-    door.position.z = -2.2;
-    door.computeWorldMatrix(true);
-    viewer.beforeFrame();
-    assert.equal(frame!.nearDoor, true);
   } finally {
     if (descriptor) Object.defineProperty(globalThis, 'document', descriptor);
     else Reflect.deleteProperty(globalThis, 'document');

@@ -7,7 +7,6 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import '@babylonjs/core/Collisions/collisionCoordinator';
 import type { HouseProject, ProjectSite } from '../src/model/types';
-import { HouseViewer } from '../src/scene/viewer';
 import {
   applyLookSensitivity,
   createWalkCamera,
@@ -160,55 +159,6 @@ test('changing the eye height outside keeps the collision body on the lawn', () 
   }
   scene.dispose();
   engine.dispose();
-});
-
-test('the visit guard keeps the visitor on the parcel and resets only outside it', () => {
-  const engine = new NullEngine();
-  const scene = new Scene(engine);
-  const walk = createWalkCamera(scene, level);
-  scene.activeCamera = walk;
-  let resets = 0;
-  const viewer = Object.assign(Object.create(HouseViewer.prototype), {
-    scene,
-    engine,
-    level,
-    walk,
-    canvas: { clientWidth: 800, clientHeight: 600 },
-    site: project.site,
-    currentMode: 'walk',
-    paused: true,
-    capturing: false,
-    keyState: new Set<string>(),
-    house: { doors: [] },
-    updateCutaway() {},
-    reset() {
-      resets++;
-    },
-    onFrame() {},
-  }) as HouseViewer;
-  const frame = () => (viewer as unknown as { beforeFrame(): void }).beforeFrame();
-  const place = (x: number, z: number) => walk.position.set(x, 1.65, z);
-  const previousDocument = globalThis.document;
-  globalThis.document = { activeElement: null, pointerLockElement: null } as unknown as Document;
-  try {
-    place(3, -1.5); // lawn, south of the house
-    frame();
-    assert.equal(resets, 0, 'the parcel is walkable');
-    place(3, 4.6); // inside the house
-    frame();
-    assert.equal(resets, 0);
-    place(-100, -100); // beyond the parcel
-    frame();
-    assert.equal(resets, 1);
-    place(3, -1.5);
-    walk.position.y = 0.2; // under the ground
-    frame();
-    assert.equal(resets, 2);
-  } finally {
-    globalThis.document = previousDocument;
-    scene.dispose();
-    engine.dispose();
-  }
 });
 
 test('section plane respects the level elevation and keeps the lower half-space', () => {

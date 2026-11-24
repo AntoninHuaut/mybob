@@ -18,7 +18,6 @@ import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imagePro
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { GreasedLineMesh } from '@babylonjs/core/Meshes/GreasedLine/greasedLineMesh';
-import type { PickingInfo } from '@babylonjs/core/Collisions/pickingInfo';
 // Side effects required for picking, shadows, and collision coordination.
 import '@babylonjs/core/Culling/ray';
 import '@babylonjs/core/Lights/Shadows/shadowGeneratorSceneComponent';
@@ -26,19 +25,27 @@ import '@babylonjs/core/Collisions/collisionCoordinator';
 import type { HouseProject, Level, Point2, ProjectSite } from '../model/types';
 import { levelAbove, stairPassage, stairsDown, type StairDirection } from '../model/stairs';
 import { bounds, floorElevationAt, groundElevationAt, pointInPolygon } from '../model/geometry';
-import { buildHouse, poseDoor, type HouseScene } from './buildHouse';
+import { buildHouse, type HouseScene } from './buildHouse';
 import { createMaterials, type Materials } from './materials';
-import { buildExterior, poseGate, type ExteriorScene } from './buildExterior';
+import { buildExterior, type ExteriorScene } from './buildExterior';
 import {
   applyLookSensitivity,
   createWalkCamera,
   DEFAULT_WALK_SPEED,
   EYE_HEIGHT,
-  prepareWalkStep,
-  walkDisplacement,
 } from './walkCamera';
 import { builtOutline, exteriorOverview, fitOverview, fitPlan, siteOverviewLevel } from './framing';
 import { panOrbitWithKeys } from './orbitNavigation';
+import {
+  anySwinging,
+  editableFurnitureId,
+  HeldKeys,
+  outsideVisit,
+  stepSwings,
+  stepWalk,
+  WALK_REACH,
+  WalkAim,
+} from './frameMotion';
 import { buildPlanOpenings, type PlanOpenings } from './planOpenings';
 import { ShadowRefresh } from './shadowRefresh';
 import { furnitureRevision, furnitureObstaclesRevision } from '../furniture/layer';
@@ -65,7 +72,6 @@ import {
   findVisitDestination,
   isParcelDestination,
   isSceneVisitDestination,
-  isVisitArea,
   sectionPlane,
 } from './navigation';
 import {
@@ -132,20 +138,10 @@ export function configureOrbitInteractions(
   camera.panningSensibility = 1000;
 }
 
-function editableFurnitureId(hit: PickingInfo | null | undefined) {
-  const metadata = hit?.pickedMesh?.metadata;
-  return metadata?.kind === 'furniture' && typeof metadata.id === 'string' && metadata.id
-    ? (metadata.id as string)
-    : undefined;
-}
-
 /** Keep the first hit, so walls and closed doors occlude furniture editing. */
 export function findEditableFurniture(camera: UniversalCamera, scene: Scene, distance = 3) {
   return editableFurnitureId(scene.pickWithRay(camera.getForwardRay(distance)));
 }
-
-/** How far E or a click reaches in the visit: a door or a stair ahead. */
-const WALK_REACH = 2.4;
 
 export class HouseViewer {
   readonly engine: AbstractEngine;
@@ -228,8 +224,7 @@ export class HouseViewer {
   private cutawaySelection = '';
   private shadowRefresh?: ShadowRefresh;
   private furnitureRevision = -1;
-  private walkRayDirty = true;
-  private walkHit?: PickingInfo | null;
+  private readonly aim = new WalkAim();
   private readonly renderScheduler = new RenderScheduler();
   private readonly warmth = new ViewWarmth();
   private preparing = false;
@@ -271,7 +266,7 @@ export class HouseViewer {
   private sectionHeight?: number;
   private planOpenings?: PlanOpenings;
   private dimensions: GreasedLineMesh[] = [];
-  private keyState = new Set<string>();
+  private readonly keys = new HeldKeys();
   private lighting!: SceneLighting;
   private viewEffects?: ViewEffects;
   private sky?: Layer;
@@ -389,7 +384,7 @@ export class HouseViewer {
     this.parcelInView = undefined;
     this.exteriorSubject = [];
     this.currentExteriorView = false;
-    this.keyState.clear();
+    this.keys.clear();
     this.measureMode = false;
     this.measureTool?.forget();
     this.dimensions = [];
@@ -1017,8 +1012,7 @@ export class HouseViewer {
     this.buildLevelOverlays();
     refreshFixtureLights(this.scene);
     this.cutawaySelection = '';
-    this.walkHit = undefined;
-    this.walkRayDirty = true;
+    this.aim.forget();
     // The host mounts the new level's furniture before the landing is checked against it.
     this.onLevelChange?.(next.id);
     const arrival = findVisitDestination(this.scene, next, passage.arrival) ?? passage.arrival;
@@ -1577,7 +1571,8 @@ export class HouseViewer {
 
   /** Asks for images until the scene is still again; the loop skips them otherwise. */
   requestRender() {
-    this.walkRayDirty = true;
+    // Optional: scene tests build a viewer from its prototype, without the constructor.
+    this.aim?.invalidate();
     // Optional: scene tests build a viewer from its prototype, without the constructor.
     this.renderScheduler?.request();
   }
@@ -1714,11 +1709,10 @@ export class HouseViewer {
   /** Changes on screen that no event announces: held keys, swinging doors, compiling shaders. */
   private busy(): boolean {
     return (
-      this.keyState.size > 0 ||
+      this.keys.any ||
       this.orbitTour !== undefined ||
       this.capturing ||
-      !!this.house?.doors.some((door) => Math.abs(door.progress - door.target) > 0.001) ||
-      !!this.exterior?.gates.some((gate) => Math.abs(gate.progress - gate.target) > 0.001) ||
+      anySwinging(this.house?.doors, this.exterior?.gates) ||
       (this.shadowRefresh !== undefined && !this.shadowRefresh.settled) ||
       !this.engine.areAllEffectsReady() ||
       this.scene.getWaitingItemsCount() > 0
@@ -1737,7 +1731,7 @@ export class HouseViewer {
     const revision = furnitureRevision(this.scene);
     if (revision !== this.furnitureRevision) {
       this.furnitureRevision = revision;
-      this.walkRayDirty = true;
+      this.aim.invalidate();
       const map = this.shadow?.getShadowMap();
       if (map?.renderList) {
         map.renderList = map.renderList.filter(
@@ -1757,27 +1751,8 @@ export class HouseViewer {
     const dt = Math.min(this.engine.getDeltaTime() / 1000, 0.045);
     // Match the collision displacement to frame time, including the garage step.
     this.scene.gravity.y = -15 * dt;
-    let doorsMoved = false;
-    for (const door of this.house.doors) {
-      if (Math.abs(door.progress - door.target) > 0.001) {
-        door.progress +=
-          Math.sign(door.target - door.progress) *
-          Math.min(Math.abs(door.target - door.progress), dt * 2.5);
-        poseDoor(door);
-        doorsMoved = true;
-        this.shadowRefresh?.invalidate();
-      }
-    }
-    for (const gate of this.exterior?.gates ?? []) {
-      if (Math.abs(gate.progress - gate.target) > 0.001) {
-        gate.progress +=
-          Math.sign(gate.target - gate.progress) *
-          Math.min(Math.abs(gate.target - gate.progress), dt * 2.5);
-        poseGate(gate);
-        doorsMoved = true;
-        this.shadowRefresh?.invalidate();
-      }
-    }
+    const doorsMoved = stepSwings(dt, this.house.doors, this.exterior?.gates);
+    if (doorsMoved) this.shadowRefresh?.invalidate();
     this.shadowRefresh?.step();
     const immersive = this.immersive;
     if (immersive) {
@@ -1797,29 +1772,13 @@ export class HouseViewer {
     }
     if (this.mode === 'walk') {
       const p = this.walk.position;
-      // The visit may leave the house onto the parcel, but never the modeled ground:
-      // outside the parcel, under the floor, or above the ceiling.
-      if (
-        !isVisitArea(this.level, this.site, [p.x, p.z]) ||
-        p.y < groundElevationAt(this.level, this.site, [p.x, p.z]) + 0.7 ||
-        p.y > this.level.elevation + this.level.ceilingHeight + 1
-      )
-        this.reset();
+      if (outsideVisit(this.level, this.site, p)) this.reset();
       const active =
         document.activeElement === this.canvas || document.pointerLockElement === this.canvas;
-      let movement = Vector3.Zero();
-      if (!this.paused && active) {
-        const { forward, side, fast } = this.keyAxes();
-        movement = walkDisplacement(this.walk, forward, side, this.walkSpeed, dt, fast);
-      }
-      prepareWalkStep(this.walk, this.level, movement, this.site);
-      this.walk.cameraDirection.addInPlace(movement);
+      const axes = !this.paused && active ? this.keys.axes() : undefined;
+      stepWalk(this.walk, this.level, this.site, axes, this.walkSpeed, dt);
       const room = this.level.rooms.find((r) => pointInPolygon([p.x, p.z], r.polygon));
-      if (cameraMoved || doorsMoved || this.walkRayDirty) {
-        this.walkHit = this.scene.pickWithRay(this.walk.getForwardRay(3));
-        this.walkRayDirty = false;
-      }
-      const hit = this.walkHit;
+      const aim = this.aim.update(this.scene, this.walk, cameraMoved || doorsMoved);
       this.emitFrame(() => ({
         cameraMoved,
         furnitureObstaclesRevision: furnitureObstaclesRevision(this.scene),
@@ -1827,12 +1786,9 @@ export class HouseViewer {
         headingDegrees: planHeading(this.walk),
         planUpDegrees: this.planUpDegrees(),
         roomId: room?.id,
-        nearDoor: hit?.pickedMesh?.metadata?.kind === 'door' && hit.distance <= WALK_REACH,
-        nearStair:
-          hit?.pickedMesh?.metadata?.kind === 'stair' && hit.distance <= WALK_REACH
-            ? hit.pickedMesh.metadata.direction
-            : undefined,
-        nearFurnitureId: this.paused ? undefined : editableFurnitureId(hit),
+        nearDoor: aim.nearDoor,
+        nearStair: aim.nearStair,
+        nearFurnitureId: this.paused ? undefined : aim.furnitureId,
         locked: document.pointerLockElement === this.canvas,
       }));
     } else {
@@ -1841,7 +1797,7 @@ export class HouseViewer {
         document.activeElement === this.canvas &&
         this.orbit.inputs.attachedToElement
       ) {
-        const { forward, side, fast } = this.keyAxes();
+        const { forward, side, fast } = this.keys.axes();
         panOrbitWithKeys(this.orbit, forward, side, dt, fast);
       }
       this.emitFrame(() => ({
@@ -1857,16 +1813,6 @@ export class HouseViewer {
   }
 
   private keydown = (event: KeyboardEvent) => this.handleKeydown(event);
-
-  /** Held keys as movement axes: ZQSD, WASD and arrows; Shift goes faster. */
-  private keyAxes() {
-    const held = (...codes: string[]) => codes.some((code) => this.keyState.has(code));
-    return {
-      forward: Number(held('KeyW', 'KeyZ', 'ArrowUp')) - Number(held('KeyS', 'ArrowDown')),
-      side: Number(held('KeyD', 'ArrowRight')) - Number(held('KeyA', 'KeyQ', 'ArrowLeft')),
-      fast: held('ShiftLeft', 'ShiftRight'),
-    };
-  }
 
   private handleKeydown(event: KeyboardEvent) {
     this.resnapMeasurement(event);
@@ -1891,7 +1837,7 @@ export class HouseViewer {
       }
       return;
     }
-    this.keyState.add(event.code);
+    this.keys.press(event.code);
   }
   private planUpDegrees() {
     const center = bounds(this.level.outline).center;
@@ -1900,7 +1846,7 @@ export class HouseViewer {
     return (Math.atan2(up.x - origin.x, origin.y - up.y) * 180) / Math.PI;
   }
   private keyup = (event: KeyboardEvent) => {
-    this.keyState.delete(event.code);
+    this.keys.release(event.code);
     this.resnapMeasurement(event);
   };
   /** Leaving or returning to the page: the next images say nothing about the machine. */
@@ -1909,7 +1855,7 @@ export class HouseViewer {
     this.lastRenderAt = undefined;
   };
   private clearKeys = () => {
-    this.keyState.clear();
+    this.keys.clear();
     this.walk?.cameraDirection.setAll(0);
   };
   private planWheel = (event: WheelEvent) => {

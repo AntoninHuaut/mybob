@@ -19,6 +19,7 @@ import type { Materials } from '../src/scene/materials';
 import { buildPlanOpenings } from '../src/scene/planOpenings';
 import { buildWallCutaway } from '../src/scene/wallCutaway';
 import { HouseViewer } from '../src/scene/viewer';
+import { HeldKeys, WalkAim } from '../src/scene/frameMotion';
 import { SceneLighting } from '../src/scene/sceneLighting';
 
 const level: Level = {
@@ -309,6 +310,7 @@ test('settle frames skip cutaway application and movement applies it on that fra
     paused: true,
     walk: new UniversalCamera('walk', new Vector3(1, 4.45, 1), scene),
     furnitureRevision: 0,
+    aim: new WalkAim(),
   });
   const apply = t.mock.method(cutaway, 'apply');
   const draw = () => (viewer as unknown as { beforeFrame(): void }).beforeFrame();
@@ -413,7 +415,8 @@ test('walk aim reuses still hits and furniture changes refresh aim and shadow ca
     paused: true,
     currentMode: 'walk',
     canvas: {},
-    keyState: new Set(),
+    keys: new HeldKeys(),
+    aim: new WalkAim(),
     planUpDegrees: () => 0,
     walk: new UniversalCamera('walk', new Vector3(1, 4.45, 1), scene),
     shadow: { getShadowMap: () => map },
