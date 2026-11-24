@@ -8,6 +8,8 @@ Read [AGENTS.md](AGENTS.md), then [the code map](docs/ARCHITECTURE.md) and [the 
 
 Parametric kitchens support corner runs, separate worktop and front colours, wall units and equipment markers, including an optional microwave above the oven. See [furniture configurations](docs/FURNITURE.md#types-and-configurations).
 
+Personal projects can select blond parquet for their wood-effect floors through the [project finishes](docs/PROJECT-FORMAT.md).
+
 Rendering preparation and automatic quality adjustment are described in the [architecture invariants](docs/ARCHITECTURE.md#invariants-not-to-break). Measured costs and rejected optimisations: [docs/PERFORMANCE.md](docs/PERFORMANCE.md).
 
 ## Getting started
