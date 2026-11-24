@@ -107,7 +107,61 @@ test('door swing is checked even while the wall aperture is geometrically clear'
     { id: 'entry', kind: 'door', offset: 2, width: 1, height: 2.1, hinge: 'start', swing: -1 },
   ];
   const item = createFurniture({ width: 0.3, depth: 0.3, position: [2.5, 0.65] });
-  assert.ok(checkFurniture([item], level).some((i) => i.message.includes('débattement')));
+  assert.ok(
+    checkFurniture([item], level).some(
+      (i) => i.message === 'Gêne le débattement de la porte extérieure de « Intérieur ».',
+    ),
+  );
+});
+
+const partitioned = (): Level => {
+  const level = structuredClone(room);
+  const half = (id: string, name: string, x0: number, x1: number) => ({
+    ...level.rooms[0],
+    id,
+    name,
+    polygon: [
+      [x0, 0.3],
+      [x1, 0.3],
+      [x1, 4.7],
+      [x0, 4.7],
+    ] as [number, number][],
+  });
+  level.rooms = [half('west', 'Ouest', 0.3, 2.95), half('east', 'Est', 3.05, 5.7)];
+  level.walls.push({ id: 'partition', start: [3, 0.3], end: [3, 4.7], thickness: 0.1 });
+  return level;
+};
+const swingMessages = (level: Level, position: [number, number]) =>
+  checkFurniture([createFurniture({ width: 0.3, depth: 0.3, position })], level)
+    .map((issue) => issue.message)
+    .filter((message) => message.includes('débattement'));
+
+test('door swing warning names both rooms, the furniture side first', () => {
+  const level = partitioned();
+  const door = { id: 'pass', kind: 'door' as const, offset: 2, width: 0.9, height: 2.1 };
+  level.walls[4].openings = [{ ...door, hinge: 'start', swing: 1 }];
+  assert.deepEqual(swingMessages(level, [3.4, 2.6]), [
+    'Gêne le débattement de la porte « Est » – « Ouest ».',
+  ]);
+  level.walls[4].openings = [{ ...door, hinge: 'start', swing: -1 }];
+  assert.deepEqual(swingMessages(level, [2.6, 2.6]), [
+    'Gêne le débattement de la porte « Ouest » – « Est ».',
+  ]);
+});
+
+test('door swing warning falls back to one room, then to the generic text', () => {
+  const level = partitioned();
+  level.walls[4].openings = [
+    { id: 'pass', kind: 'door', offset: 2, width: 0.9, height: 2.1, hinge: 'start', swing: 1 },
+  ];
+  level.rooms = [level.rooms[1]];
+  assert.deepEqual(swingMessages(level, [3.4, 2.6]), [
+    'Gêne le débattement d’une porte de « Est ».',
+  ]);
+  level.rooms = [];
+  assert.deepEqual(swingMessages(level, [3.4, 2.6]), [
+    'Gêne le débattement d’une porte de la maison.',
+  ]);
 });
 
 test('face distances stop at solid walls and furniture, respecting a full-height doorway', () => {
