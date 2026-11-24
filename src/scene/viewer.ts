@@ -1,5 +1,5 @@
 import { createScreenLines } from './screenLines';
-import { refreshFixtureLights, syncFixturePads } from './fixtureLights';
+import { refreshFixtureLights } from './fixtureLights';
 import { createSkyLayer, WALK_SKY_GAIN } from './sky';
 import type { Layer } from '@babylonjs/core/Layers/layer';
 import { installCanonicalDefineOrder } from './canonicalDefines';
@@ -11,9 +11,7 @@ import { MeasureTool, type Measurement } from './measureTool';
 import type { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
-import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
-import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
+import type { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
@@ -28,13 +26,7 @@ import '@babylonjs/core/Collisions/collisionCoordinator';
 import type { HouseProject, Level, Point2, ProjectSite } from '../model/types';
 import { levelAbove, stairPassage, stairsDown, type StairDirection } from '../model/stairs';
 import { bounds, floorElevationAt, groundElevationAt, pointInPolygon } from '../model/geometry';
-import {
-  buildHouse,
-  poseDoor,
-  FIXTURE_LIGHT_INTENSITY,
-  FIXTURE_LIGHT_RANGE,
-  type HouseScene,
-} from './buildHouse';
+import { buildHouse, poseDoor, type HouseScene } from './buildHouse';
 import { createMaterials, type Materials } from './materials';
 import { buildExterior, poseGate, type ExteriorScene } from './buildExterior';
 import {
@@ -84,11 +76,7 @@ import {
   usePlanCoordinates,
   yawFromDirection,
 } from './coordinates';
-import {
-  INTERIOR_FIXTURE_INTENSITY,
-  INTERIOR_FIXTURE_RANGE,
-  INTERIOR_GROUND_COLOR,
-} from './interiorAmbience';
+import { applyFixtureLights, createSceneLighting, type SceneLighting } from './sceneLighting';
 import { ViewEffects } from './viewEffects';
 import { buildWallPaint } from './wallPaint';
 import type { OcclusionState } from './diagnostics';
@@ -284,15 +272,10 @@ export class HouseViewer {
   private planOpenings?: PlanOpenings;
   private dimensions: GreasedLineMesh[] = [];
   private keyState = new Set<string>();
-  private hemispheric!: HemisphericLight;
-  private sun!: DirectionalLight;
-  private planLighting?: { diffuse: Color3; ground: Color3 };
-  private baseGround?: Color3;
+  private lighting!: SceneLighting;
   private viewEffects?: ViewEffects;
-  private shadowsBeforeReadability?: boolean;
   private sky?: Layer;
   private solarPosition?: SolarPosition;
-  private baseSun?: { direction: Vector3; position: Vector3; diffuse: Color3 };
   private lightOn = true;
   /** « Ombres des angles » in the navigation panel: off, no view builds an occlusion. */
   private occlusionOn = true;
@@ -401,10 +384,6 @@ export class HouseViewer {
       this.scene.dispose();
       this.engine.releaseEffects();
     }
-    this.planLighting = undefined;
-    this.shadowsBeforeReadability = undefined;
-    this.baseSun = undefined;
-    this.baseGround = undefined;
     this.exterior = undefined;
     this.exteriorFrame = undefined;
     this.parcelInView = undefined;
@@ -461,30 +440,8 @@ export class HouseViewer {
     this.walk = createWalkCamera(scene, level);
     applyLookSensitivity(this.walk, this.lookSensitivity);
     this.eyeHeight = applyEyeHeight(this.walk, level, this.eyeHeight);
-    this.hemispheric = new HemisphericLight('sky', new Vector3(0.3, 1, -0.1), scene);
-    this.hemispheric.intensity = 0.9;
-    this.hemispheric.groundColor = Color3.FromHexString('#b6b4a2');
-    // Captured once, at build time: the visit and the plan both restore from it.
-    this.baseGround = this.hemispheric.groundColor.clone();
-    this.sun = new DirectionalLight('sunlight', new Vector3(0.5, -1, -0.45), scene);
-    this.sun.position = new Vector3(
-      extent.center[0] - 9,
-      level.elevation + 16,
-      extent.center[1] + 12,
-    );
-    this.sun.intensity = 1.3;
-    this.sun.diffuse = Color3.FromHexString('#fff5df');
-    this.captureSunPreset();
-    this.sun.shadowMinZ = 0.1;
-    this.sun.shadowMaxZ = 100;
-    // 2048: the 1024 px trial (2026-11-13) left blotchy, banded shadows on the visit's
-    // floors and walls, even on a fast desktop GPU.
-    const shadow = new ShadowGenerator(2048, this.sun);
-    shadow.usePercentageCloserFiltering = true;
-    shadow.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
-    shadow.bias = 0.001;
-    shadow.normalBias = 0.025;
-    shadow.setDarkness(0.2);
+    const { lighting, shadow } = createSceneLighting(scene, level);
+    this.lighting = lighting;
     this.shadowRefresh = new ShadowRefresh(shadow);
     this.cutawaySelection = '';
     this.loadedProject = project;
@@ -1279,7 +1236,6 @@ export class HouseViewer {
 
   setSolar(position?: SolarPosition) {
     this.requestRender();
-    this.captureSunPreset();
     this.solarPosition = position;
     this.updateLighting();
   }
@@ -1296,16 +1252,6 @@ export class HouseViewer {
     this.sky.color.set(gain, gain, gain, 1);
   }
 
-  private captureSunPreset() {
-    if (!this.baseSun && this.sun?.direction && this.sun.position && this.sun.diffuse) {
-      this.baseSun = {
-        direction: this.sun.direction.clone(),
-        position: this.sun.position.clone(),
-        diffuse: this.sun.diffuse.clone(),
-      };
-    }
-  }
-
   private updateShadowPolicy() {
     if (!this.scene) return;
     // Every caller changed the mode, the cut, the sun or the walls on show.
@@ -1320,13 +1266,7 @@ export class HouseViewer {
         !this.exteriorView &&
         !explicitSection &&
         (this.wallDisplay ?? 'auto') !== 'full');
-    if (suppressed) {
-      this.shadowsBeforeReadability ??= this.scene.shadowsEnabled;
-      this.scene.shadowsEnabled = false;
-    } else if (this.shadowsBeforeReadability !== undefined) {
-      this.scene.shadowsEnabled = this.shadowsBeforeReadability;
-      this.shadowsBeforeReadability = undefined;
-    }
+    this.lighting?.suppressShadows(suppressed);
   }
 
   private updateSection() {
@@ -1465,78 +1405,15 @@ export class HouseViewer {
 
   private updateLighting() {
     const interior = this.mode === 'walk';
-    const plan = this.mode === 'plan';
     this.updateShadowPolicy();
     this.house.ceiling.setEnabled(interior);
     this.house.fixtures.forEach((f) => f.setEnabled(interior));
-    let rangesChanged = false;
-    this.house.pointLights.forEach((l) => {
-      l.setEnabled(this.lightOn && !plan);
-      // Written on every call: a per-fixture intensity from project data would be lost here.
-      l.intensity = interior ? INTERIOR_FIXTURE_INTENSITY : FIXTURE_LIGHT_INTENSITY;
-      const range = interior ? INTERIOR_FIXTURE_RANGE : FIXTURE_LIGHT_RANGE;
-      rangesChanged ||= l.range !== range;
-      l.range = range;
-    });
-    if (rangesChanged) refreshFixtureLights(this.scene);
-    syncFixturePads(this.scene);
-    if (plan) {
-      this.planLighting ??= {
-        diffuse: this.hemispheric.diffuse?.clone() ?? Color3.White(),
-        // The base bounce, never the live one: entering the plan straight from the
-        // visit would otherwise snapshot the darker interior colour.
-        ground: (this.baseGround ?? this.hemispheric.groundColor)?.clone() ?? Color3.White(),
-      };
-      this.hemispheric.diffuse = Color3.White();
-      this.hemispheric.groundColor = Color3.White();
-      this.hemispheric.intensity = 0.9;
-      this.sun.intensity = 0;
-    } else {
-      if (this.planLighting) {
-        this.hemispheric.diffuse = this.planLighting.diffuse;
-        this.hemispheric.groundColor = this.planLighting.ground;
-        this.planLighting = undefined;
-      }
-      this.baseGround ??= this.hemispheric.groundColor.clone();
-      this.hemispheric.groundColor = interior
-        ? INTERIOR_GROUND_COLOR.clone()
-        : this.baseGround.clone();
-      this.hemispheric.intensity = interior ? 0.42 : 0.45;
-      this.sun.intensity = 0.95;
-      if (this.solarPosition) {
-        const solar = this.solarPosition;
-        const daylight = solar.daylight && solar.altitudeDeg > 0;
-        const direction = new Vector3(
-          solar.lightDirection.x,
-          solar.lightDirection.y,
-          solar.lightDirection.z,
-        ).normalize();
-        const centre = bounds(this.level.outline).center;
-        this.sun.direction = direction;
-        this.sun.position = new Vector3(
-          centre[0],
-          this.level.elevation + this.level.ceilingHeight / 2,
-          centre[1],
-        ).subtract(direction.scale(30));
-        this.sun.intensity = daylight
-          ? 0.8 * Math.sqrt(Math.max(0, Math.sin((solar.altitudeDeg * Math.PI) / 180)))
-          : 0;
-        this.sun.diffuse = Color3.Lerp(
-          Color3.FromHexString('#ffbd7a'),
-          Color3.FromHexString('#fff5e6'),
-          Math.max(0, Math.min(1, solar.altitudeDeg / 35)),
-        );
-        this.hemispheric.intensity = daylight ? 0.35 : 0.1;
-      } else if (this.baseSun) {
-        this.sun.direction = this.baseSun.direction.clone();
-        this.sun.position = this.baseSun.position.clone();
-        this.sun.diffuse = this.baseSun.diffuse.clone();
-      }
-    }
+    applyFixtureLights(this.scene, this.house.pointLights, this.mode, this.lightOn);
+    this.lighting.apply(this.mode, this.level, this.solarPosition);
     this.viewEffects ??= new ViewEffects(this.scene, undefined, undefined, () =>
       this.requestRender(),
     );
-    this.viewEffects.updateEnvironment(this.mode, this.sun.direction);
+    this.viewEffects.updateEnvironment(this.mode, this.lighting.sun.direction);
     if (interior) this.house.highlights.forEach((m) => m.setEnabled(false));
   }
 
@@ -1556,7 +1433,7 @@ export class HouseViewer {
       headset: Boolean(this.immersive),
       effectTier: this.currentEffectTier,
     });
-    this.viewEffects.updateEnvironment(this.mode, this.sun.direction);
+    this.viewEffects.updateEnvironment(this.mode, this.lighting.sun.direction);
   }
 
   private rebuildWalkPipelines() {
@@ -1861,7 +1738,7 @@ export class HouseViewer {
     if (revision !== this.furnitureRevision) {
       this.furnitureRevision = revision;
       this.walkRayDirty = true;
-      const map = this.sun?.getShadowGenerator()?.getShadowMap();
+      const map = this.shadow?.getShadowMap();
       if (map?.renderList) {
         map.renderList = map.renderList.filter(
           (mesh) => mesh.metadata?.kind !== 'furniture' && !mesh.isDisposed(),
