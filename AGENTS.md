@@ -52,6 +52,9 @@ These files replace reliance on any previous chat context.
   secrets or generated private bundles.
 - No account/backend/cloud storage for house data. Browser localStorage is per origin and
   browser profile. Exports are the migration/backup mechanism.
+- The owner is highly motion-sick in VR. In the headset, the camera moves only when the
+  visitor moves physically; every other change of viewpoint is a cut behind a blink or fade.
+  The owner tests headset features on a Quest 2.
 - Cloudflare **Pages**, connected to GitHub `main`, is the deployment path. Do not replace it
   with Workers, Netlify or Sites. Access restrictions are managed in the owner's Cloudflare
   account.
