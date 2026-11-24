@@ -12,8 +12,11 @@ Measured 2026-11-12 on an RX 9060 XT, private house, 2.8 MP:
 - CPU is not the bottleneck: at CPU ×4 throttling, Vue 3D and Visite still reach ~130 frames/s.
 - Startup: 36 shader programs, ~10 PBR variants, ready in 2.2 s.
 
-The remaining GPU cost cannot drop without a visible change. Next levers: fewer PBR variants
-(startup), or laptop measurements collected with `mybob.profile()`.
+## Still short of the goal
+
+Owner reports since then: an RTX 3060 laptop runs at ~50 frames/s, and the Quest 2 alone
+(headset browser) lags, worse while casting to a PC. Neither has been profiled yet: start
+with `mybob.profile()` on that laptop and in the headset before choosing a lever (#312).
 
 ## Tried and rejected
 
