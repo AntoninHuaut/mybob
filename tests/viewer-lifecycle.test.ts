@@ -71,7 +71,8 @@ test('replacing scene resources clears old input observers and disposes the scen
       Object.assign(viewer, {
         scene,
         level,
-        immersive: {
+        headset: {
+          walk: undefined,
           dispose() {
             headsets++;
           },

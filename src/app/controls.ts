@@ -1,5 +1,6 @@
 import { userMessage } from '../errorMessage';
-import { isImmersiveSupported, preloadImmersive, type ViewMode } from '../scene/viewer';
+import { isImmersiveSupported, preloadImmersive } from '../scene/headsetSession';
+import type { ViewMode } from '../scene/viewer';
 import type { WallDisplay } from '../scene/wallCutaway';
 import { fullHelpHtml, shortHelpHtml } from '../ui/firstSteps';
 import { sourceDialogHtml } from '../ui/sourcePanel';

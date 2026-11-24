@@ -51,6 +51,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Navigation              | `src/scene/navigation.ts`                                                    | Walk destination, section plane, wall facing the camera                                                                                  |
 | Stairs                  | `src/model/stairs.ts`                                                        | Where a stair leads from a level, where the visit lands; the flights going down from a floor void                                        |
 | Walk camera             | `src/scene/walkCamera.ts`                                                    | Eye height, visitor radius, speed, step                                                                                                  |
+| Headset session         | `src/scene/headsetSession.ts`                                                | Support check, lazy import, one session at a time, readiness before the veil lifts                                                       |
 | Headset visit           | `src/scene/xrWalk.ts`                                                        | WebXR session of the walk: sticks, smooth turn, comfort vignette, teleport, doors; on demand                                             |
 | Orbit controls          | `src/scene/orbitNavigation.ts`, `orbitPointerInput.ts`                       | Keyboard pan in screen directions; one-finger pan and pinch zoom in Plan                                                                 |
 | Wall cutaway            | `src/scene/wallCutaway.ts`                                                   | `auto` / `full` / `low`, clipping planes per material                                                                                    |
@@ -382,8 +383,8 @@ offers them: Vue 3D occlusion was adopted (#205, described above), and three wer
 The **Casque** button (`#enter-immersive`) only shows when
 `navigator.xr.isSessionSupported('immersive-vr')` says yes (Quest browser, desktop VR such as Chrome with Quest Link), asked again on `navigator.xr`'s `devicechange` so a headset connected after the page opened shows it. It is a
 state of the walk, **not a fourth view mode**: `viewer.mode` stays `walk`, and
-`viewer.enterImmersive()` swaps the camera for the session's. Leaving the walk (`setMode`) ends
-the session; the end, whoever caused it, goes through `leaveImmersive`, which puts the screen
+`viewer.enterImmersive()` opens a `HeadsetSession` (`scene/headsetSession.ts`, at most one at
+a time) that swaps the camera for the session's. Leaving the walk (`setMode`) ends the session; the end, whoever caused it, goes through `leaveImmersive`, which puts the screen
 walk where the headset left the visitor and restores the camera of the current mode.
 
 - `scene/xrWalk.ts` is a separate chunk, imported on demand (`preloadImmersive` fetches it as
@@ -443,7 +444,7 @@ walk where the headset left the visitor and restores the camera of the current m
   shadows off changes every material's defines, and each relink would otherwise freeze the
   headset on its first images. The camera first draws the veil alone (`XR_VEIL_LAYER`, two
   images), so it is on screen before anything links; then the house is drawn behind it, and
-  `viewer.immersiveReady` asks every enabled, visible mesh whether it can draw, which starts
+  `sceneReadiness` (`scene/headsetSession.ts`) asks every enabled, visible mesh whether it can draw, which starts
   all their links at once. The veil lifts after three ready images in a row, or after 20 s
   (`LoadingGate`); the controls wait for it.
 - A counter plane (`scene/xrHud.ts`) is carried by the head, lower right of the view: the frame

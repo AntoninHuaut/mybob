@@ -192,7 +192,17 @@ describe('viewer state transitions', () => {
           lifecycle.leaveImmersive(headset as unknown as ImmersiveWalk);
         },
       };
-      Object.assign(viewer, { immersive: headset, rebuildWalkPipelines() {} });
+      const session = {
+        walk: headset as unknown as ImmersiveWalk | undefined,
+        exit: () => session.walk?.exit(),
+        release(walk: ImmersiveWalk) {
+          if (walk !== session.walk) return false;
+          session.walk = undefined;
+          return true;
+        },
+        dispose() {},
+      };
+      Object.assign(viewer, { headset: session, rebuildWalkPipelines() {} });
       viewer.onImmersiveChange = (active) => {
         ended = !active;
         assert.equal(viewer.mode, 'plan');
