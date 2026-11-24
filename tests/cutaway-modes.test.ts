@@ -10,7 +10,6 @@ import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
-import { Color3 } from '@babylonjs/core/Maths/math.color';
 import { HemisphericLight } from '@babylonjs/core/Lights/hemisphericLight';
 import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
@@ -20,7 +19,7 @@ import type { Materials } from '../src/scene/materials';
 import { buildPlanOpenings } from '../src/scene/planOpenings';
 import { buildWallCutaway } from '../src/scene/wallCutaway';
 import { HouseViewer } from '../src/scene/viewer';
-import type { SolarPosition } from '../src/scene/solar';
+import { SceneLighting } from '../src/scene/sceneLighting';
 
 const level: Level = {
   id: 'level',
@@ -197,162 +196,40 @@ test('plan, first person, exterior and explicit height cuts take priority over a
   engine.dispose();
 });
 
-test('plan lighting is neutral and shadow-free, then restores 3D and visit light settings', () => {
+test('the viewer suppresses sun shadows in the plan and behind lowered walls only', () => {
   const { engine, scene, viewer, cutaway, markers } = fixture();
   const sky = new HemisphericLight('sky', Vector3.Up(), scene);
-  sky.diffuse = Color3.FromHexString('#fff4df');
-  sky.groundColor = Color3.FromHexString('#b6b4a2');
-  const diffuse = sky.diffuse.asArray(),
-    ground = sky.groundColor.asArray();
   const sun = new DirectionalLight('sun', new Vector3(0.5, -1, -0.45), scene);
   const point = new PointLight('fixture', new Vector3(2, 2.5, 2), scene);
   const ceiling = MeshBuilder.CreateBox('ceiling', {}, scene);
   Object.assign(viewer, {
-    hemispheric: sky,
-    sun,
+    lighting: new SceneLighting(scene, sky, sun),
     lightOn: true,
-    ceilingOn: false,
     house: { ceiling, fixtures: [], pointLights: [point], highlights: new Map() },
   });
   const update = () => (viewer as unknown as { updateLighting(): void }).updateLighting();
   viewer.setWallDisplay('full');
   update();
-  assert.equal(sun.intensity, 0.95);
-  assert.equal(sky.intensity, 0.45, 'overview uses reduced hemispheric fill alongside sky IBL');
+  assert.equal(scene.shadowsEnabled, true);
+  assert.equal(sun.intensity, 0.95, 'the viewer drives its lighting with the current mode');
   Object.assign(viewer, { currentMode: 'plan' });
   update();
   assert.equal(scene.shadowsEnabled, false);
-  assert.equal(sun.intensity, 0);
-  assert.equal(point.isEnabled(), false);
-  assert.deepEqual(sky.diffuse.asArray(), [1, 1, 1]);
-  assert.deepEqual(sky.groundColor.asArray(), [1, 1, 1]);
-  viewer.setLights(false);
   viewer.setLights(true);
   assert.equal(point.isEnabled(), false, 'plan keeps point-light hotspots disabled');
   Object.assign(viewer, { currentMode: 'overview' });
-  update();
-  assert.equal(scene.shadowsEnabled, true);
-  assert.equal(sun.intensity, 0.95);
-  assert.equal(sky.intensity, 0.45, 'overview uses reduced hemispheric fill alongside sky IBL');
-  assert.deepEqual(sky.diffuse.asArray(), diffuse);
-  assert.deepEqual(sky.groundColor.asArray(), ground);
+  viewer.setLights(true);
   assert.equal(point.isEnabled(), true);
-  scene.shadowsEnabled = false;
-  Object.assign(viewer, { currentMode: 'plan' });
-  update();
-  Object.assign(viewer, { currentMode: 'walk' });
-  update();
-  assert.equal(
-    scene.shadowsEnabled,
-    false,
-    'a previously disabled shadow setting is restored exactly',
-  );
-  assert.equal(sky.intensity, 0.42);
-  assert.equal(sun.intensity, 0.95);
-  assert.equal(ceiling.isEnabled(), true);
-  assert.ok(
-    sky.groundColor.r < ground[0] && sky.groundColor.g < ground[1] && sky.groundColor.b < ground[2],
-    'the visit darkens the ground bounce so the interior reads top-to-bottom',
-  );
-  Object.assign(viewer, { currentMode: 'overview' });
-  update();
-  assert.deepEqual(sky.groundColor.asArray(), ground, 'the editor keeps its original bounce');
-  cutaway.dispose();
-  markers.dispose();
-  scene.dispose();
-  engine.dispose();
-});
-
-test('entering the plan straight from the visit snapshots the editor bounce, not the interior one', () => {
-  const { engine, scene, viewer, cutaway, markers } = fixture();
-  const sky = new HemisphericLight('sky', Vector3.Up(), scene);
-  sky.groundColor = Color3.FromHexString('#b6b4a2');
-  const ground = sky.groundColor.asArray();
-  const sun = new DirectionalLight('sun', new Vector3(0.5, -1, -0.45), scene);
-  const ceiling = MeshBuilder.CreateBox('ceiling', {}, scene);
-  Object.assign(viewer, {
-    hemispheric: sky,
-    sun,
-    lightOn: true,
-    ceilingOn: false,
-    house: { ceiling, fixtures: [], pointLights: [], highlights: new Map() },
-  });
-  const update = () => (viewer as unknown as { updateLighting(): void }).updateLighting();
-  viewer.setWallDisplay('full');
-  Object.assign(viewer, { currentMode: 'walk' });
-  update();
-  Object.assign(viewer, { currentMode: 'plan' });
-  update();
-  const snapshot = (viewer as unknown as { planLighting?: { ground: Color3 } }).planLighting;
-  assert.deepEqual(
-    snapshot?.ground.asArray(),
-    ground,
-    'the plan must not inherit the darker visit bounce',
-  );
-  Object.assign(viewer, { currentMode: 'overview' });
-  update();
-  assert.deepEqual(sky.groundColor.asArray(), ground);
-  cutaway.dispose();
-  markers.dispose();
-  scene.dispose();
-  engine.dispose();
-});
-
-test('solar previews drive the directional light, preserve neutral plan and restore the initial preset', () => {
-  const { engine, scene, viewer, cutaway, markers } = fixture();
-  const sky = new HemisphericLight('sky', Vector3.Up(), scene);
-  const sun = new DirectionalLight('sun', new Vector3(0.5, -1, -0.45), scene);
-  sun.position.set(-7, 18, 14);
-  sun.diffuse = Color3.FromHexString('#fff5df');
-  const initialDirection = sun.direction.clone(),
-    initialPosition = sun.position.clone(),
-    initialColor = sun.diffuse.asArray();
-  const ceiling = MeshBuilder.CreateBox('ceiling', {}, scene);
-  Object.assign(viewer, {
-    hemispheric: sky,
-    sun,
-    lightOn: true,
-    ceilingOn: false,
-    house: { ceiling, fixtures: [], pointLights: [], highlights: new Map() },
-  });
-  const solar: SolarPosition = {
-    altitudeDeg: 30,
-    geometricAltitudeDeg: 30,
-    azimuthDeg: 180,
-    daylight: true,
-    directionToSun: { x: 0, y: 0.5, z: Math.sqrt(0.75) },
-    lightDirection: { x: 0, y: -0.5, z: -Math.sqrt(0.75) },
-  };
-  viewer.setWallDisplay('full');
-  viewer.setSolar(solar);
-  assert.ok(Math.abs(sun.intensity - 0.8 * Math.sqrt(0.5)) < 1e-8);
-  assert.equal(sky.intensity, 0.35);
   assert.equal(scene.shadowsEnabled, true);
-  assert.ok(Vector3.Distance(sun.direction, new Vector3(0, -0.5, -Math.sqrt(0.75))) < 1e-8);
-  const centre = new Vector3(2, level.elevation + level.ceilingHeight / 2, 2);
-  assert.ok(Vector3.Distance(sun.position, centre.subtract(sun.direction.scale(30))) < 1e-8);
-  Object.assign(viewer, { currentMode: 'plan' });
-  viewer.setSolar(solar);
-  assert.equal(sun.intensity, 0);
-  assert.equal(sky.intensity, 0.9);
-  assert.equal(scene.shadowsEnabled, false);
-  Object.assign(viewer, { currentMode: 'overview' });
-  viewer.setSolar({ ...solar, altitudeDeg: -12, daylight: false });
-  assert.equal(sun.intensity, 0);
-  assert.equal(sky.intensity, 0.1);
-  assert.equal(scene.shadowsEnabled, true);
-  viewer.setSolar(undefined);
-  assert.equal(sun.intensity, 0.95);
-  assert.equal(sky.intensity, 0.45, 'overview uses reduced hemispheric fill alongside sky IBL');
-  assert.ok(Vector3.Distance(sun.direction, initialDirection) < 1e-8);
-  assert.ok(Vector3.Distance(sun.position, initialPosition) < 1e-8);
-  assert.deepEqual(sun.diffuse.asArray(), initialColor);
   viewer.setWallDisplay('auto');
   assert.equal(
     scene.shadowsEnabled,
     false,
     'lowered-wall editing remains readable without shadow artifacts',
   );
+  viewer.setSectionHeight(1.2);
+  assert.equal(scene.shadowsEnabled, true, 'an explicit cut shows real shadows');
+  viewer.setSectionHeight(undefined);
   Object.assign(viewer, { currentExteriorView: true });
   viewer.setWallDisplay('auto');
   assert.equal(scene.shadowsEnabled, true, 'complete exterior restores real shadows');
@@ -539,7 +416,7 @@ test('walk aim reuses still hits and furniture changes refresh aim and shadow ca
     keyState: new Set(),
     planUpDegrees: () => 0,
     walk: new UniversalCamera('walk', new Vector3(1, 4.45, 1), scene),
-    sun: { getShadowGenerator: () => ({ getShadowMap: () => map }) },
+    shadow: { getShadowMap: () => map },
     shadowRefresh: { invalidate: () => invalidations++, step() {} },
   });
   t.mock.method(engine, 'getDeltaTime', () => 16);

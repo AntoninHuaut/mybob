@@ -88,8 +88,6 @@ describe('viewer state transitions', () => {
       ceilingOn: false,
       eyeHeight: 1.65,
       house: { ceiling, fixtures: [], pointLights: [], highlights: new Map() },
-      hemispheric: { intensity: 0 },
-      sun: { intensity: 0 },
       clearKeys: () => {},
       // These tests isolate transitions and geometry; ambience has its own scene tests.
       updateLighting() {},

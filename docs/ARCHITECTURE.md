@@ -12,8 +12,8 @@ state lives in the browser's `localStorage`.
 - `src/main.ts` — start-up only: template, bundled projects, viewer callbacks.
 - `src/app/` — UI composition and **screen state**: selection, preferences, projects,
   furniture editing, share link. It owns the DOM.
-- `src/scene/viewer.ts` — the Babylon scene: cameras, modes, cutaway, lighting, measurements,
-  collisions. It owns rendering.
+- `src/scene/viewer.ts` — the Babylon scene: cameras, modes, cutaway, measurements,
+  collisions. It owns rendering and decides when lighting changes (`scene/sceneLighting.ts`).
 - `src/model/` — pure data: types, validation, geometry. Neither DOM nor Babylon.
 - `src/furniture/` — furniture: model, placement, groups, history, render layer.
 - `src/ui/` — pure HTML fragments and self-contained panels.
@@ -37,6 +37,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Controls and prefs      | `src/app/controls.ts`, `preferences.ts`                                      | Static control wiring; render scale, walk preferences, welcome card                                                                      |
 | Engine                  | `src/scene/engine.ts`                                                        | WebGL engine, message when graphics acceleration is missing                                                                              |
 | Scene                   | `src/scene/viewer.ts`                                                        | `HouseViewer`: modes, cameras, cutaway, shadows, measurements, doors                                                                     |
+| Scene lighting          | `src/scene/sceneLighting.ts`                                                 | Sky fill, sun and its shadow map per scene; plan/visit/solar settings, shadow suppression, fixture lights                                |
 | House geometry          | `src/scene/buildHouse.ts`                                                    | Walls, floors, ceilings, joinery, doors                                                                                                  |
 | Wall edges              | `src/scene/beveledBox.ts`                                                    | Box with chamfered edges, for walls                                                                                                      |
 | Vertical corners        | `src/scene/cornerBead.ts`                                                    | Chamfer of the concave corners between two walls                                                                                         |
