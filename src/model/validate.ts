@@ -177,9 +177,14 @@ export function validateProject(
   if (p.finishes !== undefined) {
     if (
       !record(p.finishes) ||
-      Object.values(p.finishes).some((c) => typeof c !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(c))
+      Object.entries(p.finishes).some(
+        ([key, value]) =>
+          key !== 'floorFinish' && (typeof value !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(value)),
+      )
     )
       fail('Les couleurs de finition doivent être un objet de couleurs au format #rrggbb.');
+    if (p.finishes.floorFinish !== undefined && p.finishes.floorFinish !== 'blond-parquet')
+      fail('Finition de sol inconnue.');
   }
   if (
     !record(p.source) ||

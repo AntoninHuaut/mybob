@@ -196,6 +196,7 @@ export interface HouseProject {
   finishes?: {
     wallColor?: string;
     floorTint?: string;
+    floorFinish?: 'blond-parquet';
     garageColor?: string;
     joineryColor?: string;
   };

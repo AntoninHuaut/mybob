@@ -31,16 +31,20 @@ export function createMaterials(scene: Scene, finishes: HouseProject['finishes']
   plaster.bumpTexture = tile(surfaces.plasterNormal, 2);
   plaster.microSurfaceTexture = tile(surfaces.plasterRoughness, 2);
 
-  const wood = new PBRMaterial('porcelain-oak', scene);
+  const parquet = finishes.floorFinish === 'blond-parquet';
+  const wood = new PBRMaterial(parquet ? 'blond-parquet' : 'porcelain-oak', scene);
   wood.roughness = 0.72;
   wood.albedoColor = Color3.FromHexString(finishes.floorTint ?? '#ffffff');
   wood.metallic = 0;
   wood.maxSimultaneousLights = 6;
   // The parquet tile is 4.8 × 3.2 m, the same footprint as the albedo below.
-  wood.bumpTexture = tile(surfaces.woodNormal, 1);
-  wood.microSurfaceTexture = tile(surfaces.woodRoughness, 1);
+  const repeatU = parquet ? 1.5 : 1;
+  const repeatV = parquet ? 2 : 1;
+  wood.bumpTexture = tile(surfaces.woodNormal, repeatU, repeatV);
+  if (parquet) wood.bumpTexture.level = 0.12;
+  wood.microSurfaceTexture = tile(surfaces.woodRoughness, repeatU, repeatV);
 
-  // Deterministic, locally generated texture: 1.20 × 0.20 m porcelain planks.
+  // Scale all three maps together so the wood grain and joints follow the boards.
   const texture = new DynamicTexture(
     'oak-tiles-4.8x3.2m',
     { width: 1024, height: 1024 },
@@ -53,16 +57,19 @@ export function createMaterials(scene: Scene, finishes: HouseProject['finishes']
     seed = (seed * 1664525 + 1013904223) >>> 0;
     return seed / 4294967296;
   };
-  ctx.fillStyle = '#b1a18a';
+  ctx.fillStyle = parquet ? '#d6b590' : '#b1a18a';
   ctx.fillRect(0, 0, 1024, 1024);
   for (let row = 0; row < 16; row++) {
     const stagger = row % 2 ? 128 : 0;
     for (let col = -1; col < 5; col++) {
       const x = col * 256 + stagger,
         y = row * 64;
-      const tone = Math.floor(random() * 13);
-      ctx.fillStyle = `rgb(${202 + tone},${185 + tone},${159 + tone})`;
-      ctx.fillRect(x + 1, y + 1, 254, 62);
+      const tone = Math.floor(random() * (parquet ? 25 : 13));
+      ctx.fillStyle = parquet
+        ? `rgb(${210 + tone},${174 + tone},${134 + tone})`
+        : `rgb(${202 + tone},${185 + tone},${159 + tone})`;
+      const inset = parquet ? 0.35 : 1;
+      ctx.fillRect(x + inset, y + inset, 256 - 2 * inset, 64 - 2 * inset);
       for (let grain = 0; grain < 30; grain++) {
         const gy = y + 3 + random() * 57;
         ctx.beginPath();
@@ -78,7 +85,7 @@ export function createMaterials(scene: Scene, finishes: HouseProject['finishes']
   texture.wrapV = Texture.WRAP_ADDRESSMODE;
   texture.anisotropicFilteringLevel = 8;
   texture.update();
-  wood.albedoTexture = texture;
+  wood.albedoTexture = tile(texture, repeatU, repeatV);
 
   const concrete = new PBRMaterial('garage-concrete', scene);
   concrete.albedoColor = Color3.FromHexString(finishes.garageColor ?? '#bcbdb6');

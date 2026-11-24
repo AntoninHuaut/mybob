@@ -38,10 +38,9 @@ export interface UnpackedShare {
  * sloping parts of each level's ceiling. Revision 6: kitchens. Revision 7: optional
  * microwave. Revision 8: terrace and lawn surfaces, a terrace's slab height, and garden
  * boundaries (walls, fences, hedges, gates). Revision 9: a fence's infill (mesh or slats).
- * Revision 10: each room's wall paint. Reading accepts revisions 1 to 10; writing always
- * produces 10.
+ * Revision 10: each room's wall paint. Revision 11 adds the blond parquet finish flag.
  */
-export const LINK_PACK_VERSION = 10;
+export const LINK_PACK_VERSION = 11;
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -355,7 +354,8 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
     (project.site ? 1 : 0) |
       (project.solar ? 2 : 0) |
       (project.finishes ? 4 : 0) |
-      (furnishing ? 8 : 0),
+      (furnishing ? 8 : 0) |
+      (project.finishes?.floorFinish === 'blond-parquet' ? 16 : 0),
   );
   packer.str(project.id);
   packer.str(project.name);
@@ -694,6 +694,7 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
         ] as const
       ).filter(([, color]) => color !== undefined),
     );
+    if (version >= 11 && flags & 16) finishes.floorFinish = 'blond-parquet';
     if (Object.keys(finishes).length) project.finishes = finishes;
   }
   const levelIds: string[] = [];
