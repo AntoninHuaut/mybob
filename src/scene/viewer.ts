@@ -7,7 +7,7 @@ import { installSunShadowSkip } from './sunShadowSkip';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Camera } from '@babylonjs/core/Cameras/camera';
 import { HouseOrbitPointersInput } from './orbitPointerInput';
-import { measurementEndpoint } from './measurement';
+import { MeasureTool, type Measurement } from './measureTool';
 import type { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
 import { Color3, Color4 } from '@babylonjs/core/Maths/math.color';
 import { Matrix, Vector3 } from '@babylonjs/core/Maths/math.vector';
@@ -17,7 +17,6 @@ import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator'
 import { AbstractEngine } from '@babylonjs/core/Engines/abstractEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
-import { CreateSphere } from '@babylonjs/core/Meshes/Builders/sphereBuilder';
 import { PointerEventTypes } from '@babylonjs/core/Events/pointerEvents';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { GreasedLineMesh } from '@babylonjs/core/Meshes/GreasedLine/greasedLineMesh';
@@ -123,13 +122,7 @@ export interface FrameInfo {
   nearFurnitureId?: string;
   locked: boolean;
 }
-export interface Measurement {
-  a: Point2;
-  b?: Point2;
-  distance?: number;
-  preview?: boolean;
-  aligned?: boolean;
-}
+export type { Measurement } from './measureTool';
 
 /** Babylon scales pan deltas by the inverse of this value, in world metres. */
 export function configureOrbitInteractions(
@@ -195,7 +188,16 @@ export class HouseViewer {
     return this.currentMode;
   }
   measureMode = false;
-  measurement?: Measurement;
+  /** « Mesurer »; optional because scene tests build a viewer from its prototype. */
+  private measureTool?: MeasureTool = new MeasureTool({
+    scene: () => this.scene,
+    level: () => this.level,
+    markerMaterial: () => this.house.highlights.values().next().value?.material ?? null,
+    changed: (measurement) => this.onMeasure?.(measurement),
+  });
+  get measurement(): Measurement | undefined {
+    return this.measureTool?.measurement;
+  }
   onSelectRoom?: (id: string) => void;
   onFrame?: (frame: FrameInfo) => void;
   /**
@@ -280,10 +282,6 @@ export class HouseViewer {
   private sectionHeight?: number;
   private planOpenings?: PlanOpenings;
   private dimensions: GreasedLineMesh[] = [];
-  private measureMeshes: AbstractMesh[] = [];
-  private pinnedMeasurements: AbstractMesh[] = [];
-  private measureLine?: GreasedLineMesh;
-  private measureCursor?: Point2;
   private keyState = new Set<string>();
   private hemispheric!: HemisphericLight;
   private sun!: DirectionalLight;
@@ -412,12 +410,8 @@ export class HouseViewer {
     this.exteriorSubject = [];
     this.currentExteriorView = false;
     this.keyState.clear();
-    this.measurement = undefined;
     this.measureMode = false;
-    this.measureMeshes = [];
-    this.pinnedMeasurements = [];
-    this.measureLine = undefined;
-    this.measureCursor = undefined;
+    this.measureTool?.forget();
     this.dimensions = [];
   }
 
@@ -611,7 +605,7 @@ export class HouseViewer {
           (mesh) => mesh.metadata?.kind === 'floor',
         );
         if (hit?.pickedPoint)
-          this.previewMeasurement(
+          this.measureTool?.preview(
             [hit.pickedPoint.x, hit.pickedPoint.z],
             event.event.shiftKey,
             event.event.altKey,
@@ -636,7 +630,7 @@ export class HouseViewer {
           (mesh) => mesh.metadata?.kind === 'floor',
         );
         if (hit?.pickedPoint)
-          this.addMeasurement(
+          this.measureTool?.add(
             [hit.pickedPoint.x, hit.pickedPoint.z],
             event.event.shiftKey,
             event.event.altKey,
@@ -1353,14 +1347,7 @@ export class HouseViewer {
     this.measureMode = enabled && this.mode !== 'walk';
     if (this.measureMode) this.setGoToMode(false);
     this.canvas.classList.toggle('measuring', this.measureMode);
-    if (!this.measureMode) {
-      this.measurement = undefined;
-      this.measureMeshes.forEach((m) => m.dispose());
-      this.measureMeshes = [];
-      this.measureLine = undefined;
-      this.measureCursor = undefined;
-      this.onMeasure?.();
-    }
+    if (!this.measureMode) this.measureTool?.cancel();
   }
 
   /**
@@ -1431,8 +1418,7 @@ export class HouseViewer {
       skyWasEnabled = this.sky?.isEnabled ?? false;
       if (this.sky && !background) this.sky.isEnabled = false;
       for (const mesh of this.dimensions) set(mesh, dimensions && this.mode !== 'walk');
-      for (const mesh of this.measureMeshes) if (!dimensions) set(mesh, false);
-      for (const mesh of this.pinnedMeasurements) if (!dimensions) set(mesh, false);
+      if (!dimensions) for (const mesh of this.measureTool?.meshes ?? []) set(mesh, false);
       for (const mesh of this.scene.meshes) {
         if (mesh.metadata?.kind !== 'furniture-overlay') continue;
         const dimension = !!mesh.metadata.label || mesh.name === 'furniture:dimension-label';
@@ -1922,25 +1908,8 @@ export class HouseViewer {
         document.activeElement === this.canvas || document.pointerLockElement === this.canvas;
       let movement = Vector3.Zero();
       if (!this.paused && active) {
-        const forward =
-          Number(
-            this.keyState.has('KeyW') || this.keyState.has('KeyZ') || this.keyState.has('ArrowUp'),
-          ) - Number(this.keyState.has('KeyS') || this.keyState.has('ArrowDown'));
-        const side =
-          Number(this.keyState.has('KeyD') || this.keyState.has('ArrowRight')) -
-          Number(
-            this.keyState.has('KeyA') ||
-              this.keyState.has('KeyQ') ||
-              this.keyState.has('ArrowLeft'),
-          );
-        movement = walkDisplacement(
-          this.walk,
-          forward,
-          side,
-          this.walkSpeed,
-          dt,
-          this.keyState.has('ShiftLeft') || this.keyState.has('ShiftRight'),
-        );
+        const { forward, side, fast } = this.keyAxes();
+        movement = walkDisplacement(this.walk, forward, side, this.walkSpeed, dt, fast);
       }
       prepareWalkStep(this.walk, this.level, movement, this.site);
       this.walk.cameraDirection.addInPlace(movement);
@@ -1971,24 +1940,8 @@ export class HouseViewer {
         document.activeElement === this.canvas &&
         this.orbit.inputs.attachedToElement
       ) {
-        const forward =
-          Number(
-            this.keyState.has('KeyW') || this.keyState.has('KeyZ') || this.keyState.has('ArrowUp'),
-          ) - Number(this.keyState.has('KeyS') || this.keyState.has('ArrowDown'));
-        const side =
-          Number(this.keyState.has('KeyD') || this.keyState.has('ArrowRight')) -
-          Number(
-            this.keyState.has('KeyA') ||
-              this.keyState.has('KeyQ') ||
-              this.keyState.has('ArrowLeft'),
-          );
-        panOrbitWithKeys(
-          this.orbit,
-          forward,
-          side,
-          dt,
-          this.keyState.has('ShiftLeft') || this.keyState.has('ShiftRight'),
-        );
+        const { forward, side, fast } = this.keyAxes();
+        panOrbitWithKeys(this.orbit, forward, side, dt, fast);
       }
       this.emitFrame(() => ({
         cameraMoved,
@@ -2004,13 +1957,18 @@ export class HouseViewer {
 
   private keydown = (event: KeyboardEvent) => this.handleKeydown(event);
 
+  /** Held keys as movement axes: ZQSD, WASD and arrows; Shift goes faster. */
+  private keyAxes() {
+    const held = (...codes: string[]) => codes.some((code) => this.keyState.has(code));
+    return {
+      forward: Number(held('KeyW', 'KeyZ', 'ArrowUp')) - Number(held('KeyS', 'ArrowDown')),
+      side: Number(held('KeyD', 'ArrowRight')) - Number(held('KeyA', 'KeyQ', 'ArrowLeft')),
+      fast: held('ShiftLeft', 'ShiftRight'),
+    };
+  }
+
   private handleKeydown(event: KeyboardEvent) {
-    if (
-      this.measureMode &&
-      this.measureCursor &&
-      ['ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight'].includes(event.code)
-    )
-      this.previewMeasurement(this.measureCursor, event.shiftKey, event.altKey);
+    this.resnapMeasurement(event);
     if (
       this.paused ||
       event.ctrlKey ||
@@ -2042,12 +2000,7 @@ export class HouseViewer {
   }
   private keyup = (event: KeyboardEvent) => {
     this.keyState.delete(event.code);
-    if (
-      this.measureMode &&
-      this.measureCursor &&
-      ['ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight'].includes(event.code)
-    )
-      this.previewMeasurement(this.measureCursor, event.shiftKey, event.altKey);
+    this.resnapMeasurement(event);
   };
   /** Leaving or returning to the page: the next images say nothing about the machine. */
   private pauseMeasure = () => {
@@ -2070,67 +2023,20 @@ export class HouseViewer {
     this.setOrthoSize();
   }
 
-  private previewMeasurement(point: Point2, forceAxis = false, free = false) {
-    if (!this.measurement?.preview) return;
-    this.measureCursor = point;
-    const snapped = measurementEndpoint(this.measurement.a, point, forceAxis, free);
-    this.measurement.b = snapped.point;
-    this.measurement.aligned = snapped.aligned;
-    this.measurement.distance = Math.hypot(
-      snapped.point[0] - this.measurement.a[0],
-      snapped.point[1] - this.measurement.a[1],
-    );
-    const points = [this.measurement.a, snapped.point].map(
-      (p) => new Vector3(p[0], floorElevationAt(this.level, p) + 0.04, p[1]),
-    );
-    if (this.measureLine) this.measureLine.setPoints([points]);
-    else {
-      this.measureLine = createScreenLines(
-        'measurement',
-        [points],
-        this.scene,
-        Color3.FromHexString('#5e9377'),
-      );
-      this.measureMeshes.push(this.measureLine);
-    }
-    this.measureLine.greasedLineMaterial!.color = Color3.FromHexString('#5e9377');
-    this.onMeasure?.(this.measurement);
-  }
-
-  private addMeasurement(point: Point2, forceAxis = false, free = false) {
-    if (!this.measurement?.preview) {
-      this.measureMeshes.forEach((m) => m.dispose());
-      this.measureMeshes = [];
-      this.measureLine = undefined;
-      this.measureCursor = undefined;
-      this.measurement = { a: point, preview: true };
-    } else {
-      this.previewMeasurement(point, forceAxis, free);
-      point = this.measurement.b!;
-      this.measurement.preview = false;
-      if (this.measureLine)
-        this.measureLine.greasedLineMaterial!.color = Color3.FromHexString('#27634e');
-      this.measureCursor = undefined;
-    }
-    const dot = CreateSphere('measure-point', { diameter: 0.07, segments: 12 }, this.scene);
-    dot.position.set(point[0], floorElevationAt(this.level, point) + 0.045, point[1]);
-    dot.material = this.house.highlights.values().next().value?.material ?? null;
-    dot.isPickable = false;
-    this.measureMeshes.push(dot);
-    if (!this.measurement.preview) {
-      this.pinnedMeasurements.push(...this.measureMeshes);
-      this.measureMeshes = [];
-      this.measureLine = undefined;
-    }
-    this.onMeasure?.(this.measurement);
+  /** Shift forces an axis, Alt frees the snap: the following measurement re-snaps at once. */
+  private resnapMeasurement(event: KeyboardEvent) {
+    const cursor = this.measureTool?.cursor;
+    if (
+      this.measureMode &&
+      cursor &&
+      ['ShiftLeft', 'ShiftRight', 'AltLeft', 'AltRight'].includes(event.code)
+    )
+      this.measureTool!.preview(cursor, event.shiftKey, event.altKey);
   }
 
   /** Validated measurements stay on the floor until explicitly cleared. */
   clearPinnedMeasurements(): boolean {
-    const had = this.pinnedMeasurements.length > 0;
-    this.pinnedMeasurements.forEach((mesh) => mesh.dispose());
-    this.pinnedMeasurements = [];
-    return had;
+    return this.measureTool?.clearPinned() ?? false;
   }
 
   private buildDimensions() {
