@@ -331,6 +331,11 @@ export function validateProject(
         );
       if (r.note !== undefined && typeof r.note !== 'string')
         fail(`La note de pièce doit être un texte : ${r.id}`);
+      if (
+        r.wallColor !== undefined &&
+        (typeof r.wallColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(r.wallColor))
+      )
+        fail(`La peinture des murs doit être une couleur #rrggbb : ${r.id}`);
       if (ceilingHeightAt(l, r.viewpoint) - (r.floorOffset ?? 0) < MIN_CEILING_HEIGHT)
         fail(
           `Le point de visite doit être sous au moins 1,80 m de plafond, hors du rampant : ${r.id}`,

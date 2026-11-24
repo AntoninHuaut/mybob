@@ -604,6 +604,57 @@ button svg {
 .visit-room:hover {
   background: #dfeccf;
 }
+.room-paint {
+  margin-top: 14px;
+}
+.room-paint-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 28px;
+  font-size: 13px;
+  color: var(--secondary);
+}
+.room-paint-head .text-button[hidden] {
+  display: none;
+}
+.room-paint-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.paint-swatch {
+  position: relative;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--swatch);
+  border: 1px solid rgb(0 0 0 / 18%);
+  cursor: pointer;
+}
+.paint-swatch[aria-pressed='true'] {
+  outline: 2px solid #3a6332;
+  outline-offset: 2px;
+}
+.paint-swatch:focus-visible,
+.paint-custom:focus-within {
+  outline: 2px solid #3a6332;
+  outline-offset: 2px;
+}
+.paint-custom {
+  overflow: hidden;
+  background: conic-gradient(#c9876b, #d8b26a, #b9c4ab, #b7c7d3, #34495e, #c9876b);
+}
+.paint-custom input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
 .room-detail .visit-room {
   margin-top: 12px;
 }

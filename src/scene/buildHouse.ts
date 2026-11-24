@@ -15,6 +15,7 @@ import earcut from 'earcut';
 import type { Level, Opening, Point2, Stair, Wall } from '../model/types';
 import { alongWall, pointInPolygon, wallLength, wallSections } from '../model/geometry';
 import type { Materials } from './materials';
+import { buildWallPaint, type WallPiece } from './wallPaint';
 import { beveledBox, facetsData, slopedPrismFacets } from './beveledBox';
 import {
   ceilingHeightAt,
@@ -75,6 +76,11 @@ export interface HouseScene {
    * visit shows it: Vue 3D already stacks the level below, with its own flight.
    */
   stairsDown: Mesh[];
+  /** Room paint over the walls (`buildWallPaint`); rebuilt alone when a colour changes. */
+  paint: Mesh[];
+  /** Each wall's local frame and solid pieces, kept so the paint can be rebuilt. */
+  wallNodes: Map<string, TransformNode>;
+  wallPieces: Map<string, WallPiece[]>;
 }
 
 /**
@@ -393,8 +399,13 @@ export function buildHouse(
   );
 
   const doors: DoorInstance[] = [];
+  const wallNodes = new Map<string, TransformNode>();
+  const wallPieces = new Map<string, WallPiece[]>();
   for (const wall of level.walls) {
     const group = new TransformNode(`wall:${wall.id}`, scene);
+    const pieces: WallPiece[] = [];
+    wallNodes.set(wall.id, group);
+    wallPieces.set(wall.id, pieces);
     group.parent = root;
     group.position.set(wall.start[0], 0, wall.start[1]);
     group.rotation.y = -Math.atan2(wall.end[1] - wall.start[1], wall.end[0] - wall.start[0]);
@@ -428,6 +439,7 @@ export function buildHouse(
         const name = runs.length === 1 ? `wall:${wall.id}:${i}` : `wall:${wall.id}:${i}:${k}`;
         if (Math.abs(run.from - run.to) < 1e-6) {
           if (run.from - bottom <= 0.00001) continue;
+          pieces.push({ start: run.start, end: run.end, bottom, from: run.from, to: run.from });
           box(
             name,
             run.end - run.start,
@@ -454,6 +466,7 @@ export function buildHouse(
           to = bottom;
         }
         if (end - start < 0.0001) continue;
+        pieces.push({ start, end, bottom, from, to });
         slopedPiece(name, start, end, bottom, from, to, wall.thickness, group);
       }
     }
@@ -903,8 +916,21 @@ export function buildHouse(
   for (const mesh of root.getChildMeshes() as Mesh[]) {
     if (!isMoving(mesh)) mesh.freezeWorldMatrix();
   }
+  // After the merge: a room's paint stays its own mesh, so a new colour rebuilds only it.
+  const paint = buildWallPaint(level, scene, materials, wallNodes, wallPieces);
   new FixtureLights(scene, pointLights, doors).refresh();
-  return { root, ceiling, fixtures, doors, pointLights, highlights, stairsDown };
+  return {
+    root,
+    ceiling,
+    fixtures,
+    doors,
+    pointLights,
+    highlights,
+    stairsDown,
+    paint,
+    wallNodes,
+    wallPieces,
+  };
 }
 
 export function poseDoor(door: DoorInstance) {

@@ -35,6 +35,8 @@ export interface Room {
   floorOffset?: number;
   planArea?: number;
   note?: string;
+  /** Paint of the room's side of its walls, `#rrggbb`; plain plaster when absent. */
+  wallColor?: string;
 }
 export interface Stair {
   id: string;

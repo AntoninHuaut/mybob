@@ -1,5 +1,6 @@
 import type { Level, Room } from '../model/types';
 import { polygonArea } from '../model/geometry';
+import { PAINT_PALETTE } from '../model/paint';
 import { area, escapeHtml as esc, number } from './format';
 
 /** Renders an SVG icon from the `ui/icons` module (optional size). */
@@ -68,4 +69,35 @@ export function sceneLabelsHtml(rooms: Room[], selectedId: string | undefined): 
         `<button class="scene-label${r.id === selectedId ? ' selected' : ''}" data-label="${esc(r.id)}"><span>${esc(r.name)}</span><small>${area(r.planArea ?? polygonArea(r.polygon))}</small></button>`,
     )
     .join('');
+}
+
+/**
+ * « Peinture des murs » of the room card: suggested paints, any other colour through the
+ * native picker, and « Retirer » back to plain plaster. The current colour is pressed.
+ */
+export function roomPaintHtml(room: Room): string {
+  const current = room.wallColor?.toLowerCase();
+  const swatches = PAINT_PALETTE.map(
+    ({ color, name }) =>
+      `<button type="button" class="paint-swatch" data-paint="${color}" style="--swatch: ${color}" title="${esc(name)}" aria-label="${esc(name)}" aria-pressed="${current === color}"></button>`,
+  ).join('');
+  const custom = current !== undefined && !PAINT_PALETTE.some(({ color }) => color === current);
+  return `<div class="room-paint" role="group" aria-labelledby="room-paint-title"><div class="room-paint-head"><span id="room-paint-title">Peinture des murs</span><button type="button" class="text-button" data-paint-clear${current ? '' : ' hidden'}>Retirer</button></div><div class="room-paint-swatches">${swatches}<label class="paint-swatch paint-custom" title="Autre couleur" aria-pressed="${custom}"><input type="color" data-paint-custom value="${current ?? '#eeede8'}" aria-label="Autre couleur"></label></div></div>`;
+}
+
+/** Updates the paint controls in place: the native colour input is never replaced. */
+export function syncRoomPaint(host: ParentNode, color: string | undefined) {
+  const current = color?.toLowerCase();
+  host.querySelectorAll<HTMLElement>('[data-paint]').forEach((swatch) => {
+    swatch.setAttribute('aria-pressed', String(swatch.dataset.paint === current));
+  });
+  const custom = host.querySelector<HTMLElement>('.paint-custom');
+  custom?.setAttribute(
+    'aria-pressed',
+    String(current !== undefined && !PAINT_PALETTE.some((paint) => paint.color === current)),
+  );
+  const input = host.querySelector<HTMLInputElement>('[data-paint-custom]');
+  if (input && current && input.value !== current) input.value = current;
+  const clear = host.querySelector<HTMLElement>('[data-paint-clear]');
+  if (clear) clear.hidden = !current;
 }

@@ -13,6 +13,7 @@ import { closeDialog, downloadText, el, openDialog, pauseForDialog, toast } from
 import { app, MAX_IMPORTED, STORAGE } from './state';
 import { clearProjectHistories, committedFurniture, setLayoutStatus } from './furnitureController';
 import { loadProject } from './projectView';
+import { paintedProject, paintStorageKey } from './roomPaint';
 
 /*
  * The project list: bundled projects, projects imported into this browser (localStorage), and
@@ -167,8 +168,9 @@ export function currentDocument(): ShareDocument {
 }
 
 /** The saved state of an owned project, without going through the view: basis of the start-up comparison. */
-export function storedDocumentFor(project: HouseProject): ShareDocument {
+export function storedDocumentFor(stored: HouseProject): ShareDocument {
   const { layoutSession, solarPanel } = app;
+  const project = paintedProject(stored);
   try {
     layoutSession.register(
       project.id,
@@ -247,6 +249,7 @@ function projectStorageKeys(project: HouseProject) {
   return [
     variantsStorageKey(project.id),
     `maison-atelier:solar:${project.id}`,
+    paintStorageKey(project.id),
     ...project.levels.map((level) => layoutStorageKey(project.id, level.id)),
   ];
 }
@@ -319,9 +322,12 @@ export async function installProjectDocument(
   assertProjectsUnchanged();
   const backups = [
     [variantsStorageKey(project.id), localStorage.getItem(variantsStorageKey(project.id))],
+    [paintStorageKey(project.id), localStorage.getItem(paintStorageKey(project.id))],
   ] as const;
   try {
     localStorage.setItem(variantsStorageKey(project.id), JSON.stringify(nextVariants));
+    // The document carries its rooms' paint: earlier local choices would override it.
+    localStorage.removeItem(paintStorageKey(project.id));
     writeProjects(next);
   } catch {
     for (const [key, value] of backups) {

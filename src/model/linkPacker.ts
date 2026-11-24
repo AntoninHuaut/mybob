@@ -1,4 +1,4 @@
-import type { HouseProject, Opening, ProjectSite, Point2, RoofDormer } from './types';
+import type { HouseProject, Opening, ProjectSite, Point2, RoofDormer, Room } from './types';
 import type {
   DressingConfiguration,
   DressingRun,
@@ -38,9 +38,10 @@ export interface UnpackedShare {
  * sloping parts of each level's ceiling. Revision 6: kitchens. Revision 7: optional
  * microwave. Revision 8: terrace and lawn surfaces, a terrace's slab height, and garden
  * boundaries (walls, fences, hedges, gates). Revision 9: a fence's infill (mesh or slats).
- * Reading accepts revisions 1 to 8; writing always produces 9.
+ * Revision 10: each room's wall paint. Reading accepts revisions 1 to 10; writing always
+ * produces 10.
  */
-export const LINK_PACK_VERSION = 9;
+export const LINK_PACK_VERSION = 10;
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -421,6 +422,7 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
       packer.optMM(room.floorOffset);
       packer.optArea(room.planArea);
       packer.optStr(room.note);
+      packer.optColor(room.wallColor);
     }
     const stairs = level.stairs ?? [];
     packer.u(stairs.length);
@@ -753,7 +755,7 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
     }
     const roomCount = reader.count(500);
     for (let r = 0; r < roomCount; r++) {
-      level.rooms.push({
+      const room: Room = {
         id: `piece-${l}-${r}`,
         name: reader.str(),
         kind: enumValue(ROOM_KINDS, reader.u()),
@@ -763,7 +765,12 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
         floorOffset: reader.optMM(),
         planArea: reader.optArea(),
         note: reader.optStr(),
-      });
+      };
+      if (version >= 10) {
+        const wallColor = reader.optColor();
+        if (wallColor !== undefined) room.wallColor = wallColor;
+      }
+      level.rooms.push(room);
     }
     const stairCount = reader.count(20);
     if (stairCount) {

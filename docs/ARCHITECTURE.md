@@ -33,6 +33,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Furniture editing       | `src/app/furnitureController.ts`                                             | History, selection, `commitFurniture`, panels, floating bar, furniture shortcuts                                                         |
 | Share link sync         | `src/app/shareLinkSync.ts`                                                   | Debounced hash writes, flush on leave, copy, opening a received link                                                                     |
 | View chrome             | `src/app/viewChrome.ts`                                                      | `setMode`, `syncViewChrome`, `syncDisplayControls`, sidebar, navigation panel                                                            |
+| Wall paint              | `src/app/roomPaint.ts`, `model/paint.ts`, `scene/wallPaint.ts`               | Room card choice stored per project; overrides and wall side spans; one paint mesh per wall and room, rebuilt by `viewer.repaintWalls`   |
 | Controls and prefs      | `src/app/controls.ts`, `preferences.ts`                                      | Static control wiring; render scale, walk preferences, welcome card                                                                      |
 | Engine                  | `src/scene/engine.ts`                                                        | WebGL engine, message when graphics acceleration is missing                                                                              |
 | Scene                   | `src/scene/viewer.ts`                                                        | `HouseViewer`: modes, cameras, cutaway, shadows, measurements, doors                                                                     |
@@ -124,7 +125,7 @@ public/projects/*.json
 
 Storage keys, all prefixed `maison-atelier:` — `projects:v1` (imported projects),
 `layout:v1:<project>:<level>` (arrangement), `variants:v1:<project>`, `navigation:v1`,
-`onboarding`, `solar:<project>`, `last-project`. Changing a key breaks local data: only do it
+`onboarding`, `solar:<project>`, `paint:<project>`, `last-project`. Changing a key breaks local data: only do it
 with a migration.
 
 `src/projectStorage.ts` owns the reading of `projects:v1`:
