@@ -62,7 +62,15 @@ test('the short help fits in three gestures and keeps the detailed text reachabl
   assert.equal([...short.matchAll(/<li>/g)].length, 3);
   assert.match(short, /id="show-full-help"/);
   const full = fullHelpHtml();
-  for (const kept of ['Mesures', 'Importer votre maison', 'Ctrl Z', 'Alt', 'Affichage des murs']) {
+  assert.match(short, /Tout voir\s:\smesures, portes, peinture, import, raccourcis/);
+  for (const kept of [
+    'Mesures',
+    'Importer votre maison',
+    'Ctrl Z',
+    'Alt',
+    'Affichage des murs',
+    'Peinture des murs',
+  ]) {
     assert.ok(full.includes(kept), `l’aide complète conserve « ${kept} »`);
   }
   assert.ok(
@@ -71,7 +79,7 @@ test('the short help fits in three gestures and keeps the detailed text reachabl
   );
   assert.equal(
     [...full.matchAll(/<h3>/g)].length,
-    7,
-    'les cinq cartes et les deux sections détaillées sont conservées',
+    8,
+    'les six cartes et les deux sections détaillées sont conservées',
   );
 });
