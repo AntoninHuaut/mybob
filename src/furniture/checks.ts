@@ -1,4 +1,4 @@
-import type { Level, Point2, Wall } from '../model/types';
+import type { Level, Opening, Point2, Wall } from '../model/types';
 import {
   alongWall,
   floorElevationAt,
@@ -68,6 +68,28 @@ function openingBase(wall: Wall, offset: number, level: Level): number {
     return room ? [room.floorOffset ?? 0] : [];
   });
   return floors.length ? Math.max(...floors) : 0;
+}
+
+/** Names a blocked door by the rooms on each side of its wall, the furniture's side first. */
+function doorSwingMessage(wall: Wall, opening: Opening, at: Point2, level: Level): string {
+  const sides = [-1, 1]
+    .map((sign) =>
+      alongWall(wall, opening.offset + opening.width / 2, sign * (wall.thickness / 2 + 0.02)),
+    )
+    .sort((a, b) => Math.hypot(a[0] - at[0], a[1] - at[1]) - Math.hypot(b[0] - at[0], b[1] - at[1]))
+    .map((point) => ({
+      room: level.rooms.find((r) => pointInPolygon(point, r.polygon)),
+      outside: !pointInPolygon(point, level.outline),
+    }));
+  const [near, far] = sides;
+  if (near.room && far.room && near.room !== far.room)
+    return `Gêne le débattement de la porte « ${near.room.name} » – « ${far.room.name} ».`;
+  const room = near.room ?? far.room;
+  if (!room) return 'Gêne le débattement d’une porte de la maison.';
+  const other = near.room ? far : near;
+  return opening.exterior || other.outside
+    ? `Gêne le débattement de la porte extérieure de « ${room.name} ».`
+    : `Gêne le débattement d’une porte de « ${room.name} ».`;
 }
 
 export function clearanceFootprint(item: FurnitureItem): Point2[] {
@@ -242,7 +264,7 @@ export function checkFurniture(items: FurnitureItem[], level: Level): FurnitureI
           parts.some((part) => polygonsOverlap(part, sector)) &&
           floor < opening.height + openingBase(wall, opening.offset + opening.width / 2, level)
         )
-          add(item, 'warning', 'Gêne le débattement d’une porte de la maison.');
+          add(item, 'warning', doorSwingMessage(wall, opening, item.position, level));
       }
   }
   return issues;
