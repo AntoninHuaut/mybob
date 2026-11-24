@@ -87,23 +87,11 @@ import { ViewEffects } from './viewEffects';
 import { buildWallPaint } from './wallPaint';
 import type { OcclusionState } from './diagnostics';
 import type { ImmersiveWalk } from './xrWalk';
+import { HeadsetSession } from './headsetSession';
 import { roofWindowWells } from '../model/ceiling';
 
 export type ViewMode = 'overview' | 'plan' | 'walk';
 
-/** True when this browser can open a headset session (Quest browser, desktop VR). */
-export async function isImmersiveSupported(): Promise<boolean> {
-  try {
-    return (await navigator.xr?.isSessionSupported('immersive-vr')) ?? false;
-  } catch {
-    return false;
-  }
-}
-
-/** Fetches the headset code ahead of the click: a slow import would outlive the user gesture. */
-export function preloadImmersive() {
-  return import('./xrWalk');
-}
 export interface FrameInfo {
   cameraMoved?: boolean;
   furnitureObstaclesRevision?: number;
@@ -212,10 +200,13 @@ export class HouseViewer {
   onImmersiveChange?: (active: boolean) => void;
   goToMode = false;
   /** The visit in a headset, a state of the walk: `mode` stays `walk` meanwhile. */
-  private immersive?: ImmersiveWalk;
-  private immersiveStarting = false;
+  private readonly headset = new HeadsetSession();
+  /** The headset visit while one runs. */
+  private get immersive() {
+    // Optional: scene tests build a viewer from its prototype, without the constructor.
+    return this.headset?.walk;
+  }
   /** Share of the visible meshes ready at the last headset readiness check. */
-  private immersiveReadiness = 0;
   private eyeHeight = EYE_HEIGHT;
   private walkSpeed = DEFAULT_WALK_SPEED;
   private lookSensitivity = 1;
@@ -367,8 +358,7 @@ export class HouseViewer {
   /** Release scene-owned resources before replacing the scene or disposing the viewer. */
   private releaseScene() {
     // The session belongs to the scene about to be disposed.
-    this.immersive?.dispose();
-    this.immersive = undefined;
+    this.headset?.dispose();
     this.wallCutaway?.dispose();
     this.wallCutaway = undefined;
     this.planOpenings?.dispose();
@@ -664,7 +654,7 @@ export class HouseViewer {
     this.cancelOrbitTour();
     if (this.immersive) {
       // The session ends asynchronously; `leaveImmersive` then restores this mode's camera.
-      void this.immersive.exit();
+      void this.headset.exit();
     }
     this.clearKeys();
     this.cancelCaptureRetry();
@@ -1452,79 +1442,47 @@ export class HouseViewer {
    * error when the session cannot start (no headset, permission refused).
    */
   async enterImmersive() {
-    if (this.immersive || this.immersiveStarting || this.mode !== 'walk' || !this.scene) return;
-    this.immersiveStarting = true;
-    try {
-      const { startImmersiveWalk } = await preloadImmersive();
-      this.clearKeys();
-      this.cancelCaptureRetry();
-      if (document.pointerLockElement === this.canvas) document.exitPointerLock();
-      const scene = this.scene;
-      const viewer = this;
-      const walk = await startImmersiveWalk({
-        scene,
-        // A stair changes the displayed level during the session.
-        get level() {
-          return viewer.level;
-        },
-        site: this.site,
-        eyeHeight: this.eyeHeight,
-        start: { point: [this.walk.position.x, this.walk.position.z], yaw: this.walk.rotation.y },
-        isDestination: (point) =>
-          isSceneVisitDestination(scene, this.level, point) ||
-          isParcelDestination(this.level, this.site, point),
-        toggleDoor: (id) => this.toggleDoor(id),
-        takeStair: (id, direction) => this.takeStair(id, direction),
-        isReady: () => this.immersiveReady(scene),
-        readiness: () => this.immersiveReadiness,
-        onEnd: (ended) => this.leaveImmersive(ended),
-      });
-      // A project load or a mode change may have happened while the session started.
-      if (this.scene !== scene || this.mode !== 'walk' || !walk.active) {
-        walk.dispose();
-        return;
-      }
-      this.immersive = walk;
-      this.updateSky();
-      this.updateShadowPolicy();
-      // The screen walk's pipelines are bound to its camera: dropped until the headset is ready.
-      this.viewEffects?.releaseWalkPipelines();
-      this.onImmersiveChange?.(true);
-    } finally {
-      this.immersiveStarting = false;
-    }
-  }
-
-  /**
-   * The headset veil may lift: every enabled, visible mesh is ready to draw. Each mesh is
-   * asked, not only up to the first refusal, so that all their links start together.
-   */
-  private immersiveReady(scene: Scene): boolean {
-    if (scene !== this.scene || scene.isDisposed) return true;
-    let ready = true;
-    let total = 0;
-    let done = 0;
-    for (const mesh of scene.meshes) {
-      if (!mesh.isEnabled() || !mesh.isVisible || !mesh.subMeshes?.length) continue;
-      total++;
-      if (mesh.isReady(true)) done++;
-      else ready = false;
-    }
-    this.immersiveReadiness = total ? done / total : 1;
-    return ready && this.engine.areAllEffectsReady() && scene.getWaitingItemsCount() === 0;
+    if (this.headset.busy || this.mode !== 'walk' || !this.scene) return;
+    this.clearKeys();
+    this.cancelCaptureRetry();
+    if (document.pointerLockElement === this.canvas) document.exitPointerLock();
+    const scene = this.scene;
+    const viewer = this;
+    const opened = await this.headset.open({
+      scene,
+      engine: this.engine,
+      get level() {
+        return viewer.level;
+      },
+      site: this.site,
+      eyeHeight: this.eyeHeight,
+      start: { point: [this.walk.position.x, this.walk.position.z], yaw: this.walk.rotation.y },
+      isDestination: (point) =>
+        isSceneVisitDestination(scene, this.level, point) ||
+        isParcelDestination(this.level, this.site, point),
+      toggleDoor: (id) => this.toggleDoor(id),
+      takeStair: (id, direction) => this.takeStair(id, direction),
+      // A project load or a mode change may happen while the session starts.
+      isCurrent: () => this.scene === scene && this.mode === 'walk',
+      onEnd: (ended) => this.leaveImmersive(ended),
+    });
+    if (!opened) return;
+    this.updateSky();
+    this.updateShadowPolicy();
+    // The screen walk's pipelines are bound to its camera: dropped until the headset is ready.
+    this.viewEffects?.releaseWalkPipelines();
+    this.onImmersiveChange?.(true);
   }
 
   async exitImmersive() {
-    await this.immersive?.exit();
+    await this.headset.exit();
   }
 
   /** Back to the screen where the headset left the visitor, at the chosen eye height. */
   private leaveImmersive(walk: ImmersiveWalk) {
-    if (this.immersive !== walk) return;
     const [x, z] = walk.position;
     const forward = walk.camera.getDirection(Vector3.Forward(true));
-    this.immersive = undefined;
-    walk.dispose();
+    if (!this.headset.release(walk)) return;
     this.updateSky();
     this.updateShadowPolicy();
     if (!this.scene || !this.walk) return;
