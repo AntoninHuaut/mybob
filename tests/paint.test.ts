@@ -168,8 +168,13 @@ test('a painted room gets paint on its own side of each wall, around the opening
     assert.equal(mesh.isPickable, false);
     assert.equal(mesh.checkCollisions, false);
     assert.equal(mesh.material?.name, 'paint:#b9c4ab');
-    const middle = centre(mesh);
-    assert.ok(pointInPolygon([middle.x, middle.z], level.rooms[0].polygon), mesh.name);
+    const vertices = worldVertices(mesh);
+    const normals = mesh.getVerticesData('normal')!;
+    for (let i = 0; i < vertices.length; i += 4) {
+      if (Math.abs(normals[i * 3 + 2]) !== 1) continue;
+      const middle = Vector3.Center(vertices[i], vertices[i + 2]);
+      assert.ok(pointInPolygon([middle.x, middle.z], level.rooms[0].polygon), mesh.name);
+    }
   }
   // The partition is painted on room A's side only.
   const partition = paint.filter((mesh) => mesh.name.startsWith('wall:cloison:'));
@@ -180,8 +185,60 @@ test('a painted room gets paint on its own side of each wall, around the opening
   const positions = facade.getVerticesData('position')!;
   for (let i = 0; i < positions.length; i += 3) {
     const [x, y] = [positions[i], positions[i + 1]];
-    assert.ok(!(x > 1.001 && x < 1.999 && y > 1.001 && y < 1.999), `vertex ${x}, ${y}`);
+    assert.ok(!(x > 1.01 && x < 1.99 && y > 1.01 && y < 1.99), `vertex ${x}, ${y}`);
   }
+  engine.dispose();
+});
+
+/** World-space vertices of a mesh. */
+function worldVertices(mesh: Mesh): Vector3[] {
+  const matrix = mesh.computeWorldMatrix(true);
+  const positions = mesh.getVerticesData('position')!;
+  const result: Vector3[] = [];
+  for (let i = 0; i < positions.length; i += 3)
+    result.push(
+      Vector3.TransformCoordinates(
+        new Vector3(positions[i], positions[i + 1], positions[i + 2]),
+        matrix,
+      ),
+    );
+  return result;
+}
+
+test('paint wraps the reveals of an opening and a free wall end, on its own room side only', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const level = square();
+  // The partition stops short of the top wall: its end at y = 3 is free, its foot is buried.
+  level.walls[4] = { ...level.walls[4], end: [4, 3] };
+  const paint = buildHouse(level, scene, fakeMaterials(scene)).paint;
+  const near = (a: number, b: number) => Math.abs(a - b) < 0.005;
+  const facade = worldVertices(paint.find((mesh) => mesh.name.startsWith('wall:bas:'))!);
+  // Window reveals at x = 1 and x = 2, soffit at y = 2 and ledge at y = 1: interior half only.
+  for (const x of [1, 2])
+    assert.ok(
+      facade.some((v) => near(v.x, x) && v.y > 0.99 && v.y < 2.01 && near(v.z, 0)),
+      `reveal at x = ${x}`,
+    );
+  for (const y of [1, 2])
+    assert.ok(
+      facade.some((v) => near(v.y, y) && v.x > 1 && v.x < 2.01 && near(v.z, 0)),
+      `${y === 2 ? 'soffit' : 'ledge'}`,
+    );
+  assert.ok(
+    facade.every((v) => v.z > -0.001),
+    'nothing on the outside half',
+  );
+  const partition = worldVertices(paint.find((mesh) => mesh.name.startsWith('wall:cloison:'))!);
+  assert.ok(
+    partition.some((v) => near(v.z, 3) && v.x > 3.89 && v.x < 4.001),
+    'free end painted',
+  );
+  assert.ok(
+    partition.every((v) => v.x < 4.001),
+    'room B side stays plaster',
+  );
+  assert.ok(!partition.some((v) => v.z < 0.0999), 'the buried foot is not painted');
   engine.dispose();
 });
 
