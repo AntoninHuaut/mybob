@@ -14,7 +14,8 @@
    the same change.
 
 ```text
-src/main.ts          UI composition and screen state: mode, selection, preferences
+src/main.ts          start-up: template, bundled projects, viewer callbacks
+src/app/             UI composition and screen state: mode, selection, projects, furniture
 src/scene/viewer.ts  Babylon scene: cameras, modes, cutaway, lighting, measurement
 src/model/           pure data: types, validation, geometry
 src/furniture/       furniture: model, placement, groups, history, render layer

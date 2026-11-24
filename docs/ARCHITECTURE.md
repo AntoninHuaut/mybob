@@ -9,15 +9,16 @@ page, then only the files of the area concerned. Product rules and delivery cons
 Static Vite + TypeScript + Babylon.js 9 application. No backend, no account: all persistent
 state lives in the browser's `localStorage`.
 
-- `src/main.ts` — UI composition and **screen state**: selection, preferences,
-  projects. It owns the DOM.
+- `src/main.ts` — start-up only: template, bundled projects, viewer callbacks.
+- `src/app/` — UI composition and **screen state**: selection, preferences, projects,
+  furniture editing, share link. It owns the DOM.
 - `src/scene/viewer.ts` — the Babylon scene: cameras, modes, cutaway, lighting, measurements,
   collisions. It owns rendering.
 - `src/model/` — pure data: types, validation, geometry. Neither DOM nor Babylon.
 - `src/furniture/` — furniture: model, placement, groups, history, render layer.
 - `src/ui/` — pure HTML fragments and self-contained panels.
 
-The two worlds talk in one direction at a time: `main.ts` calls viewer methods, and the viewer
+The two worlds talk in one direction at a time: `src/app/` calls viewer methods, and the viewer
 reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSelectRoom`, `onDestination`,
 `onMeasure`, `onEditFurniture`, `onLevelChange`).
 
@@ -25,7 +26,14 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 
 | Area                    | File                                                                         | Role                                                                                                                                     |
 | ----------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Composition             | `src/main.ts`                                                                | DOM wiring, `setMode`, projects, preferences, shortcuts                                                                                  |
+| Start-up                | `src/main.ts`                                                                | Template, bundled projects, viewer creation and callbacks, `?diagnostic`                                                                 |
+| Screen state            | `src/app/state.ts`, `dom.ts`                                                 | Shared `app` state (one writer per field), `el`, `toast`, dialogs                                                                        |
+| Displayed project       | `src/app/projectView.ts`                                                     | `loadProject`, level change, room list, card, labels and mini-map                                                                        |
+| Project list            | `src/app/projectLibrary.ts`                                                  | Bundled and imported projects, export, import, link installation, removal, other tabs                                                    |
+| Furniture editing       | `src/app/furnitureController.ts`                                             | History, selection, `commitFurniture`, panels, floating bar, furniture shortcuts                                                         |
+| Share link sync         | `src/app/shareLinkSync.ts`                                                   | Debounced hash writes, flush on leave, copy, opening a received link                                                                     |
+| View chrome             | `src/app/viewChrome.ts`                                                      | `setMode`, `syncViewChrome`, `syncDisplayControls`, sidebar, navigation panel                                                            |
+| Controls and prefs      | `src/app/controls.ts`, `preferences.ts`                                      | Static control wiring; render scale, walk preferences, welcome card                                                                      |
 | Engine                  | `src/scene/engine.ts`                                                        | WebGL engine, message when graphics acceleration is missing                                                                              |
 | Scene                   | `src/scene/viewer.ts`                                                        | `HouseViewer`: modes, cameras, cutaway, shadows, measurements, doors                                                                     |
 | House geometry          | `src/scene/buildHouse.ts`                                                    | Walls, floors, ceilings, joinery, doors                                                                                                  |
@@ -54,7 +62,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Frame profiler          | `src/scene/frameProfiler.ts`                                                 | `mybob.profile(s)`: GPU/CPU time and draw calls per image of the current view, loaded on demand                                          |
 | Performance report      | `src/ui/performanceReport.ts`                                                | `?diagnostic` link: measures every view and shows a report to copy, no console needed                                                    |
 | Screen-width lines      | `src/scene/screenLines.ts`                                                   | CSS-width dimension/measurement polylines, resize and material ownership                                                                 |
-| Measurement             | `src/scene/measurement.ts`                                                   | Snapping to the plan axes                                                                                                                |
+| Measurement             | `src/scene/measurement.ts`, `measureTool.ts`                                 | Snapping to the plan axes; `MeasureTool`: live, pinned and cleared measurements                                                          |
 | Sun                     | `src/scene/solar.ts`                                                         | NOAA equations, IANA time zones                                                                                                          |
 | Solar settings          | `src/model/solarSettings.ts`                                                 | Validation of explicit settings: no geolocation, no default place                                                                        |
 | Data                    | `src/model/types.ts`                                                         | Versioned format (`schemaVersion: 1`)                                                                                                    |
@@ -145,13 +153,13 @@ with a migration.
   Vue 3D shows the levels under the displayed one, Extérieur shows them all (seen through
   the windows), Plan and Visite hide them (`updateOtherLevels`). They are built before the
   displayed level, whose `FixtureLights` must be the scene's last.
-- Changing level keeps the view (`loadProject(…, keep)` in `main.ts`): Extérieur, Plan, or a
+- Changing level keeps the view (`loadLevel` in `app/projectView.ts`): Extérieur, Plan, or a
   visit restarted from the new level's start; changing project starts in Vue 3D.
 - Taking a stair in the visit changes level **inside the same scene** (`viewer.takeStair`), so
   that a headset session, which belongs to the scene, survives it: `releaseLevels` disposes
   every level house and the level overlays (plan openings, cutaway, dimensions), keeping the
   shared materials, sun, exterior, sky and cameras; `buildLevels` rebuilds them around the
-  arrival level, then `onLevelChange` lets `main.ts` re-mount the furniture and the level
+  arrival level, then `onLevelChange` lets `handleStairLevelChange` re-mount the furniture and the level
   chrome before the landing (`stairPassage`, checked by `findVisitDestination`) is chosen. On
   screen the walk is prepared again behind the overlay; in a headset the loading veil comes
   back (`ImmersiveWalk.arrive`).
@@ -161,10 +169,10 @@ with a migration.
   tread within 2.4 m takes it on screen (with an `E Monter / Descendre` prompt); in a headset,
   the teleport aimed at a tread does.
 - After applying the camera, roof, section, cutaway and ambience, the viewer calls
-  `onViewChange`. `main.syncViewChrome` derives buttons, titles, help and furniture policy
+  `onViewChange`. `app/viewChrome.syncViewChrome` derives buttons, titles, help and furniture policy
   from the accepted state. It never requests another transition. Ambience failures still
   allow the rest of the transition and notification to complete.
-- `main.setMode` adds UI-request conveniences after acceptance: focus the selected room
+- `app/viewChrome.setMode` adds UI-request conveniences after acceptance: focus the selected room
   and return keyboard focus to the canvas. Viewer-originated transitions do not refocus it.
 - Headset exit restores the camera of the currently accepted mode, even when an asynchronous
   session end follows a transition out of the walk.
@@ -465,7 +473,7 @@ last call, and read back at start-up.
 - **Integrity**: since revision 4 the pack ends with a CRC-32 (`crc32` in `linkPacker.ts`). A
   link altered by one character is refused (« Ce lien est tronqué ou illisible ») instead of
   decoding into another valid project; revisions 1 to 3 carry no checksum and still read.
-- **Reading at start-up** (`main.ts`, `openSharedLink`): the hash wins over `localStorage`.
+- **Reading at start-up** (`app/shareLinkSync.ts`, `openSharedLink`): the hash wins over `localStorage`.
   - The project already exists here (owner): silent comparison on the **canonical packed
     bytes** (`samePackedState`, not on the compressed hash, deflate being non-deterministic
     across browsers). Identical → nothing. Different → `ui/confirmLinkDivergence.ts`: replace,
@@ -607,7 +615,7 @@ last call, and read back at start-up.
 **Add a view mode** — `ViewMode` in `viewer.ts`, a branch in `viewer.setMode` (camera,
 section, cutaways), a title and help in `ui/modeChrome.ts`, a `[data-view]` button in
 `ui/appTemplate.ts`, then check `syncDisplayControls` and the `mode === 'walk'` guards
-scattered through `main.ts`.
+scattered through `src/app/`.
 
 **Add a furniture type** — `FurnitureKind` and the default dimensions in `furniture/model.ts`,
 the geometry in `furniture/layer.ts`, the popup fields in `furniture/panel.ts` and
@@ -619,7 +627,7 @@ message in French, it is shown to the user), the consumer in `scene/` or `ui/`, 
 
 **Change an interface text** — mode labels are in `ui/modeChrome.ts`, help in
 `ui/firstSteps.ts`, rooms in `ui/roomPanels.ts`, the rest in `ui/appTemplate.ts` and
-`main.ts`. Follow the voice described in [BRAND.md](BRAND.md).
+`src/app/`. Follow the voice described in [BRAND.md](BRAND.md).
 
 ## Verify
 

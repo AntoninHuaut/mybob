@@ -113,7 +113,7 @@ test('viewport labels retain selected small rooms and follow replacements after 
 
 test('measurement projection uses the lowered floor, and the walk HUD respects dialogs and capture', () => {
   const { window, projection, view, el, moves, heights } = setup();
-  view.measurement = { a: [0.2, 0.5], b: [0.8, 1.5] };
+  Object.assign(view, { measurement: { a: [0.2, 0.5], b: [0.8, 1.5] } });
   projection.update(view, frame, preferences);
   assert.ok(Math.abs(heights.at(-1)! - -0.02) < 1e-9);
   assert.deepEqual(moves, [{ x: 200, y: 150, visible: true }]);

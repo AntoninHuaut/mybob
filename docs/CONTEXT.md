@@ -35,7 +35,7 @@ Requests arrive with the interface's (French) words. The code name is the one to
 | Bob (mascot, tone of the copy)   | [BRAND.md](BRAND.md), `src/assets/brand/`                     |
 
 Toolbar buttons are `#tool-<name>` in `ui/appTemplate.ts`; their wiring is found with
-`grep -n "tool-<name>" src/main.ts`.
+`grep -rn "tool-<name>" src/app`.
 
 ## Reading budget
 
@@ -44,11 +44,11 @@ read the function.
 
 | File                                    | Size            | How to get in                                                                  |
 | --------------------------------------- | --------------- | ------------------------------------------------------------------------------ |
-| `src/main.ts`                           | ~2,200 lines    | `grep -nE "^(async )?function" src/main.ts`                                    |
-| `src/scene/viewer.ts`                   | ~1,500 lines    | `grep -nE "^  [a-zA-Z]+\(.*\) \{" src/scene/viewer.ts` (`HouseViewer` methods) |
-| `src/furniture/layer.ts`, `panel.ts`    | ~1,000 / 700 l. | by method name or HTML `id`                                                    |
-| `.agents/skills/mybob-plan-conversion/` | ~80 KB          | by section: `grep -n '^##'`, see its Claude pointer                            |
-| `scripts/*.py`                          | 20–55 KB        | only for plan conversion; `--help` first                                       |
+| `src/app/furnitureController.ts`        | ~730 lines      | `grep -nE "^(export )?function" src/app/furnitureController.ts`                |
+| `src/scene/viewer.ts`                   | ~2,100 lines    | `grep -nE "^  [a-zA-Z]+\(.*\) \{" src/scene/viewer.ts` (`HouseViewer` methods) |
+| `src/furniture/layer.ts`, `panel.ts`    | ~1,400 / 860 l. | by method name or HTML `id`                                                    |
+| `.agents/skills/mybob-plan-conversion/` | ~95 KB          | by section: `grep -n '^##'`, see its Claude pointer                            |
+| `scripts/*.py`                          | 2–55 KB         | only for plan conversion; `--help` first                                       |
 
 Never read: `pnpm-lock.yaml`, `dist/`, `node_modules/`, `playwright-report/`,
 `test-results/`, the PNGs in `src/assets/brand/` (described in [BRAND.md](BRAND.md)).

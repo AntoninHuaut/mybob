@@ -4,7 +4,8 @@ import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { measurementEndpoint } from '../src/scene/measurement';
 import { HouseViewer, type Measurement } from '../src/scene/viewer';
-import type { Level, Point2 } from '../src/model/types';
+import { MeasureTool } from '../src/scene/measureTool';
+import type { Level } from '../src/model/types';
 
 test('measurement snapping keeps free diagonals and snaps near either plan axis in both directions', () => {
   assert.deepEqual(measurementEndpoint([2, 3], [5, 3.2]), { point: [5, 3], aligned: true });
@@ -38,19 +39,20 @@ test('measurement preview updates one line, commits the snapped end and resets c
     spawn: { position: [2, 2], yaw: 0 },
   };
   const changes: (Measurement | undefined)[] = [];
+  const tool = new MeasureTool({
+    scene: () => scene,
+    level: () => level,
+    markerMaterial: () => null,
+    changed: (value) => changes.push(value ? structuredClone(value) : undefined),
+  });
   const viewer = Object.assign(Object.create(HouseViewer.prototype), {
-    scene,
-    level,
-    measureMeshes: [],
-    pinnedMeasurements: [],
+    measureTool: tool,
     measureMode: true,
-    house: { highlights: new Map() },
     canvas: { classList: { toggle() {} } },
-    onMeasure: (value?: Measurement) => changes.push(value ? structuredClone(value) : undefined),
   }) as HouseViewer;
-  const input = viewer as unknown as {
-    addMeasurement(point: Point2, force?: boolean, free?: boolean): void;
-    previewMeasurement(point: Point2, force?: boolean, free?: boolean): void;
+  const input = {
+    addMeasurement: tool.add.bind(tool),
+    previewMeasurement: tool.preview.bind(tool),
   };
   input.addMeasurement([1, 1]);
   assert.equal(viewer.measurement?.preview, true);

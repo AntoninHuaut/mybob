@@ -10,7 +10,7 @@ Use this repository-local skill when changing the house viewer, furniture UI, pr
 ## Establish the working state
 
 1. Read `git status --short` and the recent log. Preserve unrelated user work.
-2. Use Node 24 (`.node-version`). Install locked dependencies with `pnpm install --frozen-lockfile` when needed.
+2. Use Node 26 (`.node-version`). Install locked dependencies with `pnpm install --frozen-lockfile` when needed.
 3. Start `pnpm run dev` for the generic demonstration. Use `pnpm run dev:private` only when intentionally inspecting the personal house locally. Never publish the private build.
 4. For actual customer furnishings, ask them to import/export the JSON using the application. Repository files do not contain the browser's current arrangement. Back up exports before origin changes or storage migrations.
 

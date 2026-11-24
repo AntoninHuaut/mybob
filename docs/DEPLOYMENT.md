@@ -64,7 +64,7 @@ Pages provides; locally, see [ARCHITECTURE](ARCHITECTURE.md#the-visit-in-a-heads
 
 `vite.config.ts` splits `@babylonjs/core` into its own `babylon-*.js` chunk (shaders stay lazy
 chunks), so a change in `src/` renames only `index-*.js` and returning visitors keep the cached
-engine. `index.html` carries a static loading skeleton inside `#app`, replaced by `main.ts`.
+engine. `index.html` carries a static loading skeleton inside `#app`, replaced by `src/main.ts`.
 
 `wrangler.toml` declares the Pages output directory. No Cloudflare token is stored in the repository. Branch previews must also keep the public command; never substitute `build:private`.
 
