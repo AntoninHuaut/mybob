@@ -117,7 +117,9 @@ A room is a finished interior outline independent of the walls. `polygon` is use
 
 `label` and `viewpoint` are positions inside the room. The walk point must leave a margin of at least 17 cm around the visitor, and must not lie in a door's swing.
 
-Categories are `living`, `bedroom`, `bathroom`, `circulation`, `garage`, `storage`. The garage gets a grey floor; the other rooms use the wood-effect tiling. The project may provide an optional `finishes` object with the hexadecimal colours `wallColor`, `floorTint`, `garageColor` and `joineryColor`. Per-room textures and their visual editing are future extensions.
+Categories are `living`, `bedroom`, `bathroom`, `circulation`, `garage`, `storage`. The garage gets a grey floor; the other rooms use the wood-effect tiling. The project may provide an optional `finishes` object with the hexadecimal colours `wallColor`, `floorTint`, `garageColor` and `joineryColor`.
+
+A room may declare `wallColor` (`#rrggbb`): the paint of its side of every wall it touches, around the openings, from its own floor to the wall top (following a ceiling slope). A wall shared by two rooms on the same side is painted up to their boundary. Rooms without it keep the plaster of `finishes.wallColor`. The room card's « Peinture des murs » sets it: the choice is stored in this browser apart from the project (`paint:<project>`, like the sun settings, so bundled projects are never rewritten), and exports and share links (pack revision 10) carry the painted rooms. Importing a project drops the earlier local choices for it: the document's colours win.
 
 A room may declare `floorOffset`, between −1 and 0 m, for a floor lower than the level. The reference surface is then actually cut out, then replaced by a floor at that height; collisions and the viewpoint follow that floor. The ceiling keeps its level height: a lowered room therefore gains headroom under an unchanged ceiling. Thresholds up to 20 cm get a local stepping aid if no door or wall blocks the way. Beyond that, a flight declared in `stairs` describes the crossing.
 

@@ -90,6 +90,7 @@ import {
   INTERIOR_GROUND_COLOR,
 } from './interiorAmbience';
 import { ViewEffects } from './viewEffects';
+import { buildWallPaint } from './wallPaint';
 import type { OcclusionState } from './diagnostics';
 import type { ImmersiveWalk } from './xrWalk';
 import { roofWindowWells } from '../model/ceiling';
@@ -1118,6 +1119,29 @@ export class HouseViewer {
   setLights(enabled: boolean) {
     this.lightOn = enabled;
     this.updateLighting();
+  }
+
+  /**
+   * A room's `wallColor` changed on the displayed level: only its paint is rebuilt, then
+   * the façade cutaway, which must know the new meshes to clip them with their walls.
+   */
+  repaintWalls() {
+    if (!this.house || !this.materials) return;
+    this.wallCutaway?.dispose();
+    this.wallCutaway = undefined;
+    this.house.paint.forEach((mesh) => mesh.dispose());
+    this.house.paint = buildWallPaint(
+      this.level,
+      this.scene,
+      this.materials,
+      this.house.wallNodes,
+      this.house.wallPieces,
+    );
+    this.wallCutaway = buildWallCutaway(this.scene, this.level);
+    this.cutawaySelection = '';
+    this.updateCutaway();
+    this.shadowRefresh?.invalidate();
+    this.requestRender();
   }
   /** The visitor's switch for the occlusion: on is the full look, off is none at all. */
   setOcclusion(enabled: boolean) {

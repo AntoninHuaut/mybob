@@ -118,8 +118,23 @@ export function createMaterials(scene: Scene, finishes: HouseProject['finishes']
   selection.alpha = 0.12;
   selection.backFaceCulling = false;
   selection.disableLighting = true;
+  /** Room paint: the plaster's grain in another colour, one material per colour. */
+  const paints = new Map<string, PBRMaterial>();
+  const paint = (color: string) => {
+    let material = paints.get(color);
+    if (!material) {
+      material = plaster.clone(`paint:${color}`);
+      material.albedoColor = Color3.FromHexString(color);
+      // Two millimetres off the plaster, and drawn in front of it at equal depth.
+      material.zOffset = -1;
+      material.backFaceCulling = false;
+      paints.set(color, material);
+    }
+    return material;
+  };
   return {
     plaster,
+    paint,
     wood,
     concrete,
     frame,

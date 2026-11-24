@@ -18,6 +18,7 @@ import { mountFurniture, unmountFurniture } from './furnitureController';
 import { findProject, firstProject, isImported, renderProjectOptions } from './projectLibrary';
 import { applyNavigationPreferences, applyRenderScale } from './preferences';
 import { scheduleLinkHashUpdate } from './shareLinkSync';
+import { mountRoomPaint, paintedProject } from './roomPaint';
 import { setMode, setSidebar, setSidebarTab } from './viewChrome';
 
 /*
@@ -38,7 +39,9 @@ export function loadProject(
   // to the demonstration.
   const received =
     override ?? (app.readOnlyLink && app.current?.id === id ? app.current : undefined);
-  const p = received ?? findProject(id) ?? firstProject();
+  const stored = received ? undefined : (findProject(id) ?? firstProject());
+  // A received project is shown as it was shared; an owned one as painted here.
+  const p = received ?? (stored && paintedProject(stored));
   if (!p) return;
   app.readOnlyLink = Boolean(received);
   if (!received) app.receivedShare = undefined;
@@ -202,6 +205,7 @@ function renderRoomDetail() {
   height.className = 'detail-data';
   height.innerHTML = roomHeightHtml(room, viewer.level);
   el('#visit-room').before(height);
+  mountRoomPaint(room, el('#visit-room'));
   el('#clear-room').addEventListener('click', () => {
     const previous = app.selectedRoom?.id;
     app.selectedRoom = undefined;
