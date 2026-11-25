@@ -411,37 +411,17 @@ export function createOrbitOcclusion(
 }
 
 /**
- * The slice of `DefaultRenderingPipeline` the visit configures. Narrowed to a
- * structural type so the ordering rule below is testable without a GPU.
- */
-export interface BloomPipeline {
-  imageProcessing: { toneMappingEnabled: boolean; vignetteEnabled: boolean } | null;
-  imageProcessingEnabled: boolean;
-  bloomEnabled: boolean;
-  bloomThreshold: number;
-  bloomWeight: number;
-}
-
-/**
  * Applies the validated bloom to a pipeline. The threshold is a parameter
  * because the two cameras read different ceilings: the visit sits at
  * `INTERIOR_BLOOM_THRESHOLD`, the orbit above its flat sky at
  * `ORBIT_BLOOM_THRESHOLD`. The weight is shared.
  *
- * The app tone-maps in the material shaders, so the pipeline's own image
- * processing would tone-map a second time. It has to be configured *before* the
- * pass is switched off: disabling it disposes the post-process and nulls
- * `imageProcessing`, leaving the sub-effects unreachable.
+ * Image processing is left alone: see docs/ARCHITECTURE.md, the walk chain.
  */
-export function configureInteriorBloom(
-  pipeline: BloomPipeline,
+function configureInteriorBloom(
+  pipeline: DefaultRenderingPipeline,
   threshold: number = INTERIOR_BLOOM_THRESHOLD,
 ): void {
-  if (pipeline.imageProcessing) {
-    pipeline.imageProcessing.toneMappingEnabled = false;
-    pipeline.imageProcessing.vignetteEnabled = false;
-  }
-  pipeline.imageProcessingEnabled = false;
   pipeline.bloomThreshold = threshold;
   pipeline.bloomWeight = INTERIOR_BLOOM_WEIGHT;
   pipeline.bloomEnabled = true;

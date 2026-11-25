@@ -1,6 +1,7 @@
 import { Plane } from '@babylonjs/core/Maths/math.plane';
 import type { Scene } from '@babylonjs/core/scene';
-import type { Material } from '@babylonjs/core/Materials/material';
+import { Material } from '@babylonjs/core/Materials/material';
+import { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture';
 import type { AbstractMesh } from '@babylonjs/core/Meshes/abstractMesh';
 import type { Level, Point2 } from '../model/types';
 import { wallFacesCamera, wallHidesInterior, wallJoins } from './navigation';
@@ -14,6 +15,25 @@ export type WallDisplay = 'auto' | 'full' | 'low';
  * the continuous cut face fills them.
  */
 export const AUTO_CUT_HEIGHT = 0.85;
+
+/**
+ * Points a clone back at its original's textures: only `clipPlane` differs, and
+ * `RawTexture.clone` drops `uScale`/`vScale`, so cloned surface maps lost their tiling.
+ */
+function shareTextures(original: Material, clone: Material) {
+  // Texture slots are private backing fields (`_bumpTexture`), hence the loose record.
+  const source = original as unknown as Record<string, unknown>,
+    target = clone as unknown as Record<string, unknown>;
+  const copies = new Set<BaseTexture>();
+  for (const key of Object.keys(target)) {
+    const texture = target[key];
+    if (!(texture instanceof BaseTexture) || texture === source[key]) continue;
+    target[key] = source[key];
+    copies.add(texture);
+  }
+  for (const texture of copies) texture.dispose();
+  clone.markAsDirty(Material.TextureDirtyFlag);
+}
 
 /** Clip selected walls locally; floors, furniture and shared source materials stay intact. */
 export function buildWallCutaway(scene: Scene, level: Level) {
@@ -78,7 +98,10 @@ export function buildWallCutaway(scene: Scene, level: Level) {
           if (!material) {
             material =
               original.material.clone(`wall-cutaway:${original.material.name}`) ?? undefined;
-            if (material) cache.set(original.material, material);
+            if (material) {
+              shareTextures(original.material, material);
+              cache.set(original.material, material);
+            }
           }
           if (material) {
             material.clipPlane = plane;
