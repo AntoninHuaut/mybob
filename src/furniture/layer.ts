@@ -776,17 +776,22 @@ export class FurnitureLayer {
         // One straight recessed base per run, including under tall columns.
         // Recess all edges so an exposed island has no floating underside either.
         const recess = Math.min(0.04, k.runDepth / 4, placement.length / 4);
+        // The corner square belongs to the previous run: drawn twice, its surfaces would flicker.
+        const corner =
+          index > 0 && k.runs[index - 1].turn ? Math.min(k.runDepth, placement.length) : 0;
+        // After a corner the plinth starts inside the previous one, so no gap opens at the turn.
+        const plinthStart = corner ? corner - 2 * recess : recess;
         box(
-          placement.length - 2 * recess,
+          placement.length - recess - plinthStart,
           plinthHeight,
           k.runDepth - 2 * recess,
-          placement.length / 2,
+          (plinthStart + placement.length - recess) / 2,
           plinthHeight / 2,
           k.runDepth / 2,
           roles.main,
           run,
         );
-        let start = 0;
+        let start = corner;
         for (const column of [...columns, { offset: placement.length, width: 0 }]) {
           const length = column.offset - start;
           if (length > 0) {

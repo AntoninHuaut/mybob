@@ -661,3 +661,46 @@ test('a furniture surface gives its finish grain, relief or gloss, and the workt
     cleanup();
   }
 });
+
+test('an L kitchen draws its corner square once, so two runs never fight over the same surface', async () => {
+  const { createFurniture } = await import('../src/furniture/model');
+  const { layer, scene, cleanup } = setup();
+  try {
+    const worktopColor = '#123456';
+    layer.setItems([
+      createFurniture({
+        id: 'L',
+        kind: 'kitchen',
+        position: [5, 5],
+        kitchen: {
+          runDepth: 0.6,
+          runs: [{ length: 2, turn: 'right' }, { length: 1.5 }],
+          worktopColor,
+        },
+      }),
+    ]);
+    const worktop = scene.meshes.find(
+      (mesh) =>
+        mesh.metadata?.id === 'L' &&
+        (mesh.material as PBRMaterial | null)?.albedoColor?.toHexString() === '#123456',
+    )!;
+    worktop.computeWorldMatrix(true);
+    const positions = worktop.getVerticesData('position')!;
+    const indices = worktop.getIndices()!;
+    const top = worktop.getBoundingInfo().boundingBox.maximum.y;
+    let area = 0;
+    for (let i = 0; i < indices.length; i += 3) {
+      const [a, b, c] = [0, 1, 2].map((k) => indices[i + k] * 3);
+      if ([a, b, c].some((v) => Math.abs(positions[v + 1] - top) > 1e-4)) continue;
+      const ux = positions[b] - positions[a],
+        uz = positions[b + 2] - positions[a + 2];
+      const vx = positions[c] - positions[a],
+        vz = positions[c + 2] - positions[a + 2];
+      area += Math.abs(ux * vz - uz * vx) / 2;
+    }
+    // 2 × 0.6 + (1.5 − 0.6) × 0.6 = 1.74 m² once; 2.1 m² with the corner drawn twice.
+    assert.ok(area > 1.6 && area < 1.76, `worktop top area ${area.toFixed(3)} m²`);
+  } finally {
+    cleanup();
+  }
+});
