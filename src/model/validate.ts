@@ -31,7 +31,7 @@ const MIN_CEILING_HEIGHT = 1.8;
 const MIN_OPENING_SIZE = 0.1;
 
 /** Every floor, room, parcel or face must have a simple perimeter. */
-function simplePolygon(points: Point2[]): boolean {
+export function simplePolygon(points: Point2[]): boolean {
   const cross = (a: Point2, b: Point2, c: Point2) =>
     (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
   const on = (a: Point2, b: Point2, c: Point2) =>

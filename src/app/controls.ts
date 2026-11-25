@@ -1,3 +1,4 @@
+import { openWallDrawing } from './drawHouse';
 import { openNewHouse } from './newHouse';
 import { userMessage } from '../errorMessage';
 import { isImmersiveSupported, preloadImmersive } from '../scene/headsetSession';
@@ -202,6 +203,7 @@ export function wireProjectControls() {
   });
   el('#export-image').addEventListener('click', openImageExport);
   el('#tool-openings').addEventListener('click', openPlanOpenings);
+  el('#draw-house').addEventListener('click', openWallDrawing);
   el('#create-house').addEventListener('click', openNewHouse);
   el('#import-project').addEventListener('click', () =>
     el<HTMLInputElement>('#import-file').click(),
