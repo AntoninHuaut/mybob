@@ -71,6 +71,7 @@ function setup(t: TestContext) {
     onRoom: record('room'),
     onOpening: record('opening'),
     onDelete: record('delete'),
+    onSplit: record('split'),
   });
   const field = (name: string) =>
     root.querySelector(`[name="${name}"]`) as unknown as HTMLInputElement;
@@ -90,6 +91,8 @@ test('a wall shows its exact values and commits one edit per changed field', (t)
   assert.equal(field('thickness').value, '0.1');
   change('thickness', '0.15');
   assert.deepEqual(calls, [['wall', 'wall-5', { thickness: 0.15 }]]);
+  (root.querySelector('[data-action=split]') as unknown as HTMLButtonElement).click();
+  assert.deepEqual(calls.at(-1), ['split']);
   inspector.show(undefined, undefined);
   assert.equal(root.hidden, true);
 });

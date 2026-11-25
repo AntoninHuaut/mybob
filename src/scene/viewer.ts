@@ -103,6 +103,8 @@ import { HeadsetSession } from './headsetSession';
 import { roofWindowWells } from '../model/ceiling';
 
 export type ViewMode = 'overview' | 'plan' | 'walk';
+/** Plan pointer events offered to an edit tool before the camera and the default click. */
+export type PlanPointerKind = 'down' | 'move' | 'up' | 'tap';
 
 export interface FrameInfo {
   cameraMoved?: boolean;
@@ -199,7 +201,7 @@ export class HouseViewer {
    * A Plan tool (wall drawing) offered moves and clicks in plan coordinates; returns whether it
    * took them, so that room selection does not also run.
    */
-  planPointer?: (type: 'move' | 'tap', point: Point2, event: PointerEvent) => boolean;
+  planPointer?: (type: PlanPointerKind, point: Point2, event: PointerEvent) => boolean;
   onPointerLockError?: () => void;
   /** Optional host policy, checked before any transition side effects. */
   canChangeMode?: (mode: ViewMode) => boolean;
@@ -560,9 +562,11 @@ export class HouseViewer {
         (event.type === PointerEventTypes.POINTERTAP ||
           event.type === PointerEventTypes.POINTERDOUBLETAP) &&
         event.event.button === 0;
-      if (this.planPointer && this.mode === 'plan' && (move || tap)) {
+      const down = event.type === PointerEventTypes.POINTERDOWN && event.event.button === 0;
+      const up = event.type === PointerEventTypes.POINTERUP;
+      if (this.planPointer && this.mode === 'plan' && (move || tap || down || up)) {
         const point = this.groundPoint(scene.pointerX, scene.pointerY);
-        const kind = move ? 'move' : 'tap';
+        const kind = move ? 'move' : tap ? 'tap' : down ? 'down' : 'up';
         if (point && this.planPointer(kind, point, event.event as PointerEvent)) return;
       }
       if (

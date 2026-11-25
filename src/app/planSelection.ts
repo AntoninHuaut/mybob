@@ -6,13 +6,16 @@ import {
   pickPlan,
   setWallLength,
   setWallThickness,
+  splitWall,
   updateOpening,
   updateRoom,
   type PlanSelection,
 } from '../model/planEdit';
 import type { Level, Point2 } from '../model/types';
+import type { PlanPointerKind } from '../scene/viewer';
 import { PlanInspector } from '../ui/planInspector';
 import { el, toast } from './dom';
+import { endDrag, moveDrag, renderDrag, startDrag } from './planDrag';
 import { editableProject, planEditBarOpen, restorePlan } from './planEditBar';
 import { applyPlanEdit } from './planHistory';
 import { app } from './state';
@@ -22,6 +25,8 @@ import { wallToolActive } from './wallDrawing';
 const PICK_PIXELS = 6;
 
 let selection: PlanSelection | undefined;
+/** Where the selected wall was clicked, in metres from its start: « Couper » cuts there. */
+let cutOffset: number | undefined;
 let inspector: PlanInspector | undefined;
 
 /** Selecting is on in Plan with the edit bar open, unless a drawing tool takes the clicks. */
@@ -39,6 +44,12 @@ export function wirePlanSelection() {
     onRoom: (id, change) => edit((level) => updateRoom(level, id, change)),
     onOpening: (wallId, id, change) => edit((level) => updateOpening(level, wallId, id, change)),
     onDelete: removeSelection,
+    onSplit: () => {
+      const target = selection;
+      if (target?.kind !== 'wall' || cutOffset === undefined) return;
+      const offset = cutOffset;
+      edit((level) => splitWall(level, target.id, offset));
+    },
   });
 }
 
@@ -69,9 +80,34 @@ function removeSelection() {
   }
 }
 
-export function selectionPointer(type: 'move' | 'tap', at: Point2) {
-  if (type !== 'tap' || !planSelectionLive()) return false;
-  selection = pickPlan(app.viewer.level, at, PICK_PIXELS * app.viewer.planMetresPerPixel());
+export function selectionPointer(type: PlanPointerKind, at: Point2, event: PointerEvent) {
+  const tolerance = PICK_PIXELS * app.viewer.planMetresPerPixel();
+  if (type === 'up') {
+    const apply = endDrag();
+    if (!apply) return false;
+    try {
+      edit(apply);
+    } catch (error) {
+      toast(userMessage(error, 'Déplacement impossible.'));
+    }
+    syncPlanSelection();
+    return true;
+  }
+  if (type === 'move') {
+    moveDrag(at, event, tolerance);
+    return false;
+  }
+  if (!planSelectionLive()) return false;
+  if (type === 'down') return startDrag(at, selection, tolerance);
+  selection = pickPlan(app.viewer.level, at, tolerance);
+  const wall =
+    selection?.kind === 'wall' && app.viewer.level.walls.find((w) => w.id === selection!.id);
+  cutOffset = wall
+    ? Math.round(
+        (at[0] - wall.start[0]) * ((wall.end[0] - wall.start[0]) / wallLength(wall)) * 100 +
+          (at[1] - wall.start[1]) * ((wall.end[1] - wall.start[1]) / wallLength(wall)) * 100,
+      ) / 100
+    : undefined;
   syncPlanSelection();
   return !!selection;
 }
@@ -117,6 +153,12 @@ export function syncPlanSelection() {
 export function renderPlanSelection() {
   const svg = document.querySelector<SVGSVGElement>('#plan-selection');
   if (!svg) return;
+  const dragged = renderDrag();
+  if (dragged !== undefined) {
+    svg.innerHTML = dragged;
+    return;
+  }
+  delete svg.dataset.dragState;
   const outline = selection && planSelectionLive() && selectionOutline(app.viewer.level, selection);
   svg.toggleAttribute('hidden', !outline);
   if (!outline) {
@@ -130,7 +172,17 @@ export function renderPlanSelection() {
       return `${q.x.toFixed(1)},${q.y.toFixed(1)}`;
     })
     .join(' ');
-  svg.innerHTML = `<polygon class="plan-selection-outline ${selection!.kind}" points="${points}"/>`;
+  let html = `<polygon class="plan-selection-outline ${selection!.kind}" points="${points}"/>`;
+  const wall =
+    selection!.kind === 'wall' && app.viewer.level.walls.find((w) => w.id === selection!.id);
+  if (wall && cutOffset !== undefined) {
+    const half = wall.thickness / 2 + 0.05;
+    const [a, b] = [alongWall(wall, cutOffset, -half), alongWall(wall, cutOffset, half)].map((p) =>
+      project(p, 0),
+    );
+    html += `<line class="plan-selection-cut" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;
+  }
+  svg.innerHTML = html;
 }
 
 function selectionOutline(level: Level, target: PlanSelection): Point2[] | undefined {

@@ -10,6 +10,8 @@ export interface PlanInspectorHost {
   onRoom(id: string, change: Partial<Pick<Room, 'name' | 'kind'>>): void;
   onOpening(wallId: string, id: string, change: Partial<OpeningMeasurements>): void;
   onDelete(): void;
+  /** Cuts the selected wall where it was clicked. */
+  onSplit(): void;
 }
 
 const ROOM_KINDS: Record<Room['kind'], string> = {
@@ -54,7 +56,16 @@ export class PlanInspector {
     root.addEventListener('change', (event) => this.onChange(event.target as HTMLInputElement));
     root.addEventListener('submit', (event) => event.preventDefault());
     root.addEventListener('click', (event) => {
-      if ((event.target as HTMLElement).closest('[data-action=delete]')) host.onDelete();
+      const action = (event.target as HTMLElement).closest<HTMLElement>('[data-action]');
+      if (!action) return;
+      const error = root.querySelector('[role=alert]');
+      if (error) error.textContent = '';
+      try {
+        if (action.dataset.action === 'delete') host.onDelete();
+        else if (action.dataset.action === 'split') host.onSplit();
+      } catch (failure) {
+        if (error) error.textContent = userMessage(failure, 'Modification impossible.');
+      }
     });
   }
 
@@ -100,7 +111,8 @@ export class PlanInspector {
       title = target.wall.exterior ? 'Mur extérieur' : 'Mur';
       body =
         metreField('length', 'Longueur', wallLength(target.wall)) +
-        metreField('thickness', 'Épaisseur', target.wall.thickness);
+        metreField('thickness', 'Épaisseur', target.wall.thickness) +
+        `<button type="button" class="text-button" data-action="split">Couper le mur au point cliqué</button>`;
       remove = 'Supprimer le mur';
     } else if (target.kind === 'room') {
       const { room } = target;

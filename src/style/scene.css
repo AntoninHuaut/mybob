@@ -779,6 +779,48 @@
   fill: #3a7d4a14;
   stroke-dasharray: 6 4;
 }
+.plan-selection-cut {
+  stroke: #875335;
+  stroke-width: 2;
+}
+.plan-drag-room {
+  fill: #3a7d4a1a;
+  stroke: #2f6b3d;
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+}
+.plan-drag-wall {
+  fill: #2f6b3d66;
+  stroke: #2f6b3d;
+  stroke-width: 1.5;
+}
+.plan-drag-wall.invalid {
+  fill: #b5462f55;
+  stroke: #a34d39;
+}
+.plan-drag-furniture {
+  fill: #d8962a33;
+  stroke: #b8761a;
+  stroke-width: 1.5;
+}
+.plan-drag-area,
+.plan-drag-message {
+  fill: #36523a;
+  stroke: #fcfef7;
+  stroke-width: 4px;
+  paint-order: stroke;
+  font-size: 12px;
+  font-weight: 600;
+}
+.plan-drag-area {
+  text-anchor: middle;
+}
+.plan-drag-message {
+  fill: #a34d39;
+}
+.plan-drag-message.warning {
+  fill: #8a5a12;
+}
 .wall-draft {
   position: absolute;
   inset: 0;
