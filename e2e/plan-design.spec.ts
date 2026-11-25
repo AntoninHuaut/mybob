@@ -54,14 +54,12 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   expect(first.rooms.map((r) => area(r.polygon))).toEqual([expect.closeTo(12, 6)]);
 
   // The start faces +z (yaw 0): a partition across the depth puts the door straight ahead.
-  // Its axis 1.9 m from the top axis leaves 1.75 m on the start side, 1.15 m beyond.
-  for (const target of [
-    [x0, z0 + 1.9],
-    [x0 + 4.2, z0 + 1.9],
-  ] as Point[]) {
-    const [x, y] = await pagePoint(page, target);
-    await page.mouse.click(x, y);
-  }
+  // Its axis 1.9 m from the top axis leaves 1.75 m on the start side, 1.15 m beyond. It starts
+  // on the right wall (« Premiers pas » may cover the left one) and its length is typed.
+  const [x, y] = await pagePoint(page, [x0 + 4.2, z0 + 1.9]);
+  await page.mouse.click(x, y);
+  await page.keyboard.type('4.2');
+  await page.keyboard.press('ArrowLeft');
   await expect(page.locator('#wall-draft .wall-draft-joint')).toHaveCount(6);
   const divided = await exportedLevel(page);
   expect(partition(divided).start[1]).toBeCloseTo(z0 + 1.9, 6);
@@ -77,7 +75,8 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
   await page.locator('#move-wall').click();
-  await page.locator('#move-partition [name=delta]').fill('0.2');
+  // Drawn right to left, the partition's positive side points away from the start (−z).
+  await page.locator('#move-partition [name=delta]').fill('-0.2');
   await page.getByRole('button', { name: 'Appliquer le déplacement' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const moved = await exportedLevel(page);

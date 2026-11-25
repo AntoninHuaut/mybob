@@ -136,7 +136,8 @@ export function addWallChain(
   const rooms = deriveRooms(walls, level.rooms);
   const outline = first && closed ? enclosure(points, thickness).outline : level.outline;
   const spawn =
-    !rooms.some((r) => pointInPolygon(level.spawn.position, r.polygon)) && rooms.length
+    rooms.length &&
+    ((first && closed) || !rooms.some((r) => pointInPolygon(level.spawn.position, r.polygon)))
       ? { position: rooms[0].viewpoint, yaw: level.spawn.yaw }
       : level.spawn;
   return { ...level, walls, rooms, outline, spawn };

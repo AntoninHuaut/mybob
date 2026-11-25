@@ -121,3 +121,9 @@ test('a new house validates empty, then with its first drawn room', () => {
   house.levels[0] = addWallChain(house.levels[0], box, true, 0.2);
   assert.doesNotThrow(() => validateProject(house));
 });
+
+test('the first closed chain moves the start into its room even around the placeholder', () => {
+  const around = box.map(([x, z]) => [x + 4, z + 2] as Point2);
+  const level = addWallChain(empty, around, true, 0.2);
+  assert.deepEqual(level.spawn.position, level.rooms[0].viewpoint);
+});
