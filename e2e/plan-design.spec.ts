@@ -150,6 +150,8 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   expect(await exportedLevel(page)).toEqual(moved);
 
   await page.mouse.click(...inStart);
+  // A lost click once hung here until the test timeout (#374): fail fast, naming what is shown.
+  await expect(inspector.getByRole('heading')).toHaveText('Pièce');
   await inspector.getByLabel('Nom').fill('Entrée');
   await inspector.getByLabel('Nom').press('Enter');
   await expect(page.locator('#scene-labels')).toContainText('Entrée');
