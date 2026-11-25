@@ -110,12 +110,12 @@ const LABELS: Record<Quality, string> = {
   low: 'Basse',
 };
 
-/** The Navigation panel's field. */
+/** The header's select; what the choice does is its tooltip (`qualityNote`). */
 export function qualityFieldHtml(): string {
   const options = QUALITIES.map(
     (quality) => `<option value="${quality}">${LABELS[quality]}</option>`,
   );
-  return `<label>Qualité<select id="quality">${options.join('')}</select></label><small id="quality-note"></small>`;
+  return `<label class="header-quality"><span>Qualité</span><select id="quality">${options.join('')}</select></label>`;
 }
 
 const percent = (scale: number) => `${Math.round(scale * 100)} %`;
@@ -123,7 +123,7 @@ const TIER_NOTES = [
   '',
   ' sans ombres des angles',
   ' sans ombres des angles, ombres simplifiées',
-  ' avec les effets au minimum',
+  ' sans ombres des angles, ombres simplifiées, sans halo',
 ];
 
 /** The line under the field: what the choice does, and what automatic found on this machine. */

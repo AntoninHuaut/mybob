@@ -61,6 +61,9 @@ export function showStartCard() {
 /* « Qualité »                                                                                   */
 /* ---------------------------------------------------------------------------------------------- */
 
+/** Walk speed and look sensitivity; it also held the occlusion switch « Qualité » replaced. */
+const NAVIGATION_STORAGE = 'maison-atelier:navigation:v1';
+
 let qualitySettings: QualitySettings = { quality: 'auto', detected: {} };
 
 function stored(key: string): string | null {
@@ -78,12 +81,14 @@ function saveQuality() {
   } catch {
     /* optional persistence */
   }
-  el('#quality-note').textContent = qualityNote(qualitySettings);
+  el('#quality').title = qualityNote(qualitySettings);
 }
+
+const viewerEngine = () => app.viewer.engine as unknown as DiagnosticEngine;
 
 /** Hands the viewer the chosen quality, seeded by this GPU's class for a never-measured view. */
 function configureQuality() {
-  const engine = app.viewer.engine as unknown as DiagnosticEngine;
+  const engine = viewerEngine();
   const seed = qualitySeed(gpuClass(engineInfo(engine).renderer, navigator.userAgent));
   app.viewer.setQuality(qualitySettings.quality, qualitySettings.detected, seed);
 }
@@ -94,9 +99,12 @@ export function applyQuality() {
     renderScale: stored(LEGACY_RENDER_SCALE_STORAGE),
     navigation: stored(NAVIGATION_STORAGE),
   };
-  const device = gpuName(app.viewer.engine as unknown as DiagnosticEngine);
-  qualitySettings = forDevice(parseQuality(stored(QUALITY_STORAGE), legacy), device);
-  saveQuality();
+  const raw = stored(QUALITY_STORAGE);
+  const read = parseQuality(raw, legacy);
+  qualitySettings = forDevice(read, gpuName(viewerEngine()));
+  // Written only to finish a migration or record a new GPU, not on every project load.
+  if (raw === null || read.device !== qualitySettings.device) saveQuality();
+  else el('#quality').title = qualityNote(qualitySettings);
   el<HTMLSelectElement>('#quality').value = qualitySettings.quality;
   configureQuality();
   watchScreenCap();
@@ -129,7 +137,7 @@ function watchScreenCap() {
     if (cap === watchedCap) return;
     watchedCap = cap;
     app.viewer.setScreenCap(cap);
-    el('#quality-note').textContent = qualityNote(qualitySettings, cap);
+    el('#quality').title = qualityNote(qualitySettings, cap);
   };
   (window.screen as Screen & EventTarget).addEventListener?.('change', check);
   window.addEventListener('resize', check);
@@ -140,8 +148,6 @@ function watchScreenCap() {
 /* ---------------------------------------------------------------------------------------------- */
 /* Walk speed, look sensitivity                                                                   */
 /* ---------------------------------------------------------------------------------------------- */
-
-const NAVIGATION_STORAGE = 'maison-atelier:navigation:v1';
 
 export function applyNavigationPreferences() {
   try {

@@ -63,7 +63,7 @@ test('what a view reached on another GPU is not a start for this one', () => {
 
 test('one « Qualité » select offers automatic, high, medium and low', () => {
   const html = qualityFieldHtml();
-  assert.match(html, /<label>Qualité<select id="quality">/);
+  assert.match(html, /<label class="header-quality"><span>Qualité<\/span><select id="quality">/);
   for (const [value, label] of [
     ['auto', 'Automatique'],
     ['high', 'Haute'],
@@ -71,7 +71,6 @@ test('one « Qualité » select offers automatic, high, medium and low', () => {
     ['low', 'Basse'],
   ])
     assert.match(html, new RegExp(`<option value="${value}">${label}</option>`));
-  assert.match(html, /<small id="quality-note"><\/small>/);
 });
 
 test('the note says resolution goes before effects, and what automatic found here', () => {
