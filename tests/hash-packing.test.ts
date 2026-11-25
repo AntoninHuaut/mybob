@@ -667,6 +667,31 @@ test('furniture surfaces and the worktop surface survive export and share links'
   );
 });
 
+test('a bar stool keeps its kind through a share link', async () => {
+  const project = readPlan('public/projects/studio-demo.json');
+  const stool = createFurniture({ kind: 'stool', color: '#36403d' });
+  const book: VariantBook = {
+    version: 1,
+    activeId: 'initial',
+    variants: [
+      {
+        id: 'initial',
+        name: 'Îlot',
+        levels: Object.fromEntries(project.levels.map((l) => [l.id, [stool]])),
+      },
+    ],
+  };
+  const restored = await decodeShareLinkHash(
+    await encodeShareLinkHash(shareDocument(project, book)),
+  );
+  const item = validateVariantBook(
+    restored.document.furnishing!.variants,
+    restored.document.levels.map((l) => l.id),
+  ).variants[0].levels[restored.document.levels[0].id][0];
+  assert.equal(item.kind, 'stool');
+  assert.equal(item.height, stool.height);
+});
+
 test('an already shared revision-6 kitchen has no microwave added implicitly', async () => {
   const decoded = await decodeShareLinkHash(
     '#p1:VZFBaBNBFIbfbLeJ1TYUrfbYh7bYFhqkB9FLQdp6UFGxeJBSYbrzoiPZne3OrIRAYI_BqyCtJ4-J5JBDQI_BvXjMocoeKpaeqiLqzaNMEhHf8DPz5uPN_4aXG3dOaRMLqZYE-cotrKVNXwXaRNxIFeQubfQhCkLxH8F3b9BXIm2UCWUg0mZIgeCBOTGzXiE_LJMtCSP1hAyGPOJ-2jSR3IkJRpyTD1cJB65Ykp6RJfRVYCLCnZiwTOgrQ3GE3PMoNIRxQMhjyx-lTTV4iVDzQNsWZEl6g5ZEjJ4SVBzfuUV6aK5Rq8Cg9EMVGb5dJo1kkCr_Uh5jSUU-N3hj487tIt4P8O7adRRKGhRHyR7fVpHA9LX1NxEPtBdZYt09GpYW2ZdPaZ79-Jbmgf36_jnPCpP3qLokaMl7zGOt0ybB7qILkNQgqR1uweFWDlpOUms5mQsOY9nl-sXGFKsXwMZ-teXsVzublgF0NpPa4Myc7kp3rn0ewN63HLuGBI6v1gvHOCAHs5l7MNtZeM8AIHM7C38TBvVCd_znTN8FnMmJdR1yrz-sp5Ig153L3EbFqv4gc612F7tzu4vJzVdXrADg9MQGL9v5HiV7xGPHzdzM_X3Bqjefub35xtTbaauBha1iNmXdld613tcRYFN5GUgjeflcfjWWWgbEzp5Jlttj_Y-x9hiDZLleOHr5cRQYQHvMgWE8S1-M2n26-OH5Hw',

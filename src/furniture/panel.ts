@@ -61,6 +61,7 @@ const KINDS: Record<FurnitureItem['kind'], string> = {
   sofa: 'Canapé',
   table: 'Table',
   chair: 'Chaise',
+  stool: 'Tabouret haut',
   bed: 'Lit',
   wardrobe: 'Armoire',
   dressing: 'Dressing',

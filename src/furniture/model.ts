@@ -6,6 +6,7 @@ export type FurnitureKind =
   | 'sofa'
   | 'table'
   | 'chair'
+  | 'stool'
   | 'bed'
   | 'wardrobe'
   | 'dressing'
@@ -127,6 +128,7 @@ export const FURNITURE_PRESETS: Record<
   sofa: { name: 'Canapé', width: 2.1, depth: 0.9, height: 0.85 },
   table: { name: 'Table', width: 1.6, depth: 0.9, height: 0.75 },
   chair: { name: 'Chaise', width: 0.45, depth: 0.5, height: 0.85 },
+  stool: { name: 'Tabouret haut', width: 0.45, depth: 0.45, height: 1 },
   bed: { name: 'Lit', width: 1.6, depth: 2, height: 0.55 },
   wardrobe: { name: 'Armoire', width: 1.2, depth: 0.6, height: 2 },
   kitchen: { name: 'Cuisine', width: 3.2, depth: 0.6, height: 2.2 },
@@ -161,7 +163,7 @@ export const FURNITURE_CATEGORIES: { title: string; kinds: FurnitureKind[] }[] =
   },
   { title: 'Salle à manger', kinds: ['table', 'chair'] },
   { title: 'Chambre', kinds: ['bed', 'wardrobe', 'cabinet'] },
-  { title: 'Cuisine', kinds: ['kitchen'] },
+  { title: 'Cuisine', kinds: ['kitchen', 'stool'] },
   { title: 'Dressing', kinds: ['dressing'] },
   { title: 'Bureau', kinds: ['desk'] },
   { title: 'Salle de bain', kinds: ['toilet', 'shower', 'bathtub', 'vanity'] },

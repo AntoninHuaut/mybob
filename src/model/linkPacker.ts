@@ -40,9 +40,9 @@ export interface UnpackedShare {
  * microwave. Revision 8: terrace and lawn surfaces, a terrace's slab height, and garden
  * boundaries (walls, fences, hedges, gates). Revision 9: a fence's infill (mesh or slats).
  * Revision 10: room paint. Revision 11: blond parquet. Revision 12: individual wall faces.
- * Revision 13: furniture and worktop surfaces.
+ * Revision 13: furniture and worktop surfaces. Revision 14: bar stools.
  */
-export const LINK_PACK_VERSION = 13;
+export const LINK_PACK_VERSION = 14;
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -92,6 +92,7 @@ const FURNITURE_KIND_ORDER: FurnitureKind[] = [
   'bathtub',
   'vanity',
   'kitchen',
+  'stool',
 ];
 
 const enumInt = <T extends string>(list: readonly T[], value: T): number => {
