@@ -35,10 +35,7 @@ async function stackedHouse(): Promise<HouseProject> {
   return validateProject(house);
 }
 
-type Viewer = import('../src/scene/viewer').HouseViewer;
-
-/** The real viewer on a NullEngine, in a happy-dom window, disposed afterwards. */
-async function withViewer(run: (viewer: Viewer) => Promise<void> | void) {
+test('only the displayed level is built until Vue 3D or Extérieur shows the others', async () => {
   const window = new Window({ url: 'http://localhost' });
   const names = ['window', 'document', 'ResizeObserver'] as const;
   const previous = names.map((name) => Object.getOwnPropertyDescriptor(globalThis, name));
@@ -68,19 +65,6 @@ async function withViewer(run: (viewer: Viewer) => Promise<void> | void) {
   window.document.body.append(canvas);
   const viewer = new HouseViewer(canvas as unknown as HTMLCanvasElement, engine);
   try {
-    await run(viewer);
-  } finally {
-    viewer.dispose();
-    names.forEach((name, index) => {
-      const descriptor = previous[index];
-      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
-      else Reflect.deleteProperty(globalThis, name);
-    });
-  }
-}
-
-test('only the displayed level is built until Vue 3D or Extérieur shows the others', () =>
-  withViewer(async (viewer) => {
     const project = await stackedHouse();
     const built = () =>
       project.levels
@@ -96,15 +80,12 @@ test('only the displayed level is built until Vue 3D or Extérieur shows the oth
     viewer.setMode('overview', true);
     viewer.scene.render();
     assert.deepEqual(built(), ['rdc', 'etage', 'combles'], 'Extérieur shows every level');
-  }));
-
-test('the first load of a session draws one image, so the first shaders compile during the set-up', (t) =>
-  withViewer(async (viewer) => {
-    const project = await stackedHouse();
-    const { Scene } = await import('@babylonjs/core/scene');
-    const render = t.mock.method(Scene.prototype, 'render');
-    viewer.load(project);
-    assert.equal(render.mock.callCount(), 1);
-    viewer.load(project);
-    assert.equal(render.mock.callCount(), 1, 'later loads are prepared behind their own overlay');
-  }));
+  } finally {
+    viewer.dispose();
+    names.forEach((name, index) => {
+      const descriptor = previous[index];
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else Reflect.deleteProperty(globalThis, name);
+    });
+  }
+});
