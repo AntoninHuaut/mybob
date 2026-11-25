@@ -161,9 +161,10 @@ export class AdaptiveResolution {
 
   /**
    * `frameMs` is the time since the previous image, when both were drawn in a row;
-   * returns the render scale to use for this image (1 = full resolution).
+   * `displayHz` the screen's measured refresh rate, when known (`RefreshRateEstimator`).
+   * Returns the render scale to use for this image (1 = full resolution).
    */
-  update(frameMs?: number): number {
+  update(frameMs?: number, displayHz?: number): number {
     if (frameMs === undefined || !Number.isFinite(frameMs) || frameMs > STALL_MS)
       return this.ladder[this.level];
     if (this.warmup > 0) {
@@ -175,8 +176,17 @@ export class AdaptiveResolution {
       const sorted = [...this.samples].sort((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)];
       this.samples = [];
-      const vsync = refreshIntervalOf(median);
-      if (vsync !== undefined) this.refreshMs = Math.min(this.refreshMs ?? Infinity, vsync);
+      // A measured screen rate wins over guessing it: 60 fps sits on a 60 Hz interval, but on
+      // a 120 Hz screen it is half the rate, not keeping up.
+      const measured = displayHz && displayHz > 0 ? 1000 / displayHz : undefined;
+      const vsync =
+        measured === undefined
+          ? refreshIntervalOf(median)
+          : Math.abs(median - measured) <= measured * VSYNC_TOLERANCE
+            ? measured
+            : undefined;
+      if (measured !== undefined) this.refreshMs = measured;
+      else if (vsync !== undefined) this.refreshMs = Math.min(this.refreshMs ?? Infinity, vsync);
       const scale = this.ladder[this.level];
       if (
         !this.pinned &&

@@ -1591,7 +1591,7 @@ export class HouseViewer {
       return;
     }
     const frameMs = render && this.lastRenderAt !== undefined ? now - this.lastRenderAt : undefined;
-    const scale = this.adaptiveResolution.update(frameMs);
+    const scale = this.adaptiveResolution.update(frameMs, this.refresh?.hz);
     const tier = this.currentEffectTier;
     this.applyEffectTier();
     const rescaled = scale !== this.renderScale;
