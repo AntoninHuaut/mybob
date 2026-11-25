@@ -273,7 +273,9 @@ camera moves. Neither fires during a headset session: nothing in the page is see
   in metres by `worldScaleUvs`, otherwise a 4 m wall and a 50 cm skirting board would stretch
   the same grain differently. Parquet keeps its 4.8 × 3.2 m tile, that of its albedo, and its
   roughness varies plank by plank. Pixel data is computed once per session and cached:
-  switching project rebuilds the scene, not the noise.
+  switching project rebuilds the scene, not the noise. On furniture, each map is uploaded once
+  per `FurnitureLayer` and shared by every material that uses it, whatever its colour; the
+  textures are freed with the layer, not with the materials.
 - The walk post-processing chain is ordered and the order matters: Babylon appends each
   pipeline at the end of the camera's chain, so `ViewEffects.updateWalk` builds the TAA first,
   the occlusion next, the bloom last. It reads `TAA, TAAPass, SSAO…, ssaoCombine, bloom, fxaa`. The
@@ -585,7 +587,9 @@ last call, and read back at start-up.
   no tier: each image costs the same. `mybob.diag()` shows the current view's scale and
   tier (`effets palier n/3`).
 - Static house and exterior meshes freeze their world matrices after construction. Moving
-  door leaves and every descendant of a moving pivot stay unfrozen. House shell and trim
+  door leaves and every descendant of a moving pivot stay unfrozen. Furniture freezes too:
+  `FurnitureLayer.pose` thaws a piece, moves it and refreezes it, parents first, on every
+  placement and drag step. House shell and trim
   merge separately per wall, material, picking and collision policy; trim keeps a name outside
   the `wall:<id>:` shell prefix. Merged shadow casters replace their disposed source entries.
 - Room/dimension projection skips still frames unless preferences, level, measurements or
