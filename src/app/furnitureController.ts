@@ -382,6 +382,9 @@ export function unmountFurniture() {
 }
 
 /** Loads the active variant of the displayed level into a new scene layer and the panels. */
+/** How long the last `mountFurniture` spent building the pieces, for the start-up report. */
+export let furnitureBuildMs = 0;
+
 export function mountFurniture() {
   const { current, viewer, layoutSession } = app;
   let items: FurnitureItem[] = [];
@@ -404,8 +407,10 @@ export function mountFurniture() {
   arrangedIds = [];
   selectedFurnitureId = undefined;
   previewFurniture = undefined;
+  const buildStarted = performance.now();
   furnitureLayer = new FurnitureLayer(viewer.scene, viewer.level);
   furnitureLayer.setItems(items);
+  furnitureBuildMs = performance.now() - buildStarted;
   furnitureLayer.setOverlays(overlays);
   furnitureLayer.setCirculation(app.display.circulation);
   furnitureLayer.onSelect = selectFurniture;

@@ -33,6 +33,7 @@ import { isShareLink } from './model/shareLink';
 import { app } from './app/state';
 import { activeButton, el, openDialog, pauseForDialog, toast } from './app/dom';
 import {
+  furnitureBuildMs,
   furnitureLabelObstacles,
   openFurnitureEditor,
   updateFurnitureContext,
@@ -306,7 +307,11 @@ async function start() {
           { label: 'niveaux', ms: scene.levelsMs },
           { label: 'extérieur', ms: scene.exteriorMs },
           { label: 'scène', ms: scene.totalMs - sceneParts },
-          { label: 'interface et meubles', ms: builtAt - loadStarted - scene.totalMs },
+          { label: 'meubles', ms: furnitureBuildMs },
+          {
+            label: 'interface',
+            ms: builtAt - loadStarted - scene.totalMs - furnitureBuildMs,
+          },
           { label: 'préparation de la vue', ms: readyAt - builtAt },
         ],
       };

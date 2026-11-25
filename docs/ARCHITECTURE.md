@@ -311,9 +311,9 @@ camera moves. Neither fires during a headset session: nothing in the page is see
   state, scene size and machine characteristics; the command is recalled at start-up.
   Its `démarrage` line splits the start-up, from navigation to the first interactive view:
   projects fetched and validated, local library, engine, then `viewer.load` (materials and
-  their generated textures, levels, exterior, and the rest of the scene), the interface and
-  furniture set up around it, the first view's preparation, and what no phase covers
-  (`viewer.loadTimings`, `main.ts`).
+  their generated textures, levels, exterior, and the rest of the scene), the furniture pieces
+  (`furnitureBuildMs`) and the interface set up around it, the first view's preparation, and
+  what no phase covers (`viewer.loadTimings`, `main.ts`).
   `mybob.diag()` returns nothing — the console would echo the return value and the report
   would appear twice — and `mybob.report()` gives the same text without printing it, for
   `copy(mybob.report())`. `mybob.profile(seconds)` measures instead of describing: it draws every image of the
