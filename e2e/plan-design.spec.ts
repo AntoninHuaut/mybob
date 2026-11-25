@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
+import { drawClearRoom } from './planDrawing';
 
 type Point = [number, number];
 interface ExportedLevel {
@@ -45,12 +46,10 @@ test.beforeEach(async ({ page }) => {
 test('design two rooms in Plan, then walk through their door in Visite', async ({ page }) => {
   // Several dialogs, a reload and a software-rendered walk on CI.
   test.slow();
-  const menu = page.locator('#toggle-sidebar');
-  if ((await menu.getAttribute('aria-expanded')) !== 'true') await menu.click();
-  await page.locator('#create-house').click();
-  await page.getByLabel('Nom de la pièce').fill('Salon');
-  await page.getByRole('button', { name: 'Créer et enregistrer' }).click();
-  await expect(page.locator('#header-project')).toHaveText('Salon');
+  await drawClearRoom(page, 'Salon');
+  await expect(page.locator('#plan-edit-bar')).toBeVisible();
+  // The drawing starts at an unrounded click point: partition positions are read against it.
+  const origin = (await exportedLevel(page)).walls[0].start[1];
 
   // Spawn faces +z (yaw 0): a partition across the depth puts the door straight ahead.
   await page.locator('#divide-room').click();
@@ -72,13 +71,11 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   await page.getByRole('button', { name: 'Appliquer le déplacement' }).click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   const moved = await exportedLevel(page);
-  expect(partition(moved).start[1]).toBeCloseTo(1.8, 6);
+  expect(partition(moved).start[1] - origin).toBeCloseTo(1.9, 6);
 
-  await openOpenings(page);
-  await page.getByRole('button', { name: 'Annuler la modification précédente' }).click();
-  expect(partition(await exportedLevel(page)).start[1]).toBeCloseTo(1.5, 6);
-  await openOpenings(page);
-  await page.getByRole('button', { name: 'Rétablir' }).click();
+  await page.getByRole('button', { name: 'Annuler la modification du plan' }).click();
+  expect(partition(await exportedLevel(page)).start[1] - origin).toBeCloseTo(1.6, 6);
+  await page.getByRole('button', { name: 'Rétablir la modification du plan' }).click();
   expect(await exportedLevel(page)).toEqual(moved);
 
   // An opening wider than its host is refused and the house stays as it was.

@@ -157,6 +157,79 @@ dialog p {
   font-size: 13px;
   line-height: 1.7;
 }
+/* Plan design dialogs: stacked labelled fields, as in the Soleil form. */
+.plan-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 0 12px;
+  font-size: 13px;
+}
+.plan-form input,
+.plan-form select {
+  width: 100%;
+  min-width: 0;
+  height: 40px;
+  padding: 8px 10px;
+  border: 1px solid #cdd8cc;
+  border-radius: 6px;
+  background: white;
+  color: inherit;
+  font: inherit;
+}
+.plan-form input:focus,
+.plan-form select:focus {
+  outline: 2px solid #8aa77b;
+  outline-offset: 1px;
+}
+.plan-form fieldset {
+  margin: 0 0 12px;
+  padding: 10px 12px 0;
+  border: 1px solid #e0e5dc;
+  border-radius: 8px;
+}
+.plan-form legend {
+  padding: 0 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.plan-form p:empty {
+  margin: 0;
+}
+.plan-form [role='alert'] {
+  color: #a34d39;
+}
+.plan-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 12px;
+  align-items: end;
+}
+.plan-sketch {
+  display: block;
+  width: 100%;
+  border: 1px solid #e0e5dc;
+  border-radius: 8px;
+  background: #f3efe8;
+  cursor: crosshair;
+  touch-action: none;
+}
+.plan-sketch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  margin: 8px 0 14px;
+}
+.plan-sketch-actions .text-button:disabled {
+  opacity: 0.45;
+}
+#chain-status {
+  margin-left: auto;
+  color: #355c2b;
+  font-size: 13px;
+  font-weight: 550;
+}
 /* Confirmation footer: the safe action stays left, the destructive one is explicit. */
 .dialog-actions {
   display: flex;
@@ -458,6 +531,12 @@ dialog p {
     right: 11px;
     padding: 4px;
   }
+  .plan-edit-bar {
+    top: 13px;
+    right: 64px;
+    max-width: calc(100% - 76px);
+    padding: 4px;
+  }
   .tool-button {
     width: 40px;
     height: 40px;
@@ -542,6 +621,9 @@ dialog p {
   }
 }
 @media (max-width: 480px) {
+  .plan-form-grid {
+    grid-template-columns: 1fr;
+  }
   #furniture-context-name {
     display: none;
   }
@@ -551,6 +633,9 @@ dialog p {
   }
 }
 @media (max-height: 600px) {
+  .plan-edit-bar {
+    top: 79px;
+  }
   .mini-card {
     display: none;
   }
@@ -573,6 +658,9 @@ dialog p {
   .floating-tools {
     top: 13px;
     max-height: calc(100% - 80px);
+  }
+  .plan-edit-bar {
+    top: 13px;
   }
   .tool-button {
     width: 36px;
