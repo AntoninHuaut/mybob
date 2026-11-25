@@ -279,6 +279,52 @@ export function updateRoom(
   };
 }
 
+/** Measurements of a newly placed opening, before the inspector adjusts them. */
+const NEW_OPENINGS = {
+  door: { width: 0.9, height: 2.05, hinge: 'start', swing: 1 },
+  window: { width: 1.2, height: 1.2, sill: 0.9 },
+} as const;
+
+/**
+ * Places a door or a window centred `at` metres along a wall, kept inside its ends; with a
+ * `step`, its distance from the wall start is rounded to it.
+ */
+export function addOpening(
+  level: Level,
+  wallId: string,
+  kind: 'door' | 'window',
+  at: number,
+  id: string,
+  step?: number,
+): Level {
+  const wall = findWall(level, wallId);
+  const measurements = NEW_OPENINGS[kind];
+  const length = wallLength(wall);
+  if (measurements.width > length + 0.001)
+    throw new Error('Le mur est trop court pour cette ouverture.');
+  const wanted = at - measurements.width / 2;
+  // Dividing by the step count keeps k/20 as the nearest double, unlike k × 0.05.
+  const rounded = step ? Math.round(wanted / step) / (1 / step) : wanted;
+  const distance = Math.min(Math.max(rounded, 0), length - measurements.width);
+  const opening = editOpening(wall, id, {
+    ...measurements,
+    kind,
+    reference: 'start',
+    distance: Math.max(0, distance),
+  });
+  return {
+    ...level,
+    walls: level.walls.map((w) =>
+      w.id === wallId ? { ...w, openings: [...(w.openings ?? []), opening] } : w,
+    ),
+  };
+}
+
+/** Slides an opening along its wall to `offset` metres from the wall start. */
+export function moveOpening(level: Level, wallId: string, id: string, offset: number): Level {
+  return updateOpening(level, wallId, id, { reference: 'start', distance: offset });
+}
+
 /** Changes some measurements of an opening; the others keep their exact stored values. */
 export function updateOpening(
   level: Level,

@@ -32,12 +32,6 @@ async function exportedLevel(page: Page): Promise<ExportedLevel> {
 
 const partition = (level: ExportedLevel) => level.walls.find((w) => !w.exterior)!;
 
-async function openOpenings(page: Page) {
-  await page.locator('#tool-openings').click();
-  // The partition is the fifth wall, after the four of the rectangle.
-  await page.locator('#opening-form [name=wall]').selectOption({ index: 4 });
-}
-
 test.beforeEach(async ({ page }) => {
   await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
@@ -46,7 +40,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test('design two rooms in Plan, then walk through their door in Visite', async ({ page }) => {
-  // A drawing, dialogs, a reload and a software-rendered walk on CI.
+  // A drawing, several drags, a reload and a software-rendered walk on CI.
   test.slow();
   const [x0, z0] = await drawClearRoom(page);
   await expect(page.locator('#plan-edit-bar')).toBeVisible();
@@ -68,27 +62,42 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
     expect.closeTo(4.6, 6),
   ]);
 
-  await openOpenings(page);
-  await page.locator('#opening-form [name=distance]').fill('1.65');
-  await page.locator('#opening-form [name=width]').fill('0.9');
-  await page.locator('#opening-form [type=submit]').click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-
-  // Page points are read from the wall tool's corners before it is turned off.
-  const [onPartitionBefore, onPartition, tooNarrow, inStart, onDoor] = await Promise.all(
-    (
-      [
-        [x0 + 3.5, z0 + 1.9],
-        [x0 + 3.5, z0 + 2.1],
-        [x0 + 3.5, z0 + 2.9],
-        [x0 + 3.5, z0 + 1],
-        [x0 + 2.1, z0 + 2.1],
-      ] as Point[]
-    ).map((p) => pagePoint(page, p)),
-  );
-  await page.locator('#wall-tool').click();
+  // Page points are read from the wall tool's corners before « Porte » turns it off.
+  const [doorClick, doorTarget, onPartitionBefore, onPartition, tooNarrow, inStart, onDoor] =
+    await Promise.all(
+      (
+        [
+          [x0 + 3, z0 + 1.9],
+          [x0 + 2.1, z0 + 1.9],
+          [x0 + 3.5, z0 + 1.9],
+          [x0 + 3.5, z0 + 2.1],
+          [x0 + 3.5, z0 + 2.9],
+          [x0 + 3.5, z0 + 1],
+          [x0 + 2.1, z0 + 2.1],
+        ] as Point[]
+      ).map((p) => pagePoint(page, p)),
+    );
   const inspector = page.locator('#plan-inspector');
   const layer = page.locator('#plan-selection');
+
+  // A door placed by click, centred 1.2 m along the partition, then dragged to 1.65 m.
+  await page.locator('#place-door').click();
+  await expect(page.locator('#wall-hint')).toBeHidden();
+  await page.mouse.click(...doorClick);
+  await expect(inspector.getByLabel('Largeur')).toHaveValue('0.9');
+  await expect(inspector.getByLabel('Distance au jambage')).toHaveValue('0.75');
+  await page.mouse.move(...doorClick);
+  await page.mouse.down();
+  await page.mouse.move(...doorTarget, { steps: 8 });
+  await expect(page.locator('#plan-drag-distances')).toHaveText('1,65 m · 1,65 m');
+  await page.mouse.up();
+  await expect(inspector.getByLabel('Distance au jambage')).toHaveValue('1.65');
+  expect(partition(await exportedLevel(page)).openings![0]).toMatchObject({
+    kind: 'door',
+    offset: 1.65,
+    width: 0.9,
+    swing: 1,
+  });
 
   // Select the partition, then drag it 0.20 m away from the start: the 5 cm grid keeps it exact.
   await page.mouse.click(...onPartitionBefore);
@@ -147,20 +156,27 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   const renamed = await exportedLevel(page);
   expect(renamed.rooms[0].name).toBe('Entrée');
 
-  // An opening wider than its host is refused and the house stays as it was.
-  await openOpenings(page);
-  await page.locator('#opening-form [name=width]').fill('5');
-  await page.locator('#opening-form [type=submit]').click();
-  await expect(page.locator('#opening-error')).not.toBeEmpty();
-  await page.locator('#cancel-opening').click();
-  expect(await exportedLevel(page)).toEqual(renamed);
+  // A window dragged onto the door turns red and goes back to where it was placed.
+  await page.locator('#place-window').click();
+  await page.mouse.click(...onPartition);
+  await expect(inspector.getByLabel('Hauteur d’allège')).toHaveValue('0.9');
+  const windowed = await exportedLevel(page);
+  await page.mouse.move(...onPartition);
+  await page.mouse.down();
+  await page.mouse.move(...onDoor, { steps: 8 });
+  await expect(layer).toHaveAttribute('data-drag-state', 'invalid');
+  await expect(page.locator('#plan-drag-message')).toHaveText(
+    'L’ouverture chevauche une autre ouverture.',
+  );
+  await page.mouse.up();
+  expect(await exportedLevel(page)).toEqual(windowed);
 
   await page.reload();
   await startupDone(page);
   await expect(page.locator('#header-project')).toHaveText('Nouvelle maison');
   await expect(page.locator('#room-list')).toContainText('Entrée');
   const level = await exportedLevel(page);
-  expect(level).toEqual(renamed);
+  expect(level).toEqual(windowed);
   // The larger part kept the drawn room's identity.
   const [start, beyond] = level.rooms;
   expect(start.id).toBe(first.rooms[0].id);

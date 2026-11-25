@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { pointInPolygon, polygonArea } from '../src/model/geometry';
 import {
+  addOpening,
   deleteOpening,
   deleteWall,
   moveCorner,
+  moveOpening,
   moveWall,
   pickPlan,
   setWallLength,
@@ -175,4 +177,34 @@ test('a wall splits in two at a point, its openings going to the part that holds
   assert.ok(close(second.openings![0].offset, 0.5));
   areas(next).forEach((a, i) => assert.ok(close(a, areas(level)[i])));
   assert.throws(() => splitWall(level, 'wall-5', 1.4), /ouverture/);
+});
+
+test('a door or a window is placed centred on the clicked point, inside its wall', () => {
+  const level = house();
+  const placed = addOpening(level, 'wall-1', 'window', 2, 'win');
+  const window = wall(placed, 'wall-1').openings!.at(-1)!;
+  assert.deepEqual(window, {
+    id: 'win',
+    kind: 'window',
+    offset: 2 - 0.6,
+    width: 1.2,
+    height: 1.2,
+    sill: 0.9,
+    exterior: true,
+  });
+  const door = wall(addOpening(level, 'wall-2', 'door', 0.1, 'd'), 'wall-2').openings![0];
+  assert.deepEqual([door.offset, door.width, door.hinge, door.swing], [0, 0.9, 'start', 1]);
+  assert.throws(() => addOpening(level, 'wall-5', 'window', 1.4, 'w'), /chevauche/);
+  const snapped = addOpening(level, 'wall-1', 'door', 2.01, 's', 0.05);
+  assert.ok(close(wall(snapped, 'wall-1').openings!.at(-1)!.offset, 1.55));
+});
+
+test('an opening moves along its wall and is refused over another one', () => {
+  const level = house();
+  const moved = moveOpening(level, 'wall-5', 'door', 1.65);
+  assert.equal(wall(moved, 'wall-5').openings![0].offset, 1.65);
+  assert.equal(wall(moved, 'wall-5').openings![0].height, 2.05);
+  const withWindow = addOpening(level, 'wall-5', 'window', 2.6, 'w');
+  assert.throws(() => moveOpening(withWindow, 'wall-5', 'w', 1.2), /chevauche/);
+  assert.throws(() => moveOpening(level, 'wall-5', 'door', 3), /bout du mur/);
 });

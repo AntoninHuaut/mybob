@@ -2,7 +2,7 @@ import { userMessage } from '../errorMessage';
 import { activeButton, el, toast } from './dom';
 import { planHistory, restorePlanEdit } from './planHistory';
 import { findProject, isImported } from './projectLibrary';
-import { selectionPointer, syncPlanSelection } from './planSelection';
+import { placingOpening, selectionPointer, syncPlanSelection } from './planSelection';
 import { app } from './state';
 import {
   render as renderWallDraft,
@@ -57,7 +57,10 @@ export function syncPlanEditBar() {
   if (!project) return;
   const { walls } = app.viewer.level;
   const history = planHistory(project);
-  el<HTMLButtonElement>('#tool-openings').disabled = !walls.length;
+  for (const kind of ['door', 'window'] as const) {
+    el<HTMLButtonElement>(`#place-${kind}`).disabled = !walls.length;
+    activeButton(`#place-${kind}`, placingOpening() === kind);
+  }
   el<HTMLButtonElement>('#undo-plan').disabled = !history.undo.length;
   el<HTMLButtonElement>('#redo-plan').disabled = !history.redo.length;
 }
