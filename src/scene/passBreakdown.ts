@@ -86,7 +86,13 @@ function ms(value: number): string {
 export function breakdownLines(
   view: string,
   baseline: FrameProfile,
-  costs: ReadonlyArray<{ label: string; part?: boolean; profile: FrameProfile }>,
+  costs: ReadonlyArray<{
+    label: string;
+    part?: boolean;
+    profile: FrameProfile;
+    /** GPU median of the whole view measured around this pass; the first baseline otherwise. */
+    baselineMs?: number;
+  }>,
 ): string[] {
   const total = baseline.gpu?.median;
   if (total === undefined || costs.some((cost) => !cost.profile.gpu))
@@ -97,7 +103,8 @@ export function breakdownLines(
   const lines = [`[passes] ${view} · GPU médiane ${ms(total)} ms avec toutes les passes`];
   for (const cost of costs) {
     // Two runs of a few seconds differ by noise: a pass never costs less than nothing.
-    const saved = Math.max(0, total - (cost.profile.gpu?.median ?? total));
+    const reference = cost.baselineMs ?? total;
+    const saved = Math.max(0, reference - (cost.profile.gpu?.median ?? reference));
     if (cost.part) lines.push(line(`dont ${cost.label}`, saved, '    ', 23));
     else {
       rest -= saved;
@@ -149,20 +156,36 @@ export async function breakdownViews(
       await viewer.whenReady();
       const camera = viewer.scene.activeCamera;
       if (!camera) continue;
-      const baseline = await measure(viewer, seconds);
+      // The GPU time drifts after a view switch: a first run settles it and is thrown away,
+      // then each pass is compared with the whole view measured just before and after it.
+      await measure(viewer, seconds);
+      const wholes = [await measure(viewer, seconds)];
       const costs = [];
       for (const pass of passSwitches(viewer.scene, camera)) {
         pass.off();
+        let profile: FrameProfile;
         try {
-          costs.push({
-            label: pass.label,
-            part: pass.part,
-            profile: await measure(viewer, seconds),
-          });
+          profile = await measure(viewer, seconds);
         } finally {
           pass.on();
         }
+        wholes.push(await measure(viewer, seconds));
+        const [before, after] = wholes.slice(-2).map((whole) => whole.gpu?.median);
+        const baselineMs =
+          before !== undefined && after !== undefined ? (before + after) / 2 : undefined;
+        costs.push({ label: pass.label, part: pass.part, profile, baselineMs });
       }
+      const medians = wholes
+        .map((whole) => whole.gpu?.median)
+        .filter((value): value is number => value !== undefined)
+        .sort((a, b) => a - b);
+      const baseline: FrameProfile =
+        medians.length === wholes.length
+          ? {
+              ...wholes[0],
+              gpu: { ...wholes[0].gpu!, median: medians[Math.floor(medians.length / 2)] },
+            }
+          : wholes[0];
       lines.push(...breakdownLines(run.label, baseline, costs));
     }
   } finally {

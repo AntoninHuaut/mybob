@@ -124,7 +124,7 @@ function diagnosticView(): DiagnosticView {
 async function measureForReport() {
   const { viewer } = app;
   history.replaceState(null, '', withoutReportParameter(location.href));
-  openDialog('PERFORMANCES', reportProgressHtml(0, 1, passBreakdown ? 60 : 30));
+  openDialog('PERFORMANCES', reportProgressHtml(0, 1, passBreakdown ? 120 : 30));
   // The refresh rate is read only from undrawn frames, which the benchmark never leaves.
   for (let wait = 0; wait < 20 && viewer.refreshRate === undefined; wait++)
     await new Promise((resolve) => setTimeout(resolve, 100));

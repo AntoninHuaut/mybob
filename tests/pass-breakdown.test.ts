@@ -133,3 +133,17 @@ test('a saving lost in the noise reads as zero, never as a negative cost', () =>
   ]);
   assert.equal(lines[1], '  anticrénelage temporel    0,0 ms · 0 %');
 });
+
+test('each pass is compared with the whole view measured around it, not only at the start', () => {
+  // The view drifts from 10 to 14 ms: occlusion measured at 8 ms saves 6, not 2.
+  const lines = breakdownLines('vue 3D', profile(12), [
+    { label: 'occlusion ambiante', profile: profile(8), baselineMs: 14 },
+    { label: 'ombres du soleil', profile: profile(9), baselineMs: 10 },
+  ]);
+  assert.deepEqual(lines, [
+    '[passes] vue 3D · GPU médiane 12,0 ms avec toutes les passes',
+    '  occlusion ambiante        6,0 ms · 50 %',
+    '  ombres du soleil          1,0 ms · 8 %',
+    '  reste (scène, prépasse)   5,0 ms · 42 %',
+  ]);
+});
