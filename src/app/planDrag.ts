@@ -2,16 +2,18 @@ import { getBuildingPlacementIssues } from '../furniture/placement';
 import { footprint } from '../furniture/model';
 import { userMessage } from '../errorMessage';
 import { alongWall, polygonArea, wallLength } from '../model/geometry';
-import { moveCorner, moveWall, pickPlan, type PlanSelection } from '../model/planEdit';
+import { moveCorner, moveOpening, moveWall, pickPlan, type PlanSelection } from '../model/planEdit';
 import type { Level, Point2, Wall } from '../model/types';
 import { GRID_STEPS_PER_METRE, snapDraftPoint } from '../model/wallDraft';
-import { area, escapeHtml } from '../ui/format';
+import { area, escapeHtml, number } from '../ui/format';
 import { committedFurniture } from './furnitureController';
 import { app } from './state';
 import { wallGridOn } from './wallDrawing';
 
 type Drag =
-  { kind: 'wall'; id: string; origin: Point2; normal: Point2 } | { kind: 'corner'; from: Point2 };
+  | { kind: 'wall'; id: string; origin: Point2; normal: Point2 }
+  | { kind: 'corner'; from: Point2 }
+  | { kind: 'opening'; wallId: string; id: string; origin: Point2; offset: number };
 
 interface Preview {
   /** The level as it would be saved on release; absent while the geometry is refused. */
@@ -20,6 +22,7 @@ interface Preview {
   apply?: (level: Level) => Level;
   /** What the pointer asks for, drawn in red when refused. */
   walls: Wall[];
+  opening?: { wall: Wall; offset: number; width: number };
   error?: string;
   furniture: { names: string[]; outlines: Point2[][] };
 }
@@ -31,17 +34,33 @@ let pointer: Point2 | undefined;
 export const dragging = () => !!drag;
 
 /**
- * A press on a corner drags it; a press on the selected wall drags it across its axis.
- * The camera stops panning until release.
+ * A press on the selected opening drags it along its wall, on a corner drags the corner, on
+ * the selected wall drags it across its axis. The camera stops panning until release.
  */
 export function startDrag(at: Point2, selection: PlanSelection | undefined, tolerance: number) {
   const level = app.viewer.level;
+  const hit = pickPlan(level, at, tolerance);
+  if (selection?.kind === 'opening' && hit?.kind === 'opening' && hit.id === selection.id) {
+    const opening = level.walls
+      .find((w) => w.id === selection.wallId)
+      ?.openings?.find((o) => o.id === selection.id);
+    if (!opening) return false;
+    drag = {
+      kind: 'opening',
+      wallId: selection.wallId,
+      id: opening.id,
+      origin: at,
+      offset: opening.offset,
+    };
+    preview = undefined;
+    app.viewer.orbit.detachControl();
+    return true;
+  }
   const corner = level.walls
     .flatMap((w) => [w.start, w.end])
     .find((p) => Math.hypot(p[0] - at[0], p[1] - at[1]) <= tolerance);
   if (corner) drag = { kind: 'corner', from: corner };
   else if (selection?.kind === 'wall') {
-    const hit = pickPlan(level, at, tolerance);
     const wall = level.walls.find((w) => w.id === selection.id);
     if (!wall || hit?.kind !== 'wall' || hit.id !== wall.id) return false;
     const length = wallLength(wall);
@@ -61,13 +80,26 @@ export function moveDrag(at: Point2, event: PointerEvent, tolerance: number) {
   pointer = at;
   const level = app.viewer.level;
   let apply: (level: Level) => Level;
-  let walls: Wall[];
-  if (drag.kind === 'wall') {
+  let walls: Wall[] = [];
+  let opening: Preview['opening'];
+  const snap = (value: number) =>
+    wallGridOn() ? Math.round(value * GRID_STEPS_PER_METRE) / GRID_STEPS_PER_METRE : value;
+  if (drag.kind === 'opening') {
+    const { wallId, id, origin } = drag;
+    const wall = level.walls.find((w) => w.id === wallId)!;
+    const source = wall.openings!.find((o) => o.id === id)!;
+    const length = wallLength(wall);
+    const along =
+      ((at[0] - origin[0]) * (wall.end[0] - wall.start[0]) +
+        (at[1] - origin[1]) * (wall.end[1] - wall.start[1])) /
+      length;
+    const offset = snap(drag.offset + along);
+    opening = { wall, offset, width: source.width };
+    apply = (l) => moveOpening(l, wallId, id, offset);
+  } else if (drag.kind === 'wall') {
     const { id, origin, normal } = drag;
     const raw = (at[0] - origin[0]) * normal[0] + (at[1] - origin[1]) * normal[1];
-    const delta = wallGridOn()
-      ? Math.round(raw * GRID_STEPS_PER_METRE) / GRID_STEPS_PER_METRE
-      : raw;
+    const delta = snap(raw);
     const shift = (p: Point2): Point2 => [p[0] + normal[0] * delta, p[1] + normal[1] * delta];
     walls = level.walls
       .filter((w) => w.id === id)
@@ -90,9 +122,11 @@ export function moveDrag(at: Point2, event: PointerEvent, tolerance: number) {
   }
   try {
     const next = apply(level);
-    preview = { level: next, apply, walls, furniture: blockedFurniture(next) };
+    const furniture = opening ? none() : blockedFurniture(next);
+    preview = { level: next, apply, walls, opening, furniture };
   } catch (error) {
-    preview = { walls, error: userMessage(error, 'Déplacement impossible.'), furniture: none() };
+    const message = userMessage(error, 'Déplacement impossible.');
+    preview = { walls, opening, error: message, furniture: none() };
   }
   const svg = document.querySelector<SVGSVGElement>('#plan-selection');
   if (svg) {
@@ -171,6 +205,20 @@ function dragSvg() {
       alongWall(wall, 0, half),
     ];
     html += `<polygon class="plan-drag-wall${valid ? '' : ' invalid'}" points="${points(outline)}"/>`;
+  }
+  if (preview.opening) {
+    const { wall, offset, width } = preview.opening;
+    const half = wall.thickness / 2 + 0.03;
+    const outline = [
+      alongWall(wall, offset, -half),
+      alongWall(wall, offset + width, -half),
+      alongWall(wall, offset + width, half),
+      alongWall(wall, offset, half),
+    ];
+    html += `<polygon class="plan-drag-wall${valid ? '' : ' invalid'}" points="${points(outline)}"/>`;
+    const q = project(alongWall(wall, offset + width / 2, half + 0.25), 0);
+    const rest = wallLength(wall) - offset - width;
+    html += `<text id="plan-drag-distances" class="plan-drag-area" x="${q.x.toFixed(1)}" y="${q.y.toFixed(1)}">${number(offset)} m · ${number(rest)} m</text>`;
   }
   const message =
     preview.error ??

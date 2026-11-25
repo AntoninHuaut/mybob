@@ -43,6 +43,7 @@ const paths: Record<string, string> = {
   compass: '<circle cx="12" cy="12" r="9"/><path d="m16 8-3 5-5 3 3-5Z"/>',
   edit: '<path d="m15 5 4 4M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15Z"/>',
   divide: '<path d="M3 3h18v18H3Zm9 0v18"/>',
+  window: '<path d="M4 4h16v16H4Zm8 0v16M4 12h16"/>',
   trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
 };
 export function icon(name: string, size = 20) {

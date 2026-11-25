@@ -1,6 +1,7 @@
 import { userMessage } from '../errorMessage';
 import { alongWall, wallLength } from '../model/geometry';
 import {
+  addOpening,
   deleteOpening,
   deleteWall,
   pickPlan,
@@ -12,14 +13,15 @@ import {
   type PlanSelection,
 } from '../model/planEdit';
 import type { Level, Point2 } from '../model/types';
+import { GRID_STEPS_PER_METRE } from '../model/wallDraft';
 import type { PlanPointerKind } from '../scene/viewer';
 import { PlanInspector } from '../ui/planInspector';
 import { el, toast } from './dom';
 import { endDrag, moveDrag, renderDrag, startDrag } from './planDrag';
-import { editableProject, planEditBarOpen, restorePlan } from './planEditBar';
+import { editableProject, planEditBarOpen, restorePlan, syncPlanEditBar } from './planEditBar';
 import { applyPlanEdit } from './planHistory';
 import { app } from './state';
-import { wallToolActive } from './wallDrawing';
+import { stopWallTool, wallGridOn, wallToolActive } from './wallDrawing';
 
 /** Pointer distance, in CSS pixels, within which a click still lands on a wall. */
 const PICK_PIXELS = 6;
@@ -28,6 +30,45 @@ let selection: PlanSelection | undefined;
 /** Where the selected wall was clicked, in metres from its start: « Couper » cuts there. */
 let cutOffset: number | undefined;
 let inspector: PlanInspector | undefined;
+/** « Porte » or « Fenêtre » armed: the next click on a wall places one there. */
+let placing: 'door' | 'window' | undefined;
+
+export const placingOpening = () => placing;
+
+export function togglePlacing(kind: 'door' | 'window') {
+  if (!editableProject()) return;
+  placing = placing === kind ? undefined : kind;
+  if (placing) stopWallTool();
+  syncPlanEditBar();
+}
+
+function place(kind: 'door' | 'window', at: Point2, tolerance: number) {
+  const hit = pickPlan(app.viewer.level, at, tolerance);
+  const wallId = hit?.kind === 'wall' ? hit.id : hit?.kind === 'opening' ? hit.wallId : undefined;
+  const wall = app.viewer.level.walls.find((w) => w.id === wallId);
+  if (!wall) {
+    toast(
+      kind === 'door'
+        ? 'Cliquez sur un mur pour y placer la porte.'
+        : 'Cliquez sur un mur pour y placer la fenêtre.',
+    );
+    return;
+  }
+  const along =
+    ((at[0] - wall.start[0]) * (wall.end[0] - wall.start[0]) +
+      (at[1] - wall.start[1]) * (wall.end[1] - wall.start[1])) /
+    wallLength(wall);
+  const id = crypto.randomUUID();
+  try {
+    const step = wallGridOn() ? 1 / GRID_STEPS_PER_METRE : undefined;
+    edit((level) => addOpening(level, wall.id, kind, along, id, step));
+    placing = undefined;
+    selection = { kind: 'opening', wallId: wall.id, id };
+  } catch (error) {
+    toast(userMessage(error, 'Ouverture impossible ici.'));
+  }
+  syncPlanEditBar();
+}
 
 /** Selecting is on in Plan with the edit bar open, unless a drawing tool takes the clicks. */
 export const planSelectionLive = () =>
@@ -98,6 +139,10 @@ export function selectionPointer(type: PlanPointerKind, at: Point2, event: Point
     return false;
   }
   if (!planSelectionLive()) return false;
+  if (placing) {
+    if (type === 'tap') place(placing, at, tolerance);
+    return type === 'tap';
+  }
   if (type === 'down') return startDrag(at, selection, tolerance);
   selection = pickPlan(app.viewer.level, at, tolerance);
   const wall =
@@ -118,6 +163,11 @@ export function planSelectionKey(event: KeyboardEvent): boolean {
   const shortcut = event.key.toLowerCase();
   if ((event.ctrlKey || event.metaKey) && !event.altKey && (shortcut === 'z' || shortcut === 'y')) {
     restorePlan(shortcut === 'y' || event.shiftKey ? 'redo' : 'undo');
+    return true;
+  }
+  if (placing && event.key === 'Escape') {
+    placing = undefined;
+    syncPlanEditBar();
     return true;
   }
   if (!selection || !planSelectionLive()) return false;
@@ -141,6 +191,7 @@ export function syncPlanSelection() {
   // selection survives as long as its level does.
   const current = `${app.current?.id}/${app.viewer.level.id}`;
   if (current !== scope || !planEditBarOpen() || wallToolActive()) selection = undefined;
+  if (!planEditBarOpen() || wallToolActive() || !editableProject()) placing = undefined;
   scope = current;
   const live = planSelectionLive();
   inspector.show(live ? app.viewer.level : undefined, live ? selection : undefined);
