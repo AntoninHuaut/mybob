@@ -12,6 +12,11 @@ export function reportRequested(search: string): boolean {
   return new URLSearchParams(search).has(REPORT_PARAMETER);
 }
 
+/** `?diagnostic=passes`: what each effect of Visite and Vue 3D costs (`scene/passBreakdown.ts`). */
+export function passesRequested(search: string): boolean {
+  return new URLSearchParams(search).get(REPORT_PARAMETER) === 'passes';
+}
+
 /** The same address without the parameter: a reload must not measure again. */
 export function withoutReportParameter(href: string): string {
   const url = new URL(href);
@@ -19,8 +24,8 @@ export function withoutReportParameter(href: string): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-export function reportProgressHtml(done: number, total: number): string {
-  return `<h2>Mesure des performances…</h2><p>La vue change toute seule pendant environ 30 secondes. Ne touchez à rien.</p><progress id="report-progress" max="${total}" value="${done}"></progress>`;
+export function reportProgressHtml(done: number, total: number, seconds = 30): string {
+  return `<h2>Mesure des performances…</h2><p>La vue change toute seule pendant environ ${seconds} secondes. Ne touchez à rien.</p><progress id="report-progress" max="${total}" value="${done}"></progress>`;
 }
 
 export function reportResultHtml(text: string): string {

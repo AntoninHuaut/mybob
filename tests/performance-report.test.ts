@@ -3,6 +3,7 @@ import test from 'node:test';
 import { Window } from 'happy-dom';
 import {
   copyReport,
+  passesRequested,
   reportProgressHtml,
   reportRequested,
   reportResultHtml,
@@ -20,6 +21,17 @@ test('the report runs only on a link carrying ?diagnostic, and a reload does not
     '/?x=2#p1:abc',
   );
   assert.equal(withoutReportParameter('https://example.test/?diagnostic'), '/');
+});
+
+test('?diagnostic=passes asks for the pass breakdown instead of the views', () => {
+  assert.equal(passesRequested('?diagnostic=passes'), true);
+  assert.equal(passesRequested('?diagnostic'), false);
+  assert.equal(passesRequested('?passes'), false);
+  assert.match(reportProgressHtml(0, 2, 60), /environ 60 secondes/);
+  assert.equal(
+    withoutReportParameter('https://example.test/?diagnostic=passes#p1:abc'),
+    '/#p1:abc',
+  );
 });
 
 test('the report is escaped text, with a progress bar while it measures', () => {

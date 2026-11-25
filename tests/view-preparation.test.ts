@@ -121,6 +121,26 @@ test('late compilation cannot lower quality and restarts the measurement warm-up
   assert.equal(viewer.currentRenderScale, 0.9, 'a genuinely slow prepared view still adapts');
 });
 
+test('a frozen quality holds while the pass breakdown runs, then adapts again', async (t) => {
+  const { viewer, loop } = await setup(t);
+  const { WARMUP_FRAMES, FRAME_SAMPLES } = await import('../src/scene/adaptiveResolution');
+  let clock = performance.now();
+  t.mock.method(performance, 'now', () => clock);
+  const draw = (count: number, ms: number) => {
+    for (let frame = 0; frame < count; frame++) {
+      clock += ms;
+      viewer.requestRender();
+      loop();
+    }
+  };
+  const release = viewer.freezeQuality();
+  draw(WARMUP_FRAMES + FRAME_SAMPLES * 3, 40);
+  assert.equal(viewer.currentRenderScale, 1, 'a slow pass under measure does not resize');
+  release();
+  draw(WARMUP_FRAMES + FRAME_SAMPLES, 40);
+  assert.equal(viewer.currentRenderScale, 0.9);
+});
+
 test('« Qualité » sets the scale, the effect tier and the shadow filtering, both ways', async (t) => {
   const { viewer, loop } = await setup(t);
   const { EFFECT_TIERS, SCALE_FLOOR } = await import('../src/scene/adaptiveResolution');

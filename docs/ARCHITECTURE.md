@@ -67,6 +67,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Headset report          | `src/scene/headsetReport.ts`                                                 | Headset frame-time median/p95, missed refreshes, rates, scale, foveation; shown on exit in a `?diagnostic` session                          |
 | Frame profiler          | `src/scene/frameProfiler.ts`                                                 | `mybob.profile(s)`: GPU/CPU time and draw calls per image of the current view, loaded on demand                                             |
 | Performance report      | `src/ui/performanceReport.ts`                                                | `?diagnostic` link: measures every view and shows a report to copy, no console needed                                                       |
+| Pass breakdown          | `src/scene/passBreakdown.ts`                                                 | `?diagnostic=passes`: GPU cost of each Visite and Vue 3D pass, measured by switching it off                                                 |
 | Per-frame DOM writes    | `src/ui/domWrites.ts`                                                        | Write-if-changed helpers for overlays and toolbars updated after every drawn image                                                          |
 | Screen-width lines      | `src/scene/screenLines.ts`                                                   | CSS-width dimension/measurement polylines, resize and material ownership                                                                    |
 | Measurement             | `src/scene/measurement.ts`, `measureTool.ts`                                 | Snapping to the plan axes; `MeasureTool`: live, pinned and cleared measurements                                                             |
@@ -323,6 +324,11 @@ camera moves. Neither fires during a headset session: nothing in the page is see
   (`headsetReport.ts`): frame-time median and p95 from the frames drawn after the loading
   veil, the share that missed a refresh, the rate asked for and kept, scale, PC or
   standalone, and foveation. The Quest Browser has no console, hence the dialog.
+  `?diagnostic=passes` (`passBreakdown.ts`) splits Visite and Vue 3D instead: each view is
+  measured whole, then without one pass at a time (occlusion, its blur alone, sun shadows,
+  TAA, bloom/tone/FXAA), the quality frozen (`freezeQuality`) so only the pass changes. WebGL
+  has no per-pass timer, so a pass's cost is the GPU time saved without it; a pass is detached
+  into its empty camera slot and attached back there, so the chain keeps its order.
 - The exterior frames the building and its roof — distance and azimuth are chosen with them,
   and the plot stays whole in the background without dictating the framing; 3D view shows the
   house open; Plan hides terrain and roof. Selecting a room or adding furniture from the
