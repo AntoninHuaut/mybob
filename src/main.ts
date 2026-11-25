@@ -57,6 +57,7 @@ import { openSharedLink, wireLinkHashFlush } from './app/shareLinkSync';
 import { canChangeMode, setSidebar, syncViewChrome } from './app/viewChrome';
 import { render as renderWallDraft, wallToolActive } from './app/wallDrawing';
 import { wireNavigationControls, wireProjectControls, wireViewportControls } from './app/controls';
+import { renderPlanSelection } from './app/planSelection';
 
 /*
  * Start-up: the template, the bundled and stored projects, the viewer and its callbacks, then
@@ -213,6 +214,7 @@ function wireViewer(viewer: HouseViewer) {
       northAngleDeg: app.solarPanel.settings?.northAngleDeg ?? 0,
     });
     stairNavigation.update(app.current, viewer, frame.cameraMoved !== false);
+    if (frame.cameraMoved !== false) renderPlanSelection();
     if (wallToolActive() && frame.cameraMoved !== false) renderWallDraft();
   };
 }

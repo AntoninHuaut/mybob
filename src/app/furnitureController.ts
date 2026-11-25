@@ -25,6 +25,7 @@ import { setDisabled, setHidden, setText, setTitle } from '../ui/domWrites';
 import { app, READ_ONLY_TOAST } from './state';
 import { setMode, setSidebar, syncDisplayControls } from './viewChrome';
 import { scheduleLinkHashUpdate } from './shareLinkSync';
+import { planSelectionKey } from './planSelection';
 
 /*
  * The furniture of the displayed level: its undo history, selection, scene layer and panels.
@@ -641,6 +642,12 @@ function handleFurnitureKey(event: KeyboardEvent) {
       (event.target.closest('input,textarea,select') || event.target.isContentEditable))
   )
     return;
+  // While « Modifier le plan » is open, undo, Delete and Esc act on the plan first.
+  if (planSelectionKey(event)) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    return;
+  }
   const modifier = event.ctrlKey || event.metaKey;
   const shortcut = event.key.toLowerCase();
   if (

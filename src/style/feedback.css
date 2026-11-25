@@ -542,6 +542,11 @@ dialog p {
     right: 64px;
     max-width: calc(100% - 76px);
   }
+  .plan-inspector {
+    top: 66px;
+    right: 64px;
+    width: min(260px, calc(100% - 76px));
+  }
   .tool-button {
     width: 40px;
     height: 40px;
