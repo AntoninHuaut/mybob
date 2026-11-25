@@ -433,19 +433,19 @@ export function surfaceMapData(): SurfaceMaps {
 }
 
 /** Furniture maps tile once per metre, on the world-scale UVs of `beveledBox`. */
-const FURNITURE_SIZE = 256;
+const FURNITURE_SIZE = 512;
 
 const wrap = (value: number) => value - Math.floor(value);
 
-/** Straight grain along U: fine lines over broader streaks, barely bent so it never reads as rings. */
+/** Straight grain along U, lines several texels wide so mipmaps keep them; barely bent, never rings. */
 function furnitureGrain(size: number): Float32Array {
   const field = new Float32Array(size * size);
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const u = x / size;
       const v = wrap(y / size + (fbm(u, y / size, 2, 2, 2, 191) - 0.5) * 0.03);
-      const lines = fbm(u, v, 1, 160, 2, 193);
-      const streaks = fbm(u, v, 2, 20, 3, 195);
+      const lines = fbm(u, v, 1, 48, 2, 193);
+      const streaks = fbm(u, v, 2, 12, 3, 195);
       const figure = fbm(u, v, 4, 6, 2, 196);
       field[y * size + x] = Math.min(
         1,

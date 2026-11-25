@@ -649,6 +649,8 @@ test('a furniture surface gives its finish grain, relief or gloss, and the workt
     assert.equal(plain.bumpTexture, null);
     const wood = finishOf('wood');
     assert.ok(wood.albedoTexture && wood.bumpTexture, 'wood has grain and relief');
+    for (const texture of [wood.albedoTexture!, wood.bumpTexture!])
+      assert.ok(texture.anisotropicFilteringLevel >= 8, 'grain stays sharp at grazing angles');
     const stone = finishOf('stone');
     assert.ok(stone.bumpTexture, 'stone has relief');
     assert.ok(finishOf('gloss').roughness! < plain.roughness! / 2, 'gloss is shinier');

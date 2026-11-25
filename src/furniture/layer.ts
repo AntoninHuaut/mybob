@@ -6,6 +6,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import earcut from 'earcut';
 import { RawTexture } from '@babylonjs/core/Materials/Textures/rawTexture';
+import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { furnitureMapData, surfaceMapData, type SurfaceMapData } from '../scene/surfaceTextures';
 import { contactMaterial, contactShadow } from './contactShadow';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
@@ -411,8 +412,21 @@ export class FurnitureLayer {
         texture.uScale = texture.vScale = name === 'fabric' ? 12 : 1;
         mat.bumpTexture = texture;
       }
-      const upload = (map: SurfaceMapData) =>
-        RawTexture.CreateRGBATexture(map.data, map.size, map.size, this.scene, true);
+      // Trilinear and anisotropic, like the house surfaces: seen at a grazing angle the grain
+      // would otherwise blur away in the distance while aliasing into stripes up close.
+      const upload = (map: SurfaceMapData) => {
+        const texture = RawTexture.CreateRGBATexture(
+          map.data,
+          map.size,
+          map.size,
+          this.scene,
+          true,
+          false,
+          Texture.TRILINEAR_SAMPLINGMODE,
+        );
+        texture.anisotropicFilteringLevel = 8;
+        return texture;
+      };
       if (surface === 'wood' || surface === 'stone') {
         const maps = furnitureMapData();
         mat.albedoTexture = upload(surface === 'wood' ? maps.woodAlbedo : maps.stoneAlbedo);
@@ -427,7 +441,7 @@ export class FurnitureLayer {
             number
           >
         )[name] ?? 0.35;
-      if (surface) mat.roughness = { wood: 0.5, stone: 0.72, gloss: 0.12 }[surface];
+      if (surface) mat.roughness = { wood: 0.72, stone: 0.78, gloss: 0.12 }[surface];
       if (surface === 'gloss') mat.clearCoat.isEnabled = true;
       materials.push(mat);
       this.materialCache.set(key, { material: mat, owners: 1 });
