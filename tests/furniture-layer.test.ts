@@ -482,6 +482,25 @@ test('fabric and wood finishes of different colours share one texture per map un
   }
 });
 
+test('placed furniture keeps frozen world matrices that follow each move', () => {
+  const { scene, layer, cleanup } = setup();
+  try {
+    const parts = () =>
+      scene.meshes.filter((mesh) => mesh.parent && mesh.metadata?.kind === 'furniture');
+    layer.setItems([item('table')]);
+    assert.ok(parts().length > 0);
+    for (const mesh of scene.meshes) assert.ok(mesh.isWorldMatrixFrozen, mesh.name);
+    const before = parts().map((mesh) => mesh.getAbsolutePosition().x);
+    layer.setItems([{ ...item('table'), position: [3, 2] }]);
+    for (const mesh of scene.meshes) assert.ok(mesh.isWorldMatrixFrozen, mesh.name);
+    parts().forEach((mesh, index) =>
+      assert.ok(Math.abs(mesh.getAbsolutePosition().x - before[index] - 1) < 1e-9, mesh.name),
+    );
+  } finally {
+    cleanup();
+  }
+});
+
 test('Plan glass preserves two-sided rendering, alpha and exact diffuse channels', () => {
   const { scene, layer, cleanup } = setup();
   layer.setItems([item('shower')]);

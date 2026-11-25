@@ -158,14 +158,8 @@ export class FurnitureLayer {
         this.visuals.set(item.id, visual);
       }
       this.applyViewMaterials(visual);
-      visual.root.position.set(
-        item.position[0],
-        floorElevationAt(this.level, item.position) + (item.elevation ?? 0),
-        item.position[1],
-      );
       if (visual.contact) visual.contact.position.y = 0.002 - (item.elevation ?? 0);
-      visual.root.rotation.y = item.rotation;
-      visual.root.computeWorldMatrix(true);
+      this.pose(visual, item);
     }
     if (
       this.drag &&
@@ -1145,13 +1139,26 @@ export class FurnitureLayer {
 
   private placeVisual(visual: Visual, item: FurnitureItem) {
     changed(this.scene);
+    this.pose(visual, item);
+  }
+
+  /** A piece only moves here: its frozen world matrices are thawed, moved and frozen again. */
+  private pose(visual: Visual, item: FurnitureItem) {
+    const nodes: TransformNode[] = [];
+    const walk = (node: TransformNode) => {
+      nodes.push(node);
+      for (const child of node.getChildren()) if (child instanceof TransformNode) walk(child);
+    };
+    walk(visual.root);
+    for (const node of nodes) node.unfreezeWorldMatrix();
     visual.root.position.set(
       item.position[0],
       floorElevationAt(this.level, item.position) + (item.elevation ?? 0),
       item.position[1],
     );
     visual.root.rotation.y = item.rotation;
-    visual.root.computeWorldMatrix(true);
+    // Parents first: each child's frozen matrix is computed from its parent's.
+    for (const node of nodes) node.freezeWorldMatrix();
   }
 
   /** Search (throttled) where a release over `room` would land, and show it as a ghost. */

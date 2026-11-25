@@ -587,7 +587,9 @@ last call, and read back at start-up.
   no tier: each image costs the same. `mybob.diag()` shows the current view's scale and
   tier (`effets palier n/3`).
 - Static house and exterior meshes freeze their world matrices after construction. Moving
-  door leaves and every descendant of a moving pivot stay unfrozen. House shell and trim
+  door leaves and every descendant of a moving pivot stay unfrozen. Furniture freezes too:
+  `FurnitureLayer.pose` thaws a piece, moves it and refreezes it, parents first, on every
+  placement and drag step. House shell and trim
   merge separately per wall, material, picking and collision policy; trim keeps a name outside
   the `wall:<id>:` shell prefix. Merged shadow casters replace their disposed source entries.
 - Room/dimension projection skips still frames unless preferences, level, measurements or
