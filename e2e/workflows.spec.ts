@@ -413,10 +413,10 @@ test('the walk recaptures the pointer after its release, click in the view inclu
 });
 
 test('draw a room and reopen its saved house in Visite', async ({ page }) => {
-  await drawClearRoom(page, 'Atelier');
+  await drawClearRoom(page);
   await page.reload();
   await startupDone(page);
-  await expect(page.locator('#header-project')).toHaveText('Atelier');
+  await expect(page.locator('#header-project')).toHaveText('Nouvelle maison');
   await expect(page.locator('#project-select')).toContainText('Démonstration');
   await page.getByRole('button', { name: 'Visite', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Visite', exact: true })).toHaveAttribute(

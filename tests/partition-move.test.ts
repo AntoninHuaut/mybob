@@ -1,22 +1,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createHouse } from '../src/model/createHouse';
-import { divideRoom } from '../src/model/roomPartition';
+import { addWallChain } from '../src/model/wallDraft';
 import { movePartition } from '../src/model/partitionMove';
 import { polygonArea } from '../src/model/geometry';
 
 test('moving a partition updates both finished areas and carries the hosted door', () => {
-  const level = divideRoom(
-    createHouse('project', 'Salon', 4, 3, 0.2).levels[0],
-    'room-1',
-    [
-      { wallId: 'wall-1', offset: 2.1 },
-      { wallId: 'wall-3', offset: 2.1 },
-    ],
-    0.2,
-    ['Salon', 'Bureau'],
-    ['partition', 'office'],
-  );
+  const level = dividedRoom();
   level.walls.at(-1)!.openings = [
     { id: 'door', kind: 'door', width: 0.9, height: 2, offset: 0.45, hinge: 'end', swing: -1 },
   ];
@@ -32,18 +22,19 @@ test('moving a partition updates both finished areas and carries the hosted door
   assert.equal(next.rooms[0].planArea, 5.8);
 });
 
+/** A 0.20 m partition across the middle of a 4 × 3 m clear room. */
 function dividedRoom() {
-  return divideRoom(
+  const level = addWallChain(
     createHouse('project', 'Salon', 4, 3, 0.2).levels[0],
-    'room-1',
     [
-      { wallId: 'wall-1', offset: 2.1 },
-      { wallId: 'wall-3', offset: 2.1 },
+      [2, -0.1],
+      [2, 3.1],
     ],
+    false,
     0.2,
-    ['Salon', 'Bureau'],
-    ['partition', 'office'],
   );
+  level.walls[4].id = 'partition';
+  return level;
 }
 
 test('a move past the host wall is rejected and leaves the level untouched', () => {

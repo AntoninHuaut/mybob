@@ -195,6 +195,11 @@ export class HouseViewer {
   onRendered?: (frame: FrameInfo) => void;
   private lastFrame?: FrameInfo;
   onMeasure?: (measurement?: Measurement) => void;
+  /**
+   * A Plan tool (wall drawing) offered moves and clicks in plan coordinates; returns whether it
+   * took them, so that room selection does not also run.
+   */
+  planPointer?: (type: 'move' | 'tap', point: Point2, event: PointerEvent) => boolean;
   onPointerLockError?: () => void;
   /** Optional host policy, checked before any transition side effects. */
   canChangeMode?: (mode: ViewMode) => boolean;
@@ -549,6 +554,17 @@ export class HouseViewer {
   /** Babylon clears both observers when this scene is disposed. */
   private attachSceneInput(scene: Scene) {
     scene.onPointerObservable.add((event) => {
+      const move = event.type === PointerEventTypes.POINTERMOVE;
+      // A quick second click may come as a double tap, as with « Mesurer ».
+      const tap =
+        (event.type === PointerEventTypes.POINTERTAP ||
+          event.type === PointerEventTypes.POINTERDOUBLETAP) &&
+        event.event.button === 0;
+      if (this.planPointer && this.mode === 'plan' && (move || tap)) {
+        const point = this.groundPoint(scene.pointerX, scene.pointerY);
+        const kind = move ? 'move' : 'tap';
+        if (point && this.planPointer(kind, point, event.event as PointerEvent)) return;
+      }
       if (
         this.measureMode &&
         event.type === PointerEventTypes.POINTERMOVE &&
@@ -1344,6 +1360,22 @@ export class HouseViewer {
         },
       );
     }
+  }
+
+  /** The level's floor plane under a canvas pixel, in plan coordinates. */
+  groundPoint(x: number, y: number): Point2 | undefined {
+    const camera = this.scene.activeCamera;
+    if (!camera) return;
+    const ray = this.scene.createPickingRay(x, y, Matrix.Identity(), camera);
+    if (Math.abs(ray.direction.y) < 1e-9) return;
+    const t = (this.level.elevation - ray.origin.y) / ray.direction.y;
+    return [ray.origin.x + t * ray.direction.x, ray.origin.z + t * ray.direction.z];
+  }
+
+  /** Plan metres covered by one CSS pixel of the canvas, for on-screen snap distances. */
+  planMetresPerPixel() {
+    const width = (this.orbit.orthoRight ?? 0) - (this.orbit.orthoLeft ?? 0);
+    return width > 0 && this.canvas.clientWidth > 0 ? width / this.canvas.clientWidth : 0.01;
   }
 
   setMeasureMode(enabled: boolean) {

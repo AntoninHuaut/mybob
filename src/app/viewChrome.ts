@@ -1,4 +1,5 @@
 import { syncPlanEditBar } from './planEditBar';
+import { wallToolLive } from './wallDrawing';
 import { endWallBrush } from './roomPaint';
 import type { ViewMode } from '../scene/viewer';
 import { furnitureViewState } from '../furniture/viewState';
@@ -74,7 +75,7 @@ export function syncDisplayControls() {
       mode: viewer.mode,
       exterior: viewer.exteriorView,
       readOnly: app.readOnlyLink,
-      measuring,
+      measuring: measuring || wallToolLive(),
       pickingDestination: viewer.goToMode,
     }),
   );

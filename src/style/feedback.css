@@ -537,6 +537,11 @@ dialog p {
     max-width: calc(100% - 76px);
     padding: 4px;
   }
+  .plan-edit-hint {
+    top: 66px;
+    right: 64px;
+    max-width: calc(100% - 76px);
+  }
   .tool-button {
     width: 40px;
     height: 40px;
