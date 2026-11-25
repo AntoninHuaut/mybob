@@ -13,6 +13,10 @@ export function planHistory(project: HouseProject) {
 
 export function applyPlanEdit(current: HouseProject, next: HouseProject) {
   savePlanProject(current, next);
+  rememberPlanEdit(current, next);
+}
+
+export function rememberPlanEdit(current: HouseProject, next: HouseProject) {
   const history = planHistory(current);
   histories.delete(current);
   histories.set(next, { undo: [...history.undo.slice(-49), current], redo: [] });

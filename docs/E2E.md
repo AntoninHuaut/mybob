@@ -30,7 +30,10 @@ table, TV link, dragging), `e2e/share-link.spec.ts` (link sharing: recipient rea
 adoption, silence for the owner, old link, corrupted hash), `e2e/first-steps.spec.ts`
 (« Premiers pas » card, help), `e2e/concurrent-tabs.spec.ts` (two tabs on the same storage),
 `e2e/orbit-shaders.spec.ts` (shader reuse during orbit and cleanup on project switch),
-`e2e/view-state.spec.ts` (accepted view chrome, project/level resets and touch-only walk refusal).
+`e2e/view-state.spec.ts` (accepted view chrome, project/level resets and touch-only walk refusal),
+`e2e/plan-design.spec.ts` (room created, divided, door placed, partition moved, undone and
+redone, then walked through in Visite; `#viewport[data-walk-room]` names the room the visitor
+stands in).
 `pnpm run test:e2e` builds and checks the public output before running all scenarios in CI.
 `pnpm run test:e2e:built` runs scenarios on the already verified build. Browser HTML reports,
 screenshots, test-results and traces are not uploaded by CI. The public-build artifact is

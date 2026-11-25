@@ -14,7 +14,8 @@ function buildingChecker(level: Level) {
   const solids = wallSolids(level);
   return (item: FurnitureItem): FurnitureIssue[] => {
     const result: FurnitureIssue[] = [];
-    const add = (message: string) => result.push({ itemId: item.id, severity: 'error', message });
+    const add = (message: string, code?: FurnitureIssue['code']) =>
+      result.push({ itemId: item.id, severity: 'error', message, ...(code && { code }) });
     const parts = footprintParts(item),
       floor = floorElevationAt(level, item.position) - level.elevation + (item.elevation ?? 0);
     if (!parts.every((part) => polygonInsidePolygon(part, level.outline)))
@@ -29,7 +30,7 @@ function buildingChecker(level: Level) {
           parts.some((part) => polygonsOverlap(part, s.polygon)),
       )
     )
-      add('Chevauche un mur, un vitrage ou un linteau.');
+      add('Chevauche un mur, un vitrage ou un linteau.', 'wall');
     return result;
   };
 }
