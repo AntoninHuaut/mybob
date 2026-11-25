@@ -435,10 +435,27 @@ export interface ImmersiveHost {
 }
 
 /** The controllers this walk still holds that the session no longer reports. */
-export function staleSources<T>(held: Iterable<T>, live: Iterable<T>): T[] {
-  const current = new Set(live);
-  return [...held].filter((source) => !current.has(source));
+export function staleSources<T>(held: Iterable<T>, live: Iterable<T>): readonly T[] {
+  // Runs every frame: nothing is allocated unless a controller went stale.
+  let stale: T[] | undefined;
+  for (const source of held) {
+    let found = false;
+    for (const current of live)
+      if (current === source) {
+        found = true;
+        break;
+      }
+    if (!found) (stale ??= []).push(source);
+  }
+  return stale ?? NO_SOURCES;
 }
+const NO_SOURCES: readonly never[] = [];
+
+/**
+ * A still controller keeps its last door/stair pick this many frames at most: a swinging door
+ * or a stair taken changes what it points at without moving it.
+ */
+export const XR_PICK_REUSE_FRAMES = 30;
 
 interface Pointer {
   handedness: XRHandedness;
@@ -449,6 +466,10 @@ interface Pointer {
   upper: boolean;
   /** The teleport-only turn may fire again: the stick came back near the centre. */
   snapArmed: boolean;
+  /** The last pick and the controller's world matrix when it was made (`pick`). */
+  picked?: ReturnType<Scene['pickWithRay']>;
+  pickedPose: Float32Array;
+  pickAge: number;
 }
 
 const READY = new Color3(0.92, 0.92, 0.88);
@@ -493,6 +514,9 @@ export class ImmersiveWalk {
   /** Carries the visitor in the plan: the camera pose is local to it. */
   readonly rig: TransformNode;
   private readonly pointers = new Map<XRInputSource, Pointer>();
+  /** Reused every frame: the controllers' states and the door/stair ray. */
+  private readonly states = new Map<XRHandedness, ControllerState>();
+  private readonly pickRay = new Ray(Vector3.Zero(), Vector3.Forward(true), 1);
   private readonly material: StandardMaterial;
   private readonly marker: Mesh;
   /** Dots along the teleport arc, one thin instance per sample. */
@@ -638,7 +662,8 @@ export class ImmersiveWalk {
       pointer.root.dispose();
       this.pointers.delete(source);
     }
-    const states = new Map<XRHandedness, ControllerState>();
+    const states = this.states;
+    states.clear();
     for (const source of session.inputSources) {
       if (source.targetRayMode !== 'tracked-pointer') continue;
       const pointer = this.pointer(source);
@@ -658,8 +683,11 @@ export class ImmersiveWalk {
       pointer.ray.scaling.z = hit?.hit ? hit.distance : XR_DOOR_REACH;
       const pressed = state.trigger && !pointer.trigger;
       pointer.trigger = state.trigger;
-      if (pressed && target?.kind === 'door') this.host.toggleDoor(target.id);
-      else if (pressed && target?.kind === 'stair') {
+      if (pressed && target?.kind === 'door') {
+        this.host.toggleDoor(target.id);
+        // The leaf swings across every ray: no pointer keeps its pick.
+        for (const each of this.pointers.values()) each.pickAge = Infinity;
+      } else if (pressed && target?.kind === 'stair') {
         this.cancelAim();
         this.host.takeStair(target.id, target.direction);
       }
@@ -755,6 +783,8 @@ export class ImmersiveWalk {
    * level's shaders link.
    */
   arrive(point: Point2, yaw: number) {
+    // A new level under the same pointers: no pick of the old one is kept.
+    for (const pointer of this.pointers.values()) pointer.pickAge = Infinity;
     const forward = this.camera.getDirection(Vector3.Forward(true));
     const current = Math.atan2(-forward.x, -forward.z);
     // The camera's yaw grows to the left; `turn` takes a right-handed yaw about +y.
@@ -989,8 +1019,13 @@ export class ImmersiveWalk {
 
   /** The hand's controller, a tracked one first. */
   private pointerFor(hand: XRHandedness): Pointer | undefined {
-    const hands = [...this.pointers.values()].filter((p) => p.handedness === hand);
-    return hands.find((p) => p.root.isEnabled()) ?? hands[0];
+    let first: Pointer | undefined;
+    for (const pointer of this.pointers.values()) {
+      if (pointer.handedness !== hand) continue;
+      if (pointer.root.isEnabled()) return pointer;
+      first ??= pointer;
+    }
+    return first;
   }
 
   /** Drops an aim in progress without jumping. */
@@ -1093,14 +1128,28 @@ export class ImmersiveWalk {
     return hit;
   }
 
+  /** The door or stair `pointer` aims at; a controller held still reuses its last pick. */
   private pick(pointer: Pointer, length: number) {
     const root = pointer.root;
-    root.computeWorldMatrix(true);
-    const origin = root.getAbsolutePosition().clone();
-    const direction = Vector3.TransformNormal(Vector3.Forward(true), root.getWorldMatrix());
-    direction.normalize();
+    const matrix = root.computeWorldMatrix(true);
+    const pose = matrix.asArray();
+    let still = pointer.pickAge < XR_PICK_REUSE_FRAMES;
+    for (let index = 0; still && index < 16; index++)
+      still = Math.abs(pose[index] - pointer.pickedPose[index]) < 1e-4;
+    if (still) {
+      pointer.pickAge++;
+      return pointer.picked ?? null;
+    }
+    pointer.pickedPose.set(pose);
+    pointer.pickAge = 0;
+    const ray = this.pickRay;
+    ray.origin.copyFrom(root.getAbsolutePosition());
+    Vector3.TransformNormalToRef(Vector3.Forward(true), matrix, ray.direction);
+    ray.direction.normalize();
+    ray.length = length;
     // The default predicate: pickable, enabled and visible. The pointers are not pickable.
-    return this.host.scene.pickWithRay(new Ray(origin, direction, length));
+    pointer.picked = this.host.scene.pickWithRay(ray);
+    return pointer.picked;
   }
 
   private pointer(source: XRInputSource): Pointer {
@@ -1135,6 +1184,8 @@ export class ImmersiveWalk {
       face: false,
       upper: false,
       snapArmed: true,
+      pickedPose: new Float32Array(16),
+      pickAge: Infinity,
     };
     this.pointers.set(source, pointer);
     return pointer;
