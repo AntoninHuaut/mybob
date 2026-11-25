@@ -266,6 +266,8 @@ export class HouseViewer {
   private lastRenderAt?: number;
   /** Open `holdRendering` calls: every image is drawn while one is held. */
   private renderingHolds = 0;
+  /** Open `freezeQuality` calls: the resolution and effect tier stay as they are. */
+  private qualityFreezes = 0;
   /** Any input anywhere in the page may change what the scene shows. */
   private wake = (event?: Event) => {
     // A locked pointer turns the walk camera, which Babylon applies only while rendering:
@@ -1576,6 +1578,22 @@ export class HouseViewer {
     };
   }
 
+  /**
+   * Keeps the resolution and effect tier until the returned function is called: the pass
+   * breakdown compares images that differ by one pass only (`passBreakdown.ts`).
+   */
+  freezeQuality(): () => void {
+    this.qualityFreezes++;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      this.qualityFreezes--;
+      // The frames drawn meanwhile measured a partial chain, not this view.
+      this.adaptiveResolution?.resume();
+    };
+  }
+
   get renderingIdle(): boolean {
     return this.renderScheduler?.idle ?? false;
   }
@@ -1585,6 +1603,7 @@ export class HouseViewer {
    * alike: a resize hitches, so it never follows the camera (`adaptiveResolution.ts`).
    */
   private applyRenderScale(now: number, render: boolean) {
+    if (this.qualityFreezes > 0) return;
     // A late shader or texture is preparation work, not the machine's steady frame rate.
     if (!this.engine.areAllEffectsReady() || this.scene.getWaitingItemsCount() > 0) {
       this.adaptiveResolution.resume();

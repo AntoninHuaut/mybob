@@ -15,6 +15,7 @@ import {
 } from './scene/diagnostics';
 import {
   copyReport,
+  passesRequested,
   reportProgressHtml,
   reportRequested,
   reportResultHtml,
@@ -71,6 +72,7 @@ function wireEvents() {
 
 /** `?diagnostic` also asks for the headset's frame report on leaving it; the URL loses the flag. */
 const diagnosticSession = reportRequested(location.search);
+const passBreakdown = passesRequested(location.search);
 
 function diagnostics() {
   const { viewer } = app;
@@ -98,22 +100,27 @@ function diagnosticView(): DiagnosticView {
   };
 }
 
-/** `?diagnostic`: measure every view and show a report to copy (`ui/performanceReport.ts`). */
+/**
+ * `?diagnostic`: measure every view and show a report to copy (`ui/performanceReport.ts`);
+ * `?diagnostic=passes` measures what each effect of Visite and Vue 3D costs instead.
+ */
 async function measureForReport() {
   const { viewer } = app;
   history.replaceState(null, '', withoutReportParameter(location.href));
-  openDialog('PERFORMANCES', reportProgressHtml(0, 1));
+  openDialog('PERFORMANCES', reportProgressHtml(0, 1, passBreakdown ? 60 : 30));
   // The refresh rate is read only from undrawn frames, which the benchmark never leaves.
   for (let wait = 0; wait < 20 && viewer.refreshRate === undefined; wait++)
     await new Promise((resolve) => setTimeout(resolve, 100));
-  const { benchmarkViews } = await import('./scene/frameProfiler');
-  const lines = await benchmarkViews(viewer, 4, (done, total) => {
+  const onProgress = (done: number, total: number) => {
     const progress = document.querySelector<HTMLProgressElement>('#report-progress');
     if (progress) {
       progress.max = total;
       progress.value = done;
     }
-  });
+  };
+  const lines = passBreakdown
+    ? await (await import('./scene/passBreakdown')).breakdownViews(viewer, 3, onProgress)
+    : await (await import('./scene/frameProfiler')).benchmarkViews(viewer, 4, onProgress);
   showReport('PERFORMANCES', [...diagnosticLines(diagnostics()), ...lines].join('\n'));
 }
 
