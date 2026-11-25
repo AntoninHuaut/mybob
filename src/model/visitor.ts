@@ -1,0 +1,2 @@
+export const VISITOR_RADIUS = 0.17;
+export const VISITOR_CLEARANCE = VISITOR_RADIUS + 0.025;
