@@ -3,6 +3,7 @@ import { readFile } from 'node:fs/promises';
 import { createFurniture, type FurnitureItem } from '../src/furniture/model';
 import { furnitureDistances } from '../src/furniture/checks';
 import type { Level } from '../src/model/types';
+import { startupDone } from './startup';
 
 async function furnishings(page: Page) {
   const menu = page.locator('#toggle-sidebar');
@@ -110,6 +111,7 @@ test.beforeEach(async ({ page }) => {
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
+  await startupDone(page);
   await expect(page.locator('#project-select')).toContainText('Démonstration');
 });
 
@@ -227,6 +229,7 @@ test('linked TV unit and saved TV keep the group on drag, keyboard and reload', 
   expect(items[0].position[1]).toBeCloseTo(items[1].position[1], 8);
   expect(items[0].position).not.toEqual(stand.position);
   await page.reload();
+  await startupDone(page);
   await furnishings(page);
   await page.getByRole('button', { name: 'Modifier Meuble TV test', exact: true }).click();
   await expect(editor.locator('.furniture-group-members li')).toHaveCount(2);

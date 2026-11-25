@@ -1,5 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { startupDone } from './startup';
 
 async function importHouse(page: Page) {
   const project = JSON.parse(await readFile('public/projects/maison-atelier.json', 'utf8'));
@@ -24,6 +25,7 @@ async function importHouse(page: Page) {
 test.beforeEach(async ({ page }) => {
   await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
+  await startupDone(page);
   await expect(page.locator('#view-title')).toHaveText('Vue 3D');
 });
 

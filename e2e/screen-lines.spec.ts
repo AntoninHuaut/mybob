@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { startupDone } from './startup';
 
 /**
  * The render loop draws 32 images after the last change before reporting an idle
@@ -26,6 +27,7 @@ for (const dpr of [1, 2]) {
     test.use({ deviceScaleFactor: dpr });
     test('Plan dimension export toggles preserve CSS stroke coverage', async ({ page }) => {
       await page.goto('/');
+      await startupDone(page);
       await page.locator('[data-view=plan]').click();
       await expect(page.locator('#view-title')).toHaveText('Plan de la maison');
       const cssWidth = await page.locator('#scene').evaluate((canvas) => canvas.clientWidth);
@@ -86,6 +88,7 @@ for (const dpr of [1, 2]) {
 
 test('overview temporal export is stable after settling and Plan round trips', async ({ page }) => {
   await page.goto('/');
+  await startupDone(page);
   for (let i = 0; i < 2; i++) {
     await page.locator('[data-view=plan]').click();
     await page.locator('[data-view=overview]').click();

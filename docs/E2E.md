@@ -6,6 +6,12 @@ One-time prerequisite: `pnpm exec playwright install chromium` (on Linux,
 `pnpm exec playwright install --with-deps chromium` on first install). Port choice and
 server: `playwright.config.ts`.
 
+After every `goto` or `reload` of the app, a test calls `startupDone(page)` (`e2e/startup.ts`)
+before acting. Start-up awaits work (the project files, the texture worker) before it loads
+the project and wires the controls, while the page already shows the template: a click or a
+file import made earlier reaches a control with no handler, or one whose project is not
+loaded yet.
+
 ## Execution policy and CI recipes
 
 [AGENTS.md: Local browser verification policy](../AGENTS.md#local-browser-verification-policy)

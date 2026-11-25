@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createFurniture } from '../src/furniture/model';
+import { startupDone } from './startup';
 
 // Only exercise the compiled public demo through its UI; each test gets fresh storage.
 test('enlarging a sofa against a wall keeps the blocked edge and stays undoable', async ({
@@ -121,6 +122,7 @@ test.beforeEach(async ({ page }) => {
   // External optional fonts must not make the suite depend on internet access.
   await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
+  await startupDone(page);
   await expect(page.getByRole('button', { name: 'Plan', exact: true })).toBeEnabled();
   await expect(page.locator('#project-select')).toContainText('Démonstration');
 });
@@ -137,6 +139,7 @@ test('add, cancelled draft and reload keep the saved values', async ({ page }) =
   await dialog.getByRole('button', { name: 'Dupliquer', exact: true }).click();
   await page.getByRole('dialog').getByRole('button', { name: 'Annuler', exact: true }).click();
   await page.reload();
+  await startupDone(page);
   await furnishings(page);
   await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
   await page.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }).click();
@@ -174,6 +177,7 @@ test('independent variants, undo/redo and confirming an unchanged name', async (
   await variants.getByRole('button', { name: 'Enregistrer', exact: true }).click();
   await expect(variants.getByLabel('Nom de la variante')).toHaveCount(0);
   await page.reload();
+  await startupDone(page);
   await furnishings(page);
   await expect(select.locator('option:checked')).toHaveText('Option E2E');
   await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(0);
@@ -186,6 +190,7 @@ test('independent variants, undo/redo and confirming an unchanged name', async (
   await expect(page.locator('[data-furniture-edit-id]')).toHaveCount(1);
   await expect(variants.getByRole('button', { name: 'Supprimer', exact: true })).toBeDisabled();
   await page.reload();
+  await startupDone(page);
   await furnishings(page);
   await expect(select.locator('option')).toHaveCount(1);
 });
@@ -217,6 +222,7 @@ test('JSON export then import into a blank browser restore every variant', async
     const imported = await context.newPage();
     await imported.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
     await imported.goto('/');
+    await startupDone(imported);
     await furnishings(imported);
     await imported.getByRole('tab', { name: 'Maison', exact: true }).click();
     await imported.locator('#import-file').setInputFiles(file);
@@ -230,6 +236,7 @@ test('JSON export then import into a blank browser restore every variant', async
       imported.getByRole('button', { name: 'Modifier Canapé E2E', exact: true }),
     ).toBeVisible();
     await imported.reload();
+    await startupDone(imported);
     // The tab's hash describes its own state: the reload must not take it
     // for a received link and reopen the divergence dialog (which would block the rest).
     await expect(imported.getByRole('dialog')).toHaveCount(0);
@@ -412,6 +419,7 @@ test('create a finished room and reopen its saved house in Visite', async ({ pag
   await page.getByRole('button', { name: 'Créer et enregistrer' }).click();
   await expect(page.locator('#header-project')).toHaveText('Atelier');
   await page.reload();
+  await startupDone(page);
   await expect(page.locator('#header-project')).toHaveText('Atelier');
   await expect(page.locator('#project-select')).toContainText('Démonstration');
   await page.getByRole('button', { name: 'Visite', exact: true }).click();
