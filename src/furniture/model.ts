@@ -51,9 +51,13 @@ export interface KitchenSlot {
   /** Oven column only: a microwave above the oven. */
   microwave?: boolean;
 }
+/** Material effect on a finish colour; absent is plain matte. */
+export type FurnitureSurface = 'wood' | 'stone' | 'gloss';
+export const FURNITURE_SURFACES: FurnitureSurface[] = ['wood', 'stone', 'gloss'];
 export interface KitchenConfiguration extends DressingConfiguration {
   worktopHeight: number;
   worktopColor: string;
+  worktopSurface?: FurnitureSurface;
   wallUnits?: { bottom: number; height: number; depth: number };
   slots: KitchenSlot[];
 }
@@ -103,6 +107,7 @@ export interface FurnitureItem {
   /** Linked objects share transformations, without changing individual dimensions. */
   groupId?: string;
   color: string;
+  surface?: FurnitureSurface;
   clearances?: { front: number; back: number; left: number; right: number };
   opening?: { kind: 'hinged' | 'drawer'; reach: number };
 }
@@ -243,6 +248,8 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
       (!finite(item.elevation) || item.elevation < 0 || item.elevation > 20)
     )
       fail('La hauteur de pose doit être comprise entre 0 et 20 m.');
+    if (item.surface !== undefined && !FURNITURE_SURFACES.includes(item.surface))
+      fail('Matière de meuble inconnue.');
     if (item.sofa !== undefined) {
       const sofa = item.sofa;
       if (
@@ -312,6 +319,8 @@ export function validateFurnitureList(input: unknown): FurnitureItem[] {
         k.slots.length > 48
       )
         fail('Vérifiez le plan de travail et les équipements de la cuisine.');
+      if (k.worktopSurface !== undefined && !FURNITURE_SURFACES.includes(k.worktopSurface))
+        fail('Matière du plan de travail inconnue.');
       if (
         k.wallUnits !== undefined &&
         (!record(k.wallUnits) ||

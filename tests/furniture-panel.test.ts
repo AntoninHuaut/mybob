@@ -1074,13 +1074,15 @@ test('the editing popup repaints a piece only on Save, and keeps an untouched co
   }
 });
 
-test('kitchen popup saves runs and equipment together and Cancel discards edits', () => {
+test('kitchen popup saves runs, equipment and materials together and Cancel discards edits', () => {
   const { window, editor, panel, getItems, cleanup } = setup(true, 'kitchen');
   try {
     const form = editor.querySelector<DOMForm>('form')!;
     const field = (name: string) => form.elements.namedItem(name) as unknown as DOMInput;
     field('worktopHeight').value = '92';
     field('worktopColor').value = '#654321';
+    field('surface').value = 'stone';
+    field('worktopSurface').value = 'wood';
     form
       .querySelector('[data-dressing-add]')!
       .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
@@ -1095,10 +1097,13 @@ test('kitchen popup saves runs and equipment together and Cancel discards edits'
     const saved = getItems()[0];
     assert.equal(saved.kitchen?.worktopHeight, 0.92);
     assert.equal(saved.kitchen?.worktopColor, '#654321');
+    assert.equal(saved.surface, 'stone');
+    assert.equal(saved.kitchen?.worktopSurface, 'wood');
     assert.deepEqual(saved.kitchen?.slots, [{ kind: 'sink', run: 1, offset: 0.8, width: 0.6 }]);
     panel.openEdit(saved.id);
     const again = editor.querySelector<DOMForm>('form')!;
     (again.elements.namedItem('worktopHeight') as unknown as DOMInput).value = '99';
+    (again.elements.namedItem('surface') as unknown as DOMInput).value = '';
     editor
       .querySelector('[data-edit-close]')!
       .dispatchEvent(new window.MouseEvent('click', { bubbles: true }));

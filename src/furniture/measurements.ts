@@ -1,4 +1,5 @@
 import { kitchenSlotsFromForm } from './kitchenForm';
+import { surfaceFromForm } from './surfaceField';
 import {
   dressingBounds,
   dressingStrips,
@@ -64,6 +65,9 @@ export function measurementsFromForm(
               runs,
               worktopHeight: Number(data.get('worktopHeight')) / 100,
               worktopColor: String(data.get('worktopColor')),
+              ...(surfaceFromForm(data.get('worktopSurface'))
+                ? { worktopSurface: surfaceFromForm(data.get('worktopSurface')) }
+                : {}),
               slots: kitchenSlotsFromForm(data),
               ...(data.has('kitchenWallUnits')
                 ? {

@@ -16,6 +16,7 @@ import {
   sofaDiagram,
 } from './measurements';
 import { groupMembers } from './groups';
+import { surfaceField, surfaceFromForm } from './surfaceField';
 import { FurnitureEditorDraft } from './editorDraft';
 import { televisionDimensions } from './television';
 import {
@@ -337,6 +338,7 @@ export class FurniturePanel {
       <form id="furniture-edit-form" class="furniture-edit-form" data-furniture-edit="${esc(item.id)}" data-geometry-locked="${item.locked}">
         <label class="furniture-field">Nom<input name="name" value="${esc(item.name)}" maxlength="100" required></label>
         <label class="furniture-field furniture-tone-field">Teinte du volume<input name="color" type="color" value="${esc(item.color.toLowerCase())}"></label>
+        ${surfaceField('surface', 'Matière', item.surface)}
         ${dimensionsFields(item)}
         ${sofaFields(item)}
         ${dressingFields(item)}${kitchenFields(item)}
@@ -676,6 +678,10 @@ export class FurniturePanel {
     }
     // The colour control reports lowercase hex: an untouched one keeps the stored spelling.
     if (unchanged('color')) next.color = item.color;
+    // Like colour, the material is not geometry: a locked piece can change it.
+    const surface = data.has('surface') ? surfaceFromForm(data.get('surface')) : item.surface;
+    if (surface) next.surface = surface;
+    else delete next.surface;
     if (unchanged('x')) next.position[0] = item.position[0];
     if (unchanged('z')) next.position[1] = item.position[1];
     if (unchanged('rotation')) next.rotation = item.rotation;
@@ -729,7 +735,7 @@ export class FurniturePanel {
     if (this.editDialog.open) this.editDialog.close();
     const initial = createFurniture({ kind: 'sofa' });
     this.dialog.innerHTML = `<div class="furniture-dialog-heading"><h2 id="furniture-add-title">Ajouter un meuble</h2><button type="button" class="icon-button" data-add-close aria-label="Fermer">${icon('close', 20)}</button></div><p>Renseignez ses dimensions réelles.${this.adapter.getAddRoomName?.() ? ` Placement dans : <strong>${esc(this.adapter.getAddRoomName()!)}</strong>.` : ''} Vous pourrez ensuite le déplacer dans la maison.</p>
-      <form id="furniture-add-form"><div class="furniture-field-grid two"><label class="furniture-field">Type de meuble<select name="kind">${kindOptions(initial.kind)}</select></label><label class="furniture-field">Nom<input name="name" value="${esc(initial.name)}" maxlength="100" required></label></div>${dimensionsFields(initial)}<label class="furniture-field">Hauteur de pose au-dessus du sol <span>cm</span><input name="elevation" type="number" min="0" max="2000" step="0.1" value="${cm(initial.elevation ?? 0)}"></label>${sofaFields(initial)}${dressingFields(initial)}${kitchenFields(initial)}${showerFields(initial)}<p class="furniture-form-note">Les valeurs proposées sont des exemples. Remplacez-les par les mesures du meuble, poignées et accoudoirs compris.</p><label class="furniture-field furniture-tone-field">Teinte du volume<input name="color" type="color" value="${initial.color}"><span>Une teinte de repérage pour le volume simplifié.</span></label>
+      <form id="furniture-add-form"><div class="furniture-field-grid two"><label class="furniture-field">Type de meuble<select name="kind">${kindOptions(initial.kind)}</select></label><label class="furniture-field">Nom<input name="name" value="${esc(initial.name)}" maxlength="100" required></label></div>${dimensionsFields(initial)}<label class="furniture-field">Hauteur de pose au-dessus du sol <span>cm</span><input name="elevation" type="number" min="0" max="2000" step="0.1" value="${cm(initial.elevation ?? 0)}"></label>${sofaFields(initial)}${dressingFields(initial)}${kitchenFields(initial)}${showerFields(initial)}<p class="furniture-form-note">Les valeurs proposées sont des exemples. Remplacez-les par les mesures du meuble, poignées et accoudoirs compris.</p><label class="furniture-field furniture-tone-field">Teinte du volume<input name="color" type="color" value="${initial.color}"><span>Une teinte de repérage pour le volume simplifié.</span></label>${surfaceField('surface', 'Matière')}
       <div class="furniture-add-status" role="status"></div><div class="furniture-dialog-footer"><button type="button" class="furniture-cancel" data-add-close>Annuler</button><button type="submit" class="primary-button">Ajouter dans la maison ${icon('arrow', 17)}</button></div></form>`;
     const form = this.dialog.querySelector<HTMLFormElement>('form')!;
     updateSofaFields(form, initial.kind);
@@ -815,6 +821,7 @@ export class FurniturePanel {
           ...(this.adapter.getAddPosition?.() ?? this.adapter.getLevel().spawn.position),
         ] as Point2,
         color: String(data.get('color')),
+        surface: surfaceFromForm(data.get('surface')),
       });
       this.adapter.onAdd(item);
       this.dialog.close();

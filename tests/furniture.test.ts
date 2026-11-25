@@ -379,3 +379,23 @@ test('only oven columns accept a boolean microwave option', () => {
       validateFurnitureList([{ ...kitchen, kitchen: { ...kitchen.kitchen, slots: [slot] } }]),
     );
 });
+
+test('a furniture surface and a kitchen worktop surface accept only known materials', () => {
+  const kitchen = createFurniture({ kind: 'kitchen' });
+  const valid = {
+    ...kitchen,
+    surface: 'stone',
+    kitchen: { ...kitchen.kitchen!, worktopSurface: 'wood' },
+  };
+  assert.deepEqual(validateFurnitureList([valid])[0], valid);
+  for (const surface of ['wood', 'stone', 'gloss'])
+    assert.equal(validateFurnitureList([{ ...kitchen, surface }])[0].surface, surface);
+  assert.throws(() => validateFurnitureList([{ ...kitchen, surface: 'marble' }]), /matière/i);
+  assert.throws(
+    () =>
+      validateFurnitureList([
+        { ...kitchen, kitchen: { ...kitchen.kitchen!, worktopSurface: 'marble' } },
+      ]),
+    /matière/i,
+  );
+});
