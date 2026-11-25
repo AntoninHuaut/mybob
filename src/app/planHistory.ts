@@ -6,6 +6,12 @@ interface History {
   redo: HouseProject[];
 }
 const histories = new WeakMap<HouseProject, History>();
+// Saving reloads the view before the history entry exists: the edit bar refreshes afterwards.
+let changed = () => {};
+
+export function watchPlanHistory(listener: () => void) {
+  changed = listener;
+}
 
 export function planHistory(project: HouseProject) {
   return histories.get(project) ?? { undo: [], redo: [] };
@@ -20,6 +26,7 @@ export function rememberPlanEdit(current: HouseProject, next: HouseProject) {
   const history = planHistory(current);
   histories.delete(current);
   histories.set(next, { undo: [...history.undo.slice(-49), current], redo: [] });
+  changed();
 }
 
 export function restorePlanEdit(current: HouseProject, direction: keyof History) {
@@ -34,4 +41,5 @@ export function restorePlanEdit(current: HouseProject, direction: keyof History)
     [direction]: history[direction].slice(0, -1),
     [other]: [...history[other], current],
   });
+  changed();
 }

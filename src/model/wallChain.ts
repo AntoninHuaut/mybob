@@ -72,3 +72,37 @@ export function interiorViewpoint(polygon: Point2[]) {
   if (!viewpoint) throw new Error('Le contour ne permet pas de placer le point de visite.');
   return viewpoint;
 }
+
+const R = Math.SQRT1_2;
+const COMPASS: Point2[] = [
+  [1, 0],
+  [R, R],
+  [0, 1],
+  [-R, R],
+  [-1, 0],
+  [-R, -R],
+  [0, -1],
+  [R, -R],
+];
+
+/**
+ * The corner after `last` towards `pointer`: snapped to a multiple of 45° unless `snap` is off,
+ * at the typed `length` when given. Exact unit vectors keep right angles exact.
+ */
+export function nextCorner(
+  last: Point2,
+  pointer: Point2,
+  length?: number,
+  snap = true,
+): Point2 | undefined {
+  const dx = pointer[0] - last[0],
+    dz = pointer[1] - last[1],
+    len = Math.hypot(dx, dz);
+  if (len === 0) return;
+  const direction: Point2 = snap
+    ? COMPASS[(Math.round(Math.atan2(dz, dx) / (Math.PI / 4)) + 8) % 8]
+    : [dx / len, dz / len];
+  const distance = length ?? (snap ? direction[0] * dx + direction[1] * dz : len);
+  if (!(distance > 0)) return;
+  return [last[0] + direction[0] * distance, last[1] + direction[1] * distance];
+}

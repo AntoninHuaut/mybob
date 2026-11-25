@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createFurniture } from '../src/furniture/model';
+import { drawClearRoom } from './planDrawing';
 import { startupDone } from './startup';
 
 // Only exercise the compiled public demo through its UI; each test gets fresh storage.
@@ -411,13 +412,8 @@ test('the walk recaptures the pointer after its release, click in the view inclu
   await expect.poll(locked, { timeout: 5_000 }).toBe(true);
 });
 
-test('create a finished room and reopen its saved house in Visite', async ({ page }) => {
-  const menu = page.locator('#toggle-sidebar');
-  if ((await menu.getAttribute('aria-expanded')) !== 'true') await menu.click();
-  await page.locator('#create-house').click();
-  await page.getByLabel('Nom de la pièce').fill('Atelier');
-  await page.getByRole('button', { name: 'Créer et enregistrer' }).click();
-  await expect(page.locator('#header-project')).toHaveText('Atelier');
+test('draw a room and reopen its saved house in Visite', async ({ page }) => {
+  await drawClearRoom(page, 'Atelier');
   await page.reload();
   await startupDone(page);
   await expect(page.locator('#header-project')).toHaveText('Atelier');

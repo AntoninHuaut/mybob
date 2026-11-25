@@ -25,11 +25,11 @@ export function openPartitionMove() {
   }));
   openDialog(
     'CLOISON',
-    `<form id="move-partition"><h2>Déplacer une cloison</h2>
+    `<form id="move-partition" class="plan-form"><h2>Déplacer une cloison</h2>
     <label>Cloison <select name="wall">${walls.map((w) => `<option value="${escapeHtml(w.id)}">${escapeHtml(w.id)} · ${number(wallLength(w))} m</option>`).join('')}</select></label>
     <div id="move-diagram" style="touch-action:none"></div><label>Déplacement perpendiculaire (m)<input required name="delta" type="number" step="any" value="0"></label>
     <p>Faites glisser sur le plan ou saisissez une distance signée.</p>
-    <p id="move-status" aria-live="polite"></p><div class="dialog-actions"><button type="button" id="move-cancel">Annuler</button><button type="submit">Appliquer le déplacement</button></div></form>`,
+    <p id="move-status" aria-live="polite"></p><div class="dialog-actions"><button type="button" class="text-button" id="move-cancel">Annuler</button><button type="submit" class="primary-button">Appliquer le déplacement</button></div></form>`,
   );
   const form = el<HTMLFormElement>('#move-partition'),
     map = el('#move-diagram'),

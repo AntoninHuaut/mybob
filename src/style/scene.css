@@ -618,6 +618,52 @@
 #delete-selected-furniture {
   color: #a34d39;
 }
+/* Sits beside the tool column, level with its top, as the extension of « Modifier le plan ». */
+.plan-edit-bar {
+  position: absolute;
+  z-index: 4;
+  top: 88px;
+  right: 80px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  max-width: calc(100% - 110px);
+  padding: 5px;
+  border: 1px solid #d2ddc7;
+  border-radius: 8px;
+  background: #fcfef7ed;
+  box-shadow: 0 4px 18px #2a45200c;
+  backdrop-filter: blur(9px);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.plan-edit-bar button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  min-width: 40px;
+  min-height: 40px;
+  justify-content: center;
+  padding: 6px 10px;
+  border-radius: 5px;
+  color: #355840;
+  font-size: 13px;
+  font-weight: 500;
+}
+.plan-edit-bar button:hover:not(:disabled) {
+  background: #eaf1e1;
+}
+.plan-edit-bar button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+.plan-edit-divider {
+  flex: 0 0 1px;
+  align-self: stretch;
+  margin: 6px 3px;
+  background: #dce5d2;
+}
 .measure-bob {
   height: 44px;
   width: auto;
