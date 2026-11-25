@@ -741,6 +741,17 @@ test('Vue 3D occlusion sits between the orbit refinement and the bloom, leaves w
     effects.updateOrbit(true, camera, { occlusion: true, effectTier: 1 });
     assert.equal(occlusions, 3, 'never rebuilt once the tier removed it');
     assert.equal(effects.applyEffectTier(1, OCCLUSION_FADE_MS * 2), false);
+
+    // « Haute » chosen while a fade is under way: the occlusion comes back whole, not faded.
+    effects.updateOrbit(true, camera, vue3d);
+    assert.equal(occlusions, 4);
+    effects.applyEffectTier(1, 0);
+    effects.applyEffectTier(1, OCCLUSION_FADE_MS / 2);
+    calls.length = 0;
+    assert.equal(effects.applyEffectTier(0, OCCLUSION_FADE_MS / 2), true);
+    assert.ok(calls.includes('dispose:occlusion'), 'the half-faded occlusion is released');
+    effects.updateOrbit(true, camera, vue3d);
+    assert.equal(occlusions, 5, 'built again at full strength');
   } finally {
     effects.dispose();
     scene.dispose();

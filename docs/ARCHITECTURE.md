@@ -530,7 +530,7 @@ last call, and read back at start-up.
   on the demo, mean 1.5-3/255 within 25 s; 0 with the refresh off). `ViewEffects.temporalActive`
   tells the scheduler.
 - Quality (`adaptiveResolution.ts`), the same at rest and in motion, **one per view**
-  (`ViewResolutions`, keyed by `viewKey`), chosen with the Navigation panel's « Qualité »
+  (`ViewResolutions`, keyed by `viewKey`), chosen with the header's « Qualité »
   select (`src/ui/quality.ts`): « Automatique », « Haute », « Moyenne », « Basse ». In
   automatic, a median frame time over 25 ms (under 40 fps) first lowers the rendering one
   step per series, in every view (100, 90, 80, 67 %, `SCALE_FLOOR`), and only at 67 % drops
@@ -554,8 +554,10 @@ last call, and read back at start-up.
   check): every view starts over under the new cap. A headset session skips all of this.
   Falling 15 % behind the refresh at an up-scale goes back one step without touching the
   effects. Once a view has stepped down it never climbs again in the session (a resize
-  hitches), and a tier is never lifted in a session; choosing another quality rebuilds the
-  effects.
+  hitches), and a tier dropped in a session is never lifted. A view that started low (a
+  saved start or the seed) and keeps up with the screen gets its effects back first, then
+  sharpness. Choosing another quality rebuilds the effects. An image export always renders
+  at full resolution.
   Automatic saves where each view stood, scale and tier, per browser and GPU
   (`maison-atelier:quality:v1`, with the renderer string): that is where the view starts
   next session, and a view never measured on this GPU starts from its class

@@ -257,6 +257,9 @@ export class HouseViewer {
   private readonly baseScaling = 1 / Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
   private renderScale = 1;
   private reportedTier = 0;
+  /** The tier and view `applyEffectTier` last applied: a lower tier gives effects back. */
+  private appliedTier = 0;
+  private appliedView = '';
   private lastRenderAt?: number;
   /** Open `holdRendering` calls: every image is drawn while one is held. */
   private renderingHolds = 0;
@@ -276,7 +279,6 @@ export class HouseViewer {
   private sky?: Layer;
   private solarPosition?: SolarPosition;
   private lightOn = true;
-  /** « Ombres des angles » in the navigation panel: off, no view builds an occlusion. */
   private dimensionOn = false;
   private paused = false;
   private capturing = false;
@@ -1364,6 +1366,9 @@ export class HouseViewer {
 
   /** Copy WebGL synchronously before the browser discards its drawing buffer. */
   captureCanvas(dimensions = false, background = true): HTMLCanvasElement {
+    // An image is exported at full resolution, whatever « Qualité » lowered on screen.
+    const lowered = this.renderScale < 1;
+    if (lowered) this.engine.setHardwareScalingLevel(this.baseScaling);
     const output = document.createElement('canvas');
     output.width = this.engine.getRenderWidth();
     output.height = this.engine.getRenderHeight();
@@ -1397,6 +1402,7 @@ export class HouseViewer {
       for (const [mesh, enabled] of changed) if (!mesh.isDisposed()) mesh.setEnabled(enabled);
       if (this.sky) this.sky.isEnabled = skyWasEnabled;
       this.capturing = false;
+      if (lowered) this.engine.setHardwareScalingLevel(this.baseScaling / this.renderScale);
       this.scene.activeCamera?.resetViewHistory?.();
       this.requestRender();
     }
@@ -1603,7 +1609,13 @@ export class HouseViewer {
    */
   private applyEffectTier() {
     const tier = this.currentEffectTier;
+    const view = this.currentViewKey();
+    const givenBack = view === this.appliedView && tier < this.appliedTier;
+    this.appliedView = view;
+    this.appliedTier = tier;
     let changed = this.viewEffects?.applyEffectTier(tier) ?? false;
+    // The visit's chain is rebuilt whole so its order holds; the orbit rebuilds on its next image.
+    if (givenBack && this.mode === 'walk') this.rebuildWalkPipelines();
     // The plan shows no sun shadow: keeping the filtering of the view left avoids a relink.
     if (this.shadow && this.mode !== 'plan' && applyShadowTier(this.shadow, tier)) changed = true;
     if (changed) this.requestRender();
@@ -1642,7 +1654,6 @@ export class HouseViewer {
     this.renderScale = Number.NaN; // the next image applies the policy's scale
     if (!this.scene) return;
     this.applyEffectTier();
-    this.rebuildWalkPipelines();
     this.updateOrbitBloom();
   }
 

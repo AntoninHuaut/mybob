@@ -139,8 +139,9 @@ test('automatic starts where this machine left the view, scale and tier', () => 
   const resolution = new AdaptiveResolution(EFFECT_TIERS, { start: { scale: 0.8, tier: 1 } });
   assert.equal(resolution.scale, 0.8);
   assert.equal(resolution.effectTier, 1);
-  feed(resolution, SERIES * 10, 1000 / 60);
-  assert.equal(resolution.scale, 0.8, 'a view that lost an effect does not sharpen');
+  feed(resolution, SERIES, 1000 / 60);
+  assert.equal(resolution.effectTier, 0, 'keeping up gives the effect back first');
+  assert.equal(resolution.scale, 0.8);
 });
 
 test('the GPU class seeds where automatic starts: integrated at « Moyenne », software at « Basse »', () => {
@@ -346,4 +347,24 @@ test('moving to a screen with another cap starts the views over under it', () =>
   assert.equal(views.setCap(1), true);
   assert.equal(views.for('walk').scale, 1, 'a 1080p screen never renders above 100 %');
   assert.equal(views.setCap(1), false, 'the same cap changes nothing');
+});
+
+test('a view started without some effects gets them back first when it keeps up with the screen', () => {
+  const resolution = new AdaptiveResolution(EFFECT_TIERS, { start: { scale: 0.67, tier: 2 } });
+  feed(resolution, SERIES, 1000 / 60);
+  assert.equal(resolution.effectTier, 1, 'an effect comes back before any sharpness');
+  feed(resolution, SERIES, 1000 / 60);
+  assert.equal(resolution.effectTier, 0);
+  assert.equal(resolution.scale, SCALE_FLOOR);
+  feed(resolution, SERIES, 1000 / 60);
+  assert.equal(resolution.scale, RENDER_SCALES.at(-2));
+});
+
+test('a tier dropped in this session never comes back by itself', () => {
+  const resolution = new AdaptiveResolution(EFFECT_TIERS, { start: { scale: 0.67, tier: 0 } });
+  feed(resolution, SERIES, 45);
+  assert.equal(resolution.effectTier, 1);
+  feed(resolution, SERIES * 10, 1000 / 60);
+  assert.equal(resolution.effectTier, 1);
+  assert.equal(resolution.scale, SCALE_FLOOR);
 });

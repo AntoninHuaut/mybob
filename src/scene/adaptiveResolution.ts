@@ -14,12 +14,7 @@ export const MAX_PIXEL_RATIO = 1;
 export const RENDER_SCALES = [1, 0.9, 0.8, 0.67] as const;
 export const SCALE_FLOOR = 0.67;
 
-/**
- * Effect tiers, dropped only **after** the resolution reached its floor (#312: effects are the
- * very last thing to give up), in this order. Each effect is whole or gone, never degraded
- * on the way: a grainy cheap occlusion is the ugliest state, and a look that changes by
- * itself reads as a bug.
- */
+/** Effect tiers, dropped in this order once the resolution is at its floor; each is whole or gone. */
 export const OCCLUSION_TIER = 1;
 export const SHADOW_TIER = 2;
 export const BLOOM_TIER = 3;
@@ -180,12 +175,11 @@ export class AdaptiveResolution {
       const sorted = [...this.samples].sort((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)];
       this.samples = [];
-      const pinned = this.pinned;
       const vsync = refreshIntervalOf(median);
       if (vsync !== undefined) this.refreshMs = Math.min(this.refreshMs ?? Infinity, vsync);
       const scale = this.ladder[this.level];
       if (
-        !pinned &&
+        !this.pinned &&
         scale > 1 &&
         (this.refreshMs === undefined
           ? vsync === undefined
@@ -197,23 +191,25 @@ export class AdaptiveResolution {
         this.steppedDown = true;
         this.warmup = WARMUP_FRAMES;
       } else if (median > FRAME_BUDGET_MS) {
-        if (!pinned && this.level < this.ladder.length - 1) {
+        if (!this.pinned && this.level < this.ladder.length - 1) {
           this.level++;
           this.steppedDown = true;
           this.warmup = WARMUP_FRAMES;
         } else if (this.effectLevel < this.droppable) {
           this.effectLevel++;
+          this.steppedDown = true;
           this.warmup = WARMUP_FRAMES;
         }
       } else if (
         vsync !== undefined &&
         vsync === this.refreshMs &&
-        !pinned &&
+        !this.pinned &&
         !this.steppedDown &&
-        this.effectLevel === 0 &&
-        this.level > 0
+        (this.effectLevel > 0 || this.level > 0)
       ) {
-        this.level--;
+        // Started low (a saved start or the GPU seed) and keeping up: effects come back first.
+        if (this.effectLevel > 0) this.effectLevel--;
+        else this.level--;
         this.warmup = WARMUP_FRAMES;
       }
     }

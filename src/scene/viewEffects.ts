@@ -269,7 +269,12 @@ export class ViewEffects {
    * the occlusion is either whole or gone, and it fades out rather than blinking off.
    */
   applyEffectTier(tier: number, now: number = performance.now()): boolean {
-    if (tier < OCCLUSION_TIER) return false;
+    if (tier < OCCLUSION_TIER) {
+      // An effect given back mid-fade is rebuilt whole by `updateOrbit`, never left faded.
+      if (!this.orbitOcclusionFade) return false;
+      this.releaseOrbitOcclusion();
+      return true;
+    }
     let changed = false;
     if (tier >= BLOOM_TIER && (this.bloom || this.orbitBloom)) {
       this.bloom?.dispose();
