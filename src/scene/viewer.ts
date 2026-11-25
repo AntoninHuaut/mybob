@@ -238,7 +238,7 @@ export class HouseViewer {
   private readonly warmth = new ViewWarmth();
   private preparing = false;
   /** How long the last `load` spent on each part of the scene, for the start-up report. */
-  loadTimings?: { materialsMs: number; levelsMs: number; levels: number; exteriorMs: number };
+  loadTimings?: { materialsMs: number; levelsMs: number; exteriorMs: number; totalMs: number };
   /**
    * A GPU rather than a software rasteriser (`isSoftwareRenderer`): only then are views
    * prepared behind the overlay and does Vue 3D get its occlusion. CI's SwiftShader
@@ -405,6 +405,7 @@ export class HouseViewer {
   }
 
   load(project: HouseProject, levelId?: string) {
+    const loadStarted = performance.now();
     // Optional: scene tests build a viewer from its prototype, without the constructor.
     this.warmth?.reset();
     this.requestRender();
@@ -468,12 +469,7 @@ export class HouseViewer {
       candidate.elevation < low.elevation ? candidate : low,
     );
     this.exterior = buildExterior(project, ground, scene);
-    this.loadTimings = {
-      materialsMs: materialsAt - startedAt,
-      levelsMs: levelsAt - materialsAt,
-      levels: project.levels.length,
-      exteriorMs: performance.now() - levelsAt,
-    };
+    const exteriorAt = performance.now();
     this.sky = createSkyLayer(scene);
     refreshFixtureLights(scene);
     const exteriorScene = this.exterior;
@@ -499,6 +495,12 @@ export class HouseViewer {
     this.setMode('overview');
     this.attachSceneInput(scene);
     this.resize();
+    this.loadTimings = {
+      materialsMs: materialsAt - startedAt,
+      levelsMs: levelsAt - materialsAt,
+      exteriorMs: exteriorAt - levelsAt,
+      totalMs: performance.now() - loadStarted,
+    };
   }
 
   /**

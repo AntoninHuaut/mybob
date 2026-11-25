@@ -215,8 +215,10 @@ async function start() {
     );
     const projectsAt = performance.now();
     const unreadableProjects = restoreLibrary(bundled);
+    const libraryAt = performance.now();
     const sceneEngine = createEngine(el<HTMLCanvasElement>('#scene'));
     const viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'), sceneEngine);
+    const engineAt = performance.now();
     app.viewer = viewer;
     if (viewer.softwareRendering) {
       // A CPU rasteriser draws the scene ten to fifty times slower than any GPU: the
@@ -244,6 +246,7 @@ async function start() {
     } catch {
       /* optional persistence */
     }
+    const loadStarted = performance.now();
     if (isShareLink(location.hash)) {
       // A link error (10-project limit, rejected document…) is not a failure of the
       // 3D engine: a toast message, then the local project stays usable.
@@ -289,8 +292,25 @@ async function start() {
     // the page. The other views do the same over the viewport only, with a shorter
     // message, the first time they are opened.
     await viewer.whenReady();
-    if (viewer.loadTimings)
-      startup = { projectsAt, builtAt, readyAt: performance.now(), ...viewer.loadTimings };
+    const scene = viewer.loadTimings;
+    if (scene) {
+      const readyAt = performance.now();
+      const sceneParts = scene.materialsMs + scene.levelsMs + scene.exteriorMs;
+      startup = {
+        readyAt,
+        phases: [
+          { label: 'projets', ms: projectsAt },
+          { label: 'bibliothèque', ms: libraryAt - projectsAt },
+          { label: 'moteur', ms: engineAt - libraryAt },
+          { label: 'matériaux', ms: scene.materialsMs },
+          { label: 'niveaux', ms: scene.levelsMs },
+          { label: 'extérieur', ms: scene.exteriorMs },
+          { label: 'scène', ms: scene.totalMs - sceneParts },
+          { label: 'interface et meubles', ms: builtAt - loadStarted - scene.totalMs },
+          { label: 'préparation de la vue', ms: readyAt - builtAt },
+        ],
+      };
+    }
     viewer.onPreparing = (active) => {
       el('#loading span').textContent = 'Préparation de la vue…';
       el('#loading').hidden = !active;

@@ -67,15 +67,10 @@ export interface DiagnosticSnapshot {
   startup?: StartupTiming;
 }
 
-/** Milestones are milliseconds since navigation; phases are durations inside the scene build. */
+/** `readyAt` is milliseconds since navigation; the phases are durations, in start-up order. */
 export interface StartupTiming {
-  projectsAt: number;
-  builtAt: number;
   readyAt: number;
-  materialsMs: number;
-  levelsMs: number;
-  levels: number;
-  exteriorMs: number;
+  phases: ReadonlyArray<{ label: string; ms: number }>;
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -108,8 +103,9 @@ function seconds(ms: number): string {
 }
 
 function startupLine(t: StartupTiming): string {
-  const build = `scène ${seconds(t.builtAt - t.projectsAt)} s (matériaux ${seconds(t.materialsMs)} · ${t.levels} niveaux ${seconds(t.levelsMs)} · extérieur ${seconds(t.exteriorMs)})`;
-  return `  démarrage   prêt en ${seconds(t.readyAt)} s · projets ${seconds(t.projectsAt)} s · ${build} · préparation de la vue ${seconds(t.readyAt - t.builtAt)} s`;
+  const timed = t.phases.reduce((sum, phase) => sum + phase.ms, 0);
+  const phases = [...t.phases, { label: 'autres', ms: Math.max(0, t.readyAt - timed) }];
+  return `  démarrage   prêt en ${seconds(t.readyAt)} s · ${phases.map((phase) => `${phase.label} ${seconds(phase.ms)}`).join(' · ')}`;
 }
 
 /**
