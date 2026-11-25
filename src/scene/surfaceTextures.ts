@@ -434,24 +434,37 @@ export function surfaceMapData(): SurfaceMaps {
 
 /** Furniture maps tile once per metre, on the world-scale UVs of `beveledBox`. */
 const FURNITURE_SIZE = 512;
+const FURNITURE_WOOD_SIZE = 1024;
 
 const wrap = (value: number) => value - Math.floor(value);
 
-/** Straight grain along U, lines several texels wide so mipmaps keep them; barely bent, never rings. */
+/**
+ * Laminate walnut along U: crisp late-wood lines of uneven spacing and strength, bent into
+ * gentle arcs, over broad tone bands and a fine pore texture. 1 texel is 1 mm.
+ */
 function furnitureGrain(size: number): Float32Array {
   const field = new Float32Array(size * size);
+  let low = Infinity,
+    high = -Infinity;
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
-      const u = x / size;
-      const v = wrap(y / size + (fbm(u, y / size, 2, 2, 2, 191) - 0.5) * 0.03);
-      const lines = fbm(u, v, 1, 48, 2, 193);
-      const streaks = fbm(u, v, 2, 12, 3, 195);
-      const figure = fbm(u, v, 4, 6, 2, 196);
-      field[y * size + x] = Math.min(
-        1,
-        Math.max(0, (lines * 0.45 + streaks * 0.4 + figure * 0.15 - 0.5) * 2.2 + 0.5),
-      );
+      const u = x / size,
+        v0 = y / size;
+      const bend =
+        (fbm(u, v0, 1, 3, 2, 191) - 0.5) * 0.05 + (fbm(u, v0, 4, 2, 2, 192) - 0.5) * 0.01;
+      const v = wrap(v0 + bend);
+      const ring = wrap(v * 90 + fbm(u, v, 1, 6, 3, 193) * 14);
+      const line = Math.exp(-((ring - 0.5) ** 2) / 0.004);
+      const strength = fbm(u, v, 3, 40, 2, 194) ** 2 * 1.6;
+      const bands = fbm(u, v, 1, 7, 4, 195);
+      const streak = Math.min(1, Math.max(0, (0.42 - bands) * 6));
+      const pores = fbm(u, v, 8, 384, 1, 196);
+      const value = 1 - line * strength * 0.45 - (1 - bands) * 0.6 - streak * 0.35 - pores * 0.1;
+      field[y * size + x] = value;
+      low = Math.min(low, value);
+      high = Math.max(high, value);
     }
+  for (let i = 0; i < field.length; i++) field[i] = (field[i] - low) / (high - low);
   return field;
 }
 
@@ -489,11 +502,12 @@ let furnitureCached: FurnitureMaps | undefined;
 export function furnitureMapData(): FurnitureMaps {
   if (furnitureCached) return furnitureCached;
   const size = FURNITURE_SIZE;
-  const grain = furnitureGrain(size);
+  const woodSize = FURNITURE_WOOD_SIZE;
+  const grain = furnitureGrain(woodSize);
   const stone = furnitureStone(size);
   furnitureCached = {
-    woodAlbedo: { size, data: tone(grain, size, 0.7) },
-    woodNormal: { size, data: normalFromHeight(grain, size, 0.4) },
+    woodAlbedo: { size: woodSize, data: tone(grain, woodSize, 0.45) },
+    woodNormal: { size: woodSize, data: normalFromHeight(grain, woodSize, 0.5) },
     stoneAlbedo: { size, data: tone(stone, size, 0.93) },
     stoneNormal: { size, data: normalFromHeight(stone, size, 1.2) },
   };
