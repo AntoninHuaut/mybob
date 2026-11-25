@@ -455,20 +455,16 @@ function furnitureGrain(size: number): Float32Array {
   return field;
 }
 
-/** Cleft slate: broad clouds, flaky streaks across the board and a fine mineral grain. */
+/** Slate laminate: soft clouds and a gentle cleft, with no streak that could read as a seam. */
 function furnitureStone(size: number): Float32Array {
   const field = new Float32Array(size * size);
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const u = x / size,
         v = y / size;
-      const broad = fbm(u, v, 3, 3, 4, 197);
-      const flakes = Math.abs(fbm(u, v, 3, 10, 3, 199) - 0.5) * 2;
-      const grain = fbm(u, v, 48, 48, 2, 201);
-      field[y * size + x] = Math.min(
-        1,
-        Math.max(0, (broad * 0.5 + flakes * 0.3 + grain * 0.2 - 0.5) * 1.8 + 0.5),
-      );
+      const clouds = fbm(u, v, 2, 2, 4, 197);
+      const cleft = 1 - Math.abs(fbm(u, v, 4, 4, 3, 199) - 0.5) * 2;
+      field[y * size + x] = clouds * 0.75 + cleft * 0.25;
     }
   return field;
 }
@@ -498,8 +494,8 @@ export function furnitureMapData(): FurnitureMaps {
   furnitureCached = {
     woodAlbedo: { size, data: tone(grain, size, 0.7) },
     woodNormal: { size, data: normalFromHeight(grain, size, 0.4) },
-    stoneAlbedo: { size, data: tone(stone, size, 0.84) },
-    stoneNormal: { size, data: normalFromHeight(stone, size, 2.5) },
+    stoneAlbedo: { size, data: tone(stone, size, 0.93) },
+    stoneNormal: { size, data: normalFromHeight(stone, size, 1.2) },
   };
   return furnitureCached;
 }

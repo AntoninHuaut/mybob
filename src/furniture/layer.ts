@@ -417,7 +417,7 @@ export class FurnitureLayer {
         const maps = furnitureMapData();
         mat.albedoTexture = upload(surface === 'wood' ? maps.woodAlbedo : maps.stoneAlbedo);
         mat.bumpTexture = upload(surface === 'wood' ? maps.woodNormal : maps.stoneNormal);
-        mat.bumpTexture.level = surface === 'wood' ? 0.35 : 0.6;
+        mat.bumpTexture.level = surface === 'wood' ? 0.35 : 0.3;
       }
       mat.metallic = name === 'handles' ? 0.9 : 0;
       mat.roughness =
