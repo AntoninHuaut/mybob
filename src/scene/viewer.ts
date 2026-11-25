@@ -58,6 +58,7 @@ import {
   ViewWarmth,
   warmFrames,
 } from './shaderWarmup';
+import { RefreshRateEstimator } from './deviceProfile';
 import { pluginSummary, shaderLog } from './shaderLog';
 import { EFFECT_TIERS, MAX_PIXEL_RATIO, upscaleCap, ViewResolutions } from './adaptiveResolution';
 import {
@@ -196,8 +197,8 @@ export class HouseViewer {
   private loadedProject?: HouseProject;
   private materials?: Materials;
   private shadow?: ShadowGenerator;
-  /** The headset session started (true) or ended (false). */
-  onImmersiveChange?: (active: boolean) => void;
+  /** The headset session started (true) or ended (false, with its frame report). */
+  onImmersiveChange?: (active: boolean, report?: string) => void;
   goToMode = false;
   /** The visit in a headset, a state of the walk: `mode` stays `walk` meanwhile. */
   private readonly headset = new HeadsetSession();
@@ -217,6 +218,7 @@ export class HouseViewer {
   private furnitureRevision = -1;
   private readonly aim = new WalkAim();
   private readonly renderScheduler = new RenderScheduler();
+  private readonly refresh = new RefreshRateEstimator();
   private readonly warmth = new ViewWarmth();
   private preparing = false;
   /**
@@ -351,6 +353,7 @@ export class HouseViewer {
         this.scene.render();
         this.updateOrbitBloom();
       }
+      this.refresh.tick(now, render);
       this.lastRenderAt = render ? now : undefined;
     });
   }
@@ -1494,6 +1497,7 @@ export class HouseViewer {
     const [x, z] = walk.position;
     const forward = walk.camera.getDirection(Vector3.Forward(true));
     if (!this.headset.release(walk)) return;
+    const report = walk.frameReport();
     this.updateSky();
     this.updateShadowPolicy();
     if (!this.scene || !this.walk) return;
@@ -1511,7 +1515,7 @@ export class HouseViewer {
       this.orbit.attachControl(this.canvas, true);
     }
     this.rebuildWalkPipelines();
-    this.onImmersiveChange?.(false);
+    this.onImmersiveChange?.(false, report);
   }
 
   /**
@@ -1629,6 +1633,11 @@ export class HouseViewer {
     this.resolutions.configure(fixed, starts);
     this.renderScale = Number.NaN; // the next image applies the policy's scale
     this.requestRender();
+  }
+
+  /** Display refresh rate read while the view was still, for the diagnostic. */
+  get refreshRate(): number | undefined {
+    return this.refresh.hz;
   }
 
   /** Render scale in use on this machine (1 = full resolution), for the diagnostic. */

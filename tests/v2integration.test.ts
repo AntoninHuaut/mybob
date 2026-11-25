@@ -187,6 +187,7 @@ describe('viewer state transitions', () => {
         position: viewer.level.spawn.position,
         camera: viewer.walk,
         dispose() {},
+        frameReport: () => '[casque] rapport',
         async exit() {
           await Promise.resolve();
           lifecycle.leaveImmersive(headset as unknown as ImmersiveWalk);
@@ -203,8 +204,9 @@ describe('viewer state transitions', () => {
         dispose() {},
       };
       Object.assign(viewer, { headset: session, rebuildWalkPipelines() {} });
-      viewer.onImmersiveChange = (active) => {
+      viewer.onImmersiveChange = (active, report) => {
         ended = !active;
+        assert.equal(report, '[casque] rapport', 'the ended session hands over its frame report');
         assert.equal(viewer.mode, 'plan');
         assert.equal(scene.activeCamera, viewer.orbit);
       };

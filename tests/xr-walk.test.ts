@@ -339,6 +339,27 @@ test('the controller trigger takes the aimed stair once per press and respects o
   }
 });
 
+test('the headset report counts only the frames drawn once the loading veil lifted', () => {
+  const session = headsetWalk({ point: [4, 4.2], yaw: 0 });
+  try {
+    session.manager.session = { inputSources: [] } as unknown as XRSession;
+    session.manager.currentFrame = {} as unknown as XRFrame;
+    for (let i = 0; i < 3; i++) session.walk.step(1 / 72);
+    assert.match(session.walk.frameReport(), /aucune image mesurée/);
+    const internals = session.walk as unknown as { veil?: { dispose(): void } };
+    internals.veil?.dispose();
+    internals.veil = undefined;
+    // The first frame after the veil only starts the clock.
+    for (let i = 0; i < 4; i++) session.walk.step(1 / 72);
+    const report = session.walk.frameReport();
+    assert.match(report, /rapport de la visite au casque/);
+    assert.match(report, / 3 images en /);
+    assert.match(report, /autonome · fovéation non prise en charge/);
+  } finally {
+    session.dispose();
+  }
+});
+
 test('the headset starts where the screen walk stood, looking the same way', () => {
   const yaw = 0.9;
   const session = headsetWalk({ point: [4, 4.2], yaw });

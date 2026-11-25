@@ -9,6 +9,7 @@ import {
   collectDiagnostics,
   diagnosticLines,
   installDiagnostics,
+  profileContextLine,
   viewLabel,
   type DiagnosticView,
 } from './scene/diagnostics';
@@ -68,6 +69,22 @@ function wireEvents() {
   wireLinkHashFlush();
 }
 
+/** `?diagnostic` also asks for the headset's frame report on leaving it; the URL loses the flag. */
+const diagnosticSession = reportRequested(location.search);
+
+function diagnostics() {
+  const { viewer } = app;
+  return collectDiagnostics(viewer.engine, viewer.scene, diagnosticView(), viewer.refreshRate);
+}
+
+function showReport(title: string, text: string) {
+  openDialog(title, reportResultHtml(text));
+  el('#copy-report').addEventListener('click', async () => {
+    const copied = await copyReport(text, el('#report-text'));
+    el('#copy-report').textContent = copied ? 'Copié' : 'Texte sélectionné : Ctrl+C';
+  });
+}
+
 function diagnosticView(): DiagnosticView {
   const { viewer } = app;
   return {
@@ -86,6 +103,9 @@ async function measureForReport() {
   const { viewer } = app;
   history.replaceState(null, '', withoutReportParameter(location.href));
   openDialog('PERFORMANCES', reportProgressHtml(0, 1));
+  // The refresh rate is read only from undrawn frames, which the benchmark never leaves.
+  for (let wait = 0; wait < 20 && viewer.refreshRate === undefined; wait++)
+    await new Promise((resolve) => setTimeout(resolve, 100));
   const { benchmarkViews } = await import('./scene/frameProfiler');
   const lines = await benchmarkViews(viewer, 4, (done, total) => {
     const progress = document.querySelector<HTMLProgressElement>('#report-progress');
@@ -94,15 +114,7 @@ async function measureForReport() {
       progress.value = done;
     }
   });
-  const text = [
-    ...diagnosticLines(collectDiagnostics(viewer.engine, viewer.scene, diagnosticView())),
-    ...lines,
-  ].join('\n');
-  openDialog('PERFORMANCES', reportResultHtml(text));
-  el('#copy-report').addEventListener('click', async () => {
-    const copied = await copyReport(text, el('#report-text'));
-    el('#copy-report').textContent = copied ? 'Copié' : 'Texte sélectionné : Ctrl+C';
-  });
+  showReport('PERFORMANCES', [...diagnosticLines(diagnostics()), ...lines].join('\n'));
 }
 
 /**
@@ -131,10 +143,11 @@ function wireViewer(viewer: HouseViewer) {
   viewer.onDestinationRejected = () =>
     toast('Choisissez un point libre, à distance des murs et des meubles.');
   viewer.onLevelChange = handleStairLevelChange;
-  viewer.onImmersiveChange = (active) => {
+  viewer.onImmersiveChange = (active, report) => {
     el('#viewport').classList.toggle('immersive', active);
     el('#enter-immersive').setAttribute('aria-pressed', String(active));
     if (!active) toast('Retour à la visite à l’écran.');
+    if (!active && report && diagnosticSession) showReport('CASQUE', report);
   };
   viewer.onSelectRoom = (id) => selectRoom(id, false);
   viewer.onEditFurniture = openFurnitureEditor;
@@ -235,12 +248,15 @@ async function start() {
       void import('./ui/fxLab').then(({ mountFxLab }) => mountFxLab(viewer));
     }
     installDiagnostics(
-      () => collectDiagnostics(viewer.engine, viewer.scene, diagnosticView()),
+      diagnostics,
       () => shaderLog.report(),
       async (seconds) => {
         const { profileView, profileLines } = await import('./scene/frameProfiler');
         const view = viewLabel(viewer.mode, viewer.exteriorView);
-        return profileLines(await profileView(viewer, seconds * 1000), view).join('\n');
+        // Read before the profile: its forced images stop the refresh-rate sampling.
+        const context = profileContextLine(diagnostics());
+        const profile = await profileView(viewer, seconds * 1000);
+        return [context, ...profileLines(profile, view)].join('\n');
       },
     );
     wireEvents();
@@ -264,7 +280,7 @@ async function start() {
     app.onboarding = readOnboarding();
     showStartCard();
     if (unreadableProjects > 0) showQuarantineBanner(unreadableProjects);
-    if (reportRequested(location.search)) void measureForReport();
+    if (diagnosticSession) void measureForReport();
   } catch (error) {
     el('#loading').hidden = true;
     el('#loading').classList.remove('loading-startup');

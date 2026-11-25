@@ -1,4 +1,5 @@
 import { EFFECT_TIERS } from './adaptiveResolution';
+import { GPU_CLASS_LABELS, gpuClass, type GpuClass } from './deviceProfile';
 /**
  * A one-command performance report, meant to be read over the phone: the owner
  * asks for `mybob.diag()` and gets the engine, the GPU, the cadence and the
@@ -43,6 +44,9 @@ export interface DiagnosticView {
 export interface DiagnosticSnapshot {
   engine: string;
   gpu: string;
+  gpuClass: GpuClass;
+  /** Display refresh rate measured while the view was still; absent until then. */
+  refreshHz?: number;
   frameRate: number;
   frameTimeMs: number;
   view: DiagnosticView;
@@ -100,6 +104,12 @@ export function engineInfo(engine: DiagnosticEngine): {
   };
 }
 
+/** "vendor · renderer", or `inconnu` when the engine tells neither. */
+export function gpuName(engine: DiagnosticEngine): string {
+  const info = engineInfo(engine);
+  return [info.vendor, info.renderer].filter((part) => part !== 'inconnu').join(' · ') || 'inconnu';
+}
+
 /** "WebGL 2": the first question when a machine renders slowly. */
 export function engineLabel(engine: DiagnosticEngine): string {
   return engine.webGLVersion ? `WebGL ${engine.webGLVersion}` : engine.getClassName();
@@ -109,7 +119,7 @@ function deviceLine(snapshot: DiagnosticSnapshot): string {
   const parts: string[] = [];
   if (snapshot.cores) parts.push(`${snapshot.cores} cœurs`);
   if (snapshot.memoryGb) parts.push(`${decimal(snapshot.memoryGb)} Go de mémoire`);
-  parts.push(`écran ${snapshot.screen}`);
+  parts.push(`écran ${snapshot.screen} · ${refreshText(snapshot.refreshHz)}`);
   if (snapshot.heapMb) parts.push(`tas ${Math.round(snapshot.heapMb)} Mo`);
   return parts.join(' · ');
 }
@@ -120,7 +130,7 @@ export function diagnosticLines(snapshot: DiagnosticSnapshot): string[] {
   const mode = viewLabel(view.mode, view.exterior);
   return [
     '[diag] MyBob — rapport de performance',
-    `  moteur      ${snapshot.engine} · ${snapshot.gpu}`,
+    `  moteur      ${snapshot.engine} · ${snapshot.gpu} · carte ${GPU_CLASS_LABELS[snapshot.gpuClass]}`,
     view.idle
       ? '  cadence     au repos, image figée · bougez la vue pendant la mesure'
       : `  cadence     ${Math.round(snapshot.frameRate)} fps · ${decimal(snapshot.frameTimeMs)} ms par image`,
@@ -132,6 +142,15 @@ export function diagnosticLines(snapshot: DiagnosticSnapshot): string[] {
   ];
 }
 
+function refreshText(hz: number | undefined): string {
+  return hz ? `${hz} Hz` : 'fréquence non mesurée (vue jamais immobile)';
+}
+
+/** The first line of a profile: what a frame time means depends on these. */
+export function profileContextLine(snapshot: DiagnosticSnapshot): string {
+  return `[profil] carte ${GPU_CLASS_LABELS[snapshot.gpuClass]} · écran ${refreshText(snapshot.refreshHz)} · rendu ${snapshot.renderWidth} × ${snapshot.renderHeight} px · dpr ${decimal(snapshot.pixelRatio)}`;
+}
+
 /**
  * Reads the live engine and scene. Every browser-only value is optional: the
  * report must not throw on the machine it is meant to diagnose.
@@ -140,9 +159,9 @@ export function collectDiagnostics(
   engine: DiagnosticEngine,
   scene: DiagnosticScene,
   view: DiagnosticView,
+  refreshHz?: number,
 ): DiagnosticSnapshot {
   const info = engineInfo(engine);
-  const gpu = [info.vendor, info.renderer].filter((part) => part !== 'inconnu').join(' · ');
   const nav =
     typeof navigator === 'undefined'
       ? undefined
@@ -151,7 +170,9 @@ export function collectDiagnostics(
   const heap = (performance as { memory?: { usedJSHeapSize: number } } | undefined)?.memory;
   return {
     engine: engineLabel(engine),
-    gpu: gpu || 'inconnu',
+    gpu: gpuName(engine),
+    gpuClass: gpuClass(info.renderer, nav?.userAgent ?? ''),
+    refreshHz,
     frameRate: engine.getFps(),
     frameTimeMs: engine.getDeltaTime(),
     view,
