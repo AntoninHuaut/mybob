@@ -1,3 +1,4 @@
+import { openPartitionMove } from './movePartition';
 import { openRoomDivision } from './divideRoom';
 import { openWallDrawing } from './drawHouse';
 import { openNewHouse } from './newHouse';
@@ -204,6 +205,7 @@ export function wireProjectControls() {
   });
   el('#export-image').addEventListener('click', openImageExport);
   el('#tool-openings').addEventListener('click', openPlanOpenings);
+  el('#move-wall').addEventListener('click', openPartitionMove);
   el('#divide-room').addEventListener('click', openRoomDivision);
   el('#draw-house').addEventListener('click', openWallDrawing);
   el('#create-house').addEventListener('click', openNewHouse);
