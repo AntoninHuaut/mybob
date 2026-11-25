@@ -12,7 +12,7 @@ import { lowestCeiling } from '../model/ceiling';
 export interface FurnitureIssue {
   itemId: string;
   severity: 'warning' | 'error';
-  code?: 'clearance';
+  code?: 'clearance' | 'wall';
   message: string;
 }
 export interface FurnitureDistance {

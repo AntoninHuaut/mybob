@@ -44,6 +44,10 @@ export function enclosure(axes: Point2[], thickness: number) {
     })
   )
     throw new Error('L’épaisseur des murs ne laisse pas un contour intérieur valide.');
+  return { polygon, outline, viewpoint: interiorViewpoint(polygon) };
+}
+
+export function interiorViewpoint(polygon: Point2[]) {
   const candidates: Point2[] = [
     polygon.reduce<Point2>(
       (sum, p) => [sum[0] + p[0] / polygon.length, sum[1] + p[1] / polygon.length],
@@ -66,5 +70,5 @@ export function enclosure(axes: Point2[], thickness: number) {
     (p) => pointInPolygon(p, polygon) && distanceToPolygonBoundary(p, polygon) > VISITOR_CLEARANCE,
   );
   if (!viewpoint) throw new Error('Le contour ne permet pas de placer le point de visite.');
-  return { polygon, outline, viewpoint };
+  return viewpoint;
 }
