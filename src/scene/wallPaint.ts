@@ -4,7 +4,7 @@ import type { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Level, Point2, Room, Wall } from '../model/types';
 import { alongWall, pointInPolygon, wallLength } from '../model/geometry';
-import { wallSideSpans } from '../model/paint';
+import { wallFacePaint, wallSideSpans } from '../model/paint';
 import type { Materials } from './materials';
 
 /**
@@ -159,9 +159,7 @@ export function buildWallPaint(
     for (const sign of [-1, 1] as const) {
       const byRoom = new Map<string, Surface>();
       const quad = (room: Room, corners: Vec3[], normal: Vec3) => {
-        const color =
-          room.wallFaces?.find((face) => face.wallId === wall.id && face.side === sign)?.color ??
-          room.wallColor;
+        const color = wallFacePaint(room, wall.id, sign);
         if (!color) return;
         const data = byRoom.get(room.id) ?? {
           color,
