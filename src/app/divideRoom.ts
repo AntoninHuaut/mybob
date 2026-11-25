@@ -31,14 +31,14 @@ export function openRoomDivision() {
     <label>Distance depuis le début (m)<input type="number" name="offset${i}" min="0" step="any" required></label></fieldset>`;
   openDialog(
     'CLOISON',
-    `<form id="partition-form"><h2>Diviser une pièce</h2>
+    `<form id="partition-form" class="plan-form"><h2>Diviser une pièce</h2>
     <label>Pièce <select name="room">${level.rooms.map((r) => `<option value="${escapeHtml(r.id)}">${escapeHtml(r.name)}</option>`).join('')}</select></label>
     <p>Pointez deux murs sur le plan ou saisissez les distances des raccords.</p><div id="partition-diagram"></div>
     ${endpoint(0)}${endpoint(1)}
     <label>Épaisseur de la cloison (m)<input name="thickness" type="number" value="0.10" min="0.001" step="any" required></label>
     <label>Pièce conservant la référence du plan<input required name="first"></label>
     <label>Nouvelle pièce<input required name="second" value="Bureau"></label>
-    <p id="partition-status" aria-live="polite"></p><div class="dialog-actions"><button type="button" id="partition-cancel">Annuler</button><button type="submit">Confirmer la division</button></div></form>`,
+    <p id="partition-status" aria-live="polite"></p><div class="dialog-actions"><button type="button" class="text-button" id="partition-cancel">Annuler</button><button type="submit" class="primary-button">Confirmer la division</button></div></form>`,
   );
   const form = el<HTMLFormElement>('#partition-form'),
     map = el('#partition-diagram'),

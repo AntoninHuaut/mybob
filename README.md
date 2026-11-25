@@ -46,12 +46,12 @@ Interface names are given in French, as shown in the application.
 - **Vue 3D**: drag with the left button to rotate; wheel to zoom; right button to pan.
 - Framing adapts to the window and keeps a margin for the interface. **Recentrer** shows the whole house again after a zoom or a pan.
 - **Extérieur**: if the project contains a terrain, shows the plot, façades and roof; the 3D view keeps the roof open for arranging.
-- **Dessiner des murs** starts a local house by drawing a closed chain. Point to set each direction, optionally enter an axis length in metres, then confirm the finished area and room name. Reopen the drawing dialog to undo or redo the enclosure.
-- **Créer une maison** opens a new local project in Plan. Name the first room and enter its finished inside width, depth and wall thickness in metres. Reopen it from the project selector or export it as JSON.
+- **Nouvelle maison** starts a local house by drawing a closed chain of walls. Click each corner: walls follow 45° steps (hold Shift for a free angle), and a length typed in metres before pointing fixes the next axis length. Close the outline, check the finished area, name the room and create the house; it opens in Plan with its editing tools.
 - **Plan**: orthographic view, selection of rooms and exterior dimensions; drag to pan, pinch or use the wheel to zoom.
-- In **Plan**, choose **Ouvertures** on a local project to place a door or window or adjust an existing opening. Select the host wall, choose the wall end used for the jamb measurement, and save. The dialog also offers undo and redo.
-- **Diviser une pièce** in Plan joins two existing walls with a partition. Pick each junction or enter its distance from the wall start. Check the two named finished areas before confirming. The first room retains its identity and reference area.
-- **Déplacer une cloison** previews a parallel move by drag or signed distance. Check both rooms, hosted openings and furniture in all saved arrangements. Confirm a clear move, or change the distance or cancel. Undo and redo it from the **Ouvertures** dialog.
+- In **Plan**, **Modifier le plan** (local projects only) opens the editing bar: **Cloison**, **Diviser**, **Ouvertures**, then undo and redo for every plan edit, the drawn enclosure included.
+- **Ouvertures** places a door or window or adjusts an existing opening. Select the host wall, choose the wall end used for the jamb measurement, and save.
+- **Diviser** joins two existing walls with a partition. Pick each junction or enter its distance from the wall start. Check the two named finished areas before confirming. The first room retains its identity and reference area.
+- **Cloison** previews a parallel move by drag or signed distance. Check both rooms, hosted openings and furniture in all saved arrangements. Confirm a clear move, or change the distance or cancel.
 - **Visite**: ZQSD, WASD or arrows to walk, mouse to look, Shift to speed up, E to open or close a nearby door. Escape releases the mouse.
 - If mouse capture is refused, click in the scene and drag with the left button to look.
 - Click a room in the list or the mini-map, then **Visiter cette pièce**, to go there.

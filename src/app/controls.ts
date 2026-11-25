@@ -1,7 +1,6 @@
 import { openPartitionMove } from './movePartition';
 import { openRoomDivision } from './divideRoom';
 import { openWallDrawing } from './drawHouse';
-import { openNewHouse } from './newHouse';
 import { userMessage } from '../errorMessage';
 import { isImmersiveSupported, preloadImmersive } from '../scene/headsetSession';
 import type { ViewMode } from '../scene/viewer';
@@ -14,6 +13,7 @@ import { activeButton, closeDialog, el, openDialog, toast } from './dom';
 import { app } from './state';
 import { setFurnitureCirculation } from './furnitureController';
 import { openPlanOpenings } from './planOpenings';
+import { restorePlan, togglePlanEditBar } from './planEditBar';
 import { downloadProject, importProject, openRemoveProject } from './projectLibrary';
 import { loadLevel, loadProject } from './projectView';
 import { chooseQuality, dismissStartCard, updateNavigationPreferences } from './preferences';
@@ -207,8 +207,10 @@ export function wireProjectControls() {
   el('#tool-openings').addEventListener('click', openPlanOpenings);
   el('#move-wall').addEventListener('click', openPartitionMove);
   el('#divide-room').addEventListener('click', openRoomDivision);
-  el('#draw-house').addEventListener('click', openWallDrawing);
-  el('#create-house').addEventListener('click', openNewHouse);
+  el('#tool-plan-edit').addEventListener('click', togglePlanEditBar);
+  el('#undo-plan').addEventListener('click', () => restorePlan('undo'));
+  el('#redo-plan').addEventListener('click', () => restorePlan('redo'));
+  el('#new-house').addEventListener('click', openWallDrawing);
   el('#import-project').addEventListener('click', () =>
     el<HTMLInputElement>('#import-file').click(),
   );

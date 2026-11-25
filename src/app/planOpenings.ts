@@ -4,7 +4,7 @@ import { editOpening } from '../model/openingEdit';
 import type { Opening } from '../model/types';
 import { escapeHtml, number } from '../ui/format';
 import { closeDialog, el, openDialog, toast } from './dom';
-import { applyPlanEdit, planHistory, restorePlanEdit } from './planHistory';
+import { applyPlanEdit } from './planHistory';
 import { findProject, isImported } from './projectLibrary';
 import { app } from './state';
 
@@ -23,12 +23,11 @@ export function openPlanOpenings() {
     toast('Ce niveau ne contient aucun mur.');
     return;
   }
-  const history = planHistory(current);
   const option = (value: string, label: string) =>
     `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
   openDialog(
     'OUVERTURES',
-    `<form id="opening-form"><h2>Modifier les ouvertures</h2>
+    `<form id="opening-form" class="plan-form"><h2>Modifier les ouvertures</h2>
     <label>Mur <select name="wall">${level.walls.map((wall, i) => option(String(i), `${wall.id} · ${number(wallLength(wall))} m · (${wall.start.join(', ')}) → (${wall.end.join(', ')})`)).join('')}</select></label>
     <label>Ouverture <select name="opening"></select></label>
     <label>Type <select name="kind"></select></label>
@@ -47,8 +46,7 @@ export function openPlanOpenings() {
     <label>Charnière <select name="hinge"><option value="start">Côté début</option><option value="end">Côté fin</option></select></label>
     <label>Sens d’ouverture <select name="swing"><option value="1">Positif</option><option value="-1">Négatif</option></select></label>
     <p role="alert" id="opening-error"></p>
-    <div class="dialog-actions"><button type="button" id="undo-plan" ${history.undo.length ? '' : 'disabled'}>Annuler la modification précédente</button><button type="button" id="redo-plan" ${history.redo.length ? '' : 'disabled'}>Rétablir</button></div>
-    <div class="dialog-actions"><button type="button" id="cancel-opening">Annuler</button><button type="submit">Enregistrer</button></div></form>`,
+    <div class="dialog-actions"><button type="button" class="text-button" id="cancel-opening">Annuler</button><button type="submit" class="primary-button">Enregistrer</button></div></form>`,
   );
   const form = el<HTMLFormElement>('#opening-form');
   const field = (name: string) =>
@@ -115,8 +113,6 @@ export function openPlanOpenings() {
     }
   }
   el('#cancel-opening').onclick = closeDialog;
-  el('#undo-plan').onclick = () => attempt(() => restorePlanEdit(current, 'undo'));
-  el('#redo-plan').onclick = () => attempt(() => restorePlanEdit(current, 'redo'));
   form.onsubmit = (event) => {
     event.preventDefault();
     attempt(() => {
