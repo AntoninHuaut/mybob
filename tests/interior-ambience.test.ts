@@ -4,13 +4,15 @@ import { NullEngine } from '@babylonjs/core/Engines/nullEngine';
 import { Scene } from '@babylonjs/core/scene';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
+import { ImageProcessingConfiguration } from '@babylonjs/core/Materials/imageProcessingConfiguration';
+import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
+import { MeshBuilder } from '@babylonjs/core/Meshes/meshBuilder';
 import type { Level } from '../src/model/types';
 import { HouseViewer } from '../src/scene/viewer';
 import { createWalkCamera } from '../src/scene/walkCamera';
 import {
   bounceFaces,
   bouncePolynomial,
-  configureInteriorBloom,
   createInteriorBloom,
   createOrbitBloom,
   createInteriorEnvironment,
@@ -18,11 +20,9 @@ import {
   faceDirection,
   interiorRadiance,
   toHalfFloat,
-  INTERIOR_BLOOM_THRESHOLD,
   INTERIOR_BLOOM_WEIGHT,
   ORBIT_BLOOM_THRESHOLD,
   INTERIOR_GROUND_COLOR,
-  type BloomPipeline,
   type BounceFace,
 } from '../src/scene/interiorAmbience';
 
@@ -184,52 +184,37 @@ test('an engine without raw textures or a pre-pass degrades to no ambience', () 
   }
 });
 
-/** A pipeline that records what is set on it, and nulls `imageProcessing` like Babylon. */
-function recordingPipeline(): { pipeline: BloomPipeline; order: string[] } {
-  const order: string[] = [];
-  let enabled = true;
-  const pipeline: BloomPipeline = {
-    imageProcessing: {
-      get toneMappingEnabled() {
-        return true;
-      },
-      set toneMappingEnabled(value: boolean) {
-        order.push(`toneMapping=${value}`);
-      },
-      get vignetteEnabled() {
-        return true;
-      },
-      set vignetteEnabled(value: boolean) {
-        order.push(`vignette=${value}`);
-      },
-    },
-    get imageProcessingEnabled() {
-      return enabled;
-    },
-    set imageProcessingEnabled(value: boolean) {
-      order.push(`imageProcessingEnabled=${value}`);
-      // Switching the pass off disposes the post-process and nulls the reference.
-      if (!value) pipeline.imageProcessing = null;
-    },
-    bloomEnabled: false,
-    bloomThreshold: 0,
-    bloomWeight: 0,
-  };
-  return { pipeline, order };
-}
-
-test('the bloom sub-effects are configured before the pass is switched off', () => {
-  const { pipeline, order } = recordingPipeline();
-  configureInteriorBloom(pipeline);
-  assert.deepEqual(
-    order,
-    ['toneMapping=false', 'vignette=false', 'imageProcessingEnabled=false'],
-    'disabling the pass nulls `imageProcessing`, so the sub-effects must be set first',
-  );
-  assert.equal(pipeline.imageProcessing, null, 'the pass is gone, not merely disabled');
-  assert.equal(pipeline.bloomEnabled, true);
-  assert.equal(pipeline.bloomThreshold, INTERIOR_BLOOM_THRESHOLD);
-  assert.equal(pipeline.bloomWeight, INTERIOR_BLOOM_WEIGHT);
+test('a visit bloom, then leaving the visit, keeps the scene tone-mapped in the material shaders', () => {
+  const { engine, scene, camera } = fixture();
+  try {
+    const config = scene.imageProcessingConfiguration;
+    config.toneMappingEnabled = true;
+    config.toneMappingType = ImageProcessingConfiguration.TONEMAPPING_ACES;
+    const plaster = new PBRMaterial('white-plaster', scene);
+    MeshBuilder.CreateBox('wall', {}, scene).material = plaster;
+    const defines = () =>
+      (
+        scene.getMeshByName('wall')!.subMeshes[0].materialDefines as unknown as {
+          IMAGEPROCESSING: boolean;
+        }
+      ).IMAGEPROCESSING;
+    const expectShaderToneMapping = (when: string) => {
+      scene.render();
+      assert.equal(config.isEnabled, true, `${when}: every material keeps IMAGEPROCESSING`);
+      assert.equal(config.toneMappingEnabled, true, `${when}: ACES stays in the shaders`);
+      assert.equal(config.vignetteEnabled, false, `${when}: no vignette appears`);
+      assert.equal(config.applyByPostProcess, false, `${when}: no pass claims the tone mapping`);
+      assert.equal(defines(), true, `${when}: the plaster compiles with IMAGEPROCESSING`);
+    };
+    expectShaderToneMapping('Vue 3D');
+    const bloom = createInteriorBloom(scene, camera)!;
+    expectShaderToneMapping('Visite');
+    bloom.dispose();
+    expectShaderToneMapping('after Visite');
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
 });
 
 test('the visit bloom and FXAA are applied on the walk camera', () => {
@@ -245,11 +230,6 @@ test('the visit bloom and FXAA are applied on the walk camera', () => {
       'à 0,6 les murs blancs (0,6-0,9 affiché) fleurissaient tous',
     );
     assert.equal(pipeline.bloomWeight, 0.2, 'the weight validated on the test house');
-    assert.equal(
-      pipeline.imageProcessingEnabled,
-      false,
-      'the app tone-maps in the material shaders, a second pass would double it',
-    );
     const chain = (camera as unknown as { _postProcesses: ({ name: string } | null)[] })
       ._postProcesses;
     const names = chain.filter((pass) => pass !== null).map((pass) => pass.name);
@@ -257,7 +237,7 @@ test('the visit bloom and FXAA are applied on the walk camera', () => {
     assert.ok(names.indexOf('fxaa') > names.indexOf('bloomMerge'));
     assert.ok(
       !names.includes('imageProcessing'),
-      'no image-processing pass may be added to the visit chain',
+      'the app tone-maps in the material shaders, a second pass would double it',
     );
   } finally {
     scene.dispose();
@@ -281,7 +261,6 @@ test('the orbit bloom shares the visit weight, above the flat sky, for the 3D an
       ORBIT_BLOOM_THRESHOLD,
       'le ciel de la Vue 3D est plat à ~0,92 : au seuil de la visite, tout le ciel fleurerait',
     );
-    assert.equal(pipeline.imageProcessingEnabled, false, 'le tone mapping reste dans les shaders');
   } finally {
     scene.dispose();
     engine.dispose();

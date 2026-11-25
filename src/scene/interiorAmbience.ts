@@ -410,17 +410,11 @@ export function createOrbitOcclusion(
   return createInteriorOcclusion(scene, camera, ORBIT_OCCLUSION);
 }
 
-/**
- * The slice of `DefaultRenderingPipeline` the visit configures. Narrowed to a
- * structural type so the ordering rule below is testable without a GPU.
- */
-export interface BloomPipeline {
-  imageProcessing: { toneMappingEnabled: boolean; vignetteEnabled: boolean } | null;
-  imageProcessingEnabled: boolean;
-  bloomEnabled: boolean;
-  bloomThreshold: number;
-  bloomWeight: number;
-}
+/** The slice of `DefaultRenderingPipeline` the blooms configure. */
+export type BloomPipeline = Pick<
+  DefaultRenderingPipeline,
+  'bloomEnabled' | 'bloomThreshold' | 'bloomWeight'
+>;
 
 /**
  * Applies the validated bloom to a pipeline. The threshold is a parameter
@@ -428,20 +422,14 @@ export interface BloomPipeline {
  * `INTERIOR_BLOOM_THRESHOLD`, the orbit above its flat sky at
  * `ORBIT_BLOOM_THRESHOLD`. The weight is shared.
  *
- * The app tone-maps in the material shaders, so the pipeline's own image
- * processing would tone-map a second time. It has to be configured *before* the
- * pass is switched off: disabling it disposes the post-process and nulls
- * `imageProcessing`, leaving the sub-effects unreachable.
+ * Image processing is left alone: the pipeline's switches write the scene's
+ * shared configuration, so turning them off removed tone mapping from every
+ * material. With `hdr = false` the pipeline never chains its own pass.
  */
 export function configureInteriorBloom(
   pipeline: BloomPipeline,
   threshold: number = INTERIOR_BLOOM_THRESHOLD,
 ): void {
-  if (pipeline.imageProcessing) {
-    pipeline.imageProcessing.toneMappingEnabled = false;
-    pipeline.imageProcessing.vignetteEnabled = false;
-  }
-  pipeline.imageProcessingEnabled = false;
   pipeline.bloomThreshold = threshold;
   pipeline.bloomWeight = INTERIOR_BLOOM_WEIGHT;
   pipeline.bloomEnabled = true;
