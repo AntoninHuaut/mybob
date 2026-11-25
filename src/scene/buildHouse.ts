@@ -230,6 +230,8 @@ export function buildHouse(
   wells?: CeilingWells,
   /** Flights of the level below landing on this one (`stairsDown`). */
   flightsBelow: { stair: Stair; base: Level }[] = [],
+  /** False for a level shown only stacked (Vue 3D, Extérieur): no fixtures, no lights. */
+  fixtureLights = true,
 ): HouseScene {
   const root = new TransformNode(`level:${level.id}`, scene);
   root.position.y = level.elevation;
@@ -848,7 +850,7 @@ export function buildHouse(
 
   const pointLights: PointLight[] = [];
   const fixtures: Mesh[] = [];
-  for (const light of level.lights) {
+  for (const light of fixtureLights ? level.lights : []) {
     const fixture = CreateCylinder(
       `fixture:${light.id}`,
       { diameter: 0.26, height: 0.035, tessellation: 24 },
@@ -918,7 +920,8 @@ export function buildHouse(
   }
   // After the merge: a room's paint stays its own mesh, so a new colour rebuilds only it.
   const paint = buildWallPaint(level, scene, materials, wallNodes, wallPieces);
-  new FixtureLights(scene, pointLights, doors).refresh();
+  // A stacked level must not replace the displayed level's light assignment.
+  if (fixtureLights) new FixtureLights(scene, pointLights, doors).refresh();
   return {
     root,
     ceiling,

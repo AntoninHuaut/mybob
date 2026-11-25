@@ -158,10 +158,13 @@ with a migration.
   (the UI explains refused touch-only walking) and resolves a valid walk destination.
   Refusal returns `false`, preserving the accepted mode, exterior, camera and active tools.
 - The displayed level is the only one with lights, furniture, picking and collisions. The
-  other levels are built too (`otherLevels`), without lights, never picked nor collided:
+  other levels (`otherLevels`) have no fixtures or lights (`buildHouse(..., false)`, which
+  leaves the displayed level's `FixtureLights` in place) and are never picked nor collided:
   Vue 3D shows the levels under the displayed one, Extérieur shows them all (seen through
-  the windows), Plan and Visite hide them (`updateOtherLevels`). They are built before the
-  displayed level, whose `FixtureLights` must be the scene's last.
+  the windows), Plan and Visite hide them (`updateOtherLevels`). Each is built the first
+  time a view shows it, at the start of that view's next image (`buildPendingLevels`, behind
+  the preparation overlay when the view is cold), so a house opened in Plan or Visite builds
+  only its displayed level.
 - Changing level keeps the view (`loadLevel` in `app/projectView.ts`): Extérieur, Plan, or a
   visit restarted from the new level's start; changing project starts in Vue 3D.
 - Taking a stair in the visit changes level **inside the same scene** (`viewer.takeStair`), so
