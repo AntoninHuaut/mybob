@@ -281,12 +281,9 @@ test('the controller trigger takes the aimed stair once per press and respects o
       gamepad: { axes: [0, 0, 0, 0], buttons: [trigger] },
     } as unknown as XRInputSource;
     session.manager.session = { inputSources: [source] } as unknown as XRSession;
-    // The scene is edited under a still hand below; a real hand never holds still to the
-    // millimetre, so the pose wavers and every frame picks again (reuse is tested apart).
-    const hand = { x: 0, y: 1.2, z: 0 };
     session.manager.currentFrame = {
       getPose: () => ({
-        transform: { position: hand, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+        transform: { position: { x: 0, y: 1.2, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
       }),
     } as unknown as XRFrame;
     const stair = MeshBuilder.CreateBox(
@@ -299,7 +296,6 @@ test('the controller trigger takes the aimed stair once per press and respects o
     stair.computeWorldMatrix(true);
     const step = (pressed: boolean) => {
       trigger.pressed = pressed;
-      hand.x = hand.x ? 0 : 0.001;
       session.walk.step(1 / 90);
     };
     step(true);
@@ -728,32 +724,4 @@ test('the headset counter sits in the lower right of the view and names teleport
   session.dispose();
   assert.deepEqual(hudLines(72, 0, true, true).slice(1), ['téléportation · mode assis']);
   assert.ok(XR_HUD_FLASH_SECONDS > 1);
-});
-
-test('a controller held still reuses its last pick, a moved one picks again', (t) => {
-  const session = headsetWalk({ point: [4, 4.2], yaw: 0 });
-  try {
-    const internals = session.walk as unknown as { veil?: { dispose(): void } };
-    internals.veil?.dispose();
-    internals.veil = undefined;
-    const source = {
-      targetRayMode: 'tracked-pointer',
-      handedness: 'right',
-      targetRaySpace: {},
-      gamepad: { axes: [0, 0, 0, 0], buttons: [] },
-    } as unknown as XRInputSource;
-    const position = { x: 0, y: 1.2, z: 0 };
-    session.manager.session = { inputSources: [source] } as unknown as XRSession;
-    session.manager.currentFrame = {
-      getPose: () => ({ transform: { position, orientation: { x: 0, y: 0, z: 0, w: 1 } } }),
-    } as unknown as XRFrame;
-    const pick = t.mock.method(session.scene, 'pickWithRay', () => null);
-    for (let frame = 0; frame < 4; frame++) session.walk.step(1 / 72);
-    assert.equal(pick.mock.callCount(), 1, 'a still pose is picked once');
-    position.x = 0.05;
-    session.walk.step(1 / 72);
-    assert.equal(pick.mock.callCount(), 2, 'a moved pose picks again');
-  } finally {
-    session.dispose();
-  }
 });

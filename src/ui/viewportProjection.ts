@@ -23,7 +23,7 @@ interface ProjectionPreferences {
 export class ViewportProjection {
   private labelsDirty = true;
   /** What the labels were last projected for, besides the camera. */
-  private projected: unknown[] = [];
+  private readonly projected: unknown[] = [];
   private projectedLevel?: Level;
   private arrow = '';
   private readonly roomLabels = new Map<string, HTMLElement>();
@@ -82,27 +82,30 @@ export class ViewportProjection {
       el('#orientation-arrow').style.transform = arrow;
     }
     const { a, b } = viewer.measurement ?? {};
-    const projected = [
-      showLabels,
-      showDimensions,
-      selectedRoomId,
-      northAngleDeg,
-      viewer.mode,
-      viewer.measureMode,
-      a?.[0],
-      a?.[1],
-      b?.[0],
-      b?.[1],
-      frame.furnitureObstaclesRevision,
-    ];
-    const changed = projected.some((value, index) => value !== this.projected[index]);
+    // Compared and kept in place: no array is built per frame.
+    let changed = false;
+    const keep = (index: number, value: unknown) => {
+      if (this.projected[index] === value) return;
+      this.projected[index] = value;
+      changed = true;
+    };
+    keep(0, showLabels);
+    keep(1, showDimensions);
+    keep(2, selectedRoomId);
+    keep(3, northAngleDeg);
+    keep(4, viewer.mode);
+    keep(5, viewer.measureMode);
+    keep(6, a?.[0]);
+    keep(7, a?.[1]);
+    keep(8, b?.[0]);
+    keep(9, b?.[1]);
+    keep(10, frame.furnitureObstaclesRevision);
     const projectLabels =
       frame.cameraMoved !== false ||
       this.labelsDirty ||
       changed ||
       viewer.level !== this.projectedLevel;
     this.labelsDirty = false;
-    this.projected = projected;
     this.projectedLevel = viewer.level;
     if (projectLabels) {
       // One camera transform and one canvas size for the whole frame (`projector`).

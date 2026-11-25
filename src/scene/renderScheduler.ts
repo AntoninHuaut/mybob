@@ -104,7 +104,8 @@ export class RenderScheduler {
     let changed = signature.length !== this.signature.length;
     this.signature.length = signature.length;
     for (let index = 0; index < signature.length; index++) {
-      const rounded = Math.round(signature[index] * 1e4);
+      // `|| 0` folds NaN (which never equals itself) and -0 into 0: neither is a motion.
+      const rounded = Math.round(signature[index] * 1e4) || 0;
       if (rounded !== this.signature[index]) {
         this.signature[index] = rounded;
         changed = true;

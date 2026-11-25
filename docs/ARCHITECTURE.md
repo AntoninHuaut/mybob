@@ -587,11 +587,9 @@ last call, and read back at start-up.
   the furniture toolbar are checked each frame but written only when a value changes
   (`ui/domWrites.ts`): a still frame drawn again writes nothing to the page. The plan's north
   angle is measured again only when the camera or the level changed. The walk prompts' ray
-  reuses its hit until the camera, a door or furniture changes. Babylon does not pick on
-  pointer moves (`skipPointerMovePicking`): the measure preview and the furniture drag pick
-  by themselves; presses and taps still pick. In the headset, a controller held still reuses
-  its door/stair pick for up to 30 frames (`XR_PICK_REUSE_FRAMES`), dropped when a door is
-  toggled or a stair taken. Plan furniture labels cache camera and
+  reuses its hit until the camera, a door or furniture changes. Babylon already picks lazily on
+  pointer moves (nothing reads that pick), so `skipPointerMovePicking` stays off: it would make
+  Babylon build a picking ray on every move. Plan furniture labels cache camera and
   overlay identity. Direct mode/cutaway changes still apply immediately.
 - A view's shaders are linked behind an overlay, the first time the view is drawn
   (`shaderWarmup.ts`, `viewer.prepareView`). Babylon links a material the first time it is drawn

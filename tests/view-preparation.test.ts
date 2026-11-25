@@ -142,9 +142,3 @@ test('« Qualité » sets the scale, the effect tier and the shadow filtering, b
   assert.equal(viewer.currentEffectTier, 0);
   assert.equal(shadow.filteringQuality, ShadowGenerator.QUALITY_MEDIUM);
 });
-
-test('pointer moves do not pick the scene; presses still do', async (t) => {
-  const { viewer } = await setup(t);
-  assert.equal(viewer.scene.skipPointerMovePicking, true);
-  assert.equal(viewer.scene.skipPointerDownPicking, false);
-});

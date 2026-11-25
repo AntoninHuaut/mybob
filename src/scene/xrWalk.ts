@@ -451,12 +451,6 @@ export function staleSources<T>(held: Iterable<T>, live: Iterable<T>): readonly 
 }
 const NO_SOURCES: readonly never[] = [];
 
-/**
- * A still controller keeps its last door/stair pick this many frames at most: a swinging door
- * or a stair taken changes what it points at without moving it.
- */
-export const XR_PICK_REUSE_FRAMES = 30;
-
 interface Pointer {
   handedness: XRHandedness;
   root: Mesh;
@@ -466,10 +460,6 @@ interface Pointer {
   upper: boolean;
   /** The teleport-only turn may fire again: the stick came back near the centre. */
   snapArmed: boolean;
-  /** The last pick and the controller's world matrix when it was made (`pick`). */
-  picked?: ReturnType<Scene['pickWithRay']>;
-  pickedPose: Float32Array;
-  pickAge: number;
 }
 
 const READY = new Color3(0.92, 0.92, 0.88);
@@ -685,8 +675,6 @@ export class ImmersiveWalk {
       pointer.trigger = state.trigger;
       if (pressed && target?.kind === 'door') {
         this.host.toggleDoor(target.id);
-        // The leaf swings across every ray: no pointer keeps its pick.
-        for (const each of this.pointers.values()) each.pickAge = Infinity;
       } else if (pressed && target?.kind === 'stair') {
         this.cancelAim();
         this.host.takeStair(target.id, target.direction);
@@ -783,8 +771,6 @@ export class ImmersiveWalk {
    * level's shaders link.
    */
   arrive(point: Point2, yaw: number) {
-    // A new level under the same pointers: no pick of the old one is kept.
-    for (const pointer of this.pointers.values()) pointer.pickAge = Infinity;
     const forward = this.camera.getDirection(Vector3.Forward(true));
     const current = Math.atan2(-forward.x, -forward.z);
     // The camera's yaw grows to the left; `turn` takes a right-handed yaw about +y.
@@ -1128,28 +1114,20 @@ export class ImmersiveWalk {
     return hit;
   }
 
-  /** The door or stair `pointer` aims at; a controller held still reuses its last pick. */
+  /**
+   * The door or stair `pointer` aims at, with one reused ray. Not cached across frames: tracking
+   * jitter moves a held controller anyway, and a swinging door changes the hit.
+   */
   private pick(pointer: Pointer, length: number) {
     const root = pointer.root;
     const matrix = root.computeWorldMatrix(true);
-    const pose = matrix.asArray();
-    let still = pointer.pickAge < XR_PICK_REUSE_FRAMES;
-    for (let index = 0; still && index < 16; index++)
-      still = Math.abs(pose[index] - pointer.pickedPose[index]) < 1e-4;
-    if (still) {
-      pointer.pickAge++;
-      return pointer.picked ?? null;
-    }
-    pointer.pickedPose.set(pose);
-    pointer.pickAge = 0;
     const ray = this.pickRay;
     ray.origin.copyFrom(root.getAbsolutePosition());
     Vector3.TransformNormalToRef(Vector3.Forward(true), matrix, ray.direction);
     ray.direction.normalize();
     ray.length = length;
     // The default predicate: pickable, enabled and visible. The pointers are not pickable.
-    pointer.picked = this.host.scene.pickWithRay(ray);
-    return pointer.picked;
+    return this.host.scene.pickWithRay(ray);
   }
 
   private pointer(source: XRInputSource): Pointer {
@@ -1184,8 +1162,6 @@ export class ImmersiveWalk {
       face: false,
       upper: false,
       snapArmed: true,
-      pickedPose: new Float32Array(16),
-      pickAge: Infinity,
     };
     this.pointers.set(source, pointer);
     return pointer;

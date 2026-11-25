@@ -8,6 +8,7 @@ import {
 } from '../model/stairs';
 import type { HouseViewer } from '../scene/viewer';
 import { icon } from './icons';
+import { setHidden } from './domWrites';
 
 type StairView = Pick<HouseViewer, 'level' | 'mode' | 'exteriorView' | 'measureMode' | 'projector'>;
 interface StairButton {
@@ -97,8 +98,8 @@ export class StairNavigation {
       this.buttons.length > 0;
     const becameVisible = visible && !this.visible;
     this.visible = visible;
-    this.container.hidden = !visible;
-    this.floorContainer.hidden = !visible;
+    setHidden(this.container, !visible);
+    setHidden(this.floorContainer, !visible);
     if (!visible || (!changed && !cameraMoved && !becameVisible)) return;
     const projectPoint = this.buttons.some((button) => button.physical)
       ? viewer.projector()

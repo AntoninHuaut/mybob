@@ -137,3 +137,11 @@ test('the camera signature is compared as numbers, rounded under visibility, in 
   scheduler.shouldRender(1032, values, still);
   assert.equal(scheduler.cameraMoved, false);
 });
+
+test('a NaN in the camera signature is no endless motion', () => {
+  const scheduler = new RenderScheduler();
+  const values = [1, Number.NaN];
+  run(scheduler, RENDER_SETTLE_FRAMES + 5, 0, () => values);
+  assert.equal(scheduler.cameraMoved, false);
+  assert.equal(scheduler.idle, true);
+});
