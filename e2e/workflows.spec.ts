@@ -403,3 +403,20 @@ test('the walk recaptures the pointer after its release, click in the view inclu
   await page.locator('#resume-walk').click();
   await expect.poll(locked, { timeout: 5_000 }).toBe(true);
 });
+
+test('create a finished room and reopen its saved house in Visite', async ({ page }) => {
+  const menu = page.locator('#toggle-sidebar');
+  if ((await menu.getAttribute('aria-expanded')) !== 'true') await menu.click();
+  await page.locator('#create-house').click();
+  await page.getByLabel('Nom de la pièce').fill('Atelier');
+  await page.getByRole('button', { name: 'Créer et enregistrer' }).click();
+  await expect(page.locator('#header-project')).toHaveText('Atelier');
+  await page.reload();
+  await expect(page.locator('#header-project')).toHaveText('Atelier');
+  await expect(page.locator('#project-select')).toContainText('Démonstration');
+  await page.getByRole('button', { name: 'Visite', exact: true }).click();
+  await expect(page.getByRole('button', { name: 'Visite', exact: true })).toHaveAttribute(
+    'aria-pressed',
+    'true',
+  );
+});
