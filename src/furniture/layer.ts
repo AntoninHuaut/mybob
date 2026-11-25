@@ -47,6 +47,13 @@ const overlaysChanged = (scene: Scene) =>
   overlayRevisions.set(scene, (overlayRevisions.get(scene) ?? 0) + 1);
 const changed = (scene: Scene) => revisions.set(scene, furnitureRevision(scene) + 1);
 
+interface OverlayLine {
+  name: string;
+  points: Vector3[];
+  color: Color3;
+  label?: string;
+}
+
 export interface FurnitureOverlays {
   distances: boolean;
   clearances: boolean;
@@ -102,7 +109,9 @@ export class FurnitureLayer {
   private circulation = false;
   private circulationRoot?: TransformNode;
   private circulationMaterials: StandardMaterial[] = [];
-  private overlayMaterials: StandardMaterial[] = [];
+  /** Label materials by text and colour, reused by the next redraw that shows them again. */
+  private labelMaterials = new Map<string, StandardMaterial>();
+  private overlaySignature?: string;
   private observer: Observer<PointerInfo>;
   private labelSignature = '';
   private labelRoot?: TransformNode;
@@ -1260,12 +1269,13 @@ export class FurnitureLayer {
   }
 
   private drawOverlays(): void {
-    overlaysChanged(this.scene);
-    this.clearOverlays();
     const item = this.items.find((candidate) => candidate.id === this.selected);
-    if (!item || !this.interactive) return;
-    this.overlayRoot = new TransformNode('furniture:overlays', this.scene);
-    const root = this.overlayRoot;
+    if (!item || !this.interactive) {
+      if (this.overlayRoot) overlaysChanged(this.scene);
+      this.clearOverlays();
+      return;
+    }
+    const lines: OverlayLine[] = [];
     const y = floorElevationAt(this.level, item.position) + 0.035;
     const c = Math.cos(item.rotation),
       s = Math.sin(item.rotation);
@@ -1276,25 +1286,7 @@ export class FurnitureLayer {
       points: Vector3[],
       color = new Color3(0.12, 0.58, 0.45),
       label?: string,
-    ) => {
-      const mesh = CreateLines(name, { points }, this.scene);
-      mesh.parent = root;
-      mesh.color = color;
-      mesh.isPickable = false;
-      const measurementKind = name === 'furniture:wall-distance' ? 'gap' : undefined;
-      const labelText = label && measurementKind ? `Écart ${label}` : label;
-      mesh.metadata = { kind: 'furniture-overlay', label, labelText, measurementKind };
-      mesh.renderingGroupId = 2;
-      if (label && labelText)
-        this.label(
-          labelText,
-          points[0].add(points[points.length - 1]).scale(0.5),
-          root,
-          name === 'furniture:wall-distance' ? 200 - Number.parseFloat(label) : 100,
-          '#165347',
-          measurementKind,
-        );
-    };
+    ) => lines.push({ name, points, color, label });
     const rectangle = (
       name: string,
       left: number,
@@ -1352,19 +1344,56 @@ export class FurnitureLayer {
       // A conservative envelope covers the whole frontage, matching placement warnings.
       rectangle('furniture:opening', -hw, hw, hd, hd + reach, color);
     }
-    if (!this.overlays.distances) return;
-    for (const distance of furnitureDistances(item, this.level, this.items)) {
-      if (distance.distance <= 0.02) continue;
-      line(
-        'furniture:wall-distance',
-        [
-          new Vector3(distance.from[0], y, distance.from[1]),
-          new Vector3(distance.to[0], y, distance.to[1]),
-        ],
-        undefined,
-        `${distance.distance.toFixed(2)} m`,
-      );
+    if (this.overlays.distances)
+      for (const distance of furnitureDistances(item, this.level, this.items)) {
+        if (distance.distance <= 0.02) continue;
+        line(
+          'furniture:wall-distance',
+          [
+            new Vector3(distance.from[0], y, distance.from[1]),
+            new Vector3(distance.to[0], y, distance.to[1]),
+          ],
+          undefined,
+          `${distance.distance.toFixed(2)} m`,
+        );
+      }
+    // Selection, commits and view changes often redraw the same overlays: keep their meshes.
+    const signature = JSON.stringify(
+      lines.map(({ name, points, color, label }) => [
+        name,
+        label,
+        color.toHexString(),
+        points.map((p) => [p.x, p.y, p.z]),
+      ]),
+    );
+    if (this.overlayRoot && signature === this.overlaySignature) return;
+    overlaysChanged(this.scene);
+    this.overlayRoot?.dispose();
+    this.overlaySignature = signature;
+    const root = (this.overlayRoot = new TransformNode('furniture:overlays', this.scene));
+    const previous = this.labelMaterials;
+    this.labelMaterials = new Map();
+    for (const { name, points, color, label } of lines) {
+      const mesh = CreateLines(name, { points }, this.scene);
+      mesh.parent = root;
+      mesh.color = color;
+      mesh.isPickable = false;
+      const measurementKind = name === 'furniture:wall-distance' ? 'gap' : undefined;
+      const labelText = label && measurementKind ? `Écart ${label}` : label;
+      mesh.metadata = { kind: 'furniture-overlay', label, labelText, measurementKind };
+      mesh.renderingGroupId = 2;
+      if (label && labelText)
+        this.label(
+          labelText,
+          points[0].add(points[points.length - 1]).scale(0.5),
+          root,
+          name === 'furniture:wall-distance' ? 200 - Number.parseFloat(label) : 100,
+          '#165347',
+          measurementKind,
+          previous,
+        );
     }
+    for (const material of previous.values()) material.dispose(false, true);
   }
 
   private label(
@@ -1373,24 +1402,30 @@ export class FurnitureLayer {
     root: TransformNode,
     priority: number,
     background: string,
-    measurementKind?: 'gap',
+    measurementKind: 'gap' | undefined,
+    previous: Map<string, StandardMaterial>,
   ): void {
     // NullEngine tests and server-side validation have no canvas implementation.
     if (typeof document === 'undefined') return;
-    const texture = new DynamicTexture(
-      'furniture:dimension-label',
-      { width: 256, height: 64 },
-      this.scene,
-      false,
-    );
-    texture.hasAlpha = true;
-    texture.drawText(text, null, 44, 'bold 32px sans-serif', '#ffffff', background, true);
-    const material = new StandardMaterial('furniture:dimension-label', this.scene);
-    material.diffuseTexture = texture;
-    material.emissiveColor = Color3.White();
-    material.disableLighting = true;
-    material.backFaceCulling = false;
-    this.overlayMaterials.push(material);
+    const key = `${background} ${text}`;
+    let material = previous.get(key) ?? this.labelMaterials.get(key);
+    previous.delete(key);
+    if (!material) {
+      const texture = new DynamicTexture(
+        'furniture:dimension-label',
+        { width: 256, height: 64 },
+        this.scene,
+        false,
+      );
+      texture.hasAlpha = true;
+      texture.drawText(text, null, 44, 'bold 32px sans-serif', '#ffffff', background, true);
+      material = new StandardMaterial('furniture:dimension-label', this.scene);
+      material.diffuseTexture = texture;
+      material.emissiveColor = Color3.White();
+      material.disableLighting = true;
+      material.backFaceCulling = false;
+    }
+    this.labelMaterials.set(key, material);
     const label = CreatePlane(
       'furniture:dimension-label',
       { width: 0.72, height: 0.18 },
@@ -1415,8 +1450,9 @@ export class FurnitureLayer {
   private clearOverlays(): void {
     this.overlayRoot?.dispose();
     this.overlayRoot = undefined;
-    for (const material of this.overlayMaterials) material.dispose(false, true);
-    this.overlayMaterials = [];
+    this.overlaySignature = undefined;
+    for (const material of this.labelMaterials.values()) material.dispose(false, true);
+    this.labelMaterials.clear();
   }
 
   private destroyVisual(visual: Visual): void {

@@ -53,3 +53,45 @@ test('only gaps are displayed and update when furniture moves', () => {
   scene.dispose();
   engine.dispose();
 });
+
+test('overlays are rebuilt only when what they show changes', (t) => {
+  const level: Level = {
+    id: 'generic',
+    name: 'Pièce',
+    elevation: 0,
+    ceilingHeight: 3,
+    outline: [
+      [0, 0],
+      [8, 0],
+      [8, 6],
+      [0, 6],
+    ],
+    walls: [],
+    rooms: [],
+    lights: [],
+    spawn: { position: [3, 3], yaw: 0 },
+  };
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const layer = new FurnitureLayer(scene, level);
+  t.after(() => {
+    layer.dispose();
+    scene.dispose();
+    engine.dispose();
+  });
+  const item = createFurniture({ id: 'table', kind: 'coffee-table', position: [1.2, 3] });
+  layer.setItems([item]);
+  layer.select(item.id);
+  layer.setOverlays({ distances: true, clearances: false, openings: false });
+  const selection = () => scene.meshes.find((mesh) => mesh.name === 'furniture:selection');
+  const first = selection();
+  assert.ok(first);
+  // A save without change, a re-selection and a repeated view keep the same meshes.
+  layer.setItems([structuredClone(item)]);
+  layer.select(item.id);
+  layer.setOverlays({ distances: true, clearances: false, openings: false });
+  assert.ok(selection() === first, 'overlay meshes were rebuilt');
+  layer.setItems([{ ...item, position: [1.5, 3] }]);
+  assert.ok(selection() !== first, 'overlay meshes were kept');
+  assert.ok(first.isDisposed());
+});

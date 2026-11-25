@@ -34,6 +34,13 @@ the last pointer event's timestamp-to-preview-DOM-update time, in ms, in
 dispatch, room derivation and the SVG write, not paint. Record browser, machine and project with
 each sample; no target is set yet.
 
+## Furniture dialogs
+
+Measured 2026-11-25 at CPU ×4 (Event Timing, input to paint, studio demo): « Modifier … »
+opens in 64 ms and « Enregistrer » paints in 48 ms, down from 112 and 128 ms (#370). The
+selection overlays are rebuilt only when their lines or labels change, and label textures are
+reused across redraws. What remains when a dialog opens is building and laying out its form.
+
 ## Tried and rejected
 
 Each was measured and gave a visual regression or no gain; retry only with new evidence:
