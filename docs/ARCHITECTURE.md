@@ -54,7 +54,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Headset session         | `src/scene/headsetSession.ts`                                                | Support check, lazy import, one session at a time, readiness before the veil lifts                                                          |
 | Headset visit           | `src/scene/xrWalk.ts`                                                        | WebXR session of the walk: sticks, smooth turn, comfort vignette, teleport, doors; on demand                                                |
 | Orbit controls          | `src/scene/orbitNavigation.ts`, `orbitPointerInput.ts`                       | Keyboard pan in screen directions; one-finger pan and pinch zoom in Plan                                                                    |
-| Wall cutaway            | `src/scene/wallCutaway.ts`                                                   | `auto` / `full` / `low`, clipping planes per material                                                                                       |
+| Wall cutaway            | `src/scene/wallCutaway.ts`                                                   | `auto` / `full` / `low`, clipping planes per material clone sharing the original's textures                                                 |
 | Shadow map              | `src/scene/shadowRefresh.ts`, `sunShadowSkip.ts`                             | Sun map redrawn only when a shadow changes; lookup skipped where a PBR surface faces away from the sun                                      |
 | Idle rendering          | `src/scene/renderScheduler.ts`                                               | Frame drawn only when the scene changes; mouse moves wake it only over the canvas (`wakesScene`)                                            |
 | Shader warm-up          | `src/scene/shaderWarmup.ts`, `shaderLog.ts`                                  | Links a view's shaders behind an overlay on first use; `mybob.shaders()` log of every link                                                  |
@@ -287,10 +287,10 @@ camera moves. Neither fires during a headset session: nothing in the page is see
   bloom is set to a threshold of 0.9 and a weight of 0.2: the values are displayed values (tone
   mapping has already run) and lit white walls sit between 0.6 and 0.9 — at 0.6 the whole room
   bloomed and read as a milky sheen on the walls. Only the lamp and the view through the bay
-  window exceed the threshold. Its `imageProcessingEnabled` is false, otherwise tone mapping
-  would be applied twice — the app already tone-maps in the material shaders — and its
-  sub-effects are configured before the cut-off, which destroys the post-process and nulls
-  `imageProcessing`.
+  window exceed the threshold. The blooms never touch their image-processing switches: those
+  write the scene's shared configuration, and turning them off removed tone mapping from every
+  material until reload (#351). With `hdr = false` the pipeline does not chain its own
+  image-processing pass, so tone mapping still runs once, in the material shaders.
 - Vue 3D has its own occlusion (#205), the walk's pipeline at the overview's scale
   (`ORBIT_OCCLUSION`: 0.5 m radius, 100 m depth range), built by `ViewEffects.updateOrbit` on
   the orbit camera between the orbit TAA and the bloom: it waits for the TAA's one attempt,
