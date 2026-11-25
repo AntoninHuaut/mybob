@@ -43,3 +43,16 @@ test('a failing or missing worker leaves the generation to the main thread', asy
   );
   assert.deepEqual(adopted, []);
 });
+
+test('a worker that never answers is given up after the timeout', async () => {
+  const worker = new FakeWorker();
+  const adopted: unknown[] = [];
+  await generateMapsInWorker(
+    () => worker as unknown as Worker,
+    (maps) => adopted.push(maps),
+    10,
+  );
+  assert.equal(worker.terminated, true);
+  worker.onmessage?.({ data: { surface: {}, furniture: {} } });
+  assert.deepEqual(adopted, [], 'a late answer is ignored: the main thread generated the maps');
+});
