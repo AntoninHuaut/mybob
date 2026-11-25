@@ -341,15 +341,17 @@ button svg {
   background: #e3edda;
   border-color: #4c7448;
 }
+/* Natural widths that wrap rather than clip: label width depends on the system font. */
 .project-actions {
-  display: grid;
-  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 .project-actions .import-button {
+  flex: 1 1 auto;
+  width: auto;
   gap: 6px;
-  padding: 10px 6px;
-  font-size: 13px;
+  padding: 10px 12px;
   white-space: nowrap;
 }
 .project-privacy {
