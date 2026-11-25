@@ -5,6 +5,8 @@ import { appTemplate } from './ui/appTemplate';
 import { solarPosition } from './scene/solar';
 import { HouseViewer } from './scene/viewer';
 import { generateMapsInWorker } from './scene/surfaceMapsInWorker';
+// Inlined: a blob worker needs no request, so a slow or intercepted fetch cannot stall it.
+import SurfaceMapsWorker from './scene/surfaceMaps.worker?worker&inline';
 import { createEngine } from './scene/engine';
 import {
   collectDiagnostics,
@@ -52,7 +54,7 @@ import {
 import { handleStairLevelChange, loadLevel, loadProject, selectRoom } from './app/projectView';
 import { readOnboarding, showStartCard } from './app/preferences';
 import { openSharedLink, wireLinkHashFlush } from './app/shareLinkSync';
-import { canChangeMode, syncViewChrome } from './app/viewChrome';
+import { canChangeMode, setSidebar, syncViewChrome } from './app/viewChrome';
 import { wireNavigationControls, wireProjectControls, wireViewportControls } from './app/controls';
 
 /*
@@ -215,8 +217,11 @@ function wireViewer(viewer: HouseViewer) {
 
 async function start() {
   dropLegacyPlanPhotoStore();
+  // The panel shows its real state before any wait: a control read during the start-up
+  // (the template says closed) must not be toggled once the start-up opens it.
+  setSidebar(matchMedia('(min-width: 761px)').matches);
   // The procedural maps are generated meanwhile, while the projects download and the engine starts.
-  const maps = generateMapsInWorker();
+  const maps = generateMapsInWorker(() => new SurfaceMapsWorker());
   try {
     const projectPaths = __PUBLIC_BUILD__
       ? ['/projects/studio-demo.json']
@@ -229,6 +234,8 @@ async function start() {
       }),
     );
     const projectsAt = performance.now();
+    await maps;
+    const mapsAt = performance.now();
     const unreadableProjects = restoreLibrary(bundled);
     const libraryAt = performance.now();
     const sceneEngine = createEngine(el<HTMLCanvasElement>('#scene'));
@@ -261,8 +268,6 @@ async function start() {
     } catch {
       /* optional persistence */
     }
-    const waitStarted = performance.now();
-    await maps;
     const loadStarted = performance.now();
     if (isShareLink(location.hash)) {
       // A link error (10-project limit, rejected document…) is not a failure of the
@@ -317,9 +322,9 @@ async function start() {
         readyAt,
         phases: [
           { label: 'projets', ms: projectsAt },
-          { label: 'bibliothèque', ms: libraryAt - projectsAt },
+          { label: 'attente des textures', ms: mapsAt - projectsAt },
+          { label: 'bibliothèque', ms: libraryAt - mapsAt },
           { label: 'moteur', ms: engineAt - libraryAt },
-          { label: 'attente des textures', ms: loadStarted - waitStarted },
           { label: 'matériaux', ms: scene.materialsMs },
           { label: 'niveaux', ms: scene.levelsMs },
           { label: 'extérieur', ms: scene.exteriorMs },

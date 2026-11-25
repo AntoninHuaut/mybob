@@ -8,8 +8,7 @@ type Maps = { surface: SurfaceMaps; furniture: FurnitureMaps };
  * maps are generated on first use as before.
  */
 export function generateMapsInWorker(
-  createWorker: () => Worker = () =>
-    new Worker(new URL('./surfaceMaps.worker.ts', import.meta.url), { type: 'module' }),
+  createWorker: () => Worker,
   adopt: (maps: Maps) => void = adoptMaps,
   // A worker whose script never loads (a request interceptor, a stalled fetch) must not hold
   // the start-up: past this, the main thread generates the maps as before.
