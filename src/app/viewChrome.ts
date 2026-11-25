@@ -53,6 +53,7 @@ export function setNavigationPanel(open: boolean) {
 export function syncDisplayControls() {
   el('#tool-openings').hidden =
     app.viewer.mode !== 'plan' || app.readOnlyLink || !isImported(app.current.id);
+  el('#divide-room').hidden = el('#tool-openings').hidden || !app.viewer.level.rooms.length;
   const { viewer, display } = app;
   const measuring = viewer.measureMode;
   activeButton('#go-to', viewer.goToMode);
@@ -116,6 +117,7 @@ export function setMode(next: ViewMode): boolean {
 /** Called only after the viewer has accepted and applied a transition. */
 export function syncViewChrome() {
   endWallBrush();
+  el('#divide-room').hidden = el('#tool-openings').hidden || !app.viewer.level.rooms.length;
   const { viewer, display } = app;
   const next = viewer.mode;
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {

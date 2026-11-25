@@ -1,3 +1,4 @@
+import { openRoomDivision } from './divideRoom';
 import { openWallDrawing } from './drawHouse';
 import { openNewHouse } from './newHouse';
 import { userMessage } from '../errorMessage';
@@ -203,6 +204,7 @@ export function wireProjectControls() {
   });
   el('#export-image').addEventListener('click', openImageExport);
   el('#tool-openings').addEventListener('click', openPlanOpenings);
+  el('#divide-room').addEventListener('click', openRoomDivision);
   el('#draw-house').addEventListener('click', openWallDrawing);
   el('#create-house').addEventListener('click', openNewHouse);
   el('#import-project').addEventListener('click', () =>
