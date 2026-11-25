@@ -21,7 +21,7 @@ The output of `build:private` must never be published on a public site. `pnpm ru
 
 ## GitHub Actions CI
 
-Every change goes through a `<type>/<slug>` branch and a PR to `main`; commit conventions are in [AGENTS.md](../AGENTS.md). No direct push nor merge with remote CI pending or failing. Local tests do not replace the checks of the PR's latest commit. The owner authorises GitHub auto-merge once required checks are green: enable it for completed, validated changes, without asking permission again for each PR. Cloudflare must only receive the production branch after this validation; its build pipelines stay technically independent of GitHub Actions.
+Changes are committed and pushed directly to `main` after the owner's validation; the workflow and commit conventions are in [AGENTS.md](../AGENTS.md). Local tests do not replace the CI run of the pushed commit. Cloudflare builds the production branch on push; its build pipelines stay technically independent of GitHub Actions.
 
 GitHub protection of `main`: PR required, check « Tests, types, build et confidentialité » required from GitHub Actions, branch up to date (`strict`), rules applied to administrators, force-push and deletion forbidden. Auto-merge waits for these checks and is not a bypass. These server settings are not contained in the Git diff. The CI job names stay in French because the required check is matched by name: renaming it breaks branch protection.
 
@@ -37,7 +37,7 @@ That job uses the Python version pinned in `.python-version` (also honoured by `
 After the public check, GitHub shares the build with three runners that run the E2E tests
 in desktop Chromium. Chromium headless shell is cached per version. The required check
 « Tests, types, build et confidentialité » aggregates the build, plan scripts and the
-three shards: any failure or skipped job blocks it and blocks auto-merge. Failure reports
+three shards: any failure or skipped job turns it red. Failure reports
 and traces are archived for seven days. Shard scheduling and test verification are described
 in [E2E](E2E.md). Browser and Python checks are not part of `npm run ci` on the Cloudflare
 side: the two pipelines stay independent.

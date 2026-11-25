@@ -94,13 +94,8 @@ it does not run e2e. Happy DOM and Babylon NullEngine prove behavior, not visual
 
 ### Local browser verification policy
 
-Browser e2e belongs to CI. Do not run routine local Playwright/e2e scenarios, including
-targeted feature batches, repeats, or concurrent browser captures/benchmarks: they make the
-owner's PC unusably slow. Only one or two exact failing tests may run locally to reproduce
-a concrete CI error, with one worker and no repeats. Stop only your own browser runs.
-Prefer focused unit/NullEngine/DOM checks and CI logs. Defer visual acceptance to existing
-permitted evidence or explicit later authorization; do not open a browser for optional
-evidence. CI execution recipes live in [E2E](docs/E2E.md).
+Local Playwright/e2e runs and browser checks are allowed whenever they help verify a change.
+Stop only your own browser runs. Recipes live in [E2E](docs/E2E.md).
 
 Agent-created visual evidence must stay local and ignored: never commit images or
 image-reference reports, or upload browser captures, HTML reports or traces to PRs, Actions
@@ -114,21 +109,17 @@ Several agents share this machine. The e2e suite takes a free port on every run
 never stop another agent's Vite server. `pnpm run dev` already increments its own port; an
 orphaned `vite preview` is simply ignored because the suite picks a different port.
 
-All changes must go through a pull request (MR) to `main`. Do not commit or push changes
-directly to `main`. Branch names are `<type>/<kebab-case-slug>`, using the Conventional Commit
-types below (`feat/walk-lighting`, `fix/garage-door`). Commit messages follow
+Changes are committed directly on `main`, with no branch or pull request, and only after the
+owner validates them: present the verified change, wait for the owner's OK, then commit and
+push to `main`. Commit messages follow
 [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): description`,
 description in English, imperative mood, no trailing period.
 Types: `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `chore`, `build`, `ci`. Add `!` after
 the type or scope for a breaking change. A local test pass is not a substitute for the remote
-CI. Never merge while any required check is pending, failed, cancelled or missing; verify the
-checks for the exact latest PR commit. The owner authorizes auto-merge through GitHub once
-required CI checks pass; enable it for completed, validated changes without asking again. Never
-bypass branch protections or required checks.
+CI: check the run for the pushed commit (`gh run list --branch main`) and fix any failure.
 
-Never block on CI with long sleeps. Push, enable auto-merge, then continue other work; check
-`gh pr checks` afterwards. A `sleep` longer than about 30 s is a smell: do something useful
-instead.
+Never block on CI with long sleeps. Push, then continue other work and check the run
+afterwards. A `sleep` longer than about 30 s is a smell: do something useful instead.
 
 Use existing app architecture instead of rewriting the renderer or migrating frameworks. When
 the user asks for independent agent reviews, delegation is appropriate; otherwise follow the

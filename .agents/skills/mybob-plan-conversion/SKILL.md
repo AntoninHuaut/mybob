@@ -1153,7 +1153,7 @@ Two traps: a fixed port collides with other agents and with the e2e suite, which
 screenshot does not show the same thing as on first launch.
 
 Then fix the registry and the model, and redo the relevant checks. Run the applicable CI and
-privacy checks; publish only through the repository's pull request flow.
+privacy checks; publish only through the repository's commit flow in AGENTS.md.
 
 ## Retouching without redoing
 
