@@ -40,7 +40,7 @@ V2 adds a configurable terrain and roof, adjustable navigation and tone-mapped l
 Interface names are given in French, as shown in the application.
 
 - **Premiers pas**: on first launch, a card offers to orbit around the house, open the plan or enter the walk. It blocks nothing, stays until closed and remains reachable from the sidebar.
-- A room card’s **Peinture des murs** applies smooth matte paint. See [room finishes](docs/PROJECT-FORMAT.md#rooms).
+- A room card’s **Peinture des murs** applies smooth matte paint to the room. For an accent wall, select **Peindre un mur**, choose a colour and click its face in **Vue 3D**. Right-click or press Escape to finish. See [room finishes](docs/PROJECT-FORMAT.md#rooms).
 - **Vue 3D**: drag with the left button to rotate; wheel to zoom; right button to pan.
 - Framing adapts to the window and keeps a margin for the interface. **Recentrer** shows the whole house again after a zoom or a pan.
 - **Extérieur**: if the project contains a terrain, shows the plot, façades and roof; the 3D view keeps the roof open for arranging.

@@ -604,6 +604,9 @@ button svg {
 .visit-room:hover {
   background: #dfeccf;
 }
+canvas.painting {
+  cursor: crosshair;
+}
 .room-paint {
   margin-top: 14px;
 }

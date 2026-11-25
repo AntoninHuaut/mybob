@@ -3,7 +3,7 @@ import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import type { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import type { Scene } from '@babylonjs/core/scene';
 import type { Level, Point2, Room, Wall } from '../model/types';
-import { alongWall, wallLength } from '../model/geometry';
+import { alongWall, pointInPolygon, wallLength } from '../model/geometry';
 import { wallSideSpans } from '../model/paint';
 import type { Materials } from './materials';
 
@@ -24,6 +24,53 @@ export interface WallPiece {
 export const PAINT_OFFSET = 0.002;
 /** Where a side's room is looked for: just off the face, as the skirting does. */
 const SIDE_SAMPLE = 0.01;
+
+export function pickWallFace(
+  scene: Scene,
+  level: Level,
+  wallNodes: ReadonlyMap<string, TransformNode>,
+  x: number,
+  y: number,
+) {
+  const hits = scene.multiPick(
+    x,
+    y,
+    (mesh) =>
+      mesh.isEnabled() &&
+      mesh.isVisible &&
+      mesh.visibility > 0 &&
+      mesh.metadata?.kind !== 'paint' &&
+      (mesh.isPickable || !!mesh.material?.clipPlane),
+  );
+  const hit = hits
+    ?.filter(
+      (hit) =>
+        hit.pickedPoint &&
+        (hit.pickedMesh?.material?.clipPlane?.dotCoordinate(hit.pickedPoint) ?? 0) <= 0,
+    )
+    .sort((a, b) => a.distance - b.distance)[0];
+  const mesh = hit?.pickedMesh;
+  const wall = level.walls.find(
+    (wall) => mesh?.parent === wallNodes.get(wall.id) && mesh?.name.startsWith(`wall:${wall.id}:`),
+  );
+  const normal = hit?.getNormal(true);
+  if (wall && hit?.pickedPoint && normal)
+    return paintedSideAt(level, wall, [hit.pickedPoint.x, hit.pickedPoint.z], [normal.x, normal.z]);
+  return undefined;
+}
+
+function paintedSideAt(level: Level, wall: Wall, point: Point2, normal: Point2) {
+  const length = wallLength(wall);
+  const dx = (wall.end[0] - wall.start[0]) / length;
+  const dz = (wall.end[1] - wall.start[1]) / length;
+  const facing = -dz * normal[0] + dx * normal[1];
+  if (Math.abs(facing) < 0.9) return;
+  const side: 1 | -1 = facing > 0 ? 1 : -1;
+  const along = dx * (point[0] - wall.start[0]) + dz * (point[1] - wall.start[1]);
+  const sample = alongWall(wall, along, side * (wall.thickness / 2 + SIDE_SAMPLE));
+  const room = level.rooms.find((candidate) => pointInPolygon(sample, candidate.polygon));
+  return room ? { roomId: room.id, wallId: wall.id, side } : undefined;
+}
 /** How far along the face a reveal looks for its room: room outlines stop short of corners. */
 const REVEAL_REACH = 0.25;
 const EPSILON = 1e-4;
@@ -83,7 +130,7 @@ export function buildWallPaint(
   wallNodes: ReadonlyMap<string, TransformNode>,
   pieces: ReadonlyMap<string, readonly WallPiece[]>,
 ): Mesh[] {
-  if (!level.rooms.some((room) => room.wallColor)) return [];
+  if (!level.rooms.some((room) => room.wallColor || room.wallFaces?.length)) return [];
   const meshes: Mesh[] = [];
   for (const wall of level.walls) {
     const node = wallNodes.get(wall.id);
@@ -93,22 +140,6 @@ export function buildWallPaint(
     const half = wall.thickness / 2 + PAINT_OFFSET;
     const floor = Math.min(...wallPieces.map((piece) => piece.bottom));
     const sample = (sign: number) => sign * (wall.thickness / 2 + SIDE_SAMPLE);
-    const byRoom = new Map<string, Surface>();
-    const quad = (room: Room, corners: Vec3[], normal: Vec3) => {
-      const data = byRoom.get(room.id) ?? {
-        color: room.wallColor!,
-        positions: [],
-        normals: [],
-        indices: [],
-      };
-      byRoom.set(room.id, data);
-      const first = data.positions.length / 3;
-      for (const corner of corners) {
-        data.positions.push(...corner);
-        data.normals.push(...normal);
-      }
-      data.indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
-    };
     /** The room facing one side of the wall nearest to `x`. */
     const roomAt = (sign: number, x: number) => {
       let best: { room: Room; distance: number } | undefined;
@@ -126,10 +157,29 @@ export function buildWallPaint(
     };
 
     for (const sign of [-1, 1] as const) {
+      const byRoom = new Map<string, Surface>();
+      const quad = (room: Room, corners: Vec3[], normal: Vec3) => {
+        const color =
+          room.wallFaces?.find((face) => face.wallId === wall.id && face.side === sign)?.color ??
+          room.wallColor;
+        if (!color) return;
+        const data = byRoom.get(room.id) ?? {
+          color,
+          positions: [],
+          normals: [],
+          indices: [],
+        };
+        byRoom.set(room.id, data);
+        const first = data.positions.length / 3;
+        for (const corner of corners) {
+          data.positions.push(...corner);
+          data.normals.push(...normal);
+        }
+        data.indices.push(first, first + 1, first + 2, first, first + 2, first + 3);
+      };
       const z = sign * half;
       for (const piece of wallPieces) {
         for (const span of wallSideSpans(level, wall, piece.start, piece.end, sample(sign))) {
-          if (!span.room.wallColor) continue;
           // A raised room's paint starts at its own floor, not at the lower neighbour's.
           const bottom = Math.max(piece.bottom, span.room.floorOffset ?? 0);
           const top0 = Math.max(pieceTop(piece, span.start), bottom),
@@ -174,7 +224,7 @@ export function buildWallPaint(
                 ),
             );
           const room = buried ? undefined : roomAt(sign, x);
-          if (!room?.wallColor) continue;
+          if (!room) continue;
           const bottom = Math.max(piece.bottom, room.floorOffset ?? 0);
           const X = x + direction * PAINT_OFFSET;
           for (const [y0, y1] of subtract(bottom, pieceTop(piece, x), covers))
@@ -210,7 +260,7 @@ export function buildWallPaint(
           const Y = y + up * PAINT_OFFSET;
           for (const [a, b] of subtract(piece.start, piece.end, covers))
             for (const span of wallSideSpans(level, wall, a, b, sample(sign))) {
-              if (!span.room.wallColor || y < (span.room.floorOffset ?? 0)) continue;
+              if (y < (span.room.floorOffset ?? 0)) continue;
               quad(
                 span.room,
                 [
@@ -224,22 +274,22 @@ export function buildWallPaint(
             }
         }
       }
-    }
-    for (const [roomId, data] of byRoom) {
-      const mesh = new Mesh(`wall:${wall.id}:paint:${roomId}`, scene);
-      const vertexData = new VertexData();
-      vertexData.positions = data.positions;
-      vertexData.normals = data.normals;
-      vertexData.indices = data.indices;
-      vertexData.applyToMesh(mesh);
-      mesh.parent = node;
-      mesh.material = materials.paint(data.color);
-      mesh.isPickable = false;
-      mesh.checkCollisions = false;
-      mesh.receiveShadows = true;
-      mesh.metadata = { kind: 'paint', roomId };
-      mesh.freezeWorldMatrix();
-      meshes.push(mesh);
+      for (const [roomId, data] of byRoom) {
+        const mesh = new Mesh(`wall:${wall.id}:paint:${roomId}`, scene);
+        const vertexData = new VertexData();
+        vertexData.positions = data.positions;
+        vertexData.normals = data.normals;
+        vertexData.indices = data.indices;
+        vertexData.applyToMesh(mesh);
+        mesh.parent = node;
+        mesh.material = materials.paint(data.color);
+        mesh.isPickable = false;
+        mesh.checkCollisions = false;
+        mesh.receiveShadows = true;
+        mesh.metadata = { kind: 'paint', roomId };
+        mesh.freezeWorldMatrix();
+        meshes.push(mesh);
+      }
     }
   }
   return meshes;

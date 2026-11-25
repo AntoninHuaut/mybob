@@ -11,6 +11,7 @@ import {
   resolveRoofWindow,
   wallLength,
 } from './geometry';
+import { isFacePaint } from './paint';
 import { validateSolarSettings } from './solarSettings';
 
 export class ProjectValidationError extends Error {}
@@ -336,6 +337,19 @@ export function validateProject(
         (typeof r.wallColor !== 'string' || !/^#[0-9a-fA-F]{6}$/.test(r.wallColor))
       )
         fail(`La peinture des murs doit être une couleur #rrggbb : ${r.id}`);
+      if (r.wallFaces !== undefined) {
+        const faces = r.wallFaces;
+        if (!Array.isArray(faces) || faces.length > 2 * l.walls.length)
+          fail(`Peintures par mur invalides : ${r.id}`);
+        const seen = new Set<string>();
+        for (const face of faces) {
+          if (!isFacePaint(face) || !l.walls.some((wall) => wall.id === face.wallId))
+            fail(`Face de mur invalide : ${r.id}`);
+          const key = `${face.side}:${face.wallId}`;
+          if (seen.has(key)) fail(`Face de mur en double : ${r.id}`);
+          seen.add(key);
+        }
+      }
       if (ceilingHeightAt(l, r.viewpoint) - (r.floorOffset ?? 0) < MIN_CEILING_HEIGHT)
         fail(
           `Le point de visite doit être sous au moins 1,80 m de plafond, hors du rampant : ${r.id}`,

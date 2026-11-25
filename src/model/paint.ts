@@ -1,4 +1,4 @@
-import type { HouseProject, Level, Point2, Room, Wall } from './types';
+import type { HouseProject, Level, Point2, Room, WallFacePaint, Wall } from './types';
 import { alongWall, pointInPolygon } from './geometry';
 
 /** A paint colour, `#rrggbb`, lower case once normalised. */
@@ -20,7 +20,19 @@ export const PAINT_PALETTE: readonly { color: string; name: string }[] = [
  * Local paint choices of one project, by level then room: a colour, or `null` for a room
  * brought back to plain plaster over a colour the project itself carries.
  */
-export type PaintOverrides = Record<string, Record<string, string | null>>;
+export type RoomPaintChoice = { color?: string | null; faces: WallFacePaint[] };
+export type PaintOverrides = Record<string, Record<string, string | null | RoomPaintChoice>>;
+
+export function isFacePaint(value: unknown): value is WallFacePaint {
+  if (!value || typeof value !== 'object') return false;
+  const face = value as Partial<WallFacePaint>;
+  return (
+    typeof face.wallId === 'string' &&
+    (face.side === 1 || face.side === -1) &&
+    typeof face.color === 'string' &&
+    PAINT_COLOR.test(face.color)
+  );
+}
 
 /** Reads stored choices; anything malformed is dropped rather than blocking the house. */
 export function parsePaintOverrides(raw: unknown): PaintOverrides {
@@ -28,10 +40,25 @@ export function parsePaintOverrides(raw: unknown): PaintOverrides {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return result;
   for (const [levelId, rooms] of Object.entries(raw)) {
     if (!rooms || typeof rooms !== 'object' || Array.isArray(rooms)) continue;
-    const clean: Record<string, string | null> = {};
+    const clean: PaintOverrides[string] = {};
     for (const [roomId, color] of Object.entries(rooms))
       if (color === null || (typeof color === 'string' && PAINT_COLOR.test(color)))
         clean[roomId] = color === null ? null : color.toLowerCase();
+      else if (
+        color &&
+        typeof color === 'object' &&
+        'faces' in color &&
+        Array.isArray(color.faces)
+      ) {
+        const choice: RoomPaintChoice = { faces: color.faces.filter(isFacePaint) };
+        if (
+          'color' in color &&
+          (color.color === null ||
+            (typeof color.color === 'string' && PAINT_COLOR.test(color.color)))
+        )
+          choice.color = color.color;
+        clean[roomId] = choice;
+      }
     if (Object.keys(clean).length) result[levelId] = clean;
   }
   return result;
@@ -50,9 +77,17 @@ export function withPaint(project: HouseProject, overrides: PaintOverrides): Hou
         ...level,
         rooms: level.rooms.map((room) => {
           if (!Object.hasOwn(choices, room.id)) return { ...room };
-          const { wallColor: _previous, ...rest } = room;
-          const color = choices[room.id];
-          return color ? { ...rest, wallColor: color } : rest;
+          const choice = choices[room.id];
+          const copy = { ...room };
+          const detailed = typeof choice === 'object' && choice !== null;
+          const color = detailed ? choice.color : choice;
+          if (color) copy.wallColor = color;
+          else if (color === null) delete copy.wallColor;
+          if (detailed) {
+            if (choice.faces.length) copy.wallFaces = choice.faces;
+            else delete copy.wallFaces;
+          }
+          return copy;
         }),
       };
     }),
