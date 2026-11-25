@@ -8,6 +8,7 @@ import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import { worldScaleUvs } from '../src/scene/buildHouse';
 import {
   fenceMeshData,
+  furnitureMapData,
   hedgeMapData,
   greyFromField,
   normalFromHeight,
@@ -252,4 +253,17 @@ test('the hedge reads as foliage: varied greens, and leaf detail neutral on aver
   for (let i = 0; i < detail.size * detail.size; i++) sum += detail.data[i * 4];
   const mean = sum / (detail.size * detail.size);
   assert.ok(Math.abs(mean - 128) < 12, `detail mean ${mean}`);
+});
+
+test('the furniture wood grain runs straight along U instead of curling into rings', () => {
+  const { size, data } = furnitureMapData().woodAlbedo;
+  let along = 0,
+    across = 0;
+  for (let y = 0; y < size - 1; y++)
+    for (let x = 0; x < size - 1; x++) {
+      const at = (y * size + x) * 4;
+      along += Math.abs(data[at] - data[at + 4]);
+      across += Math.abs(data[at] - data[at + size * 4]);
+    }
+  assert.ok(along * 6 < across, `grain change along ${along}, across ${across}`);
 });
