@@ -1,12 +1,14 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import { createFurniture } from '../src/furniture/model';
+import { startupDone } from './startup';
 
 // The link carries the project state: check the emission (#p1:), the recipient's
 // read-only state, adoption, silence for the owner and the divergence of an old link.
 test.beforeEach(async ({ page }) => {
   await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
+  await startupDone(page);
   await expect(page.getByRole('button', { name: 'Plan', exact: true })).toBeEnabled();
   await expect(page.locator('#project-select')).toContainText('Démonstration');
 });
@@ -112,6 +114,7 @@ test('a shared link opens read-only, then editable after adding it', async ({
     const received = await context.newPage();
     await received.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
     await received.goto(shared);
+    await startupDone(received);
     const banner = received.locator('#received-banner');
     await expect(banner).toBeVisible({ timeout: 20_000 });
     await expect(banner).toContainText('Projet reçu');
@@ -127,6 +130,7 @@ test('a shared link opens read-only, then editable after adding it', async ({
     await expect(received.locator('#toast')).toContainText('vos projets');
     await expect(banner).toBeHidden();
     await received.reload();
+    await startupDone(received);
     await furnishings(received);
     await expect(banner).toBeHidden();
     await expect(
@@ -154,6 +158,7 @@ test('changing level keeps the project received by link, without going back to t
     const received = await context.newPage();
     await received.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
     await received.goto(shared);
+    await startupDone(received);
     const banner = received.locator('#received-banner');
     await expect(banner).toBeVisible({ timeout: 20_000 });
     await expect(received.locator('#project-select option:checked')).toHaveText(
@@ -179,6 +184,7 @@ test('changing level keeps the project received by link, without going back to t
 test('the owner reloading their own link sees no dialog', async ({ page }) => {
   await importLinkProject(page);
   await page.reload();
+  await startupDone(page);
   await expect(page.locator('#received-banner')).toBeHidden();
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.locator('#project-select option:checked')).toHaveText('Maison du lien');
@@ -204,7 +210,9 @@ test('a link older than the local state offers to keep both', async ({ page }) =
   await expect.poll(() => new URL(page.url()).hash).not.toBe(new URL(older).hash);
 
   await page.goto(older);
+  await startupDone(page);
   await page.reload();
+  await startupDone(page);
   const divergence = page.getByText('diffèrent', { exact: false });
   await expect(divergence).toBeVisible({ timeout: 20_000 });
   await page.getByRole('button', { name: 'Garder les deux' }).click();
@@ -214,6 +222,7 @@ test('a link older than the local state offers to keep both', async ({ page }) =
   await expect(page.locator('#toast')).toContainText('vos projets');
   await expect(page.locator('#project-select option')).toHaveCount(before + 1);
   await page.reload();
+  await startupDone(page);
   await expect(page.locator('#project-select option')).toHaveCount(before + 1);
   await expect(page.locator('#received-banner')).toBeHidden();
 });
@@ -234,6 +243,7 @@ test('at 10 projects, « Garder les deux » offers to replace a project from
     localStorage.setItem('maison-atelier:projects:v1', JSON.stringify(others));
   }, demo);
   await page.reload();
+  await startupDone(page);
   await expect(page.locator('#project-select')).toContainText('Remplissage 8');
   await importLinkProject(page);
   const older = await sharedHash(page);
@@ -256,6 +266,7 @@ test('at 10 projects, « Garder les deux » offers to replace a project from
   const first = await context.newPage();
   await first.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await first.goto(older);
+  await startupDone(first);
   await expect(first.getByText('diffèrent', { exact: false })).toBeVisible({ timeout: 20_000 });
   const total = await first.locator('#project-select option').count();
   await first.getByRole('button', { name: 'Garder les deux' }).click();
@@ -273,6 +284,7 @@ test('at 10 projects, « Garder les deux » offers to replace a project from
   const reopened = await context.newPage();
   await reopened.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await reopened.goto(older);
+  await startupDone(reopened);
   await expect(reopened.getByText('diffèrent', { exact: false })).toBeVisible({ timeout: 20_000 });
   await reopened.getByRole('button', { name: 'Garder les deux' }).click();
   await reopened.getByLabel('Projet à remplacer').selectOption({ label: 'Remplissage 0' });
@@ -328,6 +340,7 @@ test('a refused URL publication does not turn the reload into a received link', 
     .toBeGreaterThan(0);
 
   await page.reload();
+  await startupDone(page);
   await expect(page.getByRole('dialog')).toHaveCount(0);
   await expect(page.getByText('diffèrent', { exact: false })).toHaveCount(0);
   await expect(page.locator('#received-banner')).toBeHidden();
@@ -347,7 +360,9 @@ test('a link with a corrupted hash loads the local project with a warning', asyn
   // appears: the test only held thanks to the machine's speed.
   await expect.poll(() => new URL(page.url()).hash).toContain('#p1:');
   await page.goto('/#p1:abc');
+  await startupDone(page);
   await page.reload();
+  await startupDone(page);
   await expect(page.locator('#toast')).toContainText('lien', {
     ignoreCase: true,
     timeout: 20_000,

@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test';
+import { startupDone } from './startup';
 
 // Every test starts from empty storage: the start card is therefore visible.
 test('the card offers three actions, stays open while they are tried and does not come back', async ({
   page,
 }) => {
   await page.goto('/');
+  await startupDone(page);
   const card = page.locator('#start-card');
   await expect(card).toBeVisible();
   await expect(card.locator('[data-start-action]')).toHaveCount(3);
@@ -14,11 +16,13 @@ test('the card offers three actions, stays open while they are tried and does no
   await card.getByRole('button', { name: 'Masquer les premiers pas' }).click();
   await expect(card).toBeHidden();
   await page.reload();
+  await startupDone(page);
   await expect(page.locator('#start-card')).toBeHidden();
 });
 
 test('a click in the scene does not dismiss the card', async ({ page }) => {
   await page.goto('/');
+  await startupDone(page);
   const card = page.locator('#start-card');
   await expect(card).toBeVisible();
   const box = (await page.locator('#scene').boundingBox())!;
@@ -30,6 +34,7 @@ test('orbiting around the house raises no error', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
+  await startupDone(page);
   const card = page.locator('#start-card');
   await expect(card).toBeVisible();
   await card.getByRole('button', { name: /Tourner autour de la maison/ }).click();
@@ -46,6 +51,7 @@ test('the preview rotation stays immediate when motion is reduced', async ({ pag
   page.on('pageerror', (error) => errors.push(error.message));
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.goto('/');
+  await startupDone(page);
   const card = page.locator('#start-card');
   await expect(card).toBeVisible();
   const result = await card
@@ -63,6 +69,7 @@ test('the preview rotation stays immediate when motion is reduced', async ({ pag
 
 test('the short help fits in three gestures and leads to the detailed text', async ({ page }) => {
   await page.goto('/');
+  await startupDone(page);
   await page.locator('#help').click();
   const dialog = page.getByRole('dialog');
   await expect(dialog.locator('.first-steps-list li')).toHaveCount(3);

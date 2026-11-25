@@ -102,7 +102,6 @@ export function wireNavigationControls() {
     });
   }
   const responsiveSidebar = matchMedia('(min-width: 761px)');
-  setSidebar(responsiveSidebar.matches);
   responsiveSidebar.addEventListener('change', () => setSidebar(responsiveSidebar.matches));
   el('#walk-speed').addEventListener('input', () => updateNavigationPreferences());
   el('#look-sensitivity').addEventListener('input', () => updateNavigationPreferences());

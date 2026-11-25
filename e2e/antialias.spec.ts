@@ -1,10 +1,12 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
+import { startupDone } from './startup';
 
 test('overview antialiasing covers the opaque house silhouette with intermediate pixels', async ({
   page,
 }, testInfo) => {
   await page.goto('/');
+  await startupDone(page);
   await expect(page.locator('#view-title')).toHaveText('Vue 3D');
   for (let i = 0; i < 2; i++) {
     await page.locator('[data-view=plan]').click();

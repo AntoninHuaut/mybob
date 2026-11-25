@@ -163,10 +163,13 @@ with a migration.
   (the UI explains refused touch-only walking) and resolves a valid walk destination.
   Refusal returns `false`, preserving the accepted mode, exterior, camera and active tools.
 - The displayed level is the only one with lights, furniture, picking and collisions. The
-  other levels are built too (`otherLevels`), without lights, never picked nor collided:
+  other levels (`otherLevels`) have no fixtures or lights (`buildHouse(..., false)`, which
+  leaves the displayed level's `FixtureLights` in place) and are never picked nor collided:
   Vue 3D shows the levels under the displayed one, Extérieur shows them all (seen through
-  the windows), Plan and Visite hide them (`updateOtherLevels`). They are built before the
-  displayed level, whose `FixtureLights` must be the scene's last.
+  the windows), Plan and Visite hide them (`updateOtherLevels`). Each is built the first
+  time a view shows it, at the start of that view's next image (`buildPendingLevels`, behind
+  the preparation overlay when the view is cold), so a house opened in Plan or Visite builds
+  only its displayed level.
 - Changing level keeps the view (`loadLevel` in `app/projectView.ts`): Extérieur, Plan, or a
   visit restarted from the new level's start; changing project starts in Vue 3D.
 - Taking a stair in the visit changes level **inside the same scene** (`viewer.takeStair`), so
@@ -278,7 +281,12 @@ camera moves. Neither fires during a headset session: nothing in the page is see
   in metres by `worldScaleUvs`, otherwise a 4 m wall and a 50 cm skirting board would stretch
   the same grain differently. Parquet keeps its 4.8 × 3.2 m tile, that of its albedo, and its
   roughness varies plank by plank. Pixel data is computed once per session and cached:
-  switching project rebuilds the scene, not the noise. On furniture, each map is uploaded once
+  switching project rebuilds the scene, not the noise. The generators (`surfaceMaps.ts`, free
+  of Babylon) run in a worker started at page load (`surfaceMapsInWorker.ts`), inlined as a
+  `blob:` worker so no request can stall it; the start-up awaits it right after the project
+  files (`attente des textures` in the `démarrage` line, given up after 2 s) and adopts its
+  buffers as that cache. Without an answer, the maps are generated on first use. The sidebar
+  takes its real state before that wait (`setSidebar` at the top of `start`). On furniture, each map is uploaded once
   per `FurnitureLayer` and shared by every material that uses it, whatever its colour; the
   textures are freed with the layer, not with the materials.
 - The walk post-processing chain is ordered and the order matters: Babylon appends each
@@ -311,6 +319,11 @@ camera moves. Neither fires during a headset session: nothing in the page is see
   on. It is the one cause of a slow scene a visitor fixes alone, without losing quality. To diagnose a slow machine remotely,
   `mybob.diag()` prints engine, GPU, frame rate, actually rendered resolution, walk ambience
   state, scene size and machine characteristics; the command is recalled at start-up.
+  Its `démarrage` line splits the start-up, from navigation to the first interactive view:
+  projects fetched and validated, local library, engine, then `viewer.load` (materials and
+  their generated textures, levels, exterior, and the rest of the scene), the furniture pieces
+  (`furnitureBuildMs`) and the interface set up around it, the first view's preparation, and
+  what no phase covers (`viewer.loadTimings`, `main.ts`).
   `mybob.diag()` returns nothing — the console would echo the return value and the report
   would appear twice — and `mybob.report()` gives the same text without printing it, for
   `copy(mybob.report())`. `mybob.profile(seconds)` measures instead of describing: it draws every image of the

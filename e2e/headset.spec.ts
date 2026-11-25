@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test';
+import { startupDone } from './startup';
 
 // No headset here: the browser's WebXR entry point is faked, to check the wiring only.
 
 test('without WebXR, the headset button stays hidden', async ({ page }) => {
   await page.goto('/');
+  await startupDone(page);
   await expect(page.locator('#view-title')).toHaveText('Vue 3D');
   await expect(page.locator('#enter-immersive')).toBeHidden();
 });
@@ -25,6 +27,7 @@ test('a refused headset session leaves the screen walk running, with a message',
     });
   });
   await page.goto('/');
+  await startupDone(page);
   const button = page.locator('#enter-immersive');
   await expect(button).toBeVisible();
   await button.click();
