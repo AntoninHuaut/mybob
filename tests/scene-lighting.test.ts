@@ -141,11 +141,12 @@ test('suppressed shadows come back exactly as they were, even when already off',
   done();
 });
 
-test('ceiling fixtures are off in the plan or when switched off, brighter in the visit', () => {
+test('ceiling fixtures are dark in the plan, off when switched off, brighter in the visit', () => {
   const { scene, done } = fixture();
   const point = new PointLight('fixture', new Vector3(2, 2.5, 2), scene);
   applyFixtureLights(scene, [point], 'plan', true);
-  assert.equal(point.isEnabled(), false, 'plan keeps point-light hotspots disabled');
+  assert.equal(point.isEnabled(), true, 'the same lights in every view keep material defines');
+  assert.equal(point.intensity, 0, 'plan keeps point-light hotspots dark');
   applyFixtureLights(scene, [point], 'overview', true);
   assert.equal(point.isEnabled(), true);
   assert.equal(point.intensity, FIXTURE_LIGHT_INTENSITY);

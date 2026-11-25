@@ -137,7 +137,11 @@ export function createSceneLighting(scene: Scene, level: Level) {
   return { lighting: new SceneLighting(scene, hemispheric, sun), shadow };
 }
 
-/** Ceiling fixtures: off in the plan or when switched off, brighter and wider in the visit. */
+/**
+ * Ceiling fixtures: dark in the plan, off when switched off, brighter and wider in the visit.
+ * The plan zeroes them like the sun instead of disabling them: a changed light set would make
+ * every material prepare its light defines again on each Plan ↔ Vue 3D switch (#371).
+ */
 export function applyFixtureLights(
   scene: Scene,
   lights: PointLight[],
@@ -147,9 +151,10 @@ export function applyFixtureLights(
   const interior = mode === 'walk';
   let rangesChanged = false;
   for (const light of lights) {
-    light.setEnabled(enabled && mode !== 'plan');
+    light.setEnabled(enabled);
     // Written on every call: a per-fixture intensity from project data would be lost here.
-    light.intensity = interior ? INTERIOR_FIXTURE_INTENSITY : FIXTURE_LIGHT_INTENSITY;
+    light.intensity =
+      mode === 'plan' ? 0 : interior ? INTERIOR_FIXTURE_INTENSITY : FIXTURE_LIGHT_INTENSITY;
     const range = interior ? INTERIOR_FIXTURE_RANGE : FIXTURE_LIGHT_RANGE;
     rangesChanged ||= light.range !== range;
     light.range = range;

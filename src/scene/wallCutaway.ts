@@ -112,6 +112,18 @@ export function buildWallCutaway(scene: Scene, level: Level) {
       }
       return selected;
     },
+    /**
+     * Under a section plane (the plan, an explicit cut), walls already wearing a clone keep it,
+     * cut exactly at that plane like the originals: swapping materials back would make Babylon
+     * rebuild their defines on every Plan ↔ Vue 3D switch (#371). Other walls stay original.
+     */
+    holdForSection(section: Plane) {
+      for (const plane of [shellPlane, trimPlane]) {
+        plane.normal.copyFrom(section.normal);
+        plane.d = section.d;
+      }
+      for (const [mesh, original] of originals) mesh.isPickable = original.pickable;
+    },
     dispose() {
       for (const [mesh, original] of originals) {
         if (mesh.isDisposed()) continue;

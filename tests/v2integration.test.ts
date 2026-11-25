@@ -254,7 +254,9 @@ describe('viewer state transitions', () => {
     viewer.setSectionHeight(1.2);
     assertSectionAt(scene, 1.2);
     assert.ok(
-      exterior.facadeMeshes.every((mesh) => !mesh.material?.clipPlane),
+      exterior.facadeMeshes.every(
+        (mesh) => (mesh.material?.clipPlane ?? scene.clipPlane)?.d === scene.clipPlane?.d,
+      ),
       'the explicit cut takes priority',
     );
     viewer.setExteriorView(true);
