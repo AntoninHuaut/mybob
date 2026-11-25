@@ -2,8 +2,15 @@ import { userMessage } from '../errorMessage';
 import { activeButton, el, toast } from './dom';
 import { planHistory, restorePlanEdit } from './planHistory';
 import { findProject, isImported } from './projectLibrary';
+import { selectionPointer, syncPlanSelection } from './planSelection';
 import { app } from './state';
-import { render as renderWallDraft, stopWallTool, wallGridOn, wallToolActive } from './wallDrawing';
+import {
+  render as renderWallDraft,
+  stopWallTool,
+  wallGridOn,
+  wallPointer,
+  wallToolActive,
+} from './wallDrawing';
 
 let open = false;
 
@@ -12,6 +19,8 @@ export function editableProject() {
   if (app.viewer.mode !== 'plan' || app.readOnlyLink || !isImported(app.current.id)) return;
   return findProject(app.current.id);
 }
+
+export const planEditBarOpen = () => open;
 
 export function openPlanEditBar() {
   open = true;
@@ -41,7 +50,10 @@ export function syncPlanEditBar() {
   activeButton('#wall-tool', wallToolActive());
   el('#wall-options').hidden = !wallToolActive();
   activeButton('#wall-grid', wallGridOn());
+  app.viewer.planPointer =
+    !project || !open ? undefined : wallToolActive() ? wallPointer : selectionPointer;
   renderWallDraft();
+  syncPlanSelection();
   if (!project) return;
   const { walls } = app.viewer.level;
   const history = planHistory(project);

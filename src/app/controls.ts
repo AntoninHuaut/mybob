@@ -13,6 +13,7 @@ import { setFurnitureCirculation } from './furnitureController';
 import { openPlanOpenings } from './planOpenings';
 import { restorePlan, syncPlanEditBar, togglePlanEditBar } from './planEditBar';
 import { watchPlanHistory } from './planHistory';
+import { wirePlanSelection } from './planSelection';
 import { startNewHouse, toggleWallGrid, toggleWallTool, wallToolKey } from './wallDrawing';
 import { downloadProject, importProject, openRemoveProject } from './projectLibrary';
 import { loadLevel, loadProject } from './projectView';
@@ -205,6 +206,7 @@ export function wireProjectControls() {
   el('#export-image').addEventListener('click', openImageExport);
   el('#tool-openings').addEventListener('click', openPlanOpenings);
   el('#move-wall').addEventListener('click', openPartitionMove);
+  wirePlanSelection();
   watchPlanHistory(syncPlanEditBar);
   el('#tool-plan-edit').addEventListener('click', togglePlanEditBar);
   el('#undo-plan').addEventListener('click', () => restorePlan('undo'));

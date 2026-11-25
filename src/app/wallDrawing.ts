@@ -54,7 +54,6 @@ export function startWallTool() {
   points = [];
   typed = '';
   el<HTMLInputElement>('#wall-thickness').value = app.viewer.level.walls.length ? '0.10' : '0.20';
-  app.viewer.planPointer = onPointer;
   syncDisplayControls();
   render();
 }
@@ -65,7 +64,6 @@ export function stopWallTool() {
   points = [];
   cursor = undefined;
   typed = '';
-  app.viewer.planPointer = undefined;
   syncDisplayControls();
   render();
 }
@@ -101,7 +99,7 @@ function snap(at: Point2): DraftSnap {
   });
 }
 
-function onPointer(type: 'move' | 'tap', at: Point2, event: PointerEvent) {
+export function wallPointer(type: 'move' | 'tap', at: Point2, event: PointerEvent) {
   if (!wallToolLive()) return false;
   pointer = at;
   free = event.shiftKey;

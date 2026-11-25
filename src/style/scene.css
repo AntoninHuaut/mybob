@@ -705,6 +705,80 @@
   line-height: 1.5;
   pointer-events: none;
 }
+/* Same place as the wall hint: the inspector only shows while the wall tool is off. */
+.plan-inspector {
+  position: absolute;
+  z-index: 4;
+  top: 144px;
+  right: 80px;
+  width: min(260px, calc(100% - 110px));
+  max-height: calc(100% - 160px);
+  padding: 12px;
+  border: 1px solid #d2ddc7;
+  border-radius: 8px;
+  background: #fcfef7f2;
+  box-shadow: 0 4px 18px #2a45200c;
+  overflow-y: auto;
+}
+.plan-inspector[hidden] {
+  display: none;
+}
+.plan-inspector-form {
+  display: grid;
+  gap: 8px;
+  color: #355840;
+  font-size: 13px;
+}
+.plan-inspector-form h2 {
+  margin: 0;
+  font-size: 14px;
+}
+.plan-inspector-form label {
+  display: grid;
+  gap: 3px;
+}
+.plan-inspector-form input,
+.plan-inspector-form select {
+  width: 100%;
+  height: 32px;
+  padding: 4px 6px;
+  border: 1px solid #cdd8cc;
+  border-radius: 5px;
+  background: white;
+  font: inherit;
+}
+.plan-inspector-unit {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.plan-inspector-value {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+}
+.plan-inspector-error {
+  margin: 0;
+  color: #a34d39;
+}
+.plan-inspector-error:empty {
+  display: none;
+}
+.plan-inspector-form [data-action='delete'] {
+  justify-self: start;
+  color: #a34d39;
+}
+.plan-selection-outline {
+  fill: #3a7d4a22;
+  stroke: #2f6b3d;
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+.plan-selection-outline.room {
+  fill: #3a7d4a14;
+  stroke-dasharray: 6 4;
+}
 .wall-draft {
   position: absolute;
   inset: 0;

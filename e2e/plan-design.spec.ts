@@ -87,19 +87,59 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   await page.getByRole('button', { name: 'Rétablir la modification du plan' }).click();
   expect(await exportedLevel(page)).toEqual(moved);
 
+  // Inspector: page points are read from the wall tool's corners before it is turned off.
+  const [onPartition, inStart, onDoor] = await Promise.all(
+    (
+      [
+        [x0 + 3.5, z0 + 2.1],
+        [x0 + 3.5, z0 + 1],
+        [x0 + 2.1, z0 + 2.1],
+      ] as Point[]
+    ).map((p) => pagePoint(page, p)),
+  );
+  await page.locator('#wall-tool').click();
+  const inspector = page.locator('#plan-inspector');
+  await page.mouse.click(...onPartition);
+  await expect(inspector.getByLabel('Épaisseur')).toHaveValue('0.1');
+  await inspector.getByLabel('Épaisseur').fill('0.15');
+  await inspector.getByLabel('Épaisseur').press('Enter');
+  const thicker = await exportedLevel(page);
+  expect(thicker.rooms.map((r) => area(r.polygon))).toEqual([
+    expect.closeTo(7.7, 6),
+    expect.closeTo(3.7, 6),
+  ]);
+  await page.locator('#scene').focus();
+  await page.keyboard.press('Control+z');
+  await expect(inspector.getByLabel('Épaisseur')).toHaveValue('0.1');
+  expect(await exportedLevel(page)).toEqual(moved);
+
+  await page.mouse.click(...onDoor);
+  await inspector.getByLabel('Largeur').fill('5');
+  await inspector.getByLabel('Largeur').press('Enter');
+  await expect(inspector.getByRole('alert')).toHaveText('L’ouverture dépasse le bout du mur.');
+  expect(await exportedLevel(page)).toEqual(moved);
+
+  await page.mouse.click(...inStart);
+  await inspector.getByLabel('Nom').fill('Entrée');
+  await inspector.getByLabel('Nom').press('Enter');
+  await expect(page.locator('#scene-labels')).toContainText('Entrée');
+  const renamed = await exportedLevel(page);
+  expect(renamed.rooms[0].name).toBe('Entrée');
+
   // An opening wider than its host is refused and the house stays as it was.
   await openOpenings(page);
   await page.locator('#opening-form [name=width]').fill('5');
   await page.locator('#opening-form [type=submit]').click();
   await expect(page.locator('#opening-error')).not.toBeEmpty();
   await page.locator('#cancel-opening').click();
-  expect(await exportedLevel(page)).toEqual(moved);
+  expect(await exportedLevel(page)).toEqual(renamed);
 
   await page.reload();
   await startupDone(page);
   await expect(page.locator('#header-project')).toHaveText('Nouvelle maison');
+  await expect(page.locator('#room-list')).toContainText('Entrée');
   const level = await exportedLevel(page);
-  expect(level).toEqual(moved);
+  expect(level).toEqual(renamed);
   // The larger part kept the drawn room's identity.
   const [start, beyond] = level.rooms;
   expect(start.id).toBe(first.rooms[0].id);
