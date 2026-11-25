@@ -63,6 +63,19 @@ export interface DiagnosticSnapshot {
   screen: string;
   userAgent: string;
   heapMb?: number;
+  /** The page's start-up, once the first view is ready (`main.ts`). */
+  startup?: StartupTiming;
+}
+
+/** Milestones are milliseconds since navigation; phases are durations inside the scene build. */
+export interface StartupTiming {
+  projectsAt: number;
+  builtAt: number;
+  readyAt: number;
+  materialsMs: number;
+  levelsMs: number;
+  levels: number;
+  exteriorMs: number;
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -85,6 +98,18 @@ export function viewLabel(mode: string, exterior: boolean): string {
 /** One decimal, French comma: the report is read by a person, not parsed. */
 function decimal(value: number): string {
   return value.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+}
+
+function seconds(ms: number): string {
+  return (ms / 1000).toLocaleString('fr-FR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+function startupLine(t: StartupTiming): string {
+  const build = `scène ${seconds(t.builtAt - t.projectsAt)} s (matériaux ${seconds(t.materialsMs)} · ${t.levels} niveaux ${seconds(t.levelsMs)} · extérieur ${seconds(t.exteriorMs)})`;
+  return `  démarrage   prêt en ${seconds(t.readyAt)} s · projets ${seconds(t.projectsAt)} s · ${build} · préparation de la vue ${seconds(t.readyAt - t.builtAt)} s`;
 }
 
 /**
@@ -139,6 +164,7 @@ export function diagnosticLines(snapshot: DiagnosticSnapshot): string[] {
     `  scène       ${snapshot.meshes} maillages, ${snapshot.activeMeshes} actifs, ${snapshot.materials} matériaux, ${snapshot.lights} lumières`,
     `  machine     ${deviceLine(snapshot)}`,
     `  navigateur  ${snapshot.userAgent}`,
+    ...(snapshot.startup ? [startupLine(snapshot.startup)] : []),
   ];
 }
 

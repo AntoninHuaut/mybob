@@ -235,6 +235,8 @@ export class HouseViewer {
   private readonly refresh = new RefreshRateEstimator();
   private readonly warmth = new ViewWarmth();
   private preparing = false;
+  /** How long the last `load` spent on each part of the scene, for the start-up report. */
+  loadTimings?: { materialsMs: number; levelsMs: number; levels: number; exteriorMs: number };
   /**
    * A GPU rather than a software rasteriser (`isSoftwareRenderer`): only then are views
    * prepared behind the overlay and does Vue 3D get its occlusion. CI's SwiftShader
@@ -450,9 +452,12 @@ export class HouseViewer {
     this.shadowRefresh = new ShadowRefresh(shadow);
     this.cutawaySelection = '';
     this.loadedProject = project;
+    const startedAt = performance.now();
     this.materials = createMaterials(scene, project.finishes);
+    const materialsAt = performance.now();
     this.shadow = shadow;
     this.buildLevels(project, level);
+    const levelsAt = performance.now();
     // The exterior is the building's, not the displayed level's: the façades
     // are those of the lowest level, the roof covers the rest, and the upper
     // levels' openings are cut through it. Building from the attic only showed
@@ -461,6 +466,12 @@ export class HouseViewer {
       candidate.elevation < low.elevation ? candidate : low,
     );
     this.exterior = buildExterior(project, ground, scene);
+    this.loadTimings = {
+      materialsMs: materialsAt - startedAt,
+      levelsMs: levelsAt - materialsAt,
+      levels: project.levels.length,
+      exteriorMs: performance.now() - levelsAt,
+    };
     this.sky = createSkyLayer(scene);
     refreshFixtureLights(scene);
     const exteriorScene = this.exterior;

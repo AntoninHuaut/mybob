@@ -268,3 +268,25 @@ test('profile(seconds) prints the profile once it is measured, clamped to a sane
     globals.window = previousWindow;
   }
 });
+
+test('the report splits the start-up between projects, scene build and view preparation', () => {
+  const plain = collectDiagnostics(engine(), scene(), view);
+  assert.ok(!diagnosticLines(plain).some((line) => line.includes('démarrage')));
+  const lines = diagnosticLines({
+    ...plain,
+    startup: {
+      projectsAt: 310,
+      builtAt: 1420,
+      readyAt: 3440,
+      materialsMs: 820,
+      levelsMs: 190,
+      levels: 3,
+      exteriorMs: 60,
+    },
+  });
+  assert.ok(
+    lines.includes(
+      '  démarrage   prêt en 3,4 s · projets 0,3 s · scène 1,1 s (matériaux 0,8 · 3 niveaux 0,2 · extérieur 0,1) · préparation de la vue 2,0 s',
+    ),
+  );
+});

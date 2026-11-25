@@ -9,6 +9,7 @@ import {
   collectDiagnostics,
   diagnosticLines,
   installDiagnostics,
+  type StartupTiming,
   profileContextLine,
   viewLabel,
   type DiagnosticView,
@@ -74,9 +75,17 @@ function wireEvents() {
 const diagnosticSession = reportRequested(location.search);
 const passBreakdown = passesRequested(location.search);
 
+let startup: StartupTiming | undefined;
+
 function diagnostics() {
   const { viewer } = app;
-  return collectDiagnostics(viewer.engine, viewer.scene, diagnosticView(), viewer.refreshRate);
+  const snapshot = collectDiagnostics(
+    viewer.engine,
+    viewer.scene,
+    diagnosticView(),
+    viewer.refreshRate,
+  );
+  return { ...snapshot, startup };
 }
 
 function showReport(title: string, text: string) {
@@ -204,6 +213,7 @@ async function start() {
         return validateProject(await response.json());
       }),
     );
+    const projectsAt = performance.now();
     const unreadableProjects = restoreLibrary(bundled);
     const sceneEngine = createEngine(el<HTMLCanvasElement>('#scene'));
     const viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'), sceneEngine);
@@ -249,6 +259,7 @@ async function start() {
         );
       }
     } else loadProject(initial);
+    const builtAt = performance.now();
     // Development-only bench: the dynamic import behind `DEV` is what keeps the
     // whole module out of a production build.
     if (import.meta.env.DEV) {
@@ -278,6 +289,8 @@ async function start() {
     // the page. The other views do the same over the viewport only, with a shorter
     // message, the first time they are opened.
     await viewer.whenReady();
+    if (viewer.loadTimings)
+      startup = { projectsAt, builtAt, readyAt: performance.now(), ...viewer.loadTimings };
     viewer.onPreparing = (active) => {
       el('#loading span').textContent = 'Préparation de la vue…';
       el('#loading').hidden = !active;
