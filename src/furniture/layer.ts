@@ -667,6 +667,18 @@ export class FurnitureLayer {
       legs(h * 0.44);
       box(w, h * 0.09, d, 0, h * 0.485, 0);
       box(w, h * 0.47, d * 0.1, 0, h * 0.765, -d * 0.45);
+    } else if (item.kind === 'stool') {
+      // Counter stool: thin black legs and footrest, a seat and a low back in the item's finish.
+      const frame = material('frame', new Color3(0.05, 0.05, 0.05));
+      const seat = h * 0.64;
+      const bar = Math.min(w, d) * 0.05;
+      for (const x of [-1, 1])
+        for (const z of [-1, 1])
+          box(bar, seat, bar, x * (w / 2 - bar), seat / 2, z * (d / 2 - bar), frame);
+      for (const z of [-1, 1]) box(w - 2 * bar, bar, bar, 0, h * 0.28, z * (d / 2 - bar), frame);
+      for (const x of [-1, 1]) box(bar, bar, d - 2 * bar, x * (w / 2 - bar), h * 0.28, 0, frame);
+      box(w, h * 0.07, d, 0, seat + h * 0.035, 0);
+      box(w * 0.9, h - seat - h * 0.07, d * 0.1, 0, (h + seat + h * 0.07) / 2, -d * 0.45);
     } else if (item.kind === 'ottoman') {
       legs(h * 0.12);
       box(w, h * 0.63, d, 0, h * 0.435, 0);

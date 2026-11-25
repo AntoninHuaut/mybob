@@ -399,3 +399,10 @@ test('a furniture surface and a kitchen worktop surface accept only known materi
     /matière/i,
   );
 });
+
+test('a bar stool is a furniture kind of its own, sized for a kitchen counter', () => {
+  const stool = createFurniture({ kind: 'stool' });
+  assert.equal(stool.name, 'Tabouret haut');
+  assert.ok(stool.height > 0.9 && stool.height < 1.1);
+  assert.deepEqual(validateFurnitureList([stool])[0], stool);
+});

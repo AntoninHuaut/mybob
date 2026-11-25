@@ -6,7 +6,7 @@
 
 Read [AGENTS.md](AGENTS.md), then [the code map](docs/ARCHITECTURE.md) and [the maintenance skill](.agents/skills/mybob-maintenance/SKILL.md). **Export your project from the current browser before switching to local**: the repository does not contain the arrangement saved in that browser.
 
-Furniture can be plain matte, wood, stone or gloss. Parametric kitchens support corner runs, separate worktop and front colours and materials, wall units and equipment markers, including an optional microwave above the oven. See [furniture configurations](docs/FURNITURE.md#types-and-configurations).
+Furniture can be plain matte, wood, stone or gloss, and includes counter stools. Parametric kitchens support corner runs, separate worktop and front colours and materials, wall units and equipment markers, including an optional microwave above the oven. See [furniture configurations](docs/FURNITURE.md#types-and-configurations).
 
 Personal projects can select blond parquet for their wood-effect floors through the [project finishes](docs/PROJECT-FORMAT.md).
 

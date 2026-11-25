@@ -661,3 +661,33 @@ test('a furniture surface gives its finish grain, relief or gloss, and the workt
     cleanup();
   }
 });
+
+test('a bar stool stands on a dark metal frame with its seat high above the floor', async () => {
+  const { createFurniture } = await import('../src/furniture/model');
+  const { layer, scene, cleanup } = setup();
+  try {
+    const stool = createFurniture({
+      id: 'stool',
+      kind: 'stool',
+      position: [5, 5],
+      color: '#36403d',
+    });
+    layer.setItems([stool]);
+    const meshes = scene.meshes.filter((mesh) => mesh.metadata?.id === 'stool');
+    const byColor = (hex: string) =>
+      meshes.find(
+        (mesh) => (mesh.material as PBRMaterial | null)?.albedoColor?.toHexString() === hex,
+      );
+    const seat = byColor('#36403D')!;
+    seat.computeWorldMatrix(true);
+    const bottom = seat.getBoundingInfo().boundingBox.minimumWorld.y - level.elevation;
+    assert.ok(bottom > 0.55, `seat starts ${bottom.toFixed(2)} m above the floor`);
+    const frame = meshes.find((mesh) => {
+      const color = (mesh.material as PBRMaterial | null)?.albedoColor;
+      return color && color.r < 0.1 && color.g < 0.1 && color.b < 0.1;
+    });
+    assert.ok(frame, 'a near-black metal frame carries the seat');
+  } finally {
+    cleanup();
+  }
+});
