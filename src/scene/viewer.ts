@@ -412,6 +412,8 @@ export class HouseViewer {
     scene.clearColor = new Color4(0.918, 0.925, 0.906, 0);
     scene.ambientColor = Color3.Black();
     scene.collisionsEnabled = true;
+    // Every hover path (measure preview, furniture drag) picks by itself; down and tap still pick.
+    scene.skipPointerMovePicking = true;
     scene.gravity = new Vector3(0, -0.25, 0);
     scene.imageProcessingConfiguration.toneMappingEnabled = true;
     scene.imageProcessingConfiguration.toneMappingType =
