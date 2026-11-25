@@ -1,4 +1,5 @@
 import type { FurnitureItem, KitchenSlot } from './model';
+import { surfaceField } from './surfaceField';
 
 const cm = (value: number) => Math.round(value * 1000) / 10;
 const numberField = (name: string, label: string, value: number, min = 0, max = 2000) =>
@@ -9,6 +10,7 @@ export function kitchenFields(item: FurnitureItem): string {
   return `<fieldset data-kitchen-fields class="furniture-shape-fields"${item.kind === 'kitchen' ? '' : ' hidden disabled'}><legend>Plan de travail et équipements</legend>
     ${numberField('worktopHeight', 'Hauteur du plan (cm)', cm(k?.worktopHeight ?? 0.9), 30)}
     <label class="furniture-field">Teinte du plan<input type="color" name="worktopColor" value="${k?.worktopColor ?? '#b58d62'}"></label>
+    ${surfaceField('worktopSurface', 'Matière du plan', k?.worktopSurface)}
     <label><input type="checkbox" name="kitchenWallUnits"${k?.wallUnits ? ' checked' : ''}> Meubles hauts</label>
     ${numberField('kitchenWallBottom', 'Bas des meubles hauts (cm)', cm(k?.wallUnits?.bottom ?? 1.4))}
     ${numberField('kitchenWallHeight', 'Hauteur des meubles hauts (cm)', cm(k?.wallUnits?.height ?? 0.7), 10)}

@@ -621,3 +621,43 @@ test('an optional microwave is visible above the oven without competing cabinet 
     cleanup();
   }
 });
+
+test('a furniture surface gives its finish grain, relief or gloss, and the worktop its own', async () => {
+  const { createFurniture } = await import('../src/furniture/model');
+  const { layer, scene, cleanup } = setup();
+  try {
+    const finishOf = (id: string) =>
+      scene.meshes.find((mesh) => mesh.metadata?.id === id)!.material as PBRMaterial;
+    const kitchen = createFurniture({
+      id: 'k',
+      kind: 'kitchen',
+      position: [6, 6],
+      surface: 'stone',
+      color: '#c6bcb2',
+    });
+    kitchen.kitchen!.worktopColor = '#8a6a59';
+    kitchen.kitchen!.worktopSurface = 'wood';
+    layer.setItems([
+      createFurniture({ id: 'plain', position: [2, 2] }),
+      createFurniture({ id: 'wood', position: [4, 2], surface: 'wood' }),
+      createFurniture({ id: 'stone', position: [6, 2], surface: 'stone' }),
+      createFurniture({ id: 'gloss', position: [8, 2], surface: 'gloss' }),
+      kitchen,
+    ]);
+    const plain = finishOf('plain');
+    assert.equal(plain.albedoTexture, null);
+    assert.equal(plain.bumpTexture, null);
+    const wood = finishOf('wood');
+    assert.ok(wood.albedoTexture && wood.bumpTexture, 'wood has grain and relief');
+    const stone = finishOf('stone');
+    assert.ok(stone.bumpTexture, 'stone has relief');
+    assert.ok(finishOf('gloss').roughness! < plain.roughness! / 2, 'gloss is shinier');
+    const worktop = scene.materials.find(
+      (m) => m instanceof PBRMaterial && m.albedoColor.toHexString() === '#8A6A59',
+    ) as PBRMaterial;
+    assert.ok(worktop.albedoTexture, 'the worktop carries its own wood grain');
+    assert.notEqual(worktop, stone);
+  } finally {
+    cleanup();
+  }
+});

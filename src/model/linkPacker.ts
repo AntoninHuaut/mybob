@@ -9,7 +9,8 @@ import type {
   ShowerPanelSpan,
   SofaConfiguration,
 } from '../furniture/model';
-import { SHOWER_PANEL_SIDES } from '../furniture/model';
+import { FURNITURE_SURFACES, SHOWER_PANEL_SIDES } from '../furniture/model';
+import type { FurnitureSurface } from '../furniture/model';
 import type { LayoutVariant, VariantBook } from '../furniture/variants';
 
 /**
@@ -39,8 +40,9 @@ export interface UnpackedShare {
  * microwave. Revision 8: terrace and lawn surfaces, a terrace's slab height, and garden
  * boundaries (walls, fences, hedges, gates). Revision 9: a fence's infill (mesh or slats).
  * Revision 10: room paint. Revision 11: blond parquet. Revision 12: individual wall faces.
+ * Revision 13: furniture and worktop surfaces.
  */
-export const LINK_PACK_VERSION = 12;
+export const LINK_PACK_VERSION = 13;
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -310,7 +312,13 @@ function packFurnitureItem(packer: Packer, item: FurnitureItem, groupFirstIndex:
     packer.u(enumInt(['hinged', 'drawer'], item.opening.kind));
     packer.mm(item.opening.reach);
   }
+  packer.u(surfaceCode(item.surface));
+  if (item.kitchen) packer.u(surfaceCode(item.kitchen.worktopSurface));
 }
+
+// 0 is plain matte; the others are their index in FURNITURE_SURFACES, plus one.
+const surfaceCode = (surface?: FurnitureSurface) =>
+  surface === undefined ? 0 : FURNITURE_SURFACES.indexOf(surface) + 1;
 
 function packVariant(packer: Packer, variant: LayoutVariant, levelIds: string[]): void {
   packer.str(variant.id);
@@ -1067,6 +1075,15 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
               kind: enumValue(['hinged', 'drawer'], reader.u()),
               reach: reader.mm(),
             };
+          }
+          if (version >= 13) {
+            const surface = reader.u();
+            if (surface > 0) item.surface = enumValue(FURNITURE_SURFACES, surface - 1);
+            if (item.kitchen) {
+              const worktop = reader.u();
+              if (worktop > 0)
+                item.kitchen.worktopSurface = enumValue(FURNITURE_SURFACES, worktop - 1);
+            }
           }
           variant.levels[levelId].push(item);
         }

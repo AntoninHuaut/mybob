@@ -432,6 +432,69 @@ export function surfaceMapData(): SurfaceMaps {
   return cached;
 }
 
+/** Furniture maps tile once per metre, on the world-scale UVs of `beveledBox`. */
+const FURNITURE_SIZE = 256;
+
+/** Long, slightly wavy grain along U: the albedo darkens the finish colour between 0.72 and 1. */
+function furnitureGrain(size: number): Float32Array {
+  const field = new Float32Array(size * size);
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const u = x / size,
+        v = y / size;
+      const warp = fbm(u, v, 2, 4, 3, 191) * 6;
+      const rings = 0.5 + 0.5 * Math.sin((v * 18 + warp) * Math.PI * 2);
+      const streaks = fbm(u, v, 1, 64, 3, 193);
+      field[y * size + x] = rings * 0.55 + streaks * 0.45;
+    }
+  return field;
+}
+
+/** Cleft relief of a slate or stone laminate: broad undulations under a fine grain. */
+function furnitureStone(size: number): Float32Array {
+  const field = new Float32Array(size * size);
+  for (let y = 0; y < size; y++)
+    for (let x = 0; x < size; x++) {
+      const u = x / size,
+        v = y / size;
+      const broad = fbm(u, v, 3, 3, 4, 197);
+      const cleft = Math.abs(fbm(u, v, 6, 6, 3, 199) - 0.5) * 2;
+      field[y * size + x] = broad * 0.7 + cleft * 0.3;
+    }
+  return field;
+}
+
+function tone(field: Float32Array, size: number, low: number): Uint8Array {
+  return greyFromField(
+    field.map((value) => low + (1 - low) * value),
+    size,
+  );
+}
+
+export interface FurnitureMaps {
+  woodAlbedo: SurfaceMapData;
+  woodNormal: SurfaceMapData;
+  stoneAlbedo: SurfaceMapData;
+  stoneNormal: SurfaceMapData;
+}
+
+let furnitureCached: FurnitureMaps | undefined;
+
+/** Furniture surface maps, computed on first use only: most projects never pick a material. */
+export function furnitureMapData(): FurnitureMaps {
+  if (furnitureCached) return furnitureCached;
+  const size = FURNITURE_SIZE;
+  const grain = furnitureGrain(size);
+  const stone = furnitureStone(size);
+  furnitureCached = {
+    woodAlbedo: { size, data: tone(grain, size, 0.72) },
+    woodNormal: { size, data: normalFromHeight(grain, size, 0.8) },
+    stoneAlbedo: { size, data: tone(stone, size, 0.86) },
+    stoneNormal: { size, data: normalFromHeight(stone, size, 2.5) },
+  };
+  return furnitureCached;
+}
+
 function upload(scene: Scene, name: string, map: SurfaceMapData): RawTexture {
   const texture = RawTexture.CreateRGBATexture(
     map.data,

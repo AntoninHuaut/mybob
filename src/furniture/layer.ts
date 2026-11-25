@@ -6,7 +6,7 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { VertexData } from '@babylonjs/core/Meshes/mesh.vertexData';
 import earcut from 'earcut';
 import { RawTexture } from '@babylonjs/core/Materials/Textures/rawTexture';
-import { surfaceMapData } from '../scene/surfaceTextures';
+import { furnitureMapData, surfaceMapData, type SurfaceMapData } from '../scene/surfaceTextures';
 import { contactMaterial, contactShadow } from './contactShadow';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
 import { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
@@ -27,6 +27,7 @@ import {
   footprintParts,
   televisionDimensions,
   type FurnitureItem,
+  type FurnitureSurface,
 } from './model';
 import { furnitureDistances, type SnapGuide, type SnapResult } from './checks';
 import { circulationBands, CIRCULATION_TIGHT } from './circulation';
@@ -386,8 +387,8 @@ export class FurnitureLayer {
     const root = new TransformNode(`furniture:${item.id}`, this.scene);
     root.metadata = { kind: 'furniture', id: item.id };
     const materials: PBRMaterial[] = [];
-    const material = (name: string, color: Color3) => {
-      const key = JSON.stringify([name, color.r, color.g, color.b]);
+    const material = (name: string, color: Color3, surface?: FurnitureSurface) => {
+      const key = JSON.stringify([name, color.r, color.g, color.b, surface ?? null]);
       const cached = this.materialCache.get(key);
       if (cached) {
         if (materials.includes(cached.material)) return cached.material;
@@ -410,6 +411,14 @@ export class FurnitureLayer {
         texture.uScale = texture.vScale = name === 'fabric' ? 12 : 1;
         mat.bumpTexture = texture;
       }
+      const upload = (map: SurfaceMapData) =>
+        RawTexture.CreateRGBATexture(map.data, map.size, map.size, this.scene, true);
+      if (surface === 'wood' || surface === 'stone') {
+        const maps = furnitureMapData();
+        mat.albedoTexture = upload(surface === 'wood' ? maps.woodAlbedo : maps.stoneAlbedo);
+        mat.bumpTexture = upload(surface === 'wood' ? maps.woodNormal : maps.stoneNormal);
+        mat.bumpTexture.level = surface === 'wood' ? 0.35 : 0.6;
+      }
       mat.metallic = name === 'handles' ? 0.9 : 0;
       mat.roughness =
         (
@@ -418,6 +427,8 @@ export class FurnitureLayer {
             number
           >
         )[name] ?? 0.35;
+      if (surface) mat.roughness = { wood: 0.5, stone: 0.72, gloss: 0.12 }[surface];
+      if (surface === 'gloss') mat.clearCoat.isEnabled = true;
       materials.push(mat);
       this.materialCache.set(key, { material: mat, owners: 1 });
       return mat;
@@ -427,7 +438,7 @@ export class FurnitureLayer {
     );
     const roles = {
       get main() {
-        return material('finish', baseColor);
+        return material('finish', baseColor, item.surface);
       },
       get soft() {
         return material('fabric', baseColor.scale(1.13));
@@ -733,7 +744,7 @@ export class FurnitureLayer {
       const k = item.kitchen;
       const plinthHeight = 0.1;
       const bounds = dressingBounds(k.runDepth, k.runs);
-      const top = material('worktop', Color3.FromHexString(k.worktopColor));
+      const top = material('worktop', Color3.FromHexString(k.worktopColor), k.worktopSurface);
       const appliance = () => {
         const finish = material('appliance', new Color3(0.12, 0.13, 0.14));
         finish.zOffset = -1;
