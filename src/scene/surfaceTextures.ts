@@ -435,22 +435,27 @@ export function surfaceMapData(): SurfaceMaps {
 /** Furniture maps tile once per metre, on the world-scale UVs of `beveledBox`. */
 const FURNITURE_SIZE = 256;
 
-/** Long, slightly wavy grain along U: the albedo darkens the finish colour between 0.72 and 1. */
+const wrap = (value: number) => value - Math.floor(value);
+
+/** Straight grain along U: fine lines over broader streaks, barely bent so it never reads as rings. */
 function furnitureGrain(size: number): Float32Array {
   const field = new Float32Array(size * size);
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
-      const u = x / size,
-        v = y / size;
-      const warp = fbm(u, v, 2, 4, 3, 191) * 6;
-      const rings = 0.5 + 0.5 * Math.sin((v * 18 + warp) * Math.PI * 2);
-      const streaks = fbm(u, v, 1, 64, 3, 193);
-      field[y * size + x] = rings * 0.55 + streaks * 0.45;
+      const u = x / size;
+      const v = wrap(y / size + (fbm(u, y / size, 2, 2, 2, 191) - 0.5) * 0.03);
+      const lines = fbm(u, v, 1, 160, 2, 193);
+      const streaks = fbm(u, v, 2, 20, 3, 195);
+      const figure = fbm(u, v, 4, 6, 2, 196);
+      field[y * size + x] = Math.min(
+        1,
+        Math.max(0, (lines * 0.45 + streaks * 0.4 + figure * 0.15 - 0.5) * 2.2 + 0.5),
+      );
     }
   return field;
 }
 
-/** Cleft relief of a slate or stone laminate: broad undulations under a fine grain. */
+/** Cleft slate: broad clouds, flaky streaks across the board and a fine mineral grain. */
 function furnitureStone(size: number): Float32Array {
   const field = new Float32Array(size * size);
   for (let y = 0; y < size; y++)
@@ -458,8 +463,12 @@ function furnitureStone(size: number): Float32Array {
       const u = x / size,
         v = y / size;
       const broad = fbm(u, v, 3, 3, 4, 197);
-      const cleft = Math.abs(fbm(u, v, 6, 6, 3, 199) - 0.5) * 2;
-      field[y * size + x] = broad * 0.7 + cleft * 0.3;
+      const flakes = Math.abs(fbm(u, v, 3, 10, 3, 199) - 0.5) * 2;
+      const grain = fbm(u, v, 48, 48, 2, 201);
+      field[y * size + x] = Math.min(
+        1,
+        Math.max(0, (broad * 0.5 + flakes * 0.3 + grain * 0.2 - 0.5) * 1.8 + 0.5),
+      );
     }
   return field;
 }
@@ -487,9 +496,9 @@ export function furnitureMapData(): FurnitureMaps {
   const grain = furnitureGrain(size);
   const stone = furnitureStone(size);
   furnitureCached = {
-    woodAlbedo: { size, data: tone(grain, size, 0.72) },
-    woodNormal: { size, data: normalFromHeight(grain, size, 0.8) },
-    stoneAlbedo: { size, data: tone(stone, size, 0.86) },
+    woodAlbedo: { size, data: tone(grain, size, 0.7) },
+    woodNormal: { size, data: normalFromHeight(grain, size, 0.4) },
+    stoneAlbedo: { size, data: tone(stone, size, 0.84) },
     stoneNormal: { size, data: normalFromHeight(stone, size, 2.5) },
   };
   return furnitureCached;
