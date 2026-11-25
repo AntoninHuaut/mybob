@@ -24,96 +24,96 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 
 ## Module map
 
-| Area                    | File                                                                         | Role                                                                                                                                     |
-| ----------------------- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
-| Start-up                | `src/main.ts`                                                                | Template, bundled projects, viewer creation and callbacks, `?diagnostic`                                                                 |
-| Screen state            | `src/app/state.ts`, `dom.ts`                                                 | Shared `app` state (one writer per field), `el`, `toast`, dialogs                                                                        |
-| Displayed project       | `src/app/projectView.ts`                                                     | `loadProject`, level change, room list, card, labels and mini-map                                                                        |
-| Project list            | `src/app/projectLibrary.ts`                                                  | Bundled and imported projects, export, import, link installation, removal, other tabs                                                    |
-| Furniture editing       | `src/app/furnitureController.ts`                                             | History, selection, `commitFurniture`, panels, floating bar, furniture shortcuts                                                         |
-| Share link sync         | `src/app/shareLinkSync.ts`                                                   | Debounced hash writes, flush on leave, copy, opening a received link                                                                     |
-| View chrome             | `src/app/viewChrome.ts`                                                      | `setMode`, `syncViewChrome`, `syncDisplayControls`, sidebar, navigation panel                                                            |
-| Wall paint              | `src/app/roomPaint.ts`, `model/paint.ts`, `scene/wallPaint.ts`               | Room and face colours stored per project; paint per wall side and room, rebuilt by `viewer.repaintWalls`                                 |
-| Controls and prefs      | `src/app/controls.ts`, `preferences.ts`                                      | Static control wiring; render scale, walk preferences, welcome card                                                                      |
-| Engine                  | `src/scene/engine.ts`                                                        | WebGL engine, message when graphics acceleration is missing                                                                              |
-| Scene                   | `src/scene/viewer.ts`                                                        | `HouseViewer`: modes, cameras, cutaway, shadows, measurements, doors                                                                     |
-| Scene lighting          | `src/scene/sceneLighting.ts`                                                 | Sky fill, sun and its shadow map per scene; plan/visit/solar settings, shadow suppression, fixture lights                                |
-| Frame motion            | `src/scene/frameMotion.ts`                                                   | Held movement keys, door and gate swings, walk step and parcel guard, cached walk aim                                                    |
-| House geometry          | `src/scene/buildHouse.ts`                                                    | Walls, floors, ceilings, joinery, doors                                                                                                  |
-| Wall edges              | `src/scene/beveledBox.ts`                                                    | Box with chamfered edges, for walls                                                                                                      |
-| Vertical corners        | `src/scene/cornerBead.ts`                                                    | Chamfer of the concave corners between two walls                                                                                         |
-| Exterior                | `src/scene/buildExterior.ts`                                                 | Façades, roof, terrain, garden surfaces and boundaries                                                                                   |
-| Materials               | `src/scene/materials.ts`                                                     | Shared materials, procedural tiling                                                                                                      |
-| Relief and roughness    | `src/scene/surfaceTextures.ts`                                               | Procedural normal, roughness, exterior and furniture maps, tiled per metre                                                               |
-| Sky                     | `src/scene/sky.ts`                                                           | Sky background layer, off in Plan and headset, hidden by a transparent export                                                            |
-| Frame of reference      | `src/scene/coordinates.ts`                                                   | Conversion to the plan frame, plan framing, keyboard movement                                                                            |
-| Framing                 | `src/scene/framing.ts`                                                       | `fitOverview`, `fitPlan`, UI margins                                                                                                     |
-| Navigation              | `src/scene/navigation.ts`                                                    | Walk destination, section plane, wall facing the camera                                                                                  |
-| Stairs                  | `src/model/stairs.ts`                                                        | Where a stair leads from a level, where the visit lands; the flights going down from a floor void                                        |
-| Walk camera             | `src/scene/walkCamera.ts`                                                    | Eye height, visitor radius, speed, step                                                                                                  |
-| Headset session         | `src/scene/headsetSession.ts`                                                | Support check, lazy import, one session at a time, readiness before the veil lifts                                                       |
-| Headset visit           | `src/scene/xrWalk.ts`                                                        | WebXR session of the walk: sticks, smooth turn, comfort vignette, teleport, doors; on demand                                             |
-| Orbit controls          | `src/scene/orbitNavigation.ts`, `orbitPointerInput.ts`                       | Keyboard pan in screen directions; one-finger pan and pinch zoom in Plan                                                                 |
-| Wall cutaway            | `src/scene/wallCutaway.ts`                                                   | `auto` / `full` / `low`, clipping planes per material                                                                                    |
-| Shadow map              | `src/scene/shadowRefresh.ts`, `sunShadowSkip.ts`                             | Sun map redrawn only when a shadow changes; lookup skipped where a PBR surface faces away from the sun                                   |
-| Idle rendering          | `src/scene/renderScheduler.ts`                                               | Frame drawn only when the scene changes; mouse moves wake it only over the canvas (`wakesScene`)                                         |
-| Shader warm-up          | `src/scene/shaderWarmup.ts`, `shaderLog.ts`                                  | Links a view's shaders behind an overlay on first use; `mybob.shaders()` log of every link                                               |
-| Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | Per view, driven by frame time: occlusion first, then resolution steps; visit to 67 %; sharper up to the screen cap when at refresh rate |
-| Openings in plan        | `src/scene/planOpenings.ts`                                                  | Windows and doors drawn in Plan view, cut faces                                                                                          |
-| Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion; bloom in the walk only                                                                                        |
-| View effect lifecycle   | `src/scene/viewEffects.ts`                                                   | Scene-owned environment and pipelines, camera replacement, effect tiers and disposal                                                     |
-| Diagnostics             | `src/scene/diagnostics.ts`                                                   | `mybob.diag()`: engine, GPU and class, refresh, frame rate, resolution, scene                                                            |
-| Device profile          | `src/scene/deviceProfile.ts`                                                 | GPU class from the renderer string; display refresh rate from idle render-loop ticks                                                     |
-| Headset report          | `src/scene/headsetReport.ts`                                                 | Headset frame-time median/p95, missed refreshes, rates, scale, foveation; shown on exit in a `?diagnostic` session                       |
-| Frame profiler          | `src/scene/frameProfiler.ts`                                                 | `mybob.profile(s)`: GPU/CPU time and draw calls per image of the current view, loaded on demand                                          |
-| Performance report      | `src/ui/performanceReport.ts`                                                | `?diagnostic` link: measures every view and shows a report to copy, no console needed                                                    |
-| Screen-width lines      | `src/scene/screenLines.ts`                                                   | CSS-width dimension/measurement polylines, resize and material ownership                                                                 |
-| Measurement             | `src/scene/measurement.ts`, `measureTool.ts`                                 | Snapping to the plan axes; `MeasureTool`: live, pinned and cleared measurements                                                          |
-| Sun                     | `src/scene/solar.ts`                                                         | NOAA equations, IANA time zones                                                                                                          |
-| Solar settings          | `src/model/solarSettings.ts`                                                 | Validation of explicit settings: no geolocation, no default place                                                                        |
-| Data                    | `src/model/types.ts`                                                         | Versioned format (`schemaVersion: 1`)                                                                                                    |
-| Validation              | `src/model/validate.ts`                                                      | Import checks, readable errors                                                                                                           |
-| Pure geometry           | `src/model/geometry.ts`                                                      | Areas, containment, wall segments, floor elevation                                                                                       |
-| Sloping ceilings        | `src/model/ceiling.ts`                                                       | Ceiling height under roof slopes, wall top profiles, ceiling triangles                                                                   |
-| Share link — pack       | `src/model/linkPacker.ts`                                                    | Semantic binary pack of the `#p1:` hash (varints, quantisation)                                                                          |
-| Share link — URL        | `src/model/shareLink.ts`                                                     | Hash encoding/decoding, canonical state comparison                                                                                       |
-| Project storage         | `src/projectStorage.ts`                                                      | Reading imported projects, quarantine, 10-project limit                                                                                  |
-| Furniture — model       | `src/furniture/model.ts`                                                     | Types, identifiers, storage key, history                                                                                                 |
-| Kitchen form            | `src/furniture/kitchenForm.ts`                                               | Kitchen finishes, wall units and equipment slot controls; centimetre form conversion                                                     |
-| Furniture materials     | `src/furniture/surfaceField.ts`                                              | « Matière » select of the popup and add form; values in `model.ts`                                                                       |
-| Furniture — rendering   | `src/furniture/layer.ts`                                                     | Meshes, selection, dragging, layers, plan clipping                                                                                       |
-| Furniture contact       | `src/furniture/contactShadow.ts`                                             | Procedural alpha tile and non-pickable floor footprints                                                                                  |
-| Furniture — view policy | `src/furniture/viewState.ts`                                                 | Real camera mode and independent permission for scene interaction                                                                        |
-| Furniture — placement   | `src/furniture/placement.ts`                                                 | Building constraints, free-spot search                                                                                                   |
-| Furniture — groups      | `src/furniture/groups.ts`                                                    | Linking, transforms, constrained dragging                                                                                                |
-| Furniture — editing     | `src/furniture/editorDraft.ts`                                               | Transactional draft of the popup                                                                                                         |
-| Furniture — panel       | `src/furniture/panel.ts`                                                     | List, add, edit popup                                                                                                                    |
-| Furniture — variants    | `src/furniture/variants.ts`                                                  | Variant book per project; `VariantSession` loads and writes it per project and level                                                     |
-| Furniture — arrangement | `src/furniture/arrangement.ts`                                               | Align, distribute, magnet (wall contact, neighbour alignment)                                                                            |
-| Furniture — circulation | `src/furniture/circulation.ts`                                               | Remaining passage strips around bed, sofa and table                                                                                      |
-| Furniture — room move   | `src/furniture/roomMove.ts`                                                  | Move a piece or linked set into another room (menu or drop), flip it against a partition's other face, with reasons                      |
-| Furniture — helpers     | `src/furniture/clipboard.ts`, `resize.ts`, `tableChairs.ts`, `television.ts` | Session clipboard, local resize, chairs around a table, 16:9 screen                                                                      |
-| Interface               | `src/ui/appTemplate.ts`                                                      | Static application template                                                                                                              |
-| Mode texts              | `src/ui/modeChrome.ts`                                                       | Titles, keyboard and touch help per mode                                                                                                 |
-| Viewport projection     | `src/ui/viewportProjection.ts`                                               | Frame-to-DOM projection: room labels, obstacle layout, dimensions, measurement position and walk HUD                                     |
-| Stair shortcuts         | `src/ui/stairNavigation.ts`                                                  | Camera-projected buttons for connected levels in Vue 3D, using the existing level selector's load path                                   |
-| Frame-rate counter      | `src/ui/frameRate.ts`                                                        | fps display, written at most four times per second                                                                                       |
-| Panels                  | `src/ui/roomPanels.ts`, `minimap.ts`                                         | Room list, room card, mini-map                                                                                                           |
-| Variants panel          | `src/ui/variantsPanel.ts`, `variantThumbnail.ts`                             | Variant list, plan preview per variant                                                                                                   |
-| Focus keeper            | `src/ui/focusKeeper.ts`                                                      | Keeps keyboard focus on the same control when a panel rebuilds its HTML                                                                  |
-| Arrangement panel       | `src/ui/arrangementPanel.ts`                                                 | Align/distribute actions, grid snapping                                                                                                  |
-| Sun panel               | `src/ui/solarPanel.ts`, `solarTimeline.ts`, `solarDay.ts`                    | Location (Open-Meteo only on an explicit search), timeline, day bounds                                                                   |
-| Measure bar             | `src/ui/measureBar.ts`                                                       | Measure instructions and floating label; no geometry                                                                                     |
-| Plan labels             | `src/ui/labelLayout.ts`                                                      | Non-overlapping label placement, confined to the room                                                                                    |
-| Plans and precision     | `src/ui/sourcePanel.ts`                                                      | « Plans et précision » dialog: gap to the stated areas                                                                                   |
-| Link divergence         | `src/ui/confirmLinkDivergence.ts`                                            | Three outcomes when a link and the local state differ                                                                                    |
-| Import and limit        | `src/ui/confirmImport.ts`, `chooseProjectToReplace.ts`                       | Confirm a replacing import; pick a project to replace at the limit                                                                       |
-| Help and welcome        | `src/ui/firstSteps.ts`, `onboarding.ts`                                      | "Premiers pas" card, short and full help                                                                                                 |
-| Image export            | `src/ui/imageExport.ts`                                                      | PNG of the camera, title block, options                                                                                                  |
-| UI helpers              | `src/ui/format.ts`, `icons.ts`                                               | HTML escaping, number/area formatting, inline icons                                                                                      |
-| Test bench (dev)        | `src/ui/fxLab.ts`                                                            | Unsettled rendering questions — never in a build                                                                                         |
-| Build constants         | `src/build-env.d.ts`                                                         | Vite-injected public/private build flags                                                                                                 |
-| Styles                  | `src/style.css` + `src/style/*.css`                                          | `chrome`, `scene`, `feedback`; panel CSS next to `furniture/panel.ts`, `ui/arrangementPanel.ts`, `ui/solarPanel.ts`                      |
+| Area                    | File                                                                         | Role                                                                                                                                        |
+| ----------------------- | ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| Start-up                | `src/main.ts`                                                                | Template, bundled projects, viewer creation and callbacks, `?diagnostic`                                                                    |
+| Screen state            | `src/app/state.ts`, `dom.ts`                                                 | Shared `app` state (one writer per field), `el`, `toast`, dialogs                                                                           |
+| Displayed project       | `src/app/projectView.ts`                                                     | `loadProject`, level change, room list, card, labels and mini-map                                                                           |
+| Project list            | `src/app/projectLibrary.ts`                                                  | Bundled and imported projects, export, import, link installation, removal, other tabs                                                       |
+| Furniture editing       | `src/app/furnitureController.ts`                                             | History, selection, `commitFurniture`, panels, floating bar, furniture shortcuts                                                            |
+| Share link sync         | `src/app/shareLinkSync.ts`                                                   | Debounced hash writes, flush on leave, copy, opening a received link                                                                        |
+| View chrome             | `src/app/viewChrome.ts`                                                      | `setMode`, `syncViewChrome`, `syncDisplayControls`, sidebar, navigation panel                                                               |
+| Wall paint              | `src/app/roomPaint.ts`, `model/paint.ts`, `scene/wallPaint.ts`               | Room and face colours stored per project; paint per wall side and room, rebuilt by `viewer.repaintWalls`                                    |
+| Controls and prefs      | `src/app/controls.ts`, `preferences.ts`                                      | Static control wiring; render scale, walk preferences, welcome card                                                                         |
+| Engine                  | `src/scene/engine.ts`                                                        | WebGL engine, message when graphics acceleration is missing                                                                                 |
+| Scene                   | `src/scene/viewer.ts`                                                        | `HouseViewer`: modes, cameras, cutaway, shadows, measurements, doors                                                                        |
+| Scene lighting          | `src/scene/sceneLighting.ts`                                                 | Sky fill, sun and its shadow map per scene; plan/visit/solar settings, shadow suppression, fixture lights                                   |
+| Frame motion            | `src/scene/frameMotion.ts`                                                   | Held movement keys, door and gate swings, walk step and parcel guard, cached walk aim                                                       |
+| House geometry          | `src/scene/buildHouse.ts`                                                    | Walls, floors, ceilings, joinery, doors                                                                                                     |
+| Wall edges              | `src/scene/beveledBox.ts`                                                    | Box with chamfered edges, for walls                                                                                                         |
+| Vertical corners        | `src/scene/cornerBead.ts`                                                    | Chamfer of the concave corners between two walls                                                                                            |
+| Exterior                | `src/scene/buildExterior.ts`                                                 | Façades, roof, terrain, garden surfaces and boundaries                                                                                      |
+| Materials               | `src/scene/materials.ts`                                                     | Shared materials, procedural tiling                                                                                                         |
+| Relief and roughness    | `src/scene/surfaceTextures.ts`                                               | Procedural normal, roughness, exterior and furniture maps, tiled per metre                                                                  |
+| Sky                     | `src/scene/sky.ts`                                                           | Sky background layer, off in Plan and headset, hidden by a transparent export                                                               |
+| Frame of reference      | `src/scene/coordinates.ts`                                                   | Conversion to the plan frame, plan framing, keyboard movement                                                                               |
+| Framing                 | `src/scene/framing.ts`                                                       | `fitOverview`, `fitPlan`, UI margins                                                                                                        |
+| Navigation              | `src/scene/navigation.ts`                                                    | Walk destination, section plane, wall facing the camera                                                                                     |
+| Stairs                  | `src/model/stairs.ts`                                                        | Where a stair leads from a level, where the visit lands; the flights going down from a floor void                                           |
+| Walk camera             | `src/scene/walkCamera.ts`                                                    | Eye height, visitor radius, speed, step                                                                                                     |
+| Headset session         | `src/scene/headsetSession.ts`                                                | Support check, lazy import, one session at a time, readiness before the veil lifts                                                          |
+| Headset visit           | `src/scene/xrWalk.ts`                                                        | WebXR session of the walk: sticks, smooth turn, comfort vignette, teleport, doors; on demand                                                |
+| Orbit controls          | `src/scene/orbitNavigation.ts`, `orbitPointerInput.ts`                       | Keyboard pan in screen directions; one-finger pan and pinch zoom in Plan                                                                    |
+| Wall cutaway            | `src/scene/wallCutaway.ts`                                                   | `auto` / `full` / `low`, clipping planes per material                                                                                       |
+| Shadow map              | `src/scene/shadowRefresh.ts`, `sunShadowSkip.ts`                             | Sun map redrawn only when a shadow changes; lookup skipped where a PBR surface faces away from the sun                                      |
+| Idle rendering          | `src/scene/renderScheduler.ts`                                               | Frame drawn only when the scene changes; mouse moves wake it only over the canvas (`wakesScene`)                                            |
+| Shader warm-up          | `src/scene/shaderWarmup.ts`, `shaderLog.ts`                                  | Links a view's shaders behind an overlay on first use; `mybob.shaders()` log of every link                                                  |
+| Dynamic resolution      | `src/scene/adaptiveResolution.ts`                                            | « Qualité » per view: resolution steps to 67 % first, then occlusion, shadow filtering, bloom; sharper up to the screen cap at refresh rate |
+| Openings in plan        | `src/scene/planOpenings.ts`                                                  | Windows and doors drawn in Plan view, cut faces                                                                                             |
+| Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion; bloom in the walk only                                                                                           |
+| View effect lifecycle   | `src/scene/viewEffects.ts`                                                   | Scene-owned environment and pipelines, camera replacement, effect tiers and disposal                                                        |
+| Diagnostics             | `src/scene/diagnostics.ts`                                                   | `mybob.diag()`: engine, GPU and class, refresh, frame rate, resolution, scene                                                               |
+| Device profile          | `src/scene/deviceProfile.ts`                                                 | GPU class from the renderer string; display refresh rate from idle render-loop ticks                                                        |
+| Headset report          | `src/scene/headsetReport.ts`                                                 | Headset frame-time median/p95, missed refreshes, rates, scale, foveation; shown on exit in a `?diagnostic` session                          |
+| Frame profiler          | `src/scene/frameProfiler.ts`                                                 | `mybob.profile(s)`: GPU/CPU time and draw calls per image of the current view, loaded on demand                                             |
+| Performance report      | `src/ui/performanceReport.ts`                                                | `?diagnostic` link: measures every view and shows a report to copy, no console needed                                                       |
+| Screen-width lines      | `src/scene/screenLines.ts`                                                   | CSS-width dimension/measurement polylines, resize and material ownership                                                                    |
+| Measurement             | `src/scene/measurement.ts`, `measureTool.ts`                                 | Snapping to the plan axes; `MeasureTool`: live, pinned and cleared measurements                                                             |
+| Sun                     | `src/scene/solar.ts`                                                         | NOAA equations, IANA time zones                                                                                                             |
+| Solar settings          | `src/model/solarSettings.ts`                                                 | Validation of explicit settings: no geolocation, no default place                                                                           |
+| Data                    | `src/model/types.ts`                                                         | Versioned format (`schemaVersion: 1`)                                                                                                       |
+| Validation              | `src/model/validate.ts`                                                      | Import checks, readable errors                                                                                                              |
+| Pure geometry           | `src/model/geometry.ts`                                                      | Areas, containment, wall segments, floor elevation                                                                                          |
+| Sloping ceilings        | `src/model/ceiling.ts`                                                       | Ceiling height under roof slopes, wall top profiles, ceiling triangles                                                                      |
+| Share link — pack       | `src/model/linkPacker.ts`                                                    | Semantic binary pack of the `#p1:` hash (varints, quantisation)                                                                             |
+| Share link — URL        | `src/model/shareLink.ts`                                                     | Hash encoding/decoding, canonical state comparison                                                                                          |
+| Project storage         | `src/projectStorage.ts`                                                      | Reading imported projects, quarantine, 10-project limit                                                                                     |
+| Furniture — model       | `src/furniture/model.ts`                                                     | Types, identifiers, storage key, history                                                                                                    |
+| Kitchen form            | `src/furniture/kitchenForm.ts`                                               | Kitchen finishes, wall units and equipment slot controls; centimetre form conversion                                                        |
+| Furniture materials     | `src/furniture/surfaceField.ts`                                              | « Matière » select of the popup and add form; values in `model.ts`                                                                          |
+| Furniture — rendering   | `src/furniture/layer.ts`                                                     | Meshes, selection, dragging, layers, plan clipping                                                                                          |
+| Furniture contact       | `src/furniture/contactShadow.ts`                                             | Procedural alpha tile and non-pickable floor footprints                                                                                     |
+| Furniture — view policy | `src/furniture/viewState.ts`                                                 | Real camera mode and independent permission for scene interaction                                                                           |
+| Furniture — placement   | `src/furniture/placement.ts`                                                 | Building constraints, free-spot search                                                                                                      |
+| Furniture — groups      | `src/furniture/groups.ts`                                                    | Linking, transforms, constrained dragging                                                                                                   |
+| Furniture — editing     | `src/furniture/editorDraft.ts`                                               | Transactional draft of the popup                                                                                                            |
+| Furniture — panel       | `src/furniture/panel.ts`                                                     | List, add, edit popup                                                                                                                       |
+| Furniture — variants    | `src/furniture/variants.ts`                                                  | Variant book per project; `VariantSession` loads and writes it per project and level                                                        |
+| Furniture — arrangement | `src/furniture/arrangement.ts`                                               | Align, distribute, magnet (wall contact, neighbour alignment)                                                                               |
+| Furniture — circulation | `src/furniture/circulation.ts`                                               | Remaining passage strips around bed, sofa and table                                                                                         |
+| Furniture — room move   | `src/furniture/roomMove.ts`                                                  | Move a piece or linked set into another room (menu or drop), flip it against a partition's other face, with reasons                         |
+| Furniture — helpers     | `src/furniture/clipboard.ts`, `resize.ts`, `tableChairs.ts`, `television.ts` | Session clipboard, local resize, chairs around a table, 16:9 screen                                                                         |
+| Interface               | `src/ui/appTemplate.ts`                                                      | Static application template                                                                                                                 |
+| Mode texts              | `src/ui/modeChrome.ts`                                                       | Titles, keyboard and touch help per mode                                                                                                    |
+| Viewport projection     | `src/ui/viewportProjection.ts`                                               | Frame-to-DOM projection: room labels, obstacle layout, dimensions, measurement position and walk HUD                                        |
+| Stair shortcuts         | `src/ui/stairNavigation.ts`                                                  | Camera-projected buttons for connected levels in Vue 3D, using the existing level selector's load path                                      |
+| Frame-rate counter      | `src/ui/frameRate.ts`                                                        | fps display, written at most four times per second                                                                                          |
+| Panels                  | `src/ui/roomPanels.ts`, `minimap.ts`                                         | Room list, room card, mini-map                                                                                                              |
+| Variants panel          | `src/ui/variantsPanel.ts`, `variantThumbnail.ts`                             | Variant list, plan preview per variant                                                                                                      |
+| Focus keeper            | `src/ui/focusKeeper.ts`                                                      | Keeps keyboard focus on the same control when a panel rebuilds its HTML                                                                     |
+| Arrangement panel       | `src/ui/arrangementPanel.ts`                                                 | Align/distribute actions, grid snapping                                                                                                     |
+| Sun panel               | `src/ui/solarPanel.ts`, `solarTimeline.ts`, `solarDay.ts`                    | Location (Open-Meteo only on an explicit search), timeline, day bounds                                                                      |
+| Measure bar             | `src/ui/measureBar.ts`                                                       | Measure instructions and floating label; no geometry                                                                                        |
+| Plan labels             | `src/ui/labelLayout.ts`                                                      | Non-overlapping label placement, confined to the room                                                                                       |
+| Plans and precision     | `src/ui/sourcePanel.ts`                                                      | « Plans et précision » dialog: gap to the stated areas                                                                                      |
+| Link divergence         | `src/ui/confirmLinkDivergence.ts`                                            | Three outcomes when a link and the local state differ                                                                                       |
+| Import and limit        | `src/ui/confirmImport.ts`, `chooseProjectToReplace.ts`                       | Confirm a replacing import; pick a project to replace at the limit                                                                          |
+| Help and welcome        | `src/ui/firstSteps.ts`, `onboarding.ts`                                      | "Premiers pas" card, short and full help                                                                                                    |
+| Image export            | `src/ui/imageExport.ts`                                                      | PNG of the camera, title block, options                                                                                                     |
+| UI helpers              | `src/ui/format.ts`, `icons.ts`                                               | HTML escaping, number/area formatting, inline icons                                                                                         |
+| Test bench (dev)        | `src/ui/fxLab.ts`                                                            | Unsettled rendering questions — never in a build                                                                                            |
+| Build constants         | `src/build-env.d.ts`                                                         | Vite-injected public/private build flags                                                                                                    |
+| Styles                  | `src/style.css` + `src/style/*.css`                                          | `chrome`, `scene`, `feedback`; panel CSS next to `furniture/panel.ts`, `ui/arrangementPanel.ts`, `ui/solarPanel.ts`                         |
 
 ## The path of a piece of data
 
@@ -529,47 +529,48 @@ last call, and read back at start-up.
   accumulated antialiasing shift at every one and a still view changed by itself (measured
   on the demo, mean 1.5-3/255 within 25 s; 0 with the refresh off). `ViewEffects.temporalActive`
   tells the scheduler.
-- Dynamic resolution (`adaptiveResolution.ts`), the same at rest and in motion, **one per
-  view** (`ViewResolutions`, keyed by `viewKey`): if the median frame time exceeds 25 ms
-  (under 40 fps), a view that has an occlusion (the visit, Vue 3D) first drops it — its one
-  effect tier, which fades out over 0.8 s rather than blinking off — and only then lowers
-  the rendering one step per series (100, 90, 80, 67 %). Full resolution is one rendered
-  pixel per CSS pixel, never the screen's ratio (`MAX_PIXEL_RATIO`: a display scaled to
-  150 % would cost 2.25 times the pixels). Views never go below one rendered pixel per CSS
-  pixel, so Plan, Vue 3D and Extérieur stay at 100 % on a normal screen, except the visit,
-  which takes every step down to 67 %, one per series (`VISIT_SCALE_FLOOR`; the owner
-  rejected a 150 % render dropping straight to 67 %, not the progressive steps). The owner chose that order (2026-11-13): at a low frame rate, rather
-  lose the occlusion than sharpness. Plan and Extérieur have no tier and go straight to the
-  resolution. A scale or tier the visit took leaves Plan sharp and Vue 3D's occlusion in
-  place. A view that keeps up with the screen's refresh rate sharpens instead, one step per
-  series (owner 2026-11-13): a median frame time within 5 % of 60, 75, 90, 100, 120, 144, 165
-  or 240 Hz is the browser waiting for the screen (`refreshIntervalOf`), so a 2K screen held at
-  60 Hz may render sharper too. The cap follows the screen's device pixels (`upscaleCap`):
-  150 % on 4K (also a 4K screen scaled to 150 %), 125 % on 2K, none below; steps are 10 %
-  apart, the cap last. With several screens the cap is read again when the window changes screen (`screen` `change`, resize, focus, and a 2 s check, since two screens of the same scale fire nothing): every view starts over under the new cap. A headset session skips all of this: the desktop render scale is never applied in XR. Falling 15 % behind the refresh at an up-scale (or, started there from
-  a saved scale, not yet seen on any refresh rate) goes back one step without touching the
-  occlusion. Once a view has stepped down it never climbs again in the session, because
-  changing scale resizes every render target, which hitches. The scale each view reached is
-  saved per browser (`maison-atelier:render-scale:v1`, `src/ui/renderScale.ts`) and is where
-  that view starts next session; « Résolution du rendu » in the Navigation panel pins one
-  scale for every view instead (67 % to this screen's cap), which then never adapts. Switching view may resize once, next to the rebuild a switch already does. The first 30 images, the 30 after each change and the 30
-  after entering a view are not measured. Pending shader compilation or asset loading
-  discards the partial series and restarts that warm-up, including when new programs appear
-  after the initial preparation. A gap over 5 s between two images is a stall,
-  never a measurement, and hiding the page, losing or regaining the focus restarts that
-  warm-up and drops the half-measured series: the slow images after an alt-tab are not the
-  machine, and a tier is never lifted. The occlusion is never degraded on the way (fewer
+- Quality (`adaptiveResolution.ts`), the same at rest and in motion, **one per view**
+  (`ViewResolutions`, keyed by `viewKey`), chosen with the Navigation panel's « Qualité »
+  select (`src/ui/quality.ts`): « Automatique », « Haute », « Moyenne », « Basse ». In
+  automatic, a median frame time over 25 ms (under 40 fps) first lowers the rendering one
+  step per series, in every view (100, 90, 80, 67 %, `SCALE_FLOOR`), and only at 67 % drops
+  effect tiers, one per series: the occlusion (`OCCLUSION_TIER`, faded out over 0.8 s), then
+  the sun shadow's PCF filtering to low (`SHADOW_TIER`, `applyShadowTier`), then the bloom
+  (`BLOOM_TIER`). The owner's rule (#312): effects are the very last thing to give up. Plan
+  has no tier. « Haute » is today's full look: every effect, never under 100 %, still
+  sharper when the machine keeps up. « Moyenne » is 67 % with every effect, « Basse » 67 %
+  with every tier; neither adapts. Full resolution is one rendered pixel per CSS pixel,
+  never the screen's ratio (`MAX_PIXEL_RATIO`: a display scaled to 150 % would cost 2.25
+  times the pixels). A scale or tier the visit took leaves Plan sharp and Vue 3D's effects
+  in place. The shadow filtering is shared by the views: switching between two views at
+  different tiers relinks the shadow receivers once (the plan, which shows no sun shadow,
+  leaves it as it is).
+  A view that keeps up with the screen's refresh rate sharpens instead, one step per series
+  (owner 2026-11-13): a median frame time within 5 % of 60, 75, 90, 100, 120, 144, 165 or
+  240 Hz is the browser waiting for the screen (`refreshIntervalOf`). The cap follows the
+  screen's device pixels (`upscaleCap`): 150 % on 4K (also a 4K screen scaled to 150 %),
+  125 % on 2K, none below; steps are 10 % apart, the cap last. With several screens the cap
+  is read again when the window changes screen (`screen` `change`, resize, focus, and a 2 s
+  check): every view starts over under the new cap. A headset session skips all of this.
+  Falling 15 % behind the refresh at an up-scale goes back one step without touching the
+  effects. Once a view has stepped down it never climbs again in the session (a resize
+  hitches), and a tier is never lifted in a session; choosing another quality rebuilds the
+  effects.
+  Automatic saves where each view stood, scale and tier, per browser and GPU
+  (`maison-atelier:quality:v1`, with the renderer string): that is where the view starts
+  next session, and a view never measured on this GPU starts from its class
+  (`qualitySeed`: integrated at « Moyenne », software at « Basse », others at « Haute »).
+  The first load migrates the two settings « Qualité » replaced: a pinned « Résolution du
+  rendu » (`maison-atelier:render-scale:v1`, removed) at 100 % or more becomes « Haute »,
+  under it « Moyenne », and « Ombres des angles » off (in `maison-atelier:navigation:v1`)
+  becomes « Basse ». The first 30 images, the 30 after each change and the 30 after
+  entering a view are not measured. Pending shader compilation or asset loading discards
+  the partial series and restarts that warm-up. A gap over 5 s between two images is a
+  stall, never a measurement, and hiding the page, losing or regaining the focus restarts
+  that warm-up and drops the half-measured series. No effect is degraded on the way (fewer
   samples, cheap blur): a look that changes by itself reads as a bug. Fewer TAA samples is
-  no tier: the count only sets the length of the jitter sequence, each image costs the same.
-  A PC that holds the frame rate never leaves 100 % nor tier 0. On an integrated GPU at
-  75 Hz the walk can run at 63–70 fps (frames missing one refresh), measured above the
-  40 fps budget and left as it is: no single effect costs more than the run-to-run noise,
-  only half the resolution holds 75 fps. `mybob.diag()` shows the current view's scale and
-  tier (`effets palier n/1`). Neither is stored between sessions.
-- The navigation panel's « Ombres des angles » switch (`viewer.setOcclusion`, stored with
-  the walk speed in `maison-atelier:navigation:v1`) turns the occlusion off in every view:
-  on is the full look, off is none. Off reports tier 1 to the effects; on again rebuilds the
-  pipelines, unless the frame rate already dropped the tier for the session.
+  no tier: each image costs the same. `mybob.diag()` shows the current view's scale and
+  tier (`effets palier n/3`).
 - Static house and exterior meshes freeze their world matrices after construction. Moving
   door leaves and every descendant of a moving pivot stay unfrozen. House shell and trim
   merge separately per wall, material, picking and collision policy; trim keeps a name outside

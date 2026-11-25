@@ -18,6 +18,14 @@ Owner reports since then: an RTX 3060 laptop runs at ~50 frames/s, and the Quest
 (headset browser) lags, worse while casting to a PC. Neither has been profiled yet: start
 with `mybob.profile()` on that laptop and in the headset before choosing a lever (#312).
 
+Measured 2026-11-25 on an Intel Meteor Lake integrated GPU (`?diagnostic`, 2256 × 1249 px,
+120 Hz screen): every 3D view is GPU-bound. Visite GPU ≈ 30 ms against 9 ms of CPU (25 fps),
+Vue 3D ≈ 14 ms GPU (47 fps), Extérieur 8 ms, Plan 2.6 ms. The adaptive system then stayed at
+100 % with every effect. « Qualité » (#320) now lowers the resolution to 67 % before any
+effect and starts an integrated GPU at « Moyenne »: the expected Visite cost at 67 % is about
+half the pixels, still to be measured. Earlier, on an integrated GPU at 75 Hz, no single walk
+effect cost more than the run-to-run noise; only half the resolution held 75 fps.
+
 ## Tried and rejected
 
 Each was measured and gave a visual regression or no gain; retry only with new evidence:

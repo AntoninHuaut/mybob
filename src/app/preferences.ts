@@ -6,14 +6,17 @@ import {
   type OnboardingState,
 } from '../ui/onboarding';
 import {
-  parseRenderScale,
-  RENDER_SCALE_STORAGE,
-  renderScaleNote,
-  renderScaleOptionsHtml,
-  renderScaleValue,
+  forDevice,
+  LEGACY_RENDER_SCALE_STORAGE,
+  parseQuality,
+  QUALITY_STORAGE,
+  qualityNote,
   screenCap,
-  type RenderScaleSettings,
-} from '../ui/renderScale';
+  type QualitySettings,
+} from '../ui/quality';
+import { QUALITIES, qualitySeed, type Quality } from '../scene/adaptiveResolution';
+import { engineInfo, gpuName, type DiagnosticEngine } from '../scene/diagnostics';
+import { gpuClass } from '../scene/deviceProfile';
 import { number } from '../ui/format';
 import { el } from './dom';
 import { app } from './state';
@@ -55,44 +58,61 @@ export function showStartCard() {
   el('#start-card').hidden = false;
 }
 
-/* ---------------------------------------------------------------------------------------------- */
-/* « Résolution du rendu »                                                                         */
+/* « Qualité »                                                                                   */
 /* ---------------------------------------------------------------------------------------------- */
 
-let renderScaleSettings: RenderScaleSettings = { detected: {} };
+let qualitySettings: QualitySettings = { quality: 'auto', detected: {} };
 
-function saveRenderScale() {
+function stored(key: string): string | null {
   try {
-    localStorage.setItem(RENDER_SCALE_STORAGE, JSON.stringify(renderScaleSettings));
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function saveQuality() {
+  try {
+    localStorage.setItem(QUALITY_STORAGE, JSON.stringify(qualitySettings));
+    localStorage.removeItem(LEGACY_RENDER_SCALE_STORAGE);
   } catch {
     /* optional persistence */
   }
-  el('#render-scale-note').textContent = renderScaleNote(renderScaleSettings);
+  el('#quality-note').textContent = qualityNote(qualitySettings);
 }
 
-/** « Résolution du rendu »: automatic from what this machine reached, or pinned. */
-export function applyRenderScale() {
-  try {
-    renderScaleSettings = parseRenderScale(localStorage.getItem(RENDER_SCALE_STORAGE));
-  } catch {
-    renderScaleSettings = { detected: {} };
-  }
-  el<HTMLSelectElement>('#render-scale').value = renderScaleValue(renderScaleSettings.fixed);
-  el('#render-scale-note').textContent = renderScaleNote(renderScaleSettings);
-  app.viewer.setRenderScalePolicy(renderScaleSettings.fixed, renderScaleSettings.detected);
+/** Hands the viewer the chosen quality, seeded by this GPU's class for a never-measured view. */
+function configureQuality() {
+  const engine = app.viewer.engine as unknown as DiagnosticEngine;
+  const seed = qualitySeed(gpuClass(engineInfo(engine).renderer, navigator.userAgent));
+  app.viewer.setQuality(qualitySettings.quality, qualitySettings.detected, seed);
+}
+
+/** « Qualité »: the saved choice (or the two settings it replaced), on this GPU. */
+export function applyQuality() {
+  const legacy = {
+    renderScale: stored(LEGACY_RENDER_SCALE_STORAGE),
+    navigation: stored(NAVIGATION_STORAGE),
+  };
+  const device = gpuName(app.viewer.engine as unknown as DiagnosticEngine);
+  qualitySettings = forDevice(parseQuality(stored(QUALITY_STORAGE), legacy), device);
+  saveQuality();
+  el<HTMLSelectElement>('#quality').value = qualitySettings.quality;
+  configureQuality();
   watchScreenCap();
-  app.viewer.onRenderScaleChange = (view, scale) => {
-    if (renderScaleSettings.fixed !== undefined) return;
-    renderScaleSettings.detected[view] = scale;
-    saveRenderScale();
+  app.viewer.onQualityChange = (view, start) => {
+    if (qualitySettings.quality !== 'auto') return;
+    qualitySettings.detected[view] = start;
+    saveQuality();
   };
 }
 
-/** The « Résolution du rendu » select changed: pin a scale, or go back to automatic. */
-export function chooseRenderScale(value: string) {
-  renderScaleSettings.fixed = value === 'auto' ? undefined : Number(value);
-  saveRenderScale();
-  app.viewer.setRenderScalePolicy(renderScaleSettings.fixed, renderScaleSettings.detected);
+/** The « Qualité » select changed. */
+export function chooseQuality(value: string) {
+  if (!QUALITIES.includes(value as Quality)) return;
+  qualitySettings.quality = value as Quality;
+  saveQuality();
+  configureQuality();
 }
 
 /**
@@ -109,9 +129,7 @@ function watchScreenCap() {
     if (cap === watchedCap) return;
     watchedCap = cap;
     app.viewer.setScreenCap(cap);
-    el('#render-scale').innerHTML = renderScaleOptionsHtml(cap);
-    el<HTMLSelectElement>('#render-scale').value = renderScaleValue(renderScaleSettings.fixed, cap);
-    el('#render-scale-note').textContent = renderScaleNote(renderScaleSettings, cap);
+    el('#quality-note').textContent = qualityNote(qualitySettings, cap);
   };
   (window.screen as Screen & EventTarget).addEventListener?.('change', check);
   window.addEventListener('resize', check);
@@ -120,7 +138,7 @@ function watchScreenCap() {
 }
 
 /* ---------------------------------------------------------------------------------------------- */
-/* Walk speed, look sensitivity, occlusion                                                        */
+/* Walk speed, look sensitivity                                                                   */
 /* ---------------------------------------------------------------------------------------------- */
 
 const NAVIGATION_STORAGE = 'maison-atelier:navigation:v1';
@@ -134,8 +152,6 @@ export function applyNavigationPreferences() {
       el<HTMLInputElement>('#look-sensitivity').value = String(
         Math.max(50, Math.min(200, saved.sensitivity)),
       );
-    if (typeof saved?.occlusion === 'boolean')
-      el<HTMLInputElement>('#occlusion-enable').checked = saved.occlusion;
   } catch {
     /* Use the defaults if preferences are unavailable. */
   }
@@ -145,15 +161,13 @@ export function applyNavigationPreferences() {
 export function updateNavigationPreferences(save = true) {
   const speed = Number(el<HTMLInputElement>('#walk-speed').value);
   const sensitivity = Number(el<HTMLInputElement>('#look-sensitivity').value);
-  const occlusion = el<HTMLInputElement>('#occlusion-enable').checked;
   app.viewer.setWalkSpeed(speed);
-  app.viewer.setOcclusion(occlusion);
   app.viewer.setLookSensitivity(sensitivity / 100);
   el('#walk-speed-value').textContent = `${number(speed)} m/s`;
   el('#look-sensitivity-value').textContent = `${sensitivity} %`;
   if (save) {
     try {
-      localStorage.setItem(NAVIGATION_STORAGE, JSON.stringify({ speed, sensitivity, occlusion }));
+      localStorage.setItem(NAVIGATION_STORAGE, JSON.stringify({ speed, sensitivity }));
     } catch {
       /* Preferences are optional; scene and project still work. */
     }

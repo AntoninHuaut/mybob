@@ -11,7 +11,7 @@ import { app } from './state';
 import { setFurnitureCirculation } from './furnitureController';
 import { downloadProject, importProject, openRemoveProject } from './projectLibrary';
 import { loadLevel, loadProject } from './projectView';
-import { chooseRenderScale, dismissStartCard, updateNavigationPreferences } from './preferences';
+import { chooseQuality, dismissStartCard, updateNavigationPreferences } from './preferences';
 import { adoptReceived, copyShareLink } from './shareLinkSync';
 import {
   setMode,
@@ -100,9 +100,8 @@ export function wireNavigationControls() {
   responsiveSidebar.addEventListener('change', () => setSidebar(responsiveSidebar.matches));
   el('#walk-speed').addEventListener('input', () => updateNavigationPreferences());
   el('#look-sensitivity').addEventListener('input', () => updateNavigationPreferences());
-  el('#occlusion-enable').addEventListener('change', () => updateNavigationPreferences());
-  el('#render-scale').addEventListener('change', () =>
-    chooseRenderScale(el<HTMLSelectElement>('#render-scale').value),
+  el('#quality').addEventListener('change', () =>
+    chooseQuality(el<HTMLSelectElement>('#quality').value),
   );
   el('#go-to').addEventListener('click', () => {
     if (matchMedia('(pointer: coarse)').matches && !matchMedia('(any-pointer: fine)').matches) {
