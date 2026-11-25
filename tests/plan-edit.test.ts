@@ -208,3 +208,55 @@ test('an opening moves along its wall and is refused over another one', () => {
   assert.throws(() => moveOpening(withWindow, 'wall-5', 'w', 1.2), /chevauche/);
   assert.throws(() => moveOpening(level, 'wall-5', 'door', 3), /bout du mur/);
 });
+
+const span = (points: [number, number][]) => {
+  const xs = points.map((p) => p[0]);
+  const zs = points.map((p) => p[1]);
+  return [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)];
+};
+
+test('the level outline follows the outer faces when an exterior wall moves', () => {
+  const level = house();
+  const wider = moveWall(level, 'wall-2', -0.5);
+  span(wider.outline).forEach((v, i) => assert.ok(close(v, [-0.2, -0.2, 4.7, 3.2][i])));
+  const longer = setWallLength(level, 'wall-2', 3.7);
+  // wall-3 now slants, so its outer face rises past 3.7 m at the moved corner.
+  assert.ok(span(longer.outline)[3] > 3.7 && span(longer.outline)[3] < 3.75);
+  assert.ok(longer.rooms.every((r) => r.polygon.every((p) => pointInPolygon(p, longer.outline))));
+  // Edits that leave the exterior walls alone keep the stored outline.
+  assert.equal(moveWall(level, 'wall-5', 0.3).outline, level.outline);
+});
+
+test('a moved wall may not cross another wall', () => {
+  const level = house();
+  const stub = addWallChain(
+    level,
+    [
+      [-0.1, 1.5],
+      [1, 1.5],
+    ],
+    false,
+    0.1,
+  );
+  assert.throws(() => moveWall(stub, 'wall-5', 0.75), /croise/);
+  // A corner dragged along a collinear stub overlaps it.
+  const a = addWallChain(
+    level,
+    [
+      [4.1, 0.5],
+      [3, 0.5],
+    ],
+    false,
+    0.1,
+  );
+  const both = addWallChain(
+    a,
+    [
+      [1.55, 0.5],
+      [2, 0.5],
+    ],
+    false,
+    0.1,
+  );
+  assert.throws(() => moveCorner(both, [3, 0.5], [1.8, 0.5]), /croise/);
+});
