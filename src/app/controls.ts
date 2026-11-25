@@ -1,6 +1,4 @@
 import { openPartitionMove } from './movePartition';
-import { openRoomDivision } from './divideRoom';
-import { openWallDrawing } from './drawHouse';
 import { userMessage } from '../errorMessage';
 import { isImmersiveSupported, preloadImmersive } from '../scene/headsetSession';
 import type { ViewMode } from '../scene/viewer';
@@ -15,6 +13,7 @@ import { setFurnitureCirculation } from './furnitureController';
 import { openPlanOpenings } from './planOpenings';
 import { restorePlan, syncPlanEditBar, togglePlanEditBar } from './planEditBar';
 import { watchPlanHistory } from './planHistory';
+import { startNewHouse, toggleWallGrid, toggleWallTool, wallToolKey } from './wallDrawing';
 import { downloadProject, importProject, openRemoveProject } from './projectLibrary';
 import { loadLevel, loadProject } from './projectView';
 import { chooseQuality, dismissStartCard, updateNavigationPreferences } from './preferences';
@@ -207,12 +206,13 @@ export function wireProjectControls() {
   el('#export-image').addEventListener('click', openImageExport);
   el('#tool-openings').addEventListener('click', openPlanOpenings);
   el('#move-wall').addEventListener('click', openPartitionMove);
-  el('#divide-room').addEventListener('click', openRoomDivision);
   watchPlanHistory(syncPlanEditBar);
   el('#tool-plan-edit').addEventListener('click', togglePlanEditBar);
   el('#undo-plan').addEventListener('click', () => restorePlan('undo'));
   el('#redo-plan').addEventListener('click', () => restorePlan('redo'));
-  el('#new-house').addEventListener('click', openWallDrawing);
+  el('#new-house').addEventListener('click', () => void startNewHouse());
+  el('#wall-tool').addEventListener('click', toggleWallTool);
+  el('#wall-grid').addEventListener('click', toggleWallGrid);
   el('#import-project').addEventListener('click', () =>
     el<HTMLInputElement>('#import-file').click(),
   );
@@ -308,6 +308,19 @@ export function wireViewportControls() {
         dialog.close();
     }
   });
+  document.addEventListener(
+    'keydown',
+    (event) => {
+      const target = event.target as HTMLElement;
+      if (document.querySelector('dialog[open]') || target.closest('input, select, textarea'))
+        return;
+      if (wallToolKey(event)) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    },
+    true,
+  );
   document.addEventListener('keydown', (event) => {
     if (document.querySelector('dialog[open]')) return;
     if (event.code === 'Escape') setNavigationPanel(false);

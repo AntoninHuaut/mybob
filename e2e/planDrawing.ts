@@ -1,37 +1,63 @@
 import { expect, type Page } from '@playwright/test';
 
-/** Clicks the drawing sketch at a point in plan metres. */
-async function clickSketch(page: Page, x: number, z: number) {
-  const target = await page.locator('#wall-chain svg').evaluate(
-    (svg: SVGSVGElement, [px, pz]) => {
-      const point = new DOMPoint(px, pz).matrixTransform(svg.getScreenCTM()!);
-      return { x: point.x, y: point.y };
-    },
-    [x, z],
+type Point = [number, number];
+
+/** Existing wall corners as the wall tool shows them: plan position and page position. */
+async function joints(page: Page) {
+  return page.locator('#wall-draft .wall-draft-joint').evaluateAll((circles) =>
+    circles.map((c) => {
+      const box = c.getBoundingClientRect();
+      return {
+        plan: c.getAttribute('data-point')!.split(',').map(Number) as [number, number],
+        page: [box.x + box.width / 2, box.y + box.height / 2] as [number, number],
+      };
+    }),
   );
-  await page.mouse.click(target.x, target.y);
+}
+
+/** Page position of a plan point, interpolated from three wall corners (Plan is orthographic). */
+export async function pagePoint(page: Page, target: Point): Promise<Point> {
+  const [a, b, c] = await joints(page);
+  // Solve target = a + s (b − a) + t (c − a) in plan, then apply it on the page.
+  const [ux, uz, vx, vz] = [
+    b.plan[0] - a.plan[0],
+    b.plan[1] - a.plan[1],
+    c.plan[0] - a.plan[0],
+    c.plan[1] - a.plan[1],
+  ];
+  const [dx, dz] = [target[0] - a.plan[0], target[1] - a.plan[1]];
+  const det = ux * vz - uz * vx;
+  const s = (dx * vz - dz * vx) / det,
+    t = (ux * dz - uz * dx) / det;
+  return [
+    a.page[0] + s * (b.page[0] - a.page[0]) + t * (c.page[0] - a.page[0]),
+    a.page[1] + s * (b.page[1] - a.page[1]) + t * (c.page[1] - a.page[1]),
+  ];
 }
 
 /**
- * Draws a 4 × 3 m clear room with 0.20 m walls through « Nouvelle maison »: four typed axis
- * lengths of 4.20 and 3.20 m, clockwise from the top-left corner, as wall-1 … wall-4.
+ * « Nouvelle maison », then a 4 × 3 m clear room with 0.20 m walls drawn on the Plan: a first
+ * corner on the 5 cm grid, then axis lengths 4.20 / 3.20 typed with arrow keys. Returns that
+ * first corner, in plan metres.
  */
-export async function drawClearRoom(page: Page, name: string) {
+export async function drawClearRoom(page: Page): Promise<Point> {
   const menu = page.locator('#toggle-sidebar');
   if ((await menu.getAttribute('aria-expanded')) !== 'true') await menu.click();
   await page.getByRole('button', { name: 'Nouvelle maison' }).click();
-  const length = page.locator('#wall-chain [name=length]');
-  await clickSketch(page, 1, 1);
-  for (const [value, x, z] of [
-    ['4.2', 3, 1],
-    ['3.2', 5.2, 3],
-    ['4.2', 3, 4.2],
-  ] as const) {
-    await length.fill(value);
-    await clickSketch(page, x, z);
+  await expect(page.locator('#header-project')).toHaveText('Nouvelle maison');
+  await expect(page.locator('#wall-hint')).toBeVisible();
+  const box = (await page.locator('#scene').boundingBox())!;
+  await page.mouse.click(box.x + box.width * 0.45, box.y + box.height * 0.45);
+  for (const [length, arrow] of [
+    ['4.2', 'ArrowRight'],
+    ['3.2', 'ArrowDown'],
+    ['4.2', 'ArrowLeft'],
+    ['3.2', 'ArrowUp'],
+  ]) {
+    await page.keyboard.type(length);
+    await page.keyboard.press(arrow);
   }
-  await page.getByRole('button', { name: 'Fermer le contour' }).click();
-  await page.locator('#wall-chain [name=room]').fill(name);
-  await page.getByRole('button', { name: 'Créer la maison' }).click();
-  await expect(page.locator('#header-project')).toHaveText(name);
+  await expect(page.locator('#wall-draft .wall-draft-joint')).toHaveCount(4);
+  const corners = (await joints(page)).map((j) => j.plan);
+  return [Math.min(...corners.map((p) => p[0])), Math.min(...corners.map((p) => p[1]))];
 }
