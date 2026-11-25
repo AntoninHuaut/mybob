@@ -572,7 +572,7 @@ export function resolveRoofWindow(
 }
 
 /** Distance from a plan point to the closest edge of a plan polygon. */
-function distanceToPolygonBoundary(point: Point2, polygon: Point2[]): number {
+export function distanceToPolygonBoundary(point: Point2, polygon: Point2[]): number {
   let closest = Number.POSITIVE_INFINITY;
   for (let i = 0; i < polygon.length; i++) {
     const a = polygon[i],
