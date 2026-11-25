@@ -166,11 +166,20 @@ test('full, low and automatic modes restore originals and adapt to orbit directi
 test('plan, first person, exterior and explicit height cuts take priority over automatic wall display', () => {
   const { engine, scene, material, cutaway, markers, viewer } = fixture();
   const north = scene.getMeshByName('wall:north:0')!;
+  const jamb = scene.meshes.find((mesh) => mesh.name.startsWith('trim:wall:north:'))!;
   viewer.setWallDisplay('auto');
+  const clone = north.material;
+  assert.notEqual(clone, material);
   Object.assign(viewer, { currentMode: 'plan' });
   viewer.setSectionHeight(undefined);
-  assert.equal(north.material, material);
   assert.ok(Math.abs(scene.clipPlane!.d + 4) < 1e-8);
+  // A cut wall keeps its clone, cut exactly at the section: no material swap on each switch.
+  assert.ok(north.material === clone, 'the cut wall swapped back to its original');
+  for (const mesh of [north, jamb]) {
+    assert.ok(Math.abs(mesh.material!.clipPlane!.d - scene.clipPlane!.d) < 1e-12);
+    assert.deepEqual(mesh.material!.clipPlane!.normal.asArray(), scene.clipPlane!.normal.asArray());
+  }
+  assert.equal(north.isPickable, true);
   assert.ok(markers.meshes.every((mesh) => mesh.isEnabled()));
   Object.assign(viewer, { currentMode: 'walk' });
   viewer.setSectionHeight(undefined);
@@ -185,8 +194,11 @@ test('plan, first person, exterior and explicit height cuts take priority over a
   assert.equal(scene.clipPlane, null);
   Object.assign(viewer, { currentExteriorView: false });
   viewer.setSectionHeight(0.8);
-  assert.equal(north.material, material, 'explicit global cut takes priority');
   assert.ok(Math.abs(scene.clipPlane!.d + 3.6) < 1e-8);
+  assert.ok(
+    Math.abs((north.material!.clipPlane ?? scene.clipPlane)!.d - scene.clipPlane!.d) < 1e-12,
+    'explicit global cut takes priority',
+  );
   assert.ok(
     markers.wallCaps.some((mesh) => mesh.isEnabled() && mesh.metadata.wallId === 'partition'),
   );
@@ -218,7 +230,7 @@ test('the viewer suppresses sun shadows in the plan and behind lowered walls onl
   update();
   assert.equal(scene.shadowsEnabled, false);
   viewer.setLights(true);
-  assert.equal(point.isEnabled(), false, 'plan keeps point-light hotspots disabled');
+  assert.equal(point.intensity, 0, 'plan keeps point-light hotspots dark');
   Object.assign(viewer, { currentMode: 'overview' });
   viewer.setLights(true);
   assert.equal(point.isEnabled(), true);
@@ -314,6 +326,7 @@ test('settle frames skip cutaway application and movement applies it on that fra
     aim: new WalkAim(),
   });
   const apply = t.mock.method(cutaway, 'apply');
+  const hold = t.mock.method(cutaway, 'holdForSection');
   const draw = () => (viewer as unknown as { beforeFrame(): void }).beforeFrame();
   draw();
   draw();
@@ -356,17 +369,19 @@ test('settle frames skip cutaway application and movement applies it on that fra
   t.mock.method(viewer.orbit, 'attachControl', () => {});
   t.mock.method(viewer.walk, 'attachControl', () => {});
   assert.equal(viewer.setMode('plan'), true);
-  assert.equal(apply.mock.callCount(), 2, 'mode change applies full walls immediately');
+  assert.equal(apply.mock.callCount(), 1);
+  assert.equal(hold.mock.callCount(), 1, 'mode change cuts the walls at the section immediately');
   scheduler.cameraMoved = true;
   draw();
   scheduler.cameraMoved = false;
   draw();
   draw();
-  assert.equal(apply.mock.callCount(), 2, 'Plan frames never reapply full walls');
+  assert.equal(apply.mock.callCount(), 1, 'Plan frames never reapply cutaways');
+  assert.equal(hold.mock.callCount(), 1);
   assert.equal(viewer.setMode('overview'), true);
-  assert.equal(apply.mock.callCount(), 3, 'returning to overview restores cutaways immediately');
+  assert.equal(apply.mock.callCount(), 2, 'returning to overview restores cutaways immediately');
   draw();
-  assert.equal(apply.mock.callCount(), 3);
+  assert.equal(apply.mock.callCount(), 2);
   Object.assign(viewer, {
     level: {
       ...level,
@@ -383,14 +398,14 @@ test('settle frames skip cutaway application and movement applies it on that fra
     },
   });
   assert.equal(viewer.setMode('walk', false, [1, 1]), true);
-  assert.equal(apply.mock.callCount(), 4, 'entering walk restores full walls immediately');
+  assert.equal(apply.mock.callCount(), 3, 'entering walk restores full walls immediately');
   const ray = t.mock.method(scene, 'pickWithRay');
   draw();
   assert.equal(ray.mock.callCount(), 1, 'mode entry invalidates the walk aim with a still camera');
   draw();
   draw();
   assert.equal(ray.mock.callCount(), 1);
-  assert.equal(apply.mock.callCount(), 4, 'stationary walk frames do not apply cutaways');
+  assert.equal(apply.mock.callCount(), 3, 'stationary walk frames do not apply cutaways');
   scene.dispose();
   engine.dispose();
 });

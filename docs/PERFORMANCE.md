@@ -41,6 +41,14 @@ opens in 64 ms and « Enregistrer » paints in 48 ms, down from 112 and 128 ms (
 selection overlays are rebuilt only when their lines or labels change, and label textures are
 reused across redraws. What remains when a dialog opens is building and laying out its form.
 
+## Plan ↔ Vue 3D switch
+
+Measured 2026-11-25 at CPU ×4, larger private house: a repeat Vue 3D switch paints in
+64–88 ms (was 96–120 ms) and Plan in 56–80 ms (was 80–88 ms); the first Plan warm-up dropped
+from 586 to 341 ms (#371). Two causes of every material rebuilding its defines were removed: cut
+walls keep their cutaway clone under a section plane, and ceiling fixtures stay enabled at zero
+intensity in Plan. Plan captures are bit-identical; Vue 3D differs only by temporal noise.
+
 ## Tried and rejected
 
 Each was measured and gave a visual regression or no gain; retry only with new evidence:

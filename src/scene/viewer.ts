@@ -1343,10 +1343,15 @@ export class HouseViewer {
     const camera: Point2 = [this.orbit.position.x, this.orbit.position.z];
     const active = this.mode === 'overview' && !this.exteriorView;
     const explicitSection = this.sectionHeight !== undefined && Number.isFinite(this.sectionHeight);
-    const selected = this.wallCutaway.apply(
-      active && !explicitSection ? (this.wallDisplay ?? 'auto') : 'full',
-      camera,
-    );
+    let selected: ReadonlySet<string>;
+    if (this.scene.clipPlane && (!active || explicitSection)) {
+      this.wallCutaway.holdForSection(this.scene.clipPlane);
+      selected = new Set();
+    } else
+      selected = this.wallCutaway.apply(
+        active && !explicitSection ? (this.wallDisplay ?? 'auto') : 'full',
+        camera,
+      );
     // Only a different set of cut walls changes the casters.
     const selection = [...selected].join('|');
     if (selection !== this.cutawaySelection) {
