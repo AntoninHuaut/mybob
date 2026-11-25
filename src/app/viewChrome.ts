@@ -1,3 +1,4 @@
+import { isImported } from './projectLibrary';
 import { endWallBrush } from './roomPaint';
 import type { ViewMode } from '../scene/viewer';
 import { furnitureViewState } from '../furniture/viewState';
@@ -50,6 +51,8 @@ export function setNavigationPanel(open: boolean) {
 }
 
 export function syncDisplayControls() {
+  el('#tool-openings').hidden =
+    app.viewer.mode !== 'plan' || app.readOnlyLink || !isImported(app.current.id);
   const { viewer, display } = app;
   const measuring = viewer.measureMode;
   activeButton('#go-to', viewer.goToMode);

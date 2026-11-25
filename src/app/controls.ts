@@ -9,6 +9,7 @@ import { number } from '../ui/format';
 import { activeButton, closeDialog, el, openDialog, toast } from './dom';
 import { app } from './state';
 import { setFurnitureCirculation } from './furnitureController';
+import { openPlanOpenings } from './planOpenings';
 import { downloadProject, importProject, openRemoveProject } from './projectLibrary';
 import { loadLevel, loadProject } from './projectView';
 import { chooseQuality, dismissStartCard, updateNavigationPreferences } from './preferences';
@@ -199,6 +200,7 @@ export function wireProjectControls() {
     if (app.receivedShare) void adoptReceived(app.receivedShare.document);
   });
   el('#export-image').addEventListener('click', openImageExport);
+  el('#tool-openings').addEventListener('click', openPlanOpenings);
   el('#import-project').addEventListener('click', () =>
     el<HTMLInputElement>('#import-file').click(),
   );
