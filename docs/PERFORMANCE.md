@@ -39,5 +39,6 @@ Each was measured and gave a visual regression or no gain; retry only with new e
 
 - 8-sample SSAO with rotating noise (#246, reverted in #248): visible grain.
 - FSR1 upscaling, WebGPU, clustered lights, Frame Graph.
-- Front-to-back sorting, disabling canvas MSAA, texture decoding in a Worker: no gain.
+- Front-to-back sorting, disabling canvas MSAA, texture decoding in a Worker: no gain. (Texture
+  _generation_ does run in a worker since #321: it costs far more than decoding.)
 - Walk collisions and picking: already under 0.2 ms.

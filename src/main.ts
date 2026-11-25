@@ -4,11 +4,15 @@ import { SolarPanel } from './ui/solarPanel';
 import { appTemplate } from './ui/appTemplate';
 import { solarPosition } from './scene/solar';
 import { HouseViewer } from './scene/viewer';
+import { generateMapsInWorker } from './scene/surfaceMapsInWorker';
+// Inlined: a blob worker needs no request, so a slow or intercepted fetch cannot stall it.
+import SurfaceMapsWorker from './scene/surfaceMaps.worker?worker&inline';
 import { createEngine } from './scene/engine';
 import {
   collectDiagnostics,
   diagnosticLines,
   installDiagnostics,
+  type StartupTiming,
   profileContextLine,
   viewLabel,
   type DiagnosticView,
@@ -34,6 +38,7 @@ import { isShareLink } from './model/shareLink';
 import { app } from './app/state';
 import { activeButton, el, openDialog, pauseForDialog, toast } from './app/dom';
 import {
+  furnitureBuildMs,
   furnitureLabelObstacles,
   openFurnitureEditor,
   updateFurnitureContext,
@@ -49,7 +54,7 @@ import {
 import { handleStairLevelChange, loadLevel, loadProject, selectRoom } from './app/projectView';
 import { readOnboarding, showStartCard } from './app/preferences';
 import { openSharedLink, wireLinkHashFlush } from './app/shareLinkSync';
-import { canChangeMode, syncViewChrome } from './app/viewChrome';
+import { canChangeMode, setSidebar, syncViewChrome } from './app/viewChrome';
 import { render as renderWallDraft, wallToolActive } from './app/wallDrawing';
 import { wireNavigationControls, wireProjectControls, wireViewportControls } from './app/controls';
 
@@ -77,9 +82,17 @@ function wireEvents() {
 const diagnosticSession = reportRequested(location.search);
 const passBreakdown = passesRequested(location.search);
 
+let startup: StartupTiming | undefined;
+
 function diagnostics() {
   const { viewer } = app;
-  return collectDiagnostics(viewer.engine, viewer.scene, diagnosticView(), viewer.refreshRate);
+  const snapshot = collectDiagnostics(
+    viewer.engine,
+    viewer.scene,
+    diagnosticView(),
+    viewer.refreshRate,
+  );
+  return { ...snapshot, startup };
 }
 
 function showReport(title: string, text: string) {
@@ -206,6 +219,11 @@ function wireViewer(viewer: HouseViewer) {
 
 async function start() {
   dropLegacyPlanPhotoStore();
+  // The panel shows its real state before any wait: a control read during the start-up
+  // (the template says closed) must not be toggled once the start-up opens it.
+  setSidebar(matchMedia('(min-width: 761px)').matches);
+  // The procedural maps are generated meanwhile, while the projects download and the engine starts.
+  const maps = generateMapsInWorker(() => new SurfaceMapsWorker());
   try {
     const projectPaths = __PUBLIC_BUILD__
       ? ['/projects/studio-demo.json']
@@ -217,9 +235,14 @@ async function start() {
         return validateProject(await response.json());
       }),
     );
+    const projectsAt = performance.now();
+    await maps;
+    const mapsAt = performance.now();
     const unreadableProjects = restoreLibrary(bundled);
+    const libraryAt = performance.now();
     const sceneEngine = createEngine(el<HTMLCanvasElement>('#scene'));
     const viewer = new HouseViewer(el<HTMLCanvasElement>('#scene'), sceneEngine);
+    const engineAt = performance.now();
     app.viewer = viewer;
     if (viewer.softwareRendering) {
       // A CPU rasteriser draws the scene ten to fifty times slower than any GPU: the
@@ -247,6 +270,7 @@ async function start() {
     } catch {
       /* optional persistence */
     }
+    const loadStarted = performance.now();
     if (isShareLink(location.hash)) {
       // A link error (10-project limit, rejected document…) is not a failure of the
       // 3D engine: a toast message, then the local project stays usable.
@@ -262,6 +286,7 @@ async function start() {
         );
       }
     } else loadProject(initial);
+    const builtAt = performance.now();
     // Development-only bench: the dynamic import behind `DEV` is what keeps the
     // whole module out of a production build.
     if (import.meta.env.DEV) {
@@ -291,6 +316,30 @@ async function start() {
     // the page. The other views do the same over the viewport only, with a shorter
     // message, the first time they are opened.
     await viewer.whenReady();
+    const scene = viewer.loadTimings;
+    if (scene) {
+      const readyAt = performance.now();
+      const sceneParts = scene.materialsMs + scene.levelsMs + scene.exteriorMs;
+      startup = {
+        readyAt,
+        phases: [
+          { label: 'projets', ms: projectsAt },
+          { label: 'attente des textures', ms: mapsAt - projectsAt },
+          { label: 'bibliothèque', ms: libraryAt - mapsAt },
+          { label: 'moteur', ms: engineAt - libraryAt },
+          { label: 'matériaux', ms: scene.materialsMs },
+          { label: 'niveaux', ms: scene.levelsMs },
+          { label: 'extérieur', ms: scene.exteriorMs },
+          { label: 'scène', ms: scene.totalMs - sceneParts },
+          { label: 'meubles', ms: furnitureBuildMs },
+          {
+            label: 'interface',
+            ms: builtAt - loadStarted - scene.totalMs - furnitureBuildMs,
+          },
+          { label: 'préparation de la vue', ms: readyAt - builtAt },
+        ],
+      };
+    }
     viewer.onPreparing = (active) => {
       el('#loading span').textContent = 'Préparation de la vue…';
       el('#loading').hidden = !active;

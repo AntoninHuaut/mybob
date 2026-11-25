@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
 import { drawClearRoom, pagePoint } from './planDrawing';
+import { startupDone } from './startup';
 
 type Point = [number, number];
 interface ExportedLevel {
@@ -40,6 +41,7 @@ async function openOpenings(page: Page) {
 test.beforeEach(async ({ page }) => {
   await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
+  await startupDone(page);
   await expect(page.locator('#project-select')).toContainText('Démonstration');
 });
 
@@ -95,6 +97,7 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   expect(await exportedLevel(page)).toEqual(moved);
 
   await page.reload();
+  await startupDone(page);
   await expect(page.locator('#header-project')).toHaveText('Nouvelle maison');
   const level = await exportedLevel(page);
   expect(level).toEqual(moved);

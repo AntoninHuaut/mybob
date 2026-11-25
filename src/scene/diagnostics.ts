@@ -63,6 +63,14 @@ export interface DiagnosticSnapshot {
   screen: string;
   userAgent: string;
   heapMb?: number;
+  /** The page's start-up, once the first view is ready (`main.ts`). */
+  startup?: StartupTiming;
+}
+
+/** `readyAt` is milliseconds since navigation; the phases are durations, in start-up order. */
+export interface StartupTiming {
+  readyAt: number;
+  phases: ReadonlyArray<{ label: string; ms: number }>;
 }
 
 const MODE_LABELS: Record<string, string> = {
@@ -85,6 +93,19 @@ export function viewLabel(mode: string, exterior: boolean): string {
 /** One decimal, French comma: the report is read by a person, not parsed. */
 function decimal(value: number): string {
   return value.toLocaleString('fr-FR', { maximumFractionDigits: 1 });
+}
+
+function seconds(ms: number): string {
+  return (ms / 1000).toLocaleString('fr-FR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  });
+}
+
+function startupLine(t: StartupTiming): string {
+  const timed = t.phases.reduce((sum, phase) => sum + phase.ms, 0);
+  const phases = [...t.phases, { label: 'autres', ms: Math.max(0, t.readyAt - timed) }];
+  return `  démarrage   prêt en ${seconds(t.readyAt)} s · ${phases.map((phase) => `${phase.label} ${seconds(phase.ms)}`).join(' · ')}`;
 }
 
 /**
@@ -139,6 +160,7 @@ export function diagnosticLines(snapshot: DiagnosticSnapshot): string[] {
     `  scène       ${snapshot.meshes} maillages, ${snapshot.activeMeshes} actifs, ${snapshot.materials} matériaux, ${snapshot.lights} lumières`,
     `  machine     ${deviceLine(snapshot)}`,
     `  navigateur  ${snapshot.userAgent}`,
+    ...(snapshot.startup ? [startupLine(snapshot.startup)] : []),
   ];
 }
 

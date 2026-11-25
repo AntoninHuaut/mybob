@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { startupDone } from './startup';
 
 // Two tabs on the same house: the second must never overwrite the first one's work.
 
@@ -15,6 +16,7 @@ async function appReady(page: Page) {
 async function openTab(page: Page) {
   await page.route(/^https?:\/\/(?!127\.0\.0\.1[:/])/, (route) => route.abort());
   await page.goto('/');
+  await startupDone(page);
   await appReady(page);
 }
 

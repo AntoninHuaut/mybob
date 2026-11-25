@@ -155,6 +155,8 @@ export class HouseViewer {
    * all behind their windows.
    */
   private otherLevels: { level: Level; house: HouseScene }[] = [];
+  /** Levels the view shows stacked but not built yet: built on the next image. */
+  private levelsPending = false;
   exterior?: ExteriorScene;
   private currentExteriorView = false;
   get exteriorView(): boolean {
@@ -240,6 +242,8 @@ export class HouseViewer {
   private readonly refresh = new RefreshRateEstimator();
   private readonly warmth = new ViewWarmth();
   private preparing = false;
+  /** How long the last `load` spent on each part of the scene, for the start-up report. */
+  loadTimings?: { materialsMs: number; levelsMs: number; exteriorMs: number; totalMs: number };
   /**
    * A GPU rather than a software rasteriser (`isSoftwareRenderer`): only then are views
    * prepared behind the overlay and does Vue 3D get its occlusion. CI's SwiftShader
@@ -406,6 +410,7 @@ export class HouseViewer {
   }
 
   load(project: HouseProject, levelId?: string) {
+    const loadStarted = performance.now();
     // Optional: scene tests build a viewer from its prototype, without the constructor.
     this.warmth?.reset();
     this.requestRender();
@@ -455,9 +460,12 @@ export class HouseViewer {
     this.shadowRefresh = new ShadowRefresh(shadow);
     this.cutawaySelection = '';
     this.loadedProject = project;
+    const startedAt = performance.now();
     this.materials = createMaterials(scene, project.finishes);
+    const materialsAt = performance.now();
     this.shadow = shadow;
     this.buildLevels(project, level);
+    const levelsAt = performance.now();
     // The exterior is the building's, not the displayed level's: the façades
     // are those of the lowest level, the roof covers the rest, and the upper
     // levels' openings are cut through it. Building from the attic only showed
@@ -466,6 +474,7 @@ export class HouseViewer {
       candidate.elevation < low.elevation ? candidate : low,
     );
     this.exterior = buildExterior(project, ground, scene);
+    const exteriorAt = performance.now();
     this.sky = createSkyLayer(scene);
     refreshFixtureLights(scene);
     const exteriorScene = this.exterior;
@@ -491,42 +500,25 @@ export class HouseViewer {
     this.setMode('overview');
     this.attachSceneInput(scene);
     this.resize();
+    this.loadTimings = {
+      materialsMs: materialsAt - startedAt,
+      levelsMs: levelsAt - materialsAt,
+      exteriorMs: exteriorAt - levelsAt,
+      totalMs: performance.now() - loadStarted,
+    };
   }
 
   /**
-   * Every level of the project, the displayed one last: the fixture light assignment of the
-   * scene is the last level built, and only the displayed one keeps its lights, its
-   * collisions and its picking.
+   * The displayed level only, with its lights, collisions and picking. The other levels are
+   * built the first time a view shows them stacked (`buildPendingLevels`): Plan and Visite
+   * never do, so a multi-level house starts as fast as a single level.
    */
   private buildLevels(project: HouseProject, level: Level) {
     const scene = this.scene;
     const materials = this.materials!;
+    this.otherLevels = [];
+    this.levelsPending = false;
     // The level above owns the stairwell opening: it also pierces this ceiling.
-    this.otherLevels = project.levels
-      .filter((other) => other.id !== level.id)
-      .map((other) => {
-        const house = buildHouse(
-          other,
-          scene,
-          materials,
-          undefined,
-          levelAbove(project, other)?.floorVoids ?? [],
-          roofWindowWells(project, other),
-          stairsDown(project, other),
-        );
-        house.pointLights.forEach((light) => light.dispose());
-        house.fixtures.forEach((fixture) => fixture.dispose());
-        house.pointLights = [];
-        house.fixtures = [];
-        for (const mesh of house.root.getChildMeshes()) {
-          mesh.isPickable = false;
-          mesh.checkCollisions = false;
-          // Floor picks use their own predicate, which ignores `isPickable`.
-          mesh.metadata = { otherLevel: other.id };
-        }
-        house.root.setEnabled(false);
-        return { level: other, house };
-      });
     this.house = buildHouse(
       level,
       scene,
@@ -1193,11 +1185,52 @@ export class HouseViewer {
    */
   private updateOtherLevels() {
     this.house?.stairsDown?.forEach((step) => step.setEnabled(this.mode === 'walk'));
-    for (const { level, house } of this.otherLevels ?? [])
-      house.root.setEnabled(
-        this.mode === 'overview' && (this.exteriorView || level.elevation < this.level.elevation),
-      );
+    for (const { level, house } of this.otherLevels ?? []) house.root.setEnabled(this.shows(level));
+    this.levelsPending = Boolean(
+      this.loadedProject?.levels.some(
+        (level) =>
+          level.id !== this.level.id &&
+          this.shows(level) &&
+          !this.otherLevels.some((built) => built.level.id === level.id),
+      ),
+    );
     this.shadowRefresh?.invalidate();
+  }
+
+  /** Whether the view shows another level stacked with the displayed one. */
+  private shows(level: Level): boolean {
+    return (
+      this.mode === 'overview' && (this.exteriorView || level.elevation < this.level.elevation)
+    );
+  }
+
+  private buildPendingLevels() {
+    const project = this.loadedProject;
+    if (!project || !this.materials) return;
+    for (const other of project.levels) {
+      if (other.id === this.level.id || !this.shows(other)) continue;
+      if (this.otherLevels.some((built) => built.level.id === other.id)) continue;
+      const house = buildHouse(
+        other,
+        this.scene,
+        this.materials,
+        undefined,
+        levelAbove(project, other)?.floorVoids ?? [],
+        roofWindowWells(project, other),
+        stairsDown(project, other),
+        false,
+      );
+      for (const mesh of house.root.getChildMeshes()) {
+        mesh.isPickable = false;
+        mesh.checkCollisions = false;
+        // Floor picks use their own predicate, which ignores `isPickable`.
+        mesh.metadata = { otherLevel: other.id };
+      }
+      this.otherLevels.push({ level: other, house });
+    }
+    // The fixture assignment lists every mesh it lights or excludes: the new ones included.
+    refreshFixtureLights(this.scene);
+    this.updateOtherLevels();
   }
 
   private updateRoofVisibility() {
@@ -1794,6 +1827,7 @@ export class HouseViewer {
 
   private beforeFrame() {
     if (this.capturing) return;
+    if (this.levelsPending) this.buildPendingLevels();
     const revision = furnitureRevision(this.scene);
     if (revision !== this.furnitureRevision) {
       this.furnitureRevision = revision;

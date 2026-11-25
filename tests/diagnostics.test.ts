@@ -268,3 +268,24 @@ test('profile(seconds) prints the profile once it is measured, clamped to a sane
     globals.window = previousWindow;
   }
 });
+
+test('the report splits the start-up into its phases and what they leave over', () => {
+  const plain = collectDiagnostics(engine(), scene(), view);
+  assert.ok(!diagnosticLines(plain).some((line) => line.includes('démarrage')));
+  const lines = diagnosticLines({
+    ...plain,
+    startup: {
+      readyAt: 6300,
+      phases: [
+        { label: 'projets', ms: 700 },
+        { label: 'matériaux', ms: 520 },
+        { label: 'préparation de la vue', ms: 2700 },
+      ],
+    },
+  });
+  assert.ok(
+    lines.includes(
+      '  démarrage   prêt en 6,3 s · projets 0,7 · matériaux 0,5 · préparation de la vue 2,7 · autres 2,4',
+    ),
+  );
+});
