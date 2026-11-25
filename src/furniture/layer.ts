@@ -91,6 +91,8 @@ export class FurnitureLayer {
   private contactMaterial?: StandardMaterial;
   private contactOwners = 0;
   private materialCache = new Map<string, { material: PBRMaterial; owners: number }>();
+  /** One upload per map, shared by every material that uses it; freed with the layer. */
+  private textures = new Map<string, RawTexture>();
   private ghosts = new Map<string, Visual>();
   private selected?: string;
   private mode: 'overview' | 'plan' | 'walk' = 'overview';
@@ -399,39 +401,54 @@ export class FurnitureLayer {
       }
       const mat = new PBRMaterial(`furniture:${item.id}:${name}`, this.scene);
       mat.albedoColor = color;
+      const shared = (key: string, create: () => RawTexture) => {
+        let texture = this.textures.get(key);
+        if (!texture) this.textures.set(key, (texture = create()));
+        return texture;
+      };
       if (name === 'fabric' || name === 'feet') {
-        const maps = surfaceMapData();
-        const map = name === 'fabric' ? maps.plasterNormal : maps.woodNormal;
-        const texture = RawTexture.CreateRGBATexture(
-          map.data,
-          map.size,
-          map.size,
-          this.scene,
-          true,
-        );
-        texture.uScale = texture.vScale = name === 'fabric' ? 12 : 1;
-        mat.bumpTexture = texture;
+        mat.bumpTexture = shared(name, () => {
+          const maps = surfaceMapData();
+          const map = name === 'fabric' ? maps.plasterNormal : maps.woodNormal;
+          const texture = RawTexture.CreateRGBATexture(
+            map.data,
+            map.size,
+            map.size,
+            this.scene,
+            true,
+          );
+          texture.uScale = texture.vScale = name === 'fabric' ? 12 : 1;
+          return texture;
+        });
       }
       // Trilinear and anisotropic, like the house surfaces: seen at a grazing angle the grain
       // would otherwise blur away in the distance while aliasing into stripes up close.
-      const upload = (map: SurfaceMapData) => {
-        const texture = RawTexture.CreateRGBATexture(
-          map.data,
-          map.size,
-          map.size,
-          this.scene,
-          true,
-          false,
-          Texture.TRILINEAR_SAMPLINGMODE,
-        );
-        texture.anisotropicFilteringLevel = 8;
-        return texture;
-      };
+      const upload = (key: string, map: SurfaceMapData, level = 1) =>
+        shared(key, () => {
+          const texture = RawTexture.CreateRGBATexture(
+            map.data,
+            map.size,
+            map.size,
+            this.scene,
+            true,
+            false,
+            Texture.TRILINEAR_SAMPLINGMODE,
+          );
+          texture.anisotropicFilteringLevel = 8;
+          texture.level = level;
+          return texture;
+        });
       if (surface === 'wood' || surface === 'stone') {
         const maps = furnitureMapData();
-        mat.albedoTexture = upload(surface === 'wood' ? maps.woodAlbedo : maps.stoneAlbedo);
-        mat.bumpTexture = upload(surface === 'wood' ? maps.woodNormal : maps.stoneNormal);
-        mat.bumpTexture.level = surface === 'wood' ? 0.35 : 0.3;
+        mat.albedoTexture = upload(
+          `${surface}:albedo`,
+          surface === 'wood' ? maps.woodAlbedo : maps.stoneAlbedo,
+        );
+        mat.bumpTexture = upload(
+          `${surface}:normal`,
+          surface === 'wood' ? maps.woodNormal : maps.stoneNormal,
+          surface === 'wood' ? 0.35 : 0.3,
+        );
       }
       mat.metallic = name === 'handles' ? 0.9 : 0;
       mat.roughness =
@@ -1435,7 +1452,7 @@ export class FurnitureLayer {
       if (--entry.owners === 0) {
         this.planMaterials.get(material)?.dispose();
         this.planMaterials.delete(material);
-        material.dispose(false, true);
+        material.dispose(false, false);
         this.materialCache.delete(key);
       }
       return;
@@ -1460,5 +1477,7 @@ export class FurnitureLayer {
     this.circulationMaterials = [];
     for (const visual of this.visuals.values()) this.destroyVisual(visual);
     this.visuals.clear();
+    for (const texture of this.textures.values()) texture.dispose();
+    this.textures.clear();
   }
 }

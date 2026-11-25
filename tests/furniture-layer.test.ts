@@ -449,6 +449,39 @@ test('bright fabric colours retain distinct exact channels and independent owner
   cleanup();
 });
 
+test('fabric and wood finishes of different colours share one texture per map until the layer goes', () => {
+  const { scene, layer, cleanup } = setup();
+  try {
+    const a = { ...item(), id: 'sofa-a', color: '#aa0000', surface: 'wood' as const };
+    const b = {
+      ...item(),
+      id: 'sofa-b',
+      color: '#00aa00',
+      surface: 'wood' as const,
+      position: [7, 7] as [number, number],
+    };
+    layer.setItems([a, b]);
+    const material = (id: string, role: string) =>
+      scene.meshes.find(
+        (mesh) => mesh.metadata?.id === id && mesh.material?.name.endsWith(`:${role}`),
+      )!.material as PBRMaterial;
+    for (const role of ['fabric', 'finish']) {
+      // Identity checks: a failing deep diff of two Babylon objects never finishes printing.
+      assert.ok(material(a.id, role) !== material(b.id, role), `${role} materials differ`);
+      assert.ok(material(a.id, role).bumpTexture === material(b.id, role).bumpTexture, role);
+    }
+    assert.ok(material(a.id, 'finish').albedoTexture === material(b.id, 'finish').albedoTexture);
+    assert.equal(material(a.id, 'finish').bumpTexture!.level, 0.35);
+    const fabric = material(b.id, 'fabric').bumpTexture!;
+    layer.setItems([b]);
+    assert.ok(scene.textures.includes(fabric));
+    layer.dispose();
+    assert.ok(!scene.textures.includes(fabric));
+  } finally {
+    cleanup();
+  }
+});
+
 test('Plan glass preserves two-sided rendering, alpha and exact diffuse channels', () => {
   const { scene, layer, cleanup } = setup();
   layer.setItems([item('shower')]);
