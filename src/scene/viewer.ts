@@ -157,6 +157,9 @@ export class HouseViewer {
   private otherLevels: { level: Level; house: HouseScene }[] = [];
   /** Levels the view shows stacked but not built yet: built on the next image. */
   private levelsPending = false;
+  /** The session's first load has drawn its early image (`load`). */
+  private primed = false;
+  private priming = false;
   exterior?: ExteriorScene;
   private currentExteriorView = false;
   get exteriorView(): boolean {
@@ -495,6 +498,18 @@ export class HouseViewer {
     this.setMode('overview');
     this.attachSceneInput(scene);
     this.resize();
+    // Behind the start-up screen, one image now asks for the first view's programs: the GPU
+    // driver links them in parallel while the host builds the furniture and the interface.
+    if (this.hardwareRenderer && !this.primed) {
+      this.primed = true;
+      // The host may still switch to Plan or Visite: no other level is built for this image.
+      this.priming = true;
+      try {
+        scene.render();
+      } finally {
+        this.priming = false;
+      }
+    }
     this.loadTimings = {
       materialsMs: materialsAt - startedAt,
       levelsMs: levelsAt - materialsAt,
@@ -1799,7 +1814,7 @@ export class HouseViewer {
 
   private beforeFrame() {
     if (this.capturing) return;
-    if (this.levelsPending) this.buildPendingLevels();
+    if (this.levelsPending && !this.priming) this.buildPendingLevels();
     const revision = furnitureRevision(this.scene);
     if (revision !== this.furnitureRevision) {
       this.furnitureRevision = revision;

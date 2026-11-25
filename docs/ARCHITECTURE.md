@@ -618,7 +618,10 @@ last call, and read back at start-up.
   the page for seconds. The render loop spots a view not yet in `ViewWarmth`, skips drawing,
   tells the host (`onPreparing`: `#loading` over the viewport; at start-up `.loading-startup` covers the whole page, header and sidebar included, which would otherwise look alive while the links stall the page; with a bar fed by `onPreparingProgress`: each cutaway state an equal share, inside it the share of its new programs linked, only growing and held under 95 % until ready) and draws until the engine reports every effect ready and the sun shadow map has settled, three frames in a row (receivers relink once their shadow is ready). Automatic Vue 3D cutaways prepare full walls, lowered walls and the restored camera-facing cut in turn, with the actual view's lighting and shadow policy. Each state refreshes and settles the shadow map too; the camera stays in place. All states share the same 20 s budget. `tests/view-preparation.test.ts` drives the real viewer through preparation, rotation and zoom on a NullEngine and checks its shader-cache keys. Software renderers (SwiftShader, llvmpipe, WARP) skip it: they link slowly and
   front-loading would only multiply their work, so CI e2e keeps the on-demand behaviour.
-  The start-up is the same path with the landing view, so nothing else needs to call it. A new
+  The start-up is the same path with the landing view, so nothing else needs to call it, with
+  one head start: the session's first `load` draws one image before returning (hardware
+  renderers only, no other level built for it), so the driver links the first programs in
+  parallel while the host builds the furniture and the interface. A new
   scene (project or level change) releases the cached effects and makes every view cold again.
   `mybob.shaders()` lists every link with its duration and the preparation marks. Its first
   lines summarise what to check: whether the engine has `KHR_parallel_shader_compile`, each
