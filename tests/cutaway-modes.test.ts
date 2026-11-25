@@ -15,7 +15,8 @@ import { DirectionalLight } from '@babylonjs/core/Lights/directionalLight';
 import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import type { Level } from '../src/model/types';
 import { buildHouse } from '../src/scene/buildHouse';
-import type { Materials } from '../src/scene/materials';
+import { createMaterials, type Materials } from '../src/scene/materials';
+import type { PBRMaterial } from '@babylonjs/core/Materials/PBR/pbrMaterial';
 import { buildPlanOpenings } from '../src/scene/planOpenings';
 import { buildWallCutaway } from '../src/scene/wallCutaway';
 import { HouseViewer } from '../src/scene/viewer';
@@ -517,4 +518,56 @@ test('the plan orientation is measured only when the camera moved, and the heads
   assert.equal(frames.length, before, 'no overlay frame while immersive');
   scene.dispose();
   engine.dispose();
+});
+
+test('cutaway clones keep the tiled relief and roughness maps of their originals', (t) => {
+  const engine = new NullEngine();
+  // The parquet albedo is drawn on a canvas, which Node lacks.
+  t.mock.method(engine, 'createCanvas', (width: number, height: number) => ({
+    width,
+    height,
+    getContext: () => ({
+      fillRect() {},
+      beginPath() {},
+      moveTo() {},
+      bezierCurveTo() {},
+      stroke() {},
+    }),
+  }));
+  const scene = new Scene(engine);
+  try {
+    const materials = createMaterials(scene);
+    // A French window's handles are the steel a cut wall carries.
+    const french: Level = {
+      ...level,
+      walls: level.walls.map((wall) =>
+        wall.id === 'east'
+          ? {
+              ...wall,
+              openings: [{ id: 'french', kind: 'window', offset: 1, width: 1, height: 2.1 }],
+            }
+          : wall,
+      ),
+    };
+    buildHouse(french, scene, materials);
+    const cutaway = buildWallCutaway(scene, french);
+    cutaway.apply('low', [2, -5]);
+    for (const original of [materials.plaster, materials.metal]) {
+      const clone = scene.getMaterialByName(`wall-cutaway:${original.name}`) as PBRMaterial;
+      assert.ok(clone, `${original.name} is cut somewhere in the fixture`);
+      assert.equal(clone.bumpTexture, original.bumpTexture, `${original.name} relief`);
+      assert.equal(
+        clone.microSurfaceTexture,
+        original.microSurfaceTexture,
+        `${original.name} roughness`,
+      );
+    }
+    const textures = scene.textures.length;
+    cutaway.dispose();
+    assert.equal(scene.textures.length, textures, 'disposing the clones keeps shared textures');
+    assert.ok(materials.plaster.bumpTexture!.getInternalTexture(), 'the original stays usable');
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
 });
