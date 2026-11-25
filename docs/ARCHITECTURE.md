@@ -550,7 +550,9 @@ last call, and read back at start-up.
   leaves it as it is).
   A view that keeps up with the screen's refresh rate sharpens instead, one step per series
   (owner 2026-11-13): a median frame time within 5 % of 60, 75, 90, 100, 120, 144, 165 or
-  240 Hz is the browser waiting for the screen (`refreshIntervalOf`). The cap follows the
+  240 Hz is the browser waiting for the screen (`refreshIntervalOf`). Once the screen's own rate
+  is measured (`RefreshRateEstimator`), only that rate counts: 60 fps on a 120 Hz screen is half
+  the rate, not keeping up, and does not sharpen. The cap follows the
   screen's device pixels (`upscaleCap`): 150 % on 4K (also a 4K screen scaled to 150 %),
   125 % on 2K, none below; steps are 10 % apart, the cap last. With several screens the cap
   is read again when the window changes screen (`screen` `change`, resize, focus, and a 2 s

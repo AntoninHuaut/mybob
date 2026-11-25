@@ -368,3 +368,29 @@ test('a tier dropped in this session never comes back by itself', () => {
   assert.equal(resolution.effectTier, 1);
   assert.equal(resolution.scale, SCALE_FLOOR);
 });
+
+/** Feeds `count` images of `frameMs` each on a screen measured at `displayHz`. */
+function feedOn(resolution: AdaptiveResolution, count: number, frameMs: number, displayHz: number) {
+  for (let frame = 0; frame < count; frame++) resolution.update(frameMs, displayHz);
+  return resolution.scale;
+}
+
+test('on a measured 120 Hz screen, 60 fps is not keeping up: a view started low stays there', () => {
+  const resolution = new AdaptiveResolution(EFFECT_TIERS, {
+    start: { scale: SCALE_FLOOR, tier: 0 },
+  });
+  assert.equal(feedOn(resolution, SERIES * 5, 1000 / 60, 120), SCALE_FLOOR);
+});
+
+test('on a measured 60 Hz screen, holding 60 fps sharpens as before', () => {
+  const resolution = new AdaptiveResolution(EFFECT_TIERS, {
+    start: { scale: SCALE_FLOOR, tier: 0 },
+  });
+  assert.equal(feedOn(resolution, SERIES, 1000 / 60, 60), RENDER_SCALES.at(-2));
+});
+
+test('holding a measured 120 Hz screen sharpens, and falling behind it at an up-scale steps back', () => {
+  const resolution = new AdaptiveResolution(0, { cap: 1.25 });
+  assert.equal(feedOn(resolution, SERIES, 1000 / 120, 120), 1.1);
+  assert.equal(feedOn(resolution, SERIES, 1000 / 60, 120), 1, '60 fps is behind 120 Hz');
+});
