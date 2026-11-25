@@ -410,24 +410,16 @@ export function createOrbitOcclusion(
   return createInteriorOcclusion(scene, camera, ORBIT_OCCLUSION);
 }
 
-/** The slice of `DefaultRenderingPipeline` the blooms configure. */
-export type BloomPipeline = Pick<
-  DefaultRenderingPipeline,
-  'bloomEnabled' | 'bloomThreshold' | 'bloomWeight'
->;
-
 /**
  * Applies the validated bloom to a pipeline. The threshold is a parameter
  * because the two cameras read different ceilings: the visit sits at
  * `INTERIOR_BLOOM_THRESHOLD`, the orbit above its flat sky at
  * `ORBIT_BLOOM_THRESHOLD`. The weight is shared.
  *
- * Image processing is left alone: the pipeline's switches write the scene's
- * shared configuration, so turning them off removed tone mapping from every
- * material. With `hdr = false` the pipeline never chains its own pass.
+ * Image processing is left alone: see docs/ARCHITECTURE.md, the walk chain.
  */
-export function configureInteriorBloom(
-  pipeline: BloomPipeline,
+function configureInteriorBloom(
+  pipeline: DefaultRenderingPipeline,
   threshold: number = INTERIOR_BLOOM_THRESHOLD,
 ): void {
   pipeline.bloomThreshold = threshold;

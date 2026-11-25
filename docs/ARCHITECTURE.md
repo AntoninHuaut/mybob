@@ -288,8 +288,8 @@ camera moves. Neither fires during a headset session: nothing in the page is see
   mapping has already run) and lit white walls sit between 0.6 and 0.9 — at 0.6 the whole room
   bloomed and read as a milky sheen on the walls. Only the lamp and the view through the bay
   window exceed the threshold. The blooms never touch their image-processing switches: those
-  write the scene's shared configuration, and turning them off removed tone mapping from every
-  material until reload (#351). With `hdr = false` the pipeline does not chain its own
+  write the scene's shared configuration, so turning them off would remove tone mapping from
+  every material. With `hdr = false` the pipeline does not chain its own
   image-processing pass, so tone mapping still runs once, in the material shaders.
 - Vue 3D has its own occlusion (#205), the walk's pipeline at the overview's scale
   (`ORBIT_OCCLUSION`: 0.5 m radius, 100 m depth range), built by `ViewEffects.updateOrbit` on

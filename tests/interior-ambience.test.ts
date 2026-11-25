@@ -184,7 +184,7 @@ test('an engine without raw textures or a pre-pass degrades to no ambience', () 
   }
 });
 
-test('a visit bloom, then leaving the visit, keeps the scene tone-mapped in the material shaders', () => {
+test('the orbit and walk blooms keep the scene tone-mapped in the material shaders', () => {
   const { engine, scene, camera } = fixture();
   try {
     const config = scene.imageProcessingConfiguration;
@@ -206,11 +206,15 @@ test('a visit bloom, then leaving the visit, keeps the scene tone-mapped in the 
       assert.equal(config.applyByPostProcess, false, `${when}: no pass claims the tone mapping`);
       assert.equal(defines(), true, `${when}: the plaster compiles with IMAGEPROCESSING`);
     };
-    expectShaderToneMapping('Vue 3D');
-    const bloom = createInteriorBloom(scene, camera)!;
-    expectShaderToneMapping('Visite');
-    bloom.dispose();
-    expectShaderToneMapping('after Visite');
+    expectShaderToneMapping('overview');
+    const orbit = createOrbitBloom(scene, camera)!;
+    expectShaderToneMapping('overview with its bloom');
+    const walk = createInteriorBloom(scene, camera)!;
+    expectShaderToneMapping('walk');
+    walk.dispose();
+    expectShaderToneMapping('overview after the walk');
+    orbit.dispose();
+    expectShaderToneMapping('plan');
   } finally {
     scene.dispose();
     engine.dispose();
