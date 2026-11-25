@@ -4,6 +4,7 @@ import type { HouseViewer, FrameInfo } from '../scene/viewer';
 import { number } from './format';
 import { layoutLabels, type LabelBox, type LabelRect } from './labelLayout';
 import type { MeasureBar } from './measureBar';
+import { setAttribute, setHidden, setText } from './domWrites';
 
 type ProjectedView = Pick<
   HouseViewer,
@@ -21,9 +22,12 @@ interface ProjectionPreferences {
 /** Projects scene information into viewport labels and walk HUD; owns no application state. */
 export class ViewportProjection {
   private labelsDirty = true;
-  private preferencesSignature = '';
+  /** What the labels were last projected for, besides the camera. */
+  private readonly projected: unknown[] = [];
   private projectedLevel?: Level;
+  private arrow = '';
   private readonly roomLabels = new Map<string, HTMLElement>();
+  private readonly elements = new Map<string, HTMLElement>();
 
   constructor(
     private readonly viewport: HTMLElement,
@@ -48,8 +52,14 @@ export class ViewportProjection {
       }).observe(viewport);
   }
 
-  private readonly element = <T extends HTMLElement = HTMLElement>(selector: string): T =>
-    this.viewport.querySelector<T>(selector)!;
+  /** Looked up once, and again only once the element left the page (a project reload). */
+  private readonly element = <T extends HTMLElement = HTMLElement>(selector: string): T => {
+    const cached = this.elements.get(selector);
+    if (cached?.isConnected) return cached as T;
+    const found = this.viewport.querySelector<T>(selector)!;
+    this.elements.set(selector, found);
+    return found;
+  };
 
   private roomLabelElement(id: string): HTMLElement | undefined {
     const cached = this.roomLabels.get(id);
@@ -66,21 +76,36 @@ export class ViewportProjection {
     const el = this.element;
     const { showLabels, showDimensions, selectedRoomId, northAngleDeg } = preferences;
     const labelsVisible = viewer.mode !== 'walk' && showLabels && !viewer.measureMode;
-    el('#orientation-arrow').style.transform = `rotate(${frame.planUpDegrees + northAngleDeg}deg)`;
-    const signature = JSON.stringify([
-      preferences,
-      viewer.mode,
-      viewer.measureMode,
-      viewer.measurement,
-      frame.furnitureObstaclesRevision,
-    ]);
+    const arrow = `rotate(${frame.planUpDegrees + northAngleDeg}deg)`;
+    if (arrow !== this.arrow) {
+      this.arrow = arrow;
+      el('#orientation-arrow').style.transform = arrow;
+    }
+    const { a, b } = viewer.measurement ?? {};
+    // Compared and kept in place: no array is built per frame.
+    let changed = false;
+    const keep = (index: number, value: unknown) => {
+      if (this.projected[index] === value) return;
+      this.projected[index] = value;
+      changed = true;
+    };
+    keep(0, showLabels);
+    keep(1, showDimensions);
+    keep(2, selectedRoomId);
+    keep(3, northAngleDeg);
+    keep(4, viewer.mode);
+    keep(5, viewer.measureMode);
+    keep(6, a?.[0]);
+    keep(7, a?.[1]);
+    keep(8, b?.[0]);
+    keep(9, b?.[1]);
+    keep(10, frame.furnitureObstaclesRevision);
     const projectLabels =
       frame.cameraMoved !== false ||
       this.labelsDirty ||
-      signature !== this.preferencesSignature ||
+      changed ||
       viewer.level !== this.projectedLevel;
     this.labelsDirty = false;
-    this.preferencesSignature = signature;
     this.projectedLevel = viewer.level;
     if (projectLabels) {
       // One camera transform and one canvas size for the whole frame (`projector`).
@@ -192,29 +217,35 @@ export class ViewportProjection {
         this.measureBar.moveTo(p);
       }
     }
+    const marker = this.viewport.querySelector<SVGGElement>('#map-marker');
     if (viewer.mode === 'walk') {
-      el('#door-prompt').hidden = !frame.nearDoor || !el('#walk-start').hidden;
-      el('#stair-prompt').hidden = !frame.nearStair || !el('#walk-start').hidden;
+      const starting = !el('#walk-start').hidden;
+      setHidden(el('#door-prompt'), !frame.nearDoor || starting);
+      setHidden(el('#stair-prompt'), !frame.nearStair || starting);
       if (frame.nearStair)
-        el('#stair-prompt-label').textContent =
-          frame.nearStair === 'up' ? 'Monter à l’étage' : 'Descendre';
-      el('#furniture-edit-prompt').hidden =
+        setText(
+          el('#stair-prompt-label'),
+          frame.nearStair === 'up' ? 'Monter à l’étage' : 'Descendre',
+        );
+      setHidden(
+        el('#furniture-edit-prompt'),
         !frame.nearFurnitureId ||
-        !el('#walk-start').hidden ||
-        !!this.viewport.ownerDocument.querySelector('dialog[open]');
-      el('#resume-walk').hidden = frame.locked || !el('#walk-start').hidden;
-      const marker = this.viewport.querySelector<SVGGElement>('#map-marker');
+          starting ||
+          !!this.viewport.ownerDocument.querySelector('dialog[open]'),
+      );
+      setHidden(el('#resume-walk'), frame.locked || starting);
       if (marker) {
-        marker.setAttribute('visibility', 'visible');
-        marker.setAttribute(
+        setAttribute(marker, 'visibility', 'visible');
+        setAttribute(
+          marker,
           'transform',
           `translate(${frame.position[0]} ${frame.position[1]}) rotate(${frame.headingDegrees})`,
         );
       }
       const name = viewer.level.rooms.find((r) => r.id === frame.roomId)?.name ?? viewer.level.name;
-      if (el('#mini-caption').textContent !== name) el('#mini-caption').textContent = name;
-    } else {
-      this.viewport.querySelector('#map-marker')?.setAttribute('visibility', 'hidden');
+      setText(el('#mini-caption'), name);
+    } else if (marker) {
+      setAttribute(marker, 'visibility', 'hidden');
     }
   }
 }

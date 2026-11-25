@@ -63,7 +63,8 @@ export function wakesScene(
  */
 export class RenderScheduler {
   private remaining = RENDER_SETTLE_FRAMES;
-  private signature = '';
+  /** The last signature, rounded: the caller refills its own buffer every turn. */
+  private signature: number[] = [];
   private lastRender = Number.NEGATIVE_INFINITY;
   private moved = false;
 
@@ -73,20 +74,18 @@ export class RenderScheduler {
   }
 
   /**
-   * `signature` describes the camera; `busy` is asked only once the scene is
-   * otherwise settled, so a costly check never runs while images are drawn anyway.
+   * `signature` describes the camera, compared to 1e-4 (finer is invisible); `busy` is asked
+   * only once the scene is otherwise settled, so a costly check never runs while images are
+   * drawn anyway.
    */
   shouldRender(
     now: number,
-    signature: string,
+    signature: ArrayLike<number>,
     busy: () => boolean,
     refreshIdle: boolean = true,
   ): boolean {
-    this.moved = signature !== this.signature;
-    if (this.moved) {
-      this.signature = signature;
-      this.remaining = RENDER_SETTLE_FRAMES;
-    }
+    this.moved = this.compare(signature);
+    if (this.moved) this.remaining = RENDER_SETTLE_FRAMES;
     if (this.remaining === 0 && busy()) this.remaining = RENDER_SETTLE_FRAMES;
     if (this.remaining > 0) {
       this.remaining--;
@@ -98,6 +97,21 @@ export class RenderScheduler {
       return true;
     }
     return false;
+  }
+
+  /** Whether `signature` differs from the last one, which it then replaces. No allocation. */
+  private compare(signature: ArrayLike<number>): boolean {
+    let changed = signature.length !== this.signature.length;
+    this.signature.length = signature.length;
+    for (let index = 0; index < signature.length; index++) {
+      // `|| 0` folds NaN (which never equals itself) and -0 into 0: neither is a motion.
+      const rounded = Math.round(signature[index] * 1e4) || 0;
+      if (rounded !== this.signature[index]) {
+        this.signature[index] = rounded;
+        changed = true;
+      }
+    }
+    return changed;
   }
 
   /** The camera signature changed at the last `shouldRender`. */

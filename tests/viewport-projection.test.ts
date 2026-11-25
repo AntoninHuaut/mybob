@@ -176,3 +176,25 @@ test('furniture revisions move labels away from changed obstacles without idle l
   projection.update(view, { ...still, furnitureObstaclesRevision: 2 }, preferences);
   assert.equal(queries, 2);
 });
+
+test('a still frame drawn again writes nothing to the page, in Vue 3D or in the visit', async () => {
+  for (const mode of ['overview', 'walk'] as const) {
+    const { window, viewport, projection, view } = setup();
+    Object.assign(view, { mode });
+    const still = { ...frame, cameraMoved: false };
+    projection.update(view, still, preferences);
+    const records: unknown[] = [];
+    const observer = new window.MutationObserver((list) => records.push(...list));
+    observer.observe(viewport as unknown as Parameters<typeof observer.observe>[0], {
+      attributes: true,
+      characterData: true,
+      childList: true,
+      subtree: true,
+    });
+    projection.update(view, still, preferences);
+    projection.update(view, still, { ...preferences });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    observer.disconnect();
+    assert.equal(records.length, 0, `${mode}: no DOM write for an unchanged frame`);
+  }
+});

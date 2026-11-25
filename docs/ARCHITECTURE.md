@@ -67,6 +67,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Headset report          | `src/scene/headsetReport.ts`                                                 | Headset frame-time median/p95, missed refreshes, rates, scale, foveation; shown on exit in a `?diagnostic` session                          |
 | Frame profiler          | `src/scene/frameProfiler.ts`                                                 | `mybob.profile(s)`: GPU/CPU time and draw calls per image of the current view, loaded on demand                                             |
 | Performance report      | `src/ui/performanceReport.ts`                                                | `?diagnostic` link: measures every view and shows a report to copy, no console needed                                                       |
+| Per-frame DOM writes    | `src/ui/domWrites.ts`                                                        | Write-if-changed helpers for overlays and toolbars updated after every drawn image                                                          |
 | Screen-width lines      | `src/scene/screenLines.ts`                                                   | CSS-width dimension/measurement polylines, resize and material ownership                                                                    |
 | Measurement             | `src/scene/measurement.ts`, `measureTool.ts`                                 | Snapping to the plan axes; `MeasureTool`: live, pinned and cleared measurements                                                             |
 | Sun                     | `src/scene/solar.ts`                                                         | NOAA equations, IANA time zones                                                                                                             |
@@ -199,7 +200,7 @@ are explicit, while project loading and share-link adoption keep their existing 
 `onFrame` fires before Babylon updates the camera (HUD state); `ViewportProjection` runs from
 `onRendered`, after the image is drawn, because `viewer.project` only reads the camera's
 current matrices: projected before the render, a label trails its room by one frame while the
-camera moves.
+camera moves. Neither fires during a headset session: nothing in the page is seen from it.
 
 ## Walk and rendering
 
@@ -522,7 +523,9 @@ last call, and read back at start-up.
   An interaction in the page (pointer, keyboard, input), the window regaining focus or the
   tab becoming visible, a camera movement, a swinging door or a compiling shader restarts
   drawing. A scene change that comes from none of these signals (timer, loading, animation
-  driven by `requestAnimationFrame`) calls `viewer.requestRender()`.
+  driven by `requestAnimationFrame`) calls `viewer.requestRender()`. The camera is read on
+  every display frame, drawn or not, into one reused number buffer (`cameraSignature`),
+  compared to 1e-4: no string is built per frame.
   Where no temporal effect is on screen (Plan) one frame per second still catches a change
   nobody announced. Walk (TAA and occlusion) and the 3D view (orbit TAA) have no such
   refresh: each image jitters the camera and re-reads the depth, so the occlusion and the
@@ -580,8 +583,13 @@ last call, and read back at start-up.
 - Room/dimension projection skips still frames unless preferences, level, measurements or
   page interactions invalidate it. A separate furniture-obstacle revision also invalidates labels
   after live placement, selection/overlay rebuilding and final Plan label layout; it does not
-  invalidate shadows or lighting. Walk prompts still update each frame; their ray reuses its
-  hit until the camera, a door or furniture changes. Plan furniture labels cache camera and
+  invalidate shadows or lighting. Walk prompts, the minimap marker, the orientation arrow and
+  the furniture toolbar are checked each frame but written only when a value changes
+  (`ui/domWrites.ts`): a still frame drawn again writes nothing to the page. The plan's north
+  angle is measured again only when the camera or the level changed. The walk prompts' ray
+  reuses its hit until the camera, a door or furniture changes. Babylon already picks lazily on
+  pointer moves (nothing reads that pick), so `skipPointerMovePicking` stays off: it would make
+  Babylon build a picking ray on every move. Plan furniture labels cache camera and
   overlay identity. Direct mode/cutaway changes still apply immediately.
 - A view's shaders are linked behind an overlay, the first time the view is drawn
   (`shaderWarmup.ts`, `viewer.prepareView`). Babylon links a material the first time it is drawn

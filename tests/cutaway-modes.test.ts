@@ -469,3 +469,52 @@ test('walk aim reuses still hits and furniture changes refresh aim and shadow ca
   scene.dispose();
   engine.dispose();
 });
+
+test('the plan orientation is measured only when the camera moved, and the headset emits no 2D frame', (t) => {
+  const { engine, scene, viewer } = fixture();
+  const scheduler = { cameraMoved: true, request() {} };
+  Object.assign(viewer, {
+    engine,
+    renderScheduler: scheduler,
+    house: { doors: [] },
+    paused: true,
+    currentMode: 'plan',
+    keys: new HeldKeys(),
+    aim: new WalkAim(),
+    walk: new UniversalCamera('walk', new Vector3(1, 1.65, 1), scene),
+  });
+  t.mock.method(engine, 'getDeltaTime', () => 16);
+  const project = t.mock.method(viewer, 'project', (point: [number, number]) => ({
+    x: point[0],
+    y: point[1],
+    visible: true,
+  }));
+  const frames: number[] = [];
+  viewer.onFrame = (frame) => frames.push(frame.planUpDegrees);
+  const draw = () => (viewer as unknown as { beforeFrame(): void }).beforeFrame();
+  draw();
+  const measured = project.mock.callCount();
+  assert.ok(measured > 0);
+  scheduler.cameraMoved = false;
+  draw();
+  draw();
+  assert.equal(project.mock.callCount(), measured, 'a still camera keeps the last angle');
+  assert.deepEqual(frames, [frames[0], frames[0], frames[0]]);
+  scheduler.cameraMoved = true;
+  draw();
+  assert.ok(project.mock.callCount() > measured);
+
+  let steps = 0;
+  const immersive = {
+    step: () => steps++,
+    position: [1, 1],
+    camera: viewer.walk,
+  };
+  Object.assign(viewer, { headset: { walk: immersive } });
+  const before = frames.length;
+  draw();
+  assert.equal(steps, 1, 'the headset still steps');
+  assert.equal(frames.length, before, 'no overlay frame while immersive');
+  scene.dispose();
+  engine.dispose();
+});

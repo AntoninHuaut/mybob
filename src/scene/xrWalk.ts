@@ -435,10 +435,21 @@ export interface ImmersiveHost {
 }
 
 /** The controllers this walk still holds that the session no longer reports. */
-export function staleSources<T>(held: Iterable<T>, live: Iterable<T>): T[] {
-  const current = new Set(live);
-  return [...held].filter((source) => !current.has(source));
+export function staleSources<T>(held: Iterable<T>, live: Iterable<T>): readonly T[] {
+  // Runs every frame: nothing is allocated unless a controller went stale.
+  let stale: T[] | undefined;
+  for (const source of held) {
+    let found = false;
+    for (const current of live)
+      if (current === source) {
+        found = true;
+        break;
+      }
+    if (!found) (stale ??= []).push(source);
+  }
+  return stale ?? NO_SOURCES;
 }
+const NO_SOURCES: readonly never[] = [];
 
 interface Pointer {
   handedness: XRHandedness;
@@ -493,6 +504,9 @@ export class ImmersiveWalk {
   /** Carries the visitor in the plan: the camera pose is local to it. */
   readonly rig: TransformNode;
   private readonly pointers = new Map<XRInputSource, Pointer>();
+  /** Reused every frame: the controllers' states and the door/stair ray. */
+  private readonly states = new Map<XRHandedness, ControllerState>();
+  private readonly pickRay = new Ray(Vector3.Zero(), Vector3.Forward(true), 1);
   private readonly material: StandardMaterial;
   private readonly marker: Mesh;
   /** Dots along the teleport arc, one thin instance per sample. */
@@ -638,7 +652,8 @@ export class ImmersiveWalk {
       pointer.root.dispose();
       this.pointers.delete(source);
     }
-    const states = new Map<XRHandedness, ControllerState>();
+    const states = this.states;
+    states.clear();
     for (const source of session.inputSources) {
       if (source.targetRayMode !== 'tracked-pointer') continue;
       const pointer = this.pointer(source);
@@ -658,8 +673,9 @@ export class ImmersiveWalk {
       pointer.ray.scaling.z = hit?.hit ? hit.distance : XR_DOOR_REACH;
       const pressed = state.trigger && !pointer.trigger;
       pointer.trigger = state.trigger;
-      if (pressed && target?.kind === 'door') this.host.toggleDoor(target.id);
-      else if (pressed && target?.kind === 'stair') {
+      if (pressed && target?.kind === 'door') {
+        this.host.toggleDoor(target.id);
+      } else if (pressed && target?.kind === 'stair') {
         this.cancelAim();
         this.host.takeStair(target.id, target.direction);
       }
@@ -989,8 +1005,13 @@ export class ImmersiveWalk {
 
   /** The hand's controller, a tracked one first. */
   private pointerFor(hand: XRHandedness): Pointer | undefined {
-    const hands = [...this.pointers.values()].filter((p) => p.handedness === hand);
-    return hands.find((p) => p.root.isEnabled()) ?? hands[0];
+    let first: Pointer | undefined;
+    for (const pointer of this.pointers.values()) {
+      if (pointer.handedness !== hand) continue;
+      if (pointer.root.isEnabled()) return pointer;
+      first ??= pointer;
+    }
+    return first;
   }
 
   /** Drops an aim in progress without jumping. */
@@ -1093,14 +1114,20 @@ export class ImmersiveWalk {
     return hit;
   }
 
+  /**
+   * The door or stair `pointer` aims at, with one reused ray. Not cached across frames: tracking
+   * jitter moves a held controller anyway, and a swinging door changes the hit.
+   */
   private pick(pointer: Pointer, length: number) {
     const root = pointer.root;
-    root.computeWorldMatrix(true);
-    const origin = root.getAbsolutePosition().clone();
-    const direction = Vector3.TransformNormal(Vector3.Forward(true), root.getWorldMatrix());
-    direction.normalize();
+    const matrix = root.computeWorldMatrix(true);
+    const ray = this.pickRay;
+    ray.origin.copyFrom(root.getAbsolutePosition());
+    Vector3.TransformNormalToRef(Vector3.Forward(true), matrix, ray.direction);
+    ray.direction.normalize();
+    ray.length = length;
     // The default predicate: pickable, enabled and visible. The pointers are not pickable.
-    return this.host.scene.pickWithRay(new Ray(origin, direction, length));
+    return this.host.scene.pickWithRay(ray);
   }
 
   private pointer(source: XRInputSource): Pointer {

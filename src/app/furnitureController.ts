@@ -21,6 +21,7 @@ import {
   unlinkFurniture,
 } from '../furniture/groups';
 import { closeDialog, el, openDialog, pauseForDialog, toast } from './dom';
+import { setDisabled, setHidden, setText, setTitle } from '../ui/domWrites';
 import { app, READ_ONLY_TOAST } from './state';
 import { setMode, setSidebar, syncDisplayControls } from './viewChrome';
 import { scheduleLinkHashUpdate } from './shareLinkSync';
@@ -328,25 +329,30 @@ export function updateFurnitureContext() {
     viewer.goToMode ||
     document.querySelector('dialog[open]')
   ) {
-    toolbar.hidden = true;
+    setHidden(toolbar, true);
     return;
   }
-  el('#furniture-context-name').textContent = item.name;
-  el('#furniture-group-count').hidden = furnitureContextMembers.length < 2;
-  el('#furniture-group-count').textContent = `${furnitureContextMembers.length} liés`;
-  el('#furniture-context-name').title =
+  // Called on every frame while a piece is selected: only changed values are written.
+  setText(el('#furniture-context-name'), item.name);
+  setHidden(el('#furniture-group-count'), furnitureContextMembers.length < 2);
+  setText(el('#furniture-group-count'), `${furnitureContextMembers.length} liés`);
+  setTitle(
+    el('#furniture-context-name'),
     furnitureContextMembers.length > 1
       ? furnitureContextMembers.map((member) => member.name).join(' + ')
-      : item.name;
+      : item.name,
+  );
   toolbar
     .querySelectorAll<HTMLButtonElement>('[data-rotate-selected]')
-    .forEach((button) => (button.disabled = item.locked));
-  el<HTMLButtonElement>('#undo-selected-furniture').disabled = !furnitureHistory.canUndo;
-  el<HTMLButtonElement>('#redo-selected-furniture').disabled = !furnitureHistory.canRedo;
-  el('#table-chairs').hidden = item.kind !== 'table';
-  el<HTMLButtonElement>('#move-selected-furniture').disabled =
-    item.locked || furnitureContextMembers.some((member) => member.locked);
-  toolbar.hidden = false;
+    .forEach((button) => setDisabled(button, item.locked));
+  setDisabled(el<HTMLButtonElement>('#undo-selected-furniture'), !furnitureHistory.canUndo);
+  setDisabled(el<HTMLButtonElement>('#redo-selected-furniture'), !furnitureHistory.canRedo);
+  setHidden(el('#table-chairs'), item.kind !== 'table');
+  setDisabled(
+    el<HTMLButtonElement>('#move-selected-furniture'),
+    item.locked || furnitureContextMembers.some((member) => member.locked),
+  );
+  setHidden(toolbar, false);
 }
 
 export function selectFurniture(id: string | undefined) {
