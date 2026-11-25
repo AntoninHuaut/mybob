@@ -28,6 +28,8 @@ import { icon } from './ui/icons';
 import { escapeHtml as esc } from './ui/format';
 import { ViewportProjection } from './ui/viewportProjection';
 import { StairNavigation } from './ui/stairNavigation';
+import { setAttribute } from './ui/domWrites';
+import { pointInPolygon } from './model/geometry';
 import { isShareLink } from './model/shareLink';
 import { app } from './app/state';
 import { activeButton, el, openDialog, pauseForDialog, toast } from './app/dom';
@@ -173,10 +175,19 @@ function wireViewer(viewer: HouseViewer) {
     loadLevel,
     el('#floor-navigation'),
   );
+  const viewport = el('#viewport');
   viewer.onFrame = () => {
     if (!app.current) return;
     frameRate.update(performance.now(), viewer.engine.getFps());
     updateFurnitureContext();
+    // Test hook only: lets e2e prove the visitor crossed into another room.
+    const room =
+      viewer.mode === 'walk'
+        ? viewer.level.rooms.find((r) =>
+            pointInPolygon([viewer.walk.position.x, viewer.walk.position.z], r.polygon),
+          )
+        : undefined;
+    setAttribute(viewport, 'data-walk-room', room?.id ?? '');
   };
   // After the image is drawn: the camera matrices are then the ones the rooms were drawn with.
   viewer.onRendered = (frame) => {
