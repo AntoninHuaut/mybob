@@ -433,33 +433,51 @@ export function surfaceMapData(): SurfaceMaps {
 }
 
 /** Furniture maps tile once per metre, on the world-scale UVs of `beveledBox`. */
-const FURNITURE_SIZE = 256;
+const FURNITURE_SIZE = 512;
+const FURNITURE_WOOD_SIZE = 1024;
 
-/** Long, slightly wavy grain along U: the albedo darkens the finish colour between 0.72 and 1. */
+const wrap = (value: number) => value - Math.floor(value);
+
+/**
+ * Laminate walnut along U: crisp late-wood lines of uneven spacing and strength, bent into
+ * gentle arcs, over broad tone bands and a fine pore texture. 1 texel is 1 mm.
+ */
 function furnitureGrain(size: number): Float32Array {
   const field = new Float32Array(size * size);
+  let low = Infinity,
+    high = -Infinity;
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const u = x / size,
-        v = y / size;
-      const warp = fbm(u, v, 2, 4, 3, 191) * 6;
-      const rings = 0.5 + 0.5 * Math.sin((v * 18 + warp) * Math.PI * 2);
-      const streaks = fbm(u, v, 1, 64, 3, 193);
-      field[y * size + x] = rings * 0.55 + streaks * 0.45;
+        v0 = y / size;
+      const bend =
+        (fbm(u, v0, 1, 3, 2, 191) - 0.5) * 0.05 + (fbm(u, v0, 4, 2, 2, 192) - 0.5) * 0.01;
+      const v = wrap(v0 + bend);
+      const ring = wrap(v * 90 + fbm(u, v, 1, 6, 3, 193) * 14);
+      const line = Math.exp(-((ring - 0.5) ** 2) / 0.004);
+      const strength = fbm(u, v, 3, 40, 2, 194) ** 2 * 1.6;
+      const bands = fbm(u, v, 1, 7, 4, 195);
+      const streak = Math.min(1, Math.max(0, (0.42 - bands) * 6));
+      const pores = fbm(u, v, 8, 384, 1, 196);
+      const value = 1 - line * strength * 0.45 - (1 - bands) * 0.6 - streak * 0.35 - pores * 0.1;
+      field[y * size + x] = value;
+      low = Math.min(low, value);
+      high = Math.max(high, value);
     }
+  for (let i = 0; i < field.length; i++) field[i] = (field[i] - low) / (high - low);
   return field;
 }
 
-/** Cleft relief of a slate or stone laminate: broad undulations under a fine grain. */
+/** Slate laminate: soft clouds and a gentle cleft, with no streak that could read as a seam. */
 function furnitureStone(size: number): Float32Array {
   const field = new Float32Array(size * size);
   for (let y = 0; y < size; y++)
     for (let x = 0; x < size; x++) {
       const u = x / size,
         v = y / size;
-      const broad = fbm(u, v, 3, 3, 4, 197);
-      const cleft = Math.abs(fbm(u, v, 6, 6, 3, 199) - 0.5) * 2;
-      field[y * size + x] = broad * 0.7 + cleft * 0.3;
+      const clouds = fbm(u, v, 2, 2, 4, 197);
+      const cleft = 1 - Math.abs(fbm(u, v, 4, 4, 3, 199) - 0.5) * 2;
+      field[y * size + x] = clouds * 0.75 + cleft * 0.25;
     }
   return field;
 }
@@ -484,13 +502,14 @@ let furnitureCached: FurnitureMaps | undefined;
 export function furnitureMapData(): FurnitureMaps {
   if (furnitureCached) return furnitureCached;
   const size = FURNITURE_SIZE;
-  const grain = furnitureGrain(size);
+  const woodSize = FURNITURE_WOOD_SIZE;
+  const grain = furnitureGrain(woodSize);
   const stone = furnitureStone(size);
   furnitureCached = {
-    woodAlbedo: { size, data: tone(grain, size, 0.72) },
-    woodNormal: { size, data: normalFromHeight(grain, size, 0.8) },
-    stoneAlbedo: { size, data: tone(stone, size, 0.86) },
-    stoneNormal: { size, data: normalFromHeight(stone, size, 2.5) },
+    woodAlbedo: { size: woodSize, data: tone(grain, woodSize, 0.45) },
+    woodNormal: { size: woodSize, data: normalFromHeight(grain, woodSize, 0.5) },
+    stoneAlbedo: { size, data: tone(stone, size, 0.93) },
+    stoneNormal: { size, data: normalFromHeight(stone, size, 1.2) },
   };
   return furnitureCached;
 }
