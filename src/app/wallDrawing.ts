@@ -8,7 +8,7 @@ import { editableProject, openPlanEditBar, syncPlanEditBar } from './planEditBar
 import { applyPlanEdit } from './planHistory';
 import { installProjectDocument } from './projectLibrary';
 import { app } from './state';
-import { setMode, syncDisplayControls } from './viewChrome';
+import { setMode, setSidebar, syncDisplayControls } from './viewChrome';
 
 /** Pointer distance, in CSS pixels, within which a corner or a wall attracts the draft. */
 const SNAP_PIXELS = 12;
@@ -82,6 +82,8 @@ export async function startNewHouse() {
     const project = emptyHouse(crypto.randomUUID());
     if (!(await installProjectDocument({ project, staged: [], variants: undefined }))) return;
     openPlanEditBar();
+    // On a narrow screen the project drawer covers the plan to draw on.
+    if (!matchMedia('(min-width: 761px)').matches) setSidebar(false);
     setMode('plan');
     startWallTool();
   } catch (error) {

@@ -555,7 +555,11 @@ export class HouseViewer {
   private attachSceneInput(scene: Scene) {
     scene.onPointerObservable.add((event) => {
       const move = event.type === PointerEventTypes.POINTERMOVE;
-      const tap = event.type === PointerEventTypes.POINTERTAP && event.event.button === 0;
+      // A quick second click may come as a double tap, as with « Mesurer ».
+      const tap =
+        (event.type === PointerEventTypes.POINTERTAP ||
+          event.type === PointerEventTypes.POINTERDOUBLETAP) &&
+        event.event.button === 0;
       if (this.planPointer && this.mode === 'plan' && (move || tap)) {
         const point = this.groundPoint(scene.pointerX, scene.pointerY);
         const kind = move ? 'move' : 'tap';
