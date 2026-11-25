@@ -3,6 +3,14 @@ import { alongWall, pointInPolygon } from './geometry';
 
 /** A paint colour, `#rrggbb`, lower case once normalised. */
 export const PAINT_COLOR = /^#[0-9a-fA-F]{6}$/;
+export const DEFAULT_PLASTER_COLOR = '#eeede8';
+
+export function wallFacePaint(room: Room, wallId: string, side: WallFacePaint['side']) {
+  return (
+    room.wallFaces?.find((face) => face.wallId === wallId && face.side === side)?.color ??
+    room.wallColor
+  );
+}
 
 /** Suggested paints of the room card; any other colour stays available through the picker. */
 export const PAINT_PALETTE: readonly { color: string; name: string }[] = [

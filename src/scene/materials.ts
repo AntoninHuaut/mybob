@@ -5,6 +5,7 @@ import { StandardMaterial } from '@babylonjs/core/Materials/standardMaterial';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import type { Scene } from '@babylonjs/core/scene';
 import type { HouseProject } from '../model/types';
+import { DEFAULT_PLASTER_COLOR } from '../model/paint';
 import { createSurfaceTextures } from './surfaceTextures';
 
 /**
@@ -22,7 +23,7 @@ export function createMaterials(scene: Scene, finishes: HouseProject['finishes']
   const surfaces = createSurfaceTextures(scene);
 
   const plaster = new PBRMaterial('white-plaster', scene);
-  plaster.albedoColor = Color3.FromHexString(finishes.wallColor ?? '#eeede8');
+  plaster.albedoColor = Color3.FromHexString(finishes.wallColor ?? DEFAULT_PLASTER_COLOR);
   plaster.roughness = 0.93;
   plaster.metallic = 0;
   plaster.maxSimultaneousLights = 6;

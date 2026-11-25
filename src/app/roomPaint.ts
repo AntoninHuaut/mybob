@@ -1,6 +1,13 @@
 import { userMessage } from '../errorMessage';
 import type { HouseProject, Room, WallFacePaint } from '../model/types';
-import { PAINT_COLOR, parsePaintOverrides, withPaint, type PaintOverrides } from '../model/paint';
+import {
+  DEFAULT_PLASTER_COLOR,
+  PAINT_COLOR,
+  parsePaintOverrides,
+  wallFacePaint,
+  withPaint,
+  type PaintOverrides,
+} from '../model/paint';
 import { roomPaintHtml, syncRoomPaint } from '../ui/roomPanels';
 import { toast } from './dom';
 import { app, READ_ONLY_TOAST } from './state';
@@ -91,6 +98,17 @@ export function mountRoomPaint(room: Room, before: Element, onPaint: () => void)
   before.before(group);
   const button = group.querySelector<HTMLButtonElement>('[data-paint-brush]')!;
   const hint = group.querySelector<HTMLElement>('[data-brush-hint]')!;
+  const sample = group.querySelector<HTMLButtonElement>('[data-paint-sample]')!;
+  const paintHint = hint.textContent;
+  let sampling = false;
+  const setSampling = (active: boolean) => {
+    sampling = active;
+    sample.setAttribute('aria-pressed', String(active));
+    hint.textContent = active
+      ? 'Cliquez sur le mur dont vous voulez reprendre la teinte.'
+      : paintHint;
+  };
+  sample.addEventListener('click', () => setSampling(!sampling));
   const clear = group.querySelector<HTMLButtonElement>('[data-paint-clear]')!;
   let brushColor: string | undefined;
   const syncBrush = () => {
@@ -123,10 +141,13 @@ export function mountRoomPaint(room: Room, before: Element, onPaint: () => void)
       room.wallColor ?? group.querySelector<HTMLInputElement>('[data-paint-custom]')!.value;
     syncBrush();
     hint.hidden = false;
+    sample.hidden = false;
     button.setAttribute('aria-pressed', 'true');
     button.textContent = 'Terminer';
     viewer.canvas.classList.add('painting');
     signal.addEventListener('abort', () => {
+      setSampling(false);
+      sample.hidden = true;
       hint.hidden = true;
       button.setAttribute('aria-pressed', 'false');
       button.textContent = 'Peindre un mur';
@@ -176,6 +197,19 @@ export function mountRoomPaint(room: Room, before: Element, onPaint: () => void)
         event.stopImmediatePropagation();
         if (!click) return;
         const face = viewer.pickWallFace(event.clientX, event.clientY);
+        if (sampling) {
+          const source =
+            face && viewer.level.rooms.find((candidate) => candidate.id === face.roomId);
+          if (face && source) {
+            brushColor =
+              wallFacePaint(source, face.wallId, face.side) ??
+              app.current.finishes?.wallColor ??
+              DEFAULT_PLASTER_COLOR;
+            setSampling(false);
+            syncBrush();
+          } else toast('Cliquez sur la face d’un mur pour en prélever la teinte.');
+          return;
+        }
         if (face?.roomId === room.id) {
           if (paintRoom(room, brushColor, { wallId: face.wallId, side: face.side })) onPaint();
         } else toast('Cliquez sur la face d’un mur de la pièce sélectionnée.');
@@ -185,6 +219,7 @@ export function mountRoomPaint(room: Room, before: Element, onPaint: () => void)
   });
   const apply = (color: string | undefined) => {
     if (brush) {
+      setSampling(false);
       brushColor = color;
       syncBrush();
       return;

@@ -357,11 +357,12 @@ test('the wall brush keeps the room colour, persists its click and exits on Esca
   app.current = { ...project, levels: [level] };
   win.document.body.innerHTML = '<button id="before"></button><canvas></canvas>';
   const canvas = win.document.querySelector('canvas')!;
+  let pickedRoom = 'a';
   app.viewer = {
     level,
     canvas,
     mode: 'overview',
-    pickWallFace: () => ({ roomId: 'a', wallId: 'bas', side: 1 }),
+    pickWallFace: () => ({ roomId: pickedRoom, wallId: 'bas', side: 1 }),
     repaintWalls() {},
   } as unknown as typeof app.viewer;
   t.after(() => {
@@ -385,6 +386,14 @@ test('the wall brush keeps the room colour, persists its click and exits on Esca
   assert.deepEqual(paintedProject(stored).levels[0].rooms[0].wallFaces, [
     { wallId: 'bas', side: 1, color: '#34495e' },
   ]);
+  level.rooms[1].wallFaces = [{ wallId: 'bas', side: 1, color: '#975d41' }];
+  pickedRoom = 'b';
+  document.querySelector<HTMLButtonElement>('[data-paint-sample]')!.click();
+  click(0);
+  assert.equal(paintedProject(stored).levels[0].rooms[0].wallFaces?.[0].color, '#34495e');
+  pickedRoom = 'a';
+  click(0);
+  assert.equal(paintedProject(stored).levels[0].rooms[0].wallFaces?.[0].color, '#975d41');
   win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape' }));
   assert.equal(button.getAttribute('aria-pressed'), 'false');
   button.click();
