@@ -16,7 +16,7 @@ import {
   createOrbitTaa,
   INTERIOR_ENVIRONMENT_INTENSITY,
 } from './interiorAmbience';
-import { EFFECT_TIERS } from './adaptiveResolution';
+import { BLOOM_TIER, OCCLUSION_TIER } from './adaptiveResolution';
 
 /** The occlusion fades out over this long instead of disappearing in one image. */
 export const OCCLUSION_FADE_MS = 800;
@@ -73,6 +73,8 @@ export class ViewEffects {
   private bloom?: Bloom;
   private orbitBloom?: Bloom;
   private orbitAttached = false;
+  /** The camera the orbit bloom is attached to, to detach it at the bloom tier. */
+  private orbitCamera?: Camera;
   private orbitTaa?: OrbitTemporal;
   private orbitTaaAttempted = false;
   private orbitOcclusion?: Occlusion;
@@ -125,12 +127,12 @@ export class ViewEffects {
     }
     // Babylon appends pipelines to the camera: temporal, occlusion, then bloom.
     this.taa ??= this.create.taa(this.scene, state.camera);
-    if (!this.occlusionUnavailable && !this.occlusion && state.effectTier < EFFECT_TIERS) {
+    if (!this.occlusionUnavailable && !this.occlusion && state.effectTier < OCCLUSION_TIER) {
       this.occlusion = this.create.occlusion(this.scene, state.camera);
       this.occlusionUnavailable = !this.occlusion;
     }
     this.applyEffectTier(state.effectTier);
-    this.bloom ??= this.create.bloom(this.scene, state.camera);
+    if (state.effectTier < BLOOM_TIER) this.bloom ??= this.create.bloom(this.scene, state.camera);
   }
 
   /** Select the current mode's sky explicitly; debounce only changes to solar direction. */
@@ -172,6 +174,7 @@ export class ViewEffects {
 
   updateOrbit(active: boolean, camera: Camera, options: OrbitOptions = {}): void {
     if (this.disposed) return;
+    this.orbitCamera = camera;
     if (active && !this.orbitTaaAttempted && this.create.orbitTaa && this.scene.getFrameId() > 0) {
       this.orbitTaaAttempted = true;
       // The first scene frame establishes capabilities. Replace the initial bloom
@@ -203,7 +206,7 @@ export class ViewEffects {
     else if (
       !this.orbitOcclusion &&
       !this.orbitOcclusionUnavailable &&
-      tier < EFFECT_TIERS &&
+      tier < OCCLUSION_TIER &&
       this.create.orbitOcclusion &&
       (this.orbitTaaAttempted || !this.create.orbitTaa)
     ) {
@@ -218,7 +221,7 @@ export class ViewEffects {
       this.orbitOcclusionUnavailable = !this.orbitOcclusion;
       this.invalidate();
     }
-    if (active && !this.orbitBloom) {
+    if (active && !this.orbitBloom && tier < BLOOM_TIER) {
       this.orbitBloom = this.create.orbitBloom(this.scene, camera);
       this.orbitAttached = Boolean(this.orbitBloom);
     }
@@ -266,8 +269,26 @@ export class ViewEffects {
    * the occlusion is either whole or gone, and it fades out rather than blinking off.
    */
   applyEffectTier(tier: number, now: number = performance.now()): boolean {
-    if (tier < EFFECT_TIERS) return false;
+    if (tier < OCCLUSION_TIER) {
+      // An effect given back mid-fade is rebuilt whole by `updateOrbit`, never left faded.
+      if (!this.orbitOcclusionFade) return false;
+      this.releaseOrbitOcclusion();
+      return true;
+    }
     let changed = false;
+    if (tier >= BLOOM_TIER && (this.bloom || this.orbitBloom)) {
+      this.bloom?.dispose();
+      this.bloom = undefined;
+      if (this.orbitBloom && this.orbitAttached && this.orbitCamera)
+        this.scene.postProcessRenderPipelineManager.detachCamerasFromRenderPipeline(
+          'orbit-bloom',
+          this.orbitCamera,
+        );
+      this.orbitBloom?.dispose();
+      this.orbitBloom = undefined;
+      this.orbitAttached = false;
+      changed = true;
+    }
     if (this.occlusion) {
       this.occlusionFade ??= { from: this.occlusion.totalStrength, since: now };
       if (!fade(this.occlusion, this.occlusionFade, now)) {

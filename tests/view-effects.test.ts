@@ -7,6 +7,7 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { Texture } from '@babylonjs/core/Materials/Textures/texture';
 import type { Camera } from '@babylonjs/core/Cameras/camera';
 import { OCCLUSION_FADE_MS, ViewEffects } from '../src/scene/viewEffects';
+import { BLOOM_TIER, SHADOW_TIER } from '../src/scene/adaptiveResolution';
 import { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
 import { createOrbitBloom } from '../src/scene/interiorAmbience';
 import { TAAMaterialManager } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/taaMaterialManager';
@@ -191,6 +192,39 @@ test('the effect tier fades the occlusion out and never recreates it', () => {
     assert.equal(calls.filter((call) => call === 'occlusion:screen').length, 1);
     scene.dispose();
     assert.ok(resources.every((resource) => resource.disposals === 1));
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
+});
+
+test('the bloom tier removes the walk and orbit blooms, and only a lower tier builds them again', (t) => {
+  const { engine, scene, effects, state, calls } = setup();
+  t.mock.method(scene, 'getFrameId', () => 0);
+  const manager = scene.postProcessRenderPipelineManager;
+  t.mock.method(manager, 'detachCamerasFromRenderPipeline', (name: string) =>
+    calls.push(`detach:${name}`),
+  );
+  try {
+    effects.updateWalk({ ...state, effectTier: SHADOW_TIER });
+    assert.ok(calls.includes('bloom:screen'), 'the shadow tier keeps the bloom');
+    calls.length = 0;
+    effects.applyEffectTier(BLOOM_TIER, 0);
+    assert.ok(calls.includes('dispose:bloom:screen'));
+    effects.updateWalk({ ...state, effectTier: BLOOM_TIER });
+    assert.ok(!calls.includes('bloom:screen'), 'not rebuilt while the tier holds');
+    effects.releaseWalkPipelines();
+    effects.updateWalk({ ...state, effectTier: 0 });
+    assert.ok(calls.includes('bloom:screen'), '« Haute » chosen again brings it back');
+
+    calls.length = 0;
+    effects.updateOrbit(true, state.camera, { effectTier: BLOOM_TIER });
+    assert.ok(!calls.some((call) => call.startsWith('orbit:')), 'no orbit bloom at the tier');
+    effects.updateOrbit(true, state.camera, { effectTier: 0 });
+    assert.ok(calls.includes('orbit:screen'));
+    calls.length = 0;
+    effects.applyEffectTier(BLOOM_TIER, 0);
+    assert.ok(calls.includes('detach:orbit-bloom') && calls.includes('dispose:orbit:screen'));
   } finally {
     scene.dispose();
     engine.dispose();
@@ -707,6 +741,17 @@ test('Vue 3D occlusion sits between the orbit refinement and the bloom, leaves w
     effects.updateOrbit(true, camera, { occlusion: true, effectTier: 1 });
     assert.equal(occlusions, 3, 'never rebuilt once the tier removed it');
     assert.equal(effects.applyEffectTier(1, OCCLUSION_FADE_MS * 2), false);
+
+    // « Haute » chosen while a fade is under way: the occlusion comes back whole, not faded.
+    effects.updateOrbit(true, camera, vue3d);
+    assert.equal(occlusions, 4);
+    effects.applyEffectTier(1, 0);
+    effects.applyEffectTier(1, OCCLUSION_FADE_MS / 2);
+    calls.length = 0;
+    assert.equal(effects.applyEffectTier(0, OCCLUSION_FADE_MS / 2), true);
+    assert.ok(calls.includes('dispose:occlusion'), 'the half-faded occlusion is released');
+    effects.updateOrbit(true, camera, vue3d);
+    assert.equal(occlusions, 5, 'built again at full strength');
   } finally {
     effects.dispose();
     scene.dispose();

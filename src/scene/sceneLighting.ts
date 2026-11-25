@@ -15,6 +15,7 @@ import {
   INTERIOR_GROUND_COLOR,
 } from './interiorAmbience';
 import type { SolarPosition } from './solar';
+import { SHADOW_TIER } from './adaptiveResolution';
 
 export type LightingMode = 'overview' | 'plan' | 'walk';
 
@@ -100,6 +101,19 @@ export class SceneLighting {
   }
 }
 
+const SHADOW_FILTERING = ShadowGenerator.QUALITY_MEDIUM;
+
+/**
+ * « Basse » or a slow machine at the shadow tier: fewer PCF taps on the sun shadow. Returns
+ * whether the filtering changed; the receivers relink once, so it is only set on a change.
+ */
+export function applyShadowTier(shadow: ShadowGenerator, tier: number): boolean {
+  const quality = tier >= SHADOW_TIER ? ShadowGenerator.QUALITY_LOW : SHADOW_FILTERING;
+  if (shadow.filteringQuality === quality) return false;
+  shadow.filteringQuality = quality;
+  return true;
+}
+
 /** Builds the sky fill, the sun placed off the level's corner, and the sun's shadow map. */
 export function createSceneLighting(scene: Scene, level: Level) {
   const extent = bounds(level.outline);
@@ -116,7 +130,7 @@ export function createSceneLighting(scene: Scene, level: Level) {
   // floors and walls, even on a fast desktop GPU.
   const shadow = new ShadowGenerator(2048, sun);
   shadow.usePercentageCloserFiltering = true;
-  shadow.filteringQuality = ShadowGenerator.QUALITY_MEDIUM;
+  shadow.filteringQuality = SHADOW_FILTERING;
   shadow.bias = 0.001;
   shadow.normalBias = 0.025;
   shadow.setDarkness(0.2);

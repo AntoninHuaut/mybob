@@ -10,7 +10,14 @@ import { PointLight } from '@babylonjs/core/Lights/pointLight';
 import type { Level } from '../src/model/types';
 import { FIXTURE_LIGHT_INTENSITY } from '../src/scene/buildHouse';
 import { INTERIOR_FIXTURE_INTENSITY } from '../src/scene/interiorAmbience';
-import { applyFixtureLights, createSceneLighting, SceneLighting } from '../src/scene/sceneLighting';
+import {
+  applyFixtureLights,
+  applyShadowTier,
+  createSceneLighting,
+  SceneLighting,
+} from '../src/scene/sceneLighting';
+import { EFFECT_TIERS, SHADOW_TIER } from '../src/scene/adaptiveResolution';
+import { ShadowGenerator } from '@babylonjs/core/Lights/Shadows/shadowGenerator';
 import type { SolarPosition } from '../src/scene/solar';
 
 const level: Level = {
@@ -159,4 +166,22 @@ test('the built sun starts off the level corner and casts shadows', () => {
   );
   scene.dispose();
   engine.dispose();
+});
+
+test('the shadow tier lowers the sun shadow filtering, and a lower tier restores it', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  try {
+    const { shadow } = createSceneLighting(scene, level);
+    const full = shadow.filteringQuality;
+    assert.equal(applyShadowTier(shadow, SHADOW_TIER - 1), false, 'nothing changes below it');
+    assert.equal(applyShadowTier(shadow, SHADOW_TIER), true);
+    assert.equal(shadow.filteringQuality, ShadowGenerator.QUALITY_LOW);
+    assert.equal(applyShadowTier(shadow, EFFECT_TIERS), false, 'already lowered');
+    assert.equal(applyShadowTier(shadow, 0), true);
+    assert.equal(shadow.filteringQuality, full);
+  } finally {
+    scene.dispose();
+    engine.dispose();
+  }
 });

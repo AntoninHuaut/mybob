@@ -366,6 +366,9 @@ dialog p {
   .header-actions {
     gap: 3px;
   }
+  .header-quality span {
+    display: none;
+  }
   .layout-status {
     flex: 0 0 8px;
     width: 8px;

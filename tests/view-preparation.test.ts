@@ -113,10 +113,32 @@ test('late compilation cannot lower quality and restarts the measurement warm-up
   draw(FRAME_SAMPLES - 1, 40);
   t.mock.method(engine, 'areAllEffectsReady', () => false);
   draw(FRAME_SAMPLES * 2, 120);
-  assert.equal(viewer.currentEffectTier, 0, 'compilation is not steady rendering cost');
+  assert.equal(viewer.currentRenderScale, 1, 'compilation is not steady rendering cost');
   t.mock.method(engine, 'areAllEffectsReady', () => true);
   draw(WARMUP_FRAMES, 40);
-  assert.equal(viewer.currentEffectTier, 0, 'the first images after compilation are ignored too');
+  assert.equal(viewer.currentRenderScale, 1, 'the first images after compilation are ignored too');
   draw(FRAME_SAMPLES, 40);
-  assert.equal(viewer.currentEffectTier, 1, 'a genuinely slow prepared view still adapts');
+  assert.equal(viewer.currentRenderScale, 0.9, 'a genuinely slow prepared view still adapts');
+});
+
+test('« Qualité » sets the scale, the effect tier and the shadow filtering, both ways', async (t) => {
+  const { viewer, loop } = await setup(t);
+  const { EFFECT_TIERS, SCALE_FLOOR } = await import('../src/scene/adaptiveResolution');
+  const { ShadowGenerator } = await import('@babylonjs/core/Lights/Shadows/shadowGenerator');
+  const shadow = (viewer as unknown as { shadow: InstanceType<typeof ShadowGenerator> }).shadow;
+  const reported: { view: string; scale: number; tier: number }[] = [];
+  viewer.onQualityChange = (view, start) => reported.push({ view, ...start });
+  viewer.setQuality('low', {});
+  viewer.requestRender();
+  loop();
+  assert.equal(viewer.currentRenderScale, SCALE_FLOOR);
+  assert.equal(viewer.currentEffectTier, EFFECT_TIERS);
+  assert.equal(shadow.filteringQuality, ShadowGenerator.QUALITY_LOW);
+  assert.deepEqual(reported.at(-1), { view: 'overview', scale: SCALE_FLOOR, tier: EFFECT_TIERS });
+  viewer.setQuality('high', {});
+  viewer.requestRender();
+  loop();
+  assert.equal(viewer.currentRenderScale, 1);
+  assert.equal(viewer.currentEffectTier, 0);
+  assert.equal(shadow.filteringQuality, ShadowGenerator.QUALITY_MEDIUM);
 });

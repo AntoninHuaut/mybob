@@ -1,3 +1,5 @@
+import type { GpuClass } from './deviceProfile';
+
 /**
  * Full resolution is one rendered pixel per CSS pixel, never the screen's own ratio: on a
  * display scaled to 150 % that would draw 2.25 times the pixels for a sharpness the owner
@@ -6,28 +8,38 @@
 export const MAX_PIXEL_RATIO = 1;
 
 /**
- * Render scales tried, from full resolution down. Never below two thirds: under that,
- * textures turn visibly blurry.
+ * Render scales tried, from full resolution down, one step at a time in every view. Never
+ * below two thirds: under that, textures turn visibly blurry.
  */
 export const RENDER_SCALES = [1, 0.9, 0.8, 0.67] as const;
+export const SCALE_FLOOR = 0.67;
+
+/** Effect tiers, dropped in this order once the resolution is at its floor; each is whole or gone. */
+export const OCCLUSION_TIER = 1;
+export const SHADOW_TIER = 2;
+export const BLOOM_TIER = 3;
+export const EFFECT_TIERS = BLOOM_TIER;
 
 /**
- * The visit's fixed floor, whatever the pixel ratio, once its occlusion is gone: every
- * step down to 67 %, one at a time. What the owner disliked (2026-11-13) was the jump
- * from a 150 % render straight to 67 %, not 67 % reached step by step. Plan, Vue 3D and
- * Extérieur keep the one-rendered-pixel-per-CSS-pixel floor instead.
+ * The « Qualité » select. `high` is the full look, sharper than 100 % where the screen allows
+ * and the machine keeps up; `medium` is 67 % with every effect; `low` adds every effect tier;
+ * `auto` walks the whole ladder, resolution first.
  */
-export const VISIT_SCALE_FLOOR = 0.67;
+export type Quality = 'auto' | 'high' | 'medium' | 'low';
+export const QUALITIES: readonly Quality[] = ['auto', 'high', 'medium', 'low'];
 
-/**
- * Effect tiers, dropped **before** the resolution (owner, 2026-11-13: when the frame rate is
- * low, rather lose the occlusion than sharpness): 1 no occlusion. Only the views that have
- * one (the visit, Vue 3D) have a tier to drop. The occlusion is never degraded on the way:
- * a grainy cheap-blur version is the ugliest of the states, and a look that changes by
- * itself reads as a bug. Fewer temporal antialiasing samples is no tier: the count only
- * sets the length of the jitter sequence, each image costs the same.
- */
-export const EFFECT_TIERS = 1;
+/** Where a view stands on the ladder: its render scale and its effect tier. */
+export interface QualityStart {
+  scale: number;
+  tier: number;
+}
+
+/** Where automatic starts on a machine never measured: integrated at « Moyenne », software at « Basse ». */
+export function qualitySeed(gpu: GpuClass): QualityStart | undefined {
+  if (gpu === 'integrated') return { scale: SCALE_FLOOR, tier: 0 };
+  if (gpu === 'software') return { scale: SCALE_FLOOR, tier: EFFECT_TIERS };
+  return undefined;
+}
 
 /**
  * How sharp a screen may be rendered (owner, 2026-11-13): 150 % on a 4K screen, 125 % on
@@ -52,11 +64,6 @@ export function upscales(cap: number): number[] {
 /** The whole ladder for a cap, sharpest first: up-scales, full resolution, the steps down. */
 function ladder(cap: number): number[] {
   return [...upscales(cap).reverse(), ...RENDER_SCALES];
-}
-
-/** Every scale a user may pin in the Navigation panel on this screen, lowest first. */
-export function pinnableScales(cap: number): number[] {
-  return ladder(cap).reverse();
 }
 
 /** Above this median frame time (under 40 fps), the next render scale is tried. */
@@ -84,12 +91,11 @@ export function refreshIntervalOf(medianMs: number): number | undefined {
   return undefined;
 }
 
-/** How a view's scale is chosen: measured and adapted, or pinned by the user. */
+/** How a view's scale and tier are chosen. */
 export interface ScalePolicy {
-  /** A pinned scale: never adapted, in either direction. */
-  fixed?: number;
-  /** Where an adapted view starts: the scale this machine reached last time. */
-  start?: number;
+  quality?: Quality;
+  /** Where an automatic view starts: where this machine left it last time, or its seed. */
+  start?: QualityStart;
   /** The sharpest scale this screen allows (`upscaleCap`); 1 means no up-scaling. */
   cap?: number;
 }
@@ -113,44 +119,44 @@ export const STALL_MS = 5000;
 
 /**
  * Dynamic resolution of one view, the same at rest and in motion. A machine that cannot
- * hold 40 fps renders fewer pixels, one step at a time. A machine that keeps up with the
- * screen's refresh rate (60, 90, 120, 144 Hz…) renders more, one step at a time up to the
- * screen's cap; when it falls behind the refresh, the scale goes back one step. Once a view
- * has stepped down it never climbs again in the session: changing scale resizes every
- * render target, which hitches, so the scale must not swing with the camera.
+ * hold 40 fps renders fewer pixels, one step at a time, then drops effect tiers. A machine
+ * that keeps up with the screen's refresh rate (60, 90, 120, 144 Hz…) renders more, one
+ * step at a time up to the screen's cap; when it falls behind the refresh, the scale goes
+ * back one step. Once a view has stepped down it never climbs again in the session:
+ * changing scale resizes every render target, which hitches, so the scale must not swing
+ * with the camera.
  */
 export class AdaptiveResolution {
   private readonly ladder: number[];
-  private readonly full: number;
+  /** « Moyenne » and « Basse »: neither the scale nor the tier ever moves. */
+  private readonly pinned: boolean;
+  /** Tiers this view may drop by itself: none outside automatic. */
+  private readonly droppable: number;
   private level: number;
   /** The screen's refresh interval, once a series sat on one. */
   private refreshMs?: number;
   private steppedDown = false;
-  private effectLevel = 0;
+  private effectLevel: number;
   private forcedTier?: number;
   private samples: number[] = [];
   private warmup = WARMUP_FRAMES;
 
-  /**
-   * `floor`: under 1, a fixed floor whatever the pixel ratio; 1 means each step must keep
-   * at least one rendered pixel per CSS pixel.
-   * `tiers`: effect tiers this view can drop, first (0 for a view without occlusion).
-   */
-  constructor(
-    private readonly pixelRatio: number,
-    private readonly floor = 1,
-    private readonly tiers = 0,
-    private readonly policy: ScalePolicy = {},
-  ) {
-    this.ladder = ladder(policy.cap ?? 1);
-    this.full = this.ladder.indexOf(1);
-    const wanted = policy.fixed ?? policy.start;
-    let best = this.full;
-    if (wanted !== undefined && Number.isFinite(wanted))
+  /** `tiers`: effect tiers this view has, dropped once at the floor (0 for the plan). */
+  constructor(tiers = 0, policy: ScalePolicy = {}) {
+    const quality = policy.quality ?? 'auto';
+    const all = ladder(policy.cap ?? 1);
+    this.ladder = quality === 'high' ? all.filter((scale) => scale >= 1) : all;
+    this.pinned = quality === 'medium' || quality === 'low';
+    this.droppable = quality === 'auto' ? tiers : 0;
+    const wanted = this.pinned ? SCALE_FLOOR : (policy.start?.scale ?? 1);
+    let best = this.ladder.indexOf(1);
+    if (Number.isFinite(wanted))
       this.ladder.forEach((value, index) => {
         if (Math.abs(value - wanted) < Math.abs(this.ladder[best] - wanted)) best = index;
       });
     this.level = best;
+    const tier = quality === 'low' ? tiers : quality === 'auto' ? (policy.start?.tier ?? 0) : 0;
+    this.effectLevel = Number.isFinite(tier) ? Math.max(0, Math.min(tiers, Math.round(tier))) : 0;
   }
 
   /**
@@ -169,12 +175,11 @@ export class AdaptiveResolution {
       const sorted = [...this.samples].sort((a, b) => a - b);
       const median = sorted[Math.floor(sorted.length / 2)];
       this.samples = [];
-      const pinned = this.policy.fixed !== undefined;
       const vsync = refreshIntervalOf(median);
       if (vsync !== undefined) this.refreshMs = Math.min(this.refreshMs ?? Infinity, vsync);
       const scale = this.ladder[this.level];
       if (
-        !pinned &&
+        !this.pinned &&
         scale > 1 &&
         (this.refreshMs === undefined
           ? vsync === undefined
@@ -186,33 +191,25 @@ export class AdaptiveResolution {
         this.steppedDown = true;
         this.warmup = WARMUP_FRAMES;
       } else if (median > FRAME_BUDGET_MS) {
-        const next = this.ladder[this.level + 1];
-        // Sharpness above 100 % is a bonus: it goes before the occlusion does.
-        if (!pinned && this.ladder[this.level] > 1) {
+        if (!this.pinned && this.level < this.ladder.length - 1) {
           this.level++;
           this.steppedDown = true;
           this.warmup = WARMUP_FRAMES;
-        } else if (this.effectLevel < this.tiers) {
+        } else if (this.effectLevel < this.droppable) {
           this.effectLevel++;
-          this.warmup = WARMUP_FRAMES;
-        } else if (
-          !pinned &&
-          next !== undefined &&
-          (next >= 1 || (this.floor < 1 ? next >= this.floor : next * this.pixelRatio >= 1))
-        ) {
-          this.level++;
           this.steppedDown = true;
           this.warmup = WARMUP_FRAMES;
         }
       } else if (
         vsync !== undefined &&
         vsync === this.refreshMs &&
-        !pinned &&
+        !this.pinned &&
         !this.steppedDown &&
-        this.effectLevel === 0 &&
-        this.level > 0
+        (this.effectLevel > 0 || this.level > 0)
       ) {
-        this.level--;
+        // Started low (a saved start or the GPU seed) and keeping up: effects come back first.
+        if (this.effectLevel > 0) this.effectLevel--;
+        else this.level--;
         this.warmup = WARMUP_FRAMES;
       }
     }
@@ -229,7 +226,7 @@ export class AdaptiveResolution {
     this.warmup = WARMUP_FRAMES;
   }
 
-  /** Effect tier in use (0 = every effect at full quality), for the diagnostic. */
+  /** Effect tier in use (0 = every effect at full quality). */
   get effectTier(): number {
     return this.forcedTier ?? this.effectLevel;
   }
@@ -240,7 +237,7 @@ export class AdaptiveResolution {
       tier === undefined ? undefined : Math.max(0, Math.min(EFFECT_TIERS, Math.round(tier)));
   }
 
-  /** The scale in use on this machine, for the diagnostic. */
+  /** The scale in use on this machine. */
   get scale(): number {
     return this.ladder[this.level];
   }
@@ -257,14 +254,12 @@ export class ViewResolutions {
   private readonly views = new Map<string, AdaptiveResolution>();
   private current?: string;
   private forcedTier?: number;
-  private fixed?: number;
-  private starts: Record<string, number> = {};
+  private quality: Quality = 'auto';
+  private starts: Record<string, QualityStart> = {};
+  private seed?: QualityStart;
 
   /** `cap`: the sharpest scale this screen allows (`upscaleCap`). */
-  constructor(
-    private readonly pixelRatio: number,
-    private cap = 1,
-  ) {}
+  constructor(private cap = 1) {}
 
   /**
    * The window moved to a screen with another cap: every view starts over under it (its
@@ -279,12 +274,13 @@ export class ViewResolutions {
   }
 
   /**
-   * A pinned scale for every view, or adapted views starting where this machine left them.
-   * Views already measured are dropped and start over under the new policy.
+   * The « Qualité » for every view; automatic views start where this machine left them, or
+   * at `seed` (`qualitySeed`). Views already measured start over under the new policy.
    */
-  configure(fixed: number | undefined, starts: Record<string, number>): void {
-    this.fixed = fixed;
+  configure(quality: Quality, starts: Record<string, QualityStart>, seed?: QualityStart): void {
+    this.quality = quality;
     this.starts = { ...starts };
+    this.seed = seed;
     this.views.clear();
     this.current = undefined;
   }
@@ -293,13 +289,12 @@ export class ViewResolutions {
   for(view: string): AdaptiveResolution {
     let resolution = this.views.get(view);
     if (!resolution) {
-      resolution = new AdaptiveResolution(
-        this.pixelRatio,
-        view === 'walk' ? VISIT_SCALE_FLOOR : 1,
-        // Only the visit and Vue 3D carry an occlusion to drop.
-        view === 'walk' || view === 'overview' ? EFFECT_TIERS : 0,
-        { fixed: this.fixed, start: this.starts[view], cap: this.cap },
-      );
+      // The plan draws no occlusion, sun shadow or bloom: it has no tier to drop.
+      resolution = new AdaptiveResolution(view === 'plan' ? 0 : EFFECT_TIERS, {
+        quality: this.quality,
+        start: this.starts[view] ?? this.seed,
+        cap: this.cap,
+      });
       resolution.force(this.forcedTier);
       this.views.set(view, resolution);
     }

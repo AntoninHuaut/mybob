@@ -60,7 +60,13 @@ import {
 } from './shaderWarmup';
 import { RefreshRateEstimator } from './deviceProfile';
 import { pluginSummary, shaderLog } from './shaderLog';
-import { EFFECT_TIERS, MAX_PIXEL_RATIO, upscaleCap, ViewResolutions } from './adaptiveResolution';
+import {
+  MAX_PIXEL_RATIO,
+  upscaleCap,
+  ViewResolutions,
+  type Quality,
+  type QualityStart,
+} from './adaptiveResolution';
 import {
   AUTO_CUT_HEIGHT,
   buildWallCutaway,
@@ -83,7 +89,12 @@ import {
   usePlanCoordinates,
   yawFromDirection,
 } from './coordinates';
-import { applyFixtureLights, createSceneLighting, type SceneLighting } from './sceneLighting';
+import {
+  applyFixtureLights,
+  applyShadowTier,
+  createSceneLighting,
+  type SceneLighting,
+} from './sceneLighting';
 import { ViewEffects } from './viewEffects';
 import { buildWallPaint, pickWallFace } from './wallPaint';
 import type { OcclusionState } from './diagnostics';
@@ -236,7 +247,6 @@ export class HouseViewer {
   /** Share of the current preparation done, 0 to 1, for the overlay's bar. */
   onPreparingProgress?: (fraction: number) => void;
   private readonly resolutions = new ViewResolutions(
-    Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO),
     upscaleCap(window.screen?.width ?? 0, window.screen?.height ?? 0, window.devicePixelRatio || 1),
   );
   /** The current view's dynamic resolution (`ViewResolutions`). */
@@ -246,6 +256,10 @@ export class HouseViewer {
   /** Hardware scaling at full resolution: the screen's pixel ratio, capped (`MAX_PIXEL_RATIO`). */
   private readonly baseScaling = 1 / Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
   private renderScale = 1;
+  private reportedTier = 0;
+  /** The tier and view `applyEffectTier` last applied: a lower tier gives effects back. */
+  private appliedTier = 0;
+  private appliedView = '';
   private lastRenderAt?: number;
   /** Open `holdRendering` calls: every image is drawn while one is held. */
   private renderingHolds = 0;
@@ -265,8 +279,6 @@ export class HouseViewer {
   private sky?: Layer;
   private solarPosition?: SolarPosition;
   private lightOn = true;
-  /** « Ombres des angles » in the navigation panel: off, no view builds an occlusion. */
-  private occlusionOn = true;
   private dimensionOn = false;
   private paused = false;
   private capturing = false;
@@ -1098,15 +1110,6 @@ export class HouseViewer {
     this.shadowRefresh?.invalidate();
     this.requestRender();
   }
-  /** The visitor's switch for the occlusion: on is the full look, off is none at all. */
-  setOcclusion(enabled: boolean) {
-    if (this.occlusionOn === enabled) return;
-    this.occlusionOn = enabled;
-    if (!this.scene) return;
-    this.rebuildWalkPipelines();
-    this.updateOrbitBloom();
-    this.requestRender();
-  }
   setDimensions(enabled: boolean) {
     this.dimensionOn = enabled;
     this.dimensions.forEach((m) => m.setEnabled(enabled && this.mode !== 'walk'));
@@ -1363,6 +1366,9 @@ export class HouseViewer {
 
   /** Copy WebGL synchronously before the browser discards its drawing buffer. */
   captureCanvas(dimensions = false, background = true): HTMLCanvasElement {
+    // An image is exported at full resolution, whatever « Qualité » lowered on screen.
+    const lowered = this.renderScale < 1;
+    if (lowered) this.engine.setHardwareScalingLevel(this.baseScaling);
     const output = document.createElement('canvas');
     output.width = this.engine.getRenderWidth();
     output.height = this.engine.getRenderHeight();
@@ -1396,6 +1402,7 @@ export class HouseViewer {
       for (const [mesh, enabled] of changed) if (!mesh.isDisposed()) mesh.setEnabled(enabled);
       if (this.sky) this.sky.isEnabled = skyWasEnabled;
       this.capturing = false;
+      if (lowered) this.engine.setHardwareScalingLevel(this.baseScaling / this.renderScale);
       this.scene.activeCamera?.resetViewHistory?.();
       this.requestRender();
     }
@@ -1527,7 +1534,7 @@ export class HouseViewer {
   private updateOrbitBloom() {
     if (!this.scene || !this.orbit) return;
     this.viewEffects?.updateOrbit(this.mode === 'overview', this.orbit, {
-      occlusion: !this.exteriorView && this.hardwareRenderer && this.occlusionOn !== false,
+      occlusion: !this.exteriorView && this.hardwareRenderer,
       effectTier: this.currentEffectTier,
     });
   }
@@ -1582,10 +1589,15 @@ export class HouseViewer {
     }
     const frameMs = render && this.lastRenderAt !== undefined ? now - this.lastRenderAt : undefined;
     const scale = this.adaptiveResolution.update(frameMs);
+    const tier = this.currentEffectTier;
     this.applyEffectTier();
-    if (scale === this.renderScale) return;
+    const rescaled = scale !== this.renderScale;
+    if (rescaled || tier !== this.reportedTier) {
+      this.reportedTier = tier;
+      this.onQualityChange?.(this.currentViewKey(), { scale, tier });
+    }
+    if (!rescaled) return;
     this.renderScale = scale;
-    this.onRenderScaleChange?.(this.currentViewKey(), scale);
     this.engine.setHardwareScalingLevel(this.baseScaling / scale);
     // The targets were resized: the image is drawn again and settled.
     this.renderScheduler.request();
@@ -1596,7 +1608,17 @@ export class HouseViewer {
    * under 40 fps (`adaptiveResolution.ts`). Idempotent: also called as the pipelines are built.
    */
   private applyEffectTier() {
-    if (this.viewEffects?.applyEffectTier(this.currentEffectTier)) this.requestRender();
+    const tier = this.currentEffectTier;
+    const view = this.currentViewKey();
+    const givenBack = view === this.appliedView && tier < this.appliedTier;
+    this.appliedView = view;
+    this.appliedTier = tier;
+    let changed = this.viewEffects?.applyEffectTier(tier) ?? false;
+    // The visit's chain is rebuilt whole so its order holds; the orbit rebuilds on its next image.
+    if (givenBack && this.mode === 'walk') this.rebuildWalkPipelines();
+    // The plan shows no sun shadow: keeping the filtering of the view left avoids a relink.
+    if (this.shadow && this.mode !== 'plan' && applyShadowTier(this.shadow, tier)) changed = true;
+    if (changed) this.requestRender();
   }
 
   /**
@@ -1610,18 +1632,12 @@ export class HouseViewer {
 
   /** Effect tier in use on this machine (0 = full quality), for the diagnostic. */
   get currentEffectTier(): number {
-    // `occlusionOn` is undefined on a viewer built from its prototype (scene tests).
-    if (this.occlusionOn === false) return EFFECT_TIERS;
     return this.adaptiveResolution?.effectTier ?? 0;
   }
 
-  /** An adapted view changed scale: the host remembers it for the next session. */
-  onRenderScaleChange?: (view: string, scale: number) => void;
+  /** A view changed scale or tier: the host remembers it as the next session's start. */
+  onQualityChange?: (view: string, start: QualityStart) => void;
 
-  /**
-   * Render resolution: a scale pinned for every view, or `undefined` to adapt, each view
-   * starting from `starts[view]`, the scale this machine reached last time.
-   */
   /** The window now sits on a screen with another cap (multi-screen): views start over. */
   setScreenCap(cap: number) {
     if (!this.resolutions.setCap(cap)) return;
@@ -1629,10 +1645,16 @@ export class HouseViewer {
     this.requestRender();
   }
 
-  setRenderScalePolicy(fixed: number | undefined, starts: Record<string, number>) {
-    this.resolutions.configure(fixed, starts);
+  /**
+   * « Qualité » for every view: automatic views start at `starts[view]`, where this machine
+   * left them, or at `seed` (`qualitySeed`). Effects a lower tier removed are built again.
+   */
+  setQuality(quality: Quality, starts: Record<string, QualityStart>, seed?: QualityStart) {
+    this.resolutions.configure(quality, starts, seed);
     this.renderScale = Number.NaN; // the next image applies the policy's scale
-    this.requestRender();
+    if (!this.scene) return;
+    this.applyEffectTier();
+    this.updateOrbitBloom();
   }
 
   /** Display refresh rate read while the view was still, for the diagnostic. */

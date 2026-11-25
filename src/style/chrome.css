@@ -154,6 +154,19 @@ button svg {
 .version-badge {
   display: none;
 }
+.header-quality {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 13px;
+}
+.header-quality select {
+  min-height: 32px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font: inherit;
+}
 .text-button {
   min-height: 40px;
   display: flex;

@@ -16,7 +16,7 @@ import { el, toast } from './dom';
 import { app } from './state';
 import { mountFurniture, unmountFurniture } from './furnitureController';
 import { findProject, firstProject, isImported, renderProjectOptions } from './projectLibrary';
-import { applyNavigationPreferences, applyRenderScale } from './preferences';
+import { applyNavigationPreferences, applyQuality } from './preferences';
 import { scheduleLinkHashUpdate } from './shareLinkSync';
 import { endWallBrush, mountRoomPaint, paintedProject } from './roomPaint';
 import { setMode, setSidebar, setSidebarTab } from './viewChrome';
@@ -87,7 +87,7 @@ export function loadProject(
   el('#demo-notice').hidden = p.id !== 'studio-demo';
   el('#received-banner').hidden = !received;
   applyNavigationPreferences();
-  applyRenderScale();
+  applyQuality();
   el<HTMLSelectElement>('#level-select').innerHTML = p.levels
     .map((l) => `<option value="${esc(l.id)}">${esc(l.name)}</option>`)
     .join('');
