@@ -53,6 +53,8 @@ export function setNavigationPanel(open: boolean) {
 export function syncDisplayControls() {
   el('#tool-openings').hidden =
     app.viewer.mode !== 'plan' || app.readOnlyLink || !isImported(app.current.id);
+  el('#move-wall').hidden =
+    el('#tool-openings').hidden || !app.viewer.level.walls.some((w) => !w.exterior);
   el('#divide-room').hidden = el('#tool-openings').hidden || !app.viewer.level.rooms.length;
   const { viewer, display } = app;
   const measuring = viewer.measureMode;
@@ -117,6 +119,8 @@ export function setMode(next: ViewMode): boolean {
 /** Called only after the viewer has accepted and applied a transition. */
 export function syncViewChrome() {
   endWallBrush();
+  el('#move-wall').hidden =
+    el('#tool-openings').hidden || !app.viewer.level.walls.some((w) => !w.exterior);
   el('#divide-room').hidden = el('#tool-openings').hidden || !app.viewer.level.rooms.length;
   const { viewer, display } = app;
   const next = viewer.mode;

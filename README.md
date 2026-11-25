@@ -51,6 +51,7 @@ Interface names are given in French, as shown in the application.
 - **Plan**: orthographic view, selection of rooms and exterior dimensions; drag to pan, pinch or use the wheel to zoom.
 - In **Plan**, choose **Ouvertures** on a local project to place a door or window or adjust an existing opening. Select the host wall, choose the wall end used for the jamb measurement, and save. The dialog also offers undo and redo.
 - **Diviser une pièce** in Plan joins two existing walls with a partition. Pick each junction or enter its distance from the wall start. Check the two named finished areas before confirming. The first room retains its identity and reference area.
+- **Déplacer une cloison** previews a parallel move by drag or signed distance. Check both rooms, hosted openings and furniture in all saved arrangements. Confirm a clear move, or change the distance or cancel. Undo and redo it from the **Ouvertures** dialog.
 - **Visite**: ZQSD, WASD or arrows to walk, mouse to look, Shift to speed up, E to open or close a nearby door. Escape releases the mouse.
 - If mouse capture is refused, click in the scene and drag with the left button to look.
 - Click a room in the list or the mini-map, then **Visiter cette pièce**, to go there.

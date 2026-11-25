@@ -26,6 +26,13 @@ effect and starts an integrated GPU at « Moyenne »: the expected Visite cost a
 half the pixels, still to be measured. Earlier, on an integrated GPU at 75 Hz, no single walk
 effect cost more than the run-to-run noise; only half the resolution held 75 fps.
 
+## Plan editing responsiveness
+
+Partition drag (#343, measured alongside #322): the move dialog writes the last pointer event's
+timestamp-to-preview-DOM-update time, in ms, to `data-preview-latency-ms` on its diagram. It
+covers dispatch and preview work, not paint. Record browser, machine and project with each
+sample; no target is set yet.
+
 ## Tried and rejected
 
 Each was measured and gave a visual regression or no gain; retry only with new evidence:
