@@ -7,8 +7,10 @@ import { cameraYaw, walkMovement } from './coordinates';
 import { pointInPolygon } from '../model/geometry';
 import { Ray } from '@babylonjs/core/Culling/ray';
 
+import { VISITOR_RADIUS } from '../model/visitor';
+
 export const EYE_HEIGHT = 1.65;
-export const VISITOR_RADIUS = 0.17;
+export { VISITOR_RADIUS };
 export const ELLIPSOID_HALF_HEIGHT = 0.8;
 export const DEFAULT_WALK_SPEED = 2.8;
 

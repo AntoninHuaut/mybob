@@ -1,8 +1,9 @@
+import { VISITOR_CLEARANCE } from '../model/visitor';
 import { Plane } from '@babylonjs/core/Maths/math.plane';
 import type { UniversalCamera } from '@babylonjs/core/Cameras/universalCamera';
 import type { Level, Point2, ProjectSite, Wall } from '../model/types';
 import { bounds, floorElevationAt, pointInPolygon } from '../model/geometry';
-import { ELLIPSOID_HALF_HEIGHT, VISITOR_RADIUS } from './walkCamera';
+import { ELLIPSOID_HALF_HEIGHT } from './walkCamera';
 import type { Scene } from '@babylonjs/core/scene';
 import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import { VertexBuffer } from '@babylonjs/core/Buffers/buffer';
@@ -48,7 +49,7 @@ export function isVisitDestination(level: Level, point: Point2) {
     pointInPolygon(point, level.outline) &&
     level.rooms.some((room) => pointInPolygon(point, room.polygon)) &&
     level.walls.every(
-      (wall) => distanceToWall(point, wall) > wall.thickness / 2 + VISITOR_RADIUS + 0.025,
+      (wall) => distanceToWall(point, wall) > wall.thickness / 2 + VISITOR_CLEARANCE,
     )
   );
 }
@@ -66,7 +67,7 @@ export function isParcelDestination(level: Level, site: ProjectSite | undefined,
     !pointInPolygon(point, level.outline) &&
     pointInPolygon(point, site.boundary) &&
     level.walls.every(
-      (wall) => distanceToWall(point, wall) > wall.thickness / 2 + VISITOR_RADIUS + 0.025,
+      (wall) => distanceToWall(point, wall) > wall.thickness / 2 + VISITOR_CLEARANCE,
     )
   );
 }
@@ -82,7 +83,7 @@ export function isSceneVisitDestination(scene: Scene, level: Level, point: Point
     if (box.maximumWorld.y < floor + 0.01 || box.minimumWorld.y > floor + 1.6) return false;
     const dx = point[0] - Math.max(box.minimumWorld.x, Math.min(point[0], box.maximumWorld.x));
     const dz = point[1] - Math.max(box.minimumWorld.z, Math.min(point[1], box.maximumWorld.z));
-    const radius = VISITOR_RADIUS + 0.025;
+    const radius = VISITOR_CLEARANCE;
     if (dx * dx + dz * dz >= radius ** 2) return false;
     const positions = mesh.getVerticesData(VertexBuffer.PositionKind);
     const indices = mesh.getIndices();

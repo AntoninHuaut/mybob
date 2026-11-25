@@ -46,6 +46,7 @@ Interface names are given in French, as shown in the application.
 - **Vue 3D**: drag with the left button to rotate; wheel to zoom; right button to pan.
 - Framing adapts to the window and keeps a margin for the interface. **Recentrer** shows the whole house again after a zoom or a pan.
 - **Extérieur**: if the project contains a terrain, shows the plot, façades and roof; the 3D view keeps the roof open for arranging.
+- **Créer une maison** opens a new local project in Plan. Name the first room and enter its finished inside width, depth and wall thickness in metres. Reopen it from the project selector or export it as JSON.
 - **Plan**: orthographic view, selection of rooms and exterior dimensions; drag to pan, pinch or use the wheel to zoom.
 - In **Plan**, choose **Ouvertures** on a local project to place a door or window or adjust an existing opening. Select the host wall, choose the wall end used for the jamb measurement, and save. The dialog also offers undo and redo.
 - **Visite**: ZQSD, WASD or arrows to walk, mouse to look, Shift to speed up, E to open or close a nearby door. Escape releases the mouse.

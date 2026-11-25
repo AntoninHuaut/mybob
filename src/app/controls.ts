@@ -1,3 +1,4 @@
+import { openNewHouse } from './newHouse';
 import { userMessage } from '../errorMessage';
 import { isImmersiveSupported, preloadImmersive } from '../scene/headsetSession';
 import type { ViewMode } from '../scene/viewer';
@@ -201,6 +202,7 @@ export function wireProjectControls() {
   });
   el('#export-image').addEventListener('click', openImageExport);
   el('#tool-openings').addEventListener('click', openPlanOpenings);
+  el('#create-house').addEventListener('click', openNewHouse);
   el('#import-project').addEventListener('click', () =>
     el<HTMLInputElement>('#import-file').click(),
   );
