@@ -16,8 +16,8 @@ loaded yet.
 ## Execution policy and CI recipes
 
 [AGENTS.md: Local browser verification policy](../AGENTS.md#local-browser-verification-policy)
-is the single source of truth for local runs and permitted evidence. Follow it before any
-local browser command. Routine browser workflows run in CI, sharded in three:
+is the single source of truth for local runs and permitted evidence. CI runs the browser
+workflows sharded in three; the same commands work locally:
 
 ```sh
 pnpm run build
@@ -25,7 +25,7 @@ pnpm run check:public
 node scripts/e2e-shard.mjs n/3
 ```
 
-For the narrowly allowed reproduction of a concrete CI failure on an already-built `dist/`:
+To run a single test on an already-built `dist/`:
 
 ```sh
 pnpm exec playwright test e2e/<failing-file>.spec.ts --grep "^exact failing test title$" --workers=1 --repeat-each=1

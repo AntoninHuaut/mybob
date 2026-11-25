@@ -94,13 +94,8 @@ it does not run e2e. Happy DOM and Babylon NullEngine prove behavior, not visual
 
 ### Local browser verification policy
 
-Browser e2e belongs to CI. Do not run routine local Playwright/e2e scenarios, including
-targeted feature batches, repeats, or concurrent browser captures/benchmarks: they make the
-owner's PC unusably slow. Only one or two exact failing tests may run locally to reproduce
-a concrete CI error, with one worker and no repeats. Stop only your own browser runs.
-Prefer focused unit/NullEngine/DOM checks and CI logs. Defer visual acceptance to existing
-permitted evidence or explicit later authorization; do not open a browser for optional
-evidence. CI execution recipes live in [E2E](docs/E2E.md).
+Local Playwright/e2e runs and browser checks are allowed whenever they help verify a change.
+Stop only your own browser runs. Recipes live in [E2E](docs/E2E.md).
 
 Agent-created visual evidence must stay local and ignored: never commit images or
 image-reference reports, or upload browser captures, HTML reports or traces to PRs, Actions
