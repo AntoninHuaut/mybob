@@ -13,7 +13,8 @@ import { activeButton, closeDialog, el, openDialog, toast } from './dom';
 import { app } from './state';
 import { setFurnitureCirculation } from './furnitureController';
 import { openPlanOpenings } from './planOpenings';
-import { restorePlan, togglePlanEditBar } from './planEditBar';
+import { restorePlan, syncPlanEditBar, togglePlanEditBar } from './planEditBar';
+import { watchPlanHistory } from './planHistory';
 import { downloadProject, importProject, openRemoveProject } from './projectLibrary';
 import { loadLevel, loadProject } from './projectView';
 import { chooseQuality, dismissStartCard, updateNavigationPreferences } from './preferences';
@@ -207,6 +208,7 @@ export function wireProjectControls() {
   el('#tool-openings').addEventListener('click', openPlanOpenings);
   el('#move-wall').addEventListener('click', openPartitionMove);
   el('#divide-room').addEventListener('click', openRoomDivision);
+  watchPlanHistory(syncPlanEditBar);
   el('#tool-plan-edit').addEventListener('click', togglePlanEditBar);
   el('#undo-plan').addEventListener('click', () => restorePlan('undo'));
   el('#redo-plan').addEventListener('click', () => restorePlan('redo'));
