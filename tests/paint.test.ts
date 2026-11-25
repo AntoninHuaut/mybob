@@ -9,7 +9,9 @@ import { Vector3 } from '@babylonjs/core/Maths/math.vector';
 import type { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { buildHouse } from '../src/scene/buildHouse';
 import type { Materials } from '../src/scene/materials';
-import { buildWallPaint } from '../src/scene/wallPaint';
+import '@babylonjs/core/Culling/ray';
+import { FreeCamera } from '@babylonjs/core/Cameras/freeCamera';
+import { buildWallPaint, pickWallFace } from '../src/scene/wallPaint';
 import { buildWallCutaway } from '../src/scene/wallCutaway';
 import { pointInPolygon } from '../src/model/geometry';
 import { parsePaintOverrides, wallSideSpans, withPaint } from '../src/model/paint';
@@ -263,6 +265,63 @@ test('the façade cutaway clips paint with its wall, and a repaint replaces only
   engine.dispose();
 });
 
+test('a 3D pick identifies the visible room side of the partition', () => {
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  scene.useRightHandedSystem = true;
+  const level = square();
+  const house = buildHouse(level, scene, fakeMaterials(scene));
+  const camera = new FreeCamera('brush', new Vector3(2, 1.4, 2), scene);
+  camera.setTarget(new Vector3(4, 1.4, 2));
+  scene.render();
+  const pick = () =>
+    pickWallFace(
+      scene,
+      level,
+      house.wallNodes,
+      engine.getRenderWidth() / 2,
+      engine.getRenderHeight() / 2,
+    );
+  assert.deepEqual(pick(), { roomId: 'a', wallId: 'cloison', side: 1 });
+  camera.position.x = 6;
+  camera.setTarget(new Vector3(4, 1.4, 2));
+  scene.render();
+  assert.deepEqual(pick(), { roomId: 'b', wallId: 'cloison', side: -1 });
+  engine.dispose();
+});
+
+test('a single wall face overrides the room and survives wall renumbering in a link', () => {
+  const level = square();
+  level.rooms[0].wallFaces = [{ wallId: 'cloison', side: 1, color: '#123456' }];
+  const doc = { ...project, levels: [level] };
+  const engine = new NullEngine();
+  const scene = new Scene(engine);
+  const meshes = buildHouse(level, scene, fakeMaterials(scene)).paint;
+  assert.deepEqual(
+    meshes
+      .filter((mesh) => mesh.material?.name === 'paint:#123456')
+      .map((mesh) => mesh.parent?.name),
+    ['wall:cloison'],
+  );
+  const roundTrip = unpackShareDocument(packShareDocument(doc)).levels[0];
+  assert.deepEqual(roundTrip.rooms[0].wallFaces, [
+    { wallId: roundTrip.walls[4].id, side: 1, color: '#123456' },
+  ]);
+  const restored = withPaint(
+    doc,
+    parsePaintOverrides({
+      rdc: { a: { faces: [] }, b: { faces: [{ wallId: 'bas', side: 1, color: '#112233' }] } },
+    }),
+  );
+  assert.equal(restored.levels[0].rooms[0].wallFaces, undefined);
+  assert.equal(restored.levels[0].rooms[0].wallColor, level.rooms[0].wallColor);
+  assert.equal(restored.levels[0].rooms[1].wallFaces?.[0].color, '#112233');
+  const invalid = structuredClone(project);
+  invalid.levels[0].rooms[0].wallFaces = [{ wallId: 'missing', side: 1, color: '#112233' }];
+  assert.throws(() => validateProject(invalid), /face de mur/i);
+  engine.dispose();
+});
+
 test('wall paint is validated, and travels in the share link', () => {
   const painted = structuredClone(project);
   painted.levels[0].rooms[1].wallColor = '#c9876b';
@@ -273,6 +332,67 @@ test('wall paint is validated, and travels in the share link', () => {
   const unpacked = unpackShareDocument(packShareDocument(painted));
   assert.equal(unpacked.levels[0].rooms[1].wallColor, '#c9876b');
   assert.equal(unpacked.levels[0].rooms[0].wallColor, undefined);
+});
+
+test('the wall brush keeps the room colour, persists its click and exits on Escape or right-click', async (t) => {
+  const win = new Window();
+  for (const [key, value] of Object.entries({
+    window: win,
+    document: win.document,
+    localStorage: win.localStorage,
+    AbortController: win.AbortController,
+  })) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, key);
+    Object.defineProperty(globalThis, key, { configurable: true, value });
+    t.after(() =>
+      previous
+        ? Object.defineProperty(globalThis, key, previous)
+        : Reflect.deleteProperty(globalThis, key),
+    );
+  }
+  const { app } = await import('../src/app/state');
+  const { mountRoomPaint, paintedProject, endWallBrush } = await import('../src/app/roomPaint');
+  const previous = { current: app.current, viewer: app.viewer };
+  const level = square();
+  app.current = { ...project, levels: [level] };
+  win.document.body.innerHTML = '<button id="before"></button><canvas></canvas>';
+  const canvas = win.document.querySelector('canvas')!;
+  app.viewer = {
+    level,
+    canvas,
+    mode: 'overview',
+    pickWallFace: () => ({ roomId: 'a', wallId: 'bas', side: 1 }),
+    repaintWalls() {},
+  } as unknown as typeof app.viewer;
+  t.after(() => {
+    endWallBrush();
+    Object.assign(app, previous);
+    win.close();
+  });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  mountRoomPaint(level.rooms[0], document.querySelector('#before')!, () => {});
+  const button = document.querySelector<HTMLButtonElement>('[data-paint-brush]')!;
+  button.click();
+  document.querySelector<HTMLButtonElement>('[data-paint="#34495e"]')!.click();
+  assert.equal(level.rooms[0].wallFaces, undefined);
+  const click = (button: number) => {
+    for (const type of ['pointerdown', 'pointerup'])
+      canvas.dispatchEvent(new win.PointerEvent(type, { button, bubbles: true }));
+  };
+  click(0);
+  assert.equal(level.rooms[0].wallColor, '#b9c4ab');
+  const stored = { ...project, levels: [square()] };
+  assert.deepEqual(paintedProject(stored).levels[0].rooms[0].wallFaces, [
+    { wallId: 'bas', side: 1, color: '#34495e' },
+  ]);
+  win.dispatchEvent(new win.KeyboardEvent('keydown', { key: 'Escape' }));
+  assert.equal(button.getAttribute('aria-pressed'), 'false');
+  button.click();
+  document.querySelector<HTMLButtonElement>('[data-paint-clear]')!.click();
+  click(0);
+  assert.equal(paintedProject(stored).levels[0].rooms[0].wallFaces, undefined);
+  click(2);
+  assert.equal(button.getAttribute('aria-pressed'), 'false');
 });
 
 test('the room card presses the current paint and updates without replacing the picker', () => {

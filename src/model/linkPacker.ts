@@ -38,9 +38,9 @@ export interface UnpackedShare {
  * sloping parts of each level's ceiling. Revision 6: kitchens. Revision 7: optional
  * microwave. Revision 8: terrace and lawn surfaces, a terrace's slab height, and garden
  * boundaries (walls, fences, hedges, gates). Revision 9: a fence's infill (mesh or slats).
- * Revision 10: each room's wall paint. Revision 11 adds the blond parquet finish flag.
+ * Revision 10: room paint. Revision 11: blond parquet. Revision 12: individual wall faces.
  */
-export const LINK_PACK_VERSION = 11;
+export const LINK_PACK_VERSION = 12;
 
 const CRC_TABLE = Array.from({ length: 256 }, (_, n) => {
   let c = n;
@@ -423,6 +423,13 @@ export function packShareDocument(document: ShareDocument): Uint8Array {
       packer.optArea(room.planArea);
       packer.optStr(room.note);
       packer.optColor(room.wallColor);
+      packer.u(room.wallFaces?.length ?? 0);
+      for (const face of room.wallFaces ?? []) {
+        const index = level.walls.findIndex((wall) => wall.id === face.wallId);
+        if (index < 0) throw new LinkPackError('Mur de peinture introuvable.');
+        packer.u(2 * index + (face.side === 1 ? 1 : 0));
+        packer.optColor(face.color);
+      }
     }
     const stairs = level.stairs ?? [];
     packer.u(stairs.length);
@@ -770,6 +777,16 @@ export function unpackShareDocument(data: Uint8Array): ShareDocument {
       if (version >= 10) {
         const wallColor = reader.optColor();
         if (wallColor !== undefined) room.wallColor = wallColor;
+      }
+      if (version >= 12) {
+        const count = reader.count(2 * wallCount);
+        for (let i = 0; i < count; i++) {
+          const index = reader.u();
+          const wall = level.walls[Math.floor(index / 2)];
+          const color = reader.optColor();
+          if (!wall || !color) throw new LinkPackError('Face de mur illisible.');
+          (room.wallFaces ??= []).push({ wallId: wall.id, side: index % 2 ? 1 : -1, color });
+        }
       }
       level.rooms.push(room);
     }

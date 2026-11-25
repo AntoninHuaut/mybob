@@ -18,7 +18,7 @@ import { mountFurniture, unmountFurniture } from './furnitureController';
 import { findProject, firstProject, isImported, renderProjectOptions } from './projectLibrary';
 import { applyNavigationPreferences, applyRenderScale } from './preferences';
 import { scheduleLinkHashUpdate } from './shareLinkSync';
-import { mountRoomPaint, paintedProject } from './roomPaint';
+import { endWallBrush, mountRoomPaint, paintedProject } from './roomPaint';
 import { setMode, setSidebar, setSidebarTab } from './viewChrome';
 
 /*
@@ -185,6 +185,7 @@ export function selectRoom(id: string, move = true) {
 }
 
 function renderRoomDetail() {
+  endWallBrush();
   const { viewer } = app;
   const room = app.selectedRoom;
   if (!room) {
@@ -205,7 +206,7 @@ function renderRoomDetail() {
   height.className = 'detail-data';
   height.innerHTML = roomHeightHtml(room, viewer.level);
   el('#visit-room').before(height);
-  mountRoomPaint(room, el('#visit-room'));
+  mountRoomPaint(room, el('#visit-room'), scheduleLinkHashUpdate);
   el('#clear-room').addEventListener('click', () => {
     const previous = app.selectedRoom?.id;
     app.selectedRoom = undefined;

@@ -84,7 +84,7 @@ import {
 } from './coordinates';
 import { applyFixtureLights, createSceneLighting, type SceneLighting } from './sceneLighting';
 import { ViewEffects } from './viewEffects';
-import { buildWallPaint } from './wallPaint';
+import { buildWallPaint, pickWallFace } from './wallPaint';
 import type { OcclusionState } from './diagnostics';
 import type { ImmersiveWalk } from './xrWalk';
 import { HeadsetSession } from './headsetSession';
@@ -1060,6 +1060,17 @@ export class HouseViewer {
   setLights(enabled: boolean) {
     this.lightOn = enabled;
     this.updateLighting();
+  }
+
+  pickWallFace(clientX: number, clientY: number) {
+    const rect = this.canvas.getBoundingClientRect();
+    return pickWallFace(
+      this.scene,
+      this.level,
+      this.house.wallNodes,
+      clientX - rect.left,
+      clientY - rect.top,
+    );
   }
 
   /**

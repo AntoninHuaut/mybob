@@ -24,6 +24,12 @@ export interface Wall {
   exterior?: boolean;
   openings?: Opening[];
 }
+export interface WallFacePaint {
+  wallId: string;
+  side: -1 | 1;
+  color: string;
+}
+
 export interface Room {
   id: string;
   name: string;
@@ -37,6 +43,7 @@ export interface Room {
   note?: string;
   /** Paint of the room's side of its walls, `#rrggbb`; plain plaster when absent. */
   wallColor?: string;
+  wallFaces?: WallFacePaint[];
 }
 export interface Stair {
   id: string;

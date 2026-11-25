@@ -1,3 +1,4 @@
+import { endWallBrush } from './roomPaint';
 import type { ViewMode } from '../scene/viewer';
 import { furnitureViewState } from '../furniture/viewState';
 import { desktopHint, modeTitle, touchHint as touchHintText } from '../ui/modeChrome';
@@ -111,6 +112,7 @@ export function setMode(next: ViewMode): boolean {
 
 /** Called only after the viewer has accepted and applied a transition. */
 export function syncViewChrome() {
+  endWallBrush();
   const { viewer, display } = app;
   const next = viewer.mode;
   document.querySelectorAll<HTMLButtonElement>('[data-view]').forEach((b) => {
