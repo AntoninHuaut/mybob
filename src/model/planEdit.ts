@@ -1,8 +1,9 @@
 import { pointInPolygon, wallLength } from './geometry';
 import { editOpening, type OpeningMeasurements } from './openingEdit';
-import { deriveRooms } from './roomDerivation';
+import { deriveRooms, exteriorOutline } from './roomDerivation';
 import { checkJunctionOpening } from './roomPartition';
 import type { Level, Point2, Room, Wall } from './types';
+import { simplePolygon } from './validate';
 
 export type PlanSelection =
   | { kind: 'wall'; id: string }
@@ -47,7 +48,18 @@ function withWalls(level: Level, walls: Wall[]): Level {
     rooms.length && !rooms.some((r) => pointInPolygon(level.spawn.position, r.polygon))
       ? { ...level.spawn, position: rooms[0].viewpoint }
       : level.spawn;
-  return { ...level, walls, rooms, spawn };
+  // The outline follows the exterior walls' outer faces once they change and close a loop.
+  const exterior = walls.filter((w) => w.exterior);
+  const before = level.walls.filter((w) => w.exterior);
+  const changed = exterior.length !== before.length || exterior.some((w, i) => w !== before[i]);
+  const outline = changed ? exteriorOutline(walls) : undefined;
+  return {
+    ...level,
+    walls,
+    rooms,
+    spawn,
+    outline: outline && simplePolygon(outline) ? outline : level.outline,
+  };
 }
 
 const ENDS = 1e-6;
@@ -72,6 +84,25 @@ function crossing(origin: Point2, u: Point2, wall: Wall): Point2 | undefined {
   const d: Point2 = [wall.start[0] - origin[0], wall.start[1] - origin[1]];
   const t = (d[0] * v[1] - d[1] * v[0]) / denominator;
   return [origin[0] + u[0] * t, origin[1] + u[1] * t];
+}
+
+/** Whether the axes of two walls cross between the ends of both, or overlap along one line. */
+function axesCross(a: Wall, b: Wall) {
+  const d: Point2 = [a.end[0] - a.start[0], a.end[1] - a.start[1]];
+  const e: Point2 = [b.end[0] - b.start[0], b.end[1] - b.start[1]];
+  const denominator = d[0] * e[1] - d[1] * e[0];
+  const r: Point2 = [b.start[0] - a.start[0], b.start[1] - a.start[1]];
+  if (Math.abs(denominator) < 1e-9) {
+    const length = wallLength(a);
+    if (Math.abs(r[0] * d[1] - r[1] * d[0]) / length > ENDS) return false;
+    const along = (p: Point2) => ((p[0] - a.start[0]) * d[0] + (p[1] - a.start[1]) * d[1]) / length;
+    const [from, to] = [along(b.start), along(b.end)].sort((x, y) => x - y);
+    return Math.min(to, length) - Math.max(from, 0) > ENDS;
+  }
+  const t = (r[0] * e[1] - r[1] * e[0]) / denominator;
+  const s = (r[0] * d[1] - r[1] * d[0]) / denominator;
+  const inside = (k: number, length: number) => k * length > ENDS && (1 - k) * length > ENDS;
+  return inside(t, wallLength(a)) && inside(s, wallLength(b));
 }
 
 type EndMoves = Map<string, { start?: Point2; end?: Point2 }>;
@@ -115,6 +146,15 @@ function relocate(level: Level, moves: EndMoves): Level {
   for (const wall of walls) {
     const move = moves.get(wall.id);
     if (!move) continue;
+    // Crossings already in the stored plan do not block an edit that keeps them.
+    const before = level.walls[walls.indexOf(wall)];
+    if (
+      walls.some(
+        (other, i) =>
+          other !== wall && axesCross(wall, other) && !axesCross(before, level.walls[i]),
+      )
+    )
+      throw new Error('Le mur croise un autre mur.');
     for (const p of [move.start, move.end]) {
       if (!p) continue;
       for (const host of walls) {
@@ -158,14 +198,10 @@ export function setWallLength(level: Level, id: string, length: number): Level {
     wall.start[0] + ((old[0] - wall.start[0]) * length) / current,
     wall.start[1] + ((old[1] - wall.start[1]) * length) / current,
   ];
-  const same = (p: Point2) => Math.hypot(p[0] - old[0], p[1] - old[1]) < 1e-6;
-  const walls = level.walls.map((w) =>
-    same(w.start) || same(w.end)
-      ? { ...w, start: same(w.start) ? end : w.start, end: same(w.end) ? end : w.end }
-      : w,
-  );
-  walls.forEach(assertOpeningsFit);
-  return withWalls(level, walls);
+  const moves: EndMoves = new Map();
+  for (const w of level.walls)
+    if (same(w.start, old) || same(w.end, old)) moveEnd(moves, w, old, end);
+  return relocate(level, moves);
 }
 
 /**

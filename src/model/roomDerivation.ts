@@ -216,6 +216,34 @@ function faces(source: Wall[]) {
   return result;
 }
 
+/**
+ * The outer faces of the exterior walls when they close a single loop, each side offset
+ * outward by half its wall's thickness; undefined otherwise.
+ */
+export function exteriorOutline(walls: Wall[]): Point2[] | undefined {
+  const remaining = walls.filter((w) => w.exterior);
+  if (remaining.length < 3) return;
+  const near = (a: Point2, b: Point2) => Math.hypot(a[0] - b[0], a[1] - b[1]) < SNAP;
+  let points: Point2[] = [];
+  let thickness: number[] = [];
+  let at = remaining[0].start;
+  while (remaining.length) {
+    const i = remaining.findIndex((w) => near(w.start, at) || near(w.end, at));
+    if (i < 0) return;
+    const [wall] = remaining.splice(i, 1);
+    points.push(at);
+    thickness.push(wall.thickness);
+    at = near(wall.start, at) ? wall.end : wall.start;
+  }
+  if (!near(at, points[0])) return;
+  if (signedArea(points) < 0) {
+    points = [points[0], ...points.slice(1).reverse()];
+    thickness = thickness.reverse();
+  }
+  // A negative thickness offsets the counter-clockwise sides outward.
+  return finishedPolygon({ points, thickness: thickness.map((t) => -t) });
+}
+
 /** Offsets each side of a counter-clockwise face inward by half its wall's thickness. */
 function finishedPolygon({ points, thickness }: { points: Point2[]; thickness: number[] }) {
   // Merge collinear sides of equal thickness (a wall split by a junction on its other face).
