@@ -4,6 +4,7 @@ import { SolarPanel } from './ui/solarPanel';
 import { appTemplate } from './ui/appTemplate';
 import { solarPosition } from './scene/solar';
 import { HouseViewer } from './scene/viewer';
+import { generateMapsInWorker } from './scene/surfaceMapsInWorker';
 import { createEngine } from './scene/engine';
 import {
   collectDiagnostics,
@@ -203,6 +204,8 @@ function wireViewer(viewer: HouseViewer) {
 
 async function start() {
   dropLegacyPlanPhotoStore();
+  // The procedural maps are generated meanwhile, while the projects download and the engine starts.
+  const maps = generateMapsInWorker();
   try {
     const projectPaths = __PUBLIC_BUILD__
       ? ['/projects/studio-demo.json']
@@ -247,6 +250,8 @@ async function start() {
     } catch {
       /* optional persistence */
     }
+    const waitStarted = performance.now();
+    await maps;
     const loadStarted = performance.now();
     if (isShareLink(location.hash)) {
       // A link error (10-project limit, rejected document…) is not a failure of the
@@ -303,6 +308,7 @@ async function start() {
           { label: 'projets', ms: projectsAt },
           { label: 'bibliothèque', ms: libraryAt - projectsAt },
           { label: 'moteur', ms: engineAt - libraryAt },
+          { label: 'attente des textures', ms: loadStarted - waitStarted },
           { label: 'matériaux', ms: scene.materialsMs },
           { label: 'niveaux', ms: scene.levelsMs },
           { label: 'extérieur', ms: scene.exteriorMs },

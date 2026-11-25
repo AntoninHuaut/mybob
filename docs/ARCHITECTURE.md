@@ -276,7 +276,10 @@ camera moves. Neither fires during a headset session: nothing in the page is see
   in metres by `worldScaleUvs`, otherwise a 4 m wall and a 50 cm skirting board would stretch
   the same grain differently. Parquet keeps its 4.8 × 3.2 m tile, that of its albedo, and its
   roughness varies plank by plank. Pixel data is computed once per session and cached:
-  switching project rebuilds the scene, not the noise. On furniture, each map is uploaded once
+  switching project rebuilds the scene, not the noise. The generators (`surfaceMaps.ts`, free
+  of Babylon) run in a worker started at page load (`surfaceMapsInWorker.ts`); the start-up
+  awaits it before the first project load (`attente des textures` in the `démarrage` line) and
+  adopts its buffers as that cache. Without a worker, they are generated on first use. On furniture, each map is uploaded once
   per `FurnitureLayer` and shared by every material that uses it, whatever its colour; the
   textures are freed with the layer, not with the materials.
 - The walk post-processing chain is ordered and the order matters: Babylon appends each
