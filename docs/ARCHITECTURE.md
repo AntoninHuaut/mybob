@@ -349,7 +349,9 @@ camera moves. Neither fires during a headset session: nothing in the page is see
   `?diagnostic=passes` (`passBreakdown.ts`) splits Visite and Vue 3D instead: each view is
   measured whole, then without one pass at a time (occlusion, its blur alone, sun shadows,
   TAA, bloom/tone/FXAA), the quality frozen (`freezeQuality`) so only the pass changes. WebGL
-  has no per-pass timer, so a pass's cost is the GPU time saved without it; a pass is detached
+  has no per-pass timer, so a pass's cost is the GPU time saved without it, against the whole
+  view measured just before and after it (a first run after the view switch is discarded:
+  the GPU time drifts there, #319); a pass is detached
   into its empty camera slot and attached back there, so the chain keeps its order.
 - The exterior frames the building and its roof — distance and azimuth are chosen with them,
   and the plot stays whole in the background without dictating the framing; 3D view shows the
