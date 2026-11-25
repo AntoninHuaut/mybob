@@ -229,6 +229,9 @@ export class HouseViewer {
   private furnitureRevision = -1;
   private readonly aim = new WalkAim();
   private readonly renderScheduler = new RenderScheduler();
+  private readonly signatureValues = new Float64Array(24);
+  private planUp?: number;
+  private planUpLevel?: Level;
   private readonly refresh = new RefreshRateEstimator();
   private readonly warmth = new ViewWarmth();
   private preparing = false;
@@ -1667,43 +1670,58 @@ export class HouseViewer {
     return this.adaptiveResolution?.scale ?? 1;
   }
 
-  /** Everything about the active camera that changes the image, rounded under visibility. */
-  private cameraSignature(): string {
+  /**
+   * Everything about the active camera that changes the image, written into one reused
+   * buffer: this runs on every display frame, drawn or not (`RenderScheduler` rounds it).
+   */
+  private cameraSignature(): Float64Array {
+    const values = this.signatureValues;
+    values.fill(0);
     const camera = this.scene.activeCamera;
-    if (!camera) return '';
-    const values = [
-      camera.position.x,
-      camera.position.y,
-      camera.position.z,
-      camera.fov,
-      camera.mode,
-      camera.orthoLeft ?? 0,
-      camera.orthoRight ?? 0,
-      camera.orthoTop ?? 0,
-      camera.orthoBottom ?? 0,
-      // The canvas size, not the render size: the adaptive resolution changes the
-      // latter, and must not read as a camera motion.
-      this.canvas.clientWidth,
-      this.canvas.clientHeight,
-    ];
+    if (!camera) return values;
+    let index = 0;
+    const put = (value: number) => (values[index++] = value);
+    put(camera.position.x);
+    put(camera.position.y);
+    put(camera.position.z);
+    put(camera.fov);
+    put(camera.mode);
+    put(camera.orthoLeft ?? 0);
+    put(camera.orthoRight ?? 0);
+    put(camera.orthoTop ?? 0);
+    put(camera.orthoBottom ?? 0);
+    // The canvas size, not the render size: the adaptive resolution changes the
+    // latter, and must not read as a camera motion.
+    put(this.canvas.clientWidth);
+    put(this.canvas.clientHeight);
     if (camera === this.orbit) {
       const o = this.orbit;
-      values.push(o.alpha, o.beta, o.radius, o.target.x, o.target.y, o.target.z);
+      put(1);
+      put(o.alpha);
+      put(o.beta);
+      put(o.radius);
+      put(o.target.x);
+      put(o.target.y);
+      put(o.target.z);
       // Inertia still to spend moves the camera on the next images.
-      values.push(
-        o.inertialAlphaOffset,
-        o.inertialBetaOffset,
-        o.inertialRadiusOffset,
-        o.inertialPanningX,
-        o.inertialPanningY,
-      );
+      put(o.inertialAlphaOffset);
+      put(o.inertialBetaOffset);
+      put(o.inertialRadiusOffset);
+      put(o.inertialPanningX);
+      put(o.inertialPanningY);
     } else if (camera === this.walk) {
       const w = this.walk;
-      values.push(w.rotation.x, w.rotation.y, w.rotation.z);
-      values.push(w.cameraDirection.x, w.cameraDirection.y, w.cameraDirection.z);
-      values.push(w.cameraRotation.x, w.cameraRotation.y);
+      put(2);
+      put(w.rotation.x);
+      put(w.rotation.y);
+      put(w.rotation.z);
+      put(w.cameraDirection.x);
+      put(w.cameraDirection.y);
+      put(w.cameraDirection.z);
+      put(w.cameraRotation.x);
+      put(w.cameraRotation.y);
     }
-    return values.map((value) => value.toFixed(4)).join(',');
+    return values;
   }
 
   /** Changes on screen that no event announces: held keys, swinging doors, compiling shaders. */
@@ -1755,19 +1773,9 @@ export class HouseViewer {
     if (doorsMoved) this.shadowRefresh?.invalidate();
     this.shadowRefresh?.step();
     const immersive = this.immersive;
+    // Nothing in the page is seen from the headset: no 2D overlay frame while immersive.
     if (immersive) {
       immersive.step(dt);
-      const position = immersive.position;
-      this.emitFrame(() => ({
-        cameraMoved,
-        furnitureObstaclesRevision: furnitureObstaclesRevision(this.scene),
-        position,
-        headingDegrees: planHeading(immersive.camera),
-        planUpDegrees: this.planUpDegrees(),
-        roomId: this.level.rooms.find((r) => pointInPolygon(position, r.polygon))?.id,
-        nearDoor: false,
-        locked: true,
-      }));
       return;
     }
     if (this.mode === 'walk') {
@@ -1784,7 +1792,7 @@ export class HouseViewer {
         furnitureObstaclesRevision: furnitureObstaclesRevision(this.scene),
         position: [p.x, p.z],
         headingDegrees: planHeading(this.walk),
-        planUpDegrees: this.planUpDegrees(),
+        planUpDegrees: this.planUpDegrees(cameraMoved),
         roomId: room?.id,
         nearDoor: aim.nearDoor,
         nearStair: aim.nearStair,
@@ -1805,7 +1813,7 @@ export class HouseViewer {
         furnitureObstaclesRevision: furnitureObstaclesRevision(this.scene),
         position: [this.walk.position.x, this.walk.position.z],
         headingDegrees: planHeading(this.walk),
-        planUpDegrees: this.planUpDegrees(),
+        planUpDegrees: this.planUpDegrees(cameraMoved),
         nearDoor: false,
         locked: false,
       }));
@@ -1839,11 +1847,16 @@ export class HouseViewer {
     }
     this.keys.press(event.code);
   }
-  private planUpDegrees() {
-    const center = bounds(this.level.outline).center;
-    const origin = this.project(center),
-      up = this.project([center[0], center[1] - 1]);
-    return (Math.atan2(up.x - origin.x, origin.y - up.y) * 180) / Math.PI;
+  /** The plan's north on screen, measured again only when the camera or the level changed. */
+  private planUpDegrees(cameraMoved: boolean) {
+    if (cameraMoved || this.planUp === undefined || this.planUpLevel !== this.level) {
+      const center = bounds(this.level.outline).center;
+      const origin = this.project(center),
+        up = this.project([center[0], center[1] - 1]);
+      this.planUp = (Math.atan2(up.x - origin.x, origin.y - up.y) * 180) / Math.PI;
+      this.planUpLevel = this.level;
+    }
+    return this.planUp;
   }
   private keyup = (event: KeyboardEvent) => {
     this.keys.release(event.code);

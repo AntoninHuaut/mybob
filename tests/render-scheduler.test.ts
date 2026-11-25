@@ -14,7 +14,7 @@ function run(
   scheduler: RenderScheduler,
   frames: number,
   start = 0,
-  signature: (frame: number) => string = () => 'camera',
+  signature: (frame: number) => ArrayLike<number> = () => [1],
   busy: () => boolean = still,
 ) {
   let drawn = 0;
@@ -42,10 +42,10 @@ test('at rest, one frame per second catches up a change nobody announced', () =>
 test('a moving camera is redrawn on every frame, then for the smoothing time', () => {
   const scheduler = new RenderScheduler();
   run(scheduler, RENDER_SETTLE_FRAMES);
-  const moving = run(scheduler, 20, 1000, (frame) => `camera-${frame}`);
+  const moving = run(scheduler, 20, 1000, (frame) => [frame]);
   assert.equal(moving, 20);
   // The last position stays: the TAA still gets its settle frames, then rest.
-  const after = run(scheduler, RENDER_SETTLE_FRAMES + 10, 2000, () => 'camera-19');
+  const after = run(scheduler, RENDER_SETTLE_FRAMES + 10, 2000, () => [19]);
   assert.equal(after, RENDER_SETTLE_FRAMES - 1);
 });
 
@@ -83,24 +83,24 @@ test('the busy state is only consulted once the scene is set', () => {
 test('with a temporal effect on screen, a still view is never redrawn by itself', () => {
   const scheduler = new RenderScheduler();
   for (let frame = 0; frame < RENDER_SETTLE_FRAMES; frame++)
-    scheduler.shouldRender(frame * 16, 'camera', still, false);
+    scheduler.shouldRender(frame * 16, [1], still, false);
   let drawn = 0;
   for (let frame = 0; frame < Math.ceil((10 * IDLE_REFRESH_MS) / 16); frame++)
-    if (scheduler.shouldRender(1000 + frame * 16, 'camera', still, false)) drawn++;
+    if (scheduler.shouldRender(1000 + frame * 16, [1], still, false)) drawn++;
   assert.equal(drawn, 0, 'ten seconds of rest draw nothing');
   scheduler.request();
-  assert.equal(scheduler.shouldRender(20_000, 'camera', still, false), true);
+  assert.equal(scheduler.shouldRender(20_000, [1], still, false), true);
 });
 
 test('a busy scene and a moved camera still draw with a temporal effect', () => {
   const scheduler = new RenderScheduler();
   for (let frame = 0; frame < RENDER_SETTLE_FRAMES; frame++)
-    scheduler.shouldRender(frame * 16, 'camera', still, false);
+    scheduler.shouldRender(frame * 16, [1], still, false);
   assert.equal(
-    scheduler.shouldRender(2000, 'camera', () => true, false),
+    scheduler.shouldRender(2000, [1], () => true, false),
     true,
   );
-  assert.equal(scheduler.shouldRender(2016, 'elsewhere', still, false), true);
+  assert.equal(scheduler.shouldRender(2016, [2], still, false), true);
 });
 
 test('only pointer moves and wheel turns that can change the scene wake it', () => {
@@ -121,4 +121,19 @@ test('only pointer moves and wheel turns that can change the scene wake it', () 
   // Clicks, keys and form edits are how panels change the scene: always global.
   for (const type of ['pointerdown', 'pointerup', 'click', 'keydown', 'keyup', 'input', 'change'])
     assert.equal(wakesScene(event(type, panel), canvas), true, type);
+});
+
+test('the camera signature is compared as numbers, rounded under visibility, in a buffer reused by the caller', () => {
+  const scheduler = new RenderScheduler();
+  const values = new Float64Array([1, 2, 3]);
+  run(scheduler, RENDER_SETTLE_FRAMES, 0, () => values);
+  assert.equal(scheduler.idle, true);
+  values[1] = 2.00001;
+  scheduler.shouldRender(1000, values, still);
+  assert.equal(scheduler.cameraMoved, false, 'a change under 1e-4 is no motion');
+  values[1] = 2.001;
+  scheduler.shouldRender(1016, values, still);
+  assert.equal(scheduler.cameraMoved, true, 'the same buffer, changed in place, is seen');
+  scheduler.shouldRender(1032, values, still);
+  assert.equal(scheduler.cameraMoved, false);
 });

@@ -547,7 +547,7 @@ test('orbit setup invalidates once and still reaches the scheduler idle state', 
     effects.updateOrbit(true, camera);
     let rendered = 0;
     for (let frame = 0; frame < 100; frame++) {
-      if (scheduler.shouldRender(frame * 8, 'same-camera', () => false)) {
+      if (scheduler.shouldRender(frame * 8, [1], () => false)) {
         rendered++;
         effects.updateOrbit(true, camera);
       }
