@@ -62,7 +62,9 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Openings in plan        | `src/scene/planOpenings.ts`                                                  | Windows and doors drawn in Plan view, cut faces                                                                                          |
 | Walk ambience           | `src/scene/interiorAmbience.ts`                                              | Local IBL, TAA, occlusion; bloom in the walk only                                                                                        |
 | View effect lifecycle   | `src/scene/viewEffects.ts`                                                   | Scene-owned environment and pipelines, camera replacement, effect tiers and disposal                                                     |
-| Diagnostics             | `src/scene/diagnostics.ts`                                                   | `mybob.diag()`: engine, GPU, frame rate, resolution, scene                                                                               |
+| Diagnostics             | `src/scene/diagnostics.ts`                                                   | `mybob.diag()`: engine, GPU and class, refresh, frame rate, resolution, scene                                                            |
+| Device profile          | `src/scene/deviceProfile.ts`                                                 | GPU class from the renderer string; display refresh rate from idle render-loop ticks                                                     |
+| Headset report          | `src/scene/headsetReport.ts`                                                 | Headset frame-time median/p95, missed refreshes, rates, scale, foveation; shown on exit in a `?diagnostic` session                       |
 | Frame profiler          | `src/scene/frameProfiler.ts`                                                 | `mybob.profile(s)`: GPU/CPU time and draw calls per image of the current view, loaded on demand                                          |
 | Performance report      | `src/ui/performanceReport.ts`                                                | `?diagnostic` link: measures every view and shows a report to copy, no console needed                                                    |
 | Screen-width lines      | `src/scene/screenLines.ts`                                                   | CSS-width dimension/measurement polylines, resize and material ownership                                                                 |
@@ -312,7 +314,14 @@ camera moves.
   the site's link with `?diagnostic` runs that same path (`benchmarkViews`) behind a dialog,
   then shows the `diag` and `profile` text with a copy button; the parameter is removed from
   the address so a reload does not measure again. The text holds the machine and the timings,
-  never the house.
+  never the house. `diag` names the GPU class (`gpuClass`: software, integrated, discrete,
+  standalone headset) and the screen refresh rate, read from render-loop intervals that follow
+  an undrawn tick (a slow GPU would otherwise read as a slow screen; unknown until the view
+  has been still); `profile` opens with the same facts and the canvas size and DPR. In a
+  `?diagnostic` session, leaving the headset also shows a copyable headset report
+  (`headsetReport.ts`): frame-time median and p95 from the frames drawn after the loading
+  veil, the share that missed a refresh, the rate asked for and kept, scale, PC or
+  standalone, and foveation. The Quest Browser has no console, hence the dialog.
 - The exterior frames the building and its roof — distance and azimuth are chosen with them,
   and the plot stays whole in the background without dictating the framing; 3D view shows the
   house open; Plan hides terrain and roof. Selecting a room or adding furniture from the

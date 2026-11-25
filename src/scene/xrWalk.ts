@@ -7,6 +7,9 @@ import {
   XR_SCALE_STORAGE,
   XrScaleTuner,
 } from './xrScale';
+import { engineInfo, gpuName, type DiagnosticEngine } from './diagnostics';
+import { gpuClass } from './deviceProfile';
+import { HeadsetFrameStats, headsetReportLines } from './headsetReport';
 import type { WebXRCamera } from '@babylonjs/core/XR/webXRCamera';
 import type { Collider } from '@babylonjs/core/Collisions/collider';
 import { TransformNode } from '@babylonjs/core/Meshes/transformNode';
@@ -474,6 +477,8 @@ export async function startImmersiveWalk(host: ImmersiveHost): Promise<Immersive
     );
     // 0 to 1; ignored by a browser or layer without fixed foveation.
     helper.sessionManager.fixedFoveation = XR_FIXED_FOVEATION;
+    // Read back now: the layer, and with it the value, is gone once the session ends.
+    walk.foveation = helper.sessionManager.fixedFoveation;
   } catch (error) {
     walk.dispose();
     throw error;
@@ -506,6 +511,12 @@ export class ImmersiveWalk {
   private readiness = new PreparationProgress();
   private readonly counter = new FrameCounter();
   private governor?: FrameRateGovernor;
+  private requestedRate?: number;
+  /** For the `?diagnostic` report (`headsetReport.ts`); the veil's frames are left out. */
+  private readonly frames = new HeadsetFrameStats();
+  private lastFrameAt?: number;
+  /** The layer's fixed foveation, null when it has none. */
+  foveation: number | null = null;
   /** Seconds the current aim has spent in the hold band (`XR_AIM_HOLD_MAX`). */
   private aimHold = 0;
   /** Seconds left of the button hint (`XR_HINT`). */
@@ -586,7 +597,14 @@ export class ImmersiveWalk {
     const frame = manager.currentFrame;
     const session = manager.session;
     if (!frame || !session || this.ended) return;
-    if (this.veil && !this.lift()) return;
+    if (this.veil && !this.lift()) {
+      this.lastFrameAt = undefined;
+      return;
+    }
+    const now = performance.now();
+    if (this.lastFrameAt !== undefined)
+      this.frames.record(now - this.lastFrameAt, this.governor?.current);
+    this.lastFrameAt = now;
     this.followPose();
     this.blink.update(seconds);
     if (this.hintSeconds > 0) {
@@ -595,7 +613,7 @@ export class ImmersiveWalk {
       this.hud.visible = this.hintSeconds > 0 || this.preferences.counter;
       this.showHud();
     }
-    const fps = this.counter.tick(performance.now());
+    const fps = this.counter.tick(now);
     if (fps !== undefined) {
       this.lastFps = fps;
       this.showHud();
@@ -938,8 +956,23 @@ export class ImmersiveWalk {
     const supported = Array.from(session.supportedFrameRates ?? []);
     const rate = pickFrameRate(supported);
     if (rate === undefined) return;
+    this.requestedRate = rate;
     this.governor = new FrameRateGovernor(rate, supported);
     this.setFrameRate(rate);
+  }
+
+  /** The session's frame report, as copyable French text. */
+  frameReport(): string {
+    const engine = this.host.scene.getEngine() as unknown as DiagnosticEngine;
+    return headsetReportLines(this.frames.summary(), {
+      requestedHz: this.requestedRate,
+      retainedHz: this.governor?.current,
+      scale: this.scaleTuner?.scale ?? 1,
+      tethered: !!this.scaleTuner,
+      foveation: this.foveation,
+      gpuClass: gpuClass(engineInfo(engine).renderer, navigator.userAgent),
+      gpu: gpuName(engine),
+    }).join('\n');
   }
 
   private setFrameRate(rate: number) {

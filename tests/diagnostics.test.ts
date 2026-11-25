@@ -7,6 +7,7 @@ import {
   engineInfo,
   engineLabel,
   installDiagnostics,
+  profileContextLine,
   type DiagnosticEngine,
   type DiagnosticScene,
   type DiagnosticSnapshot,
@@ -116,10 +117,39 @@ test('a complete snapshot stays formattable without a browser', () => {
     screen: '1920 × 1080',
     userAgent: 'test',
     heapMb: 142.4,
+    gpuClass: 'discrete',
   };
   const lines = diagnosticLines(snapshot);
-  assert.match(lines[6], /8 cœurs · 8 Go de mémoire · écran 1920 × 1080 · tas 142 Mo/);
+  assert.match(
+    lines[6],
+    /8 cœurs · 8 Go de mémoire · écran 1920 × 1080 · fréquence non mesurée \(vue jamais immobile\) · tas 142 Mo/,
+  );
   assert.equal(lines[7], '  navigateur  test');
+});
+
+test('the report names the GPU class and the measured screen refresh rate', () => {
+  const lines = diagnosticLines(collectDiagnostics(engine(), scene(), view, 144));
+  assert.match(lines[1], /ANGLE \(NVIDIA RTX 3060\) · carte dédiée/);
+  assert.match(lines[6], /écran inconnu · 144 Hz/);
+  const unmeasured = diagnosticLines(collectDiagnostics(engine(), scene(), view));
+  assert.match(unmeasured[6], /écran inconnu · fréquence non mesurée/);
+});
+
+test('a profile starts with what explains its numbers: GPU class, refresh rate, pixels', () => {
+  const intel = engine({
+    getRenderWidth: () => 2256,
+    getRenderHeight: () => 1249,
+    getGlInfo: () => ({ renderer: 'ANGLE (Intel, Mesa Intel(R) Graphics (MTL), OpenGL ES 3.2)' }),
+  });
+  const snapshot = { ...collectDiagnostics(intel, scene(), view, 60), pixelRatio: 1.25 };
+  assert.equal(
+    profileContextLine(snapshot),
+    '[profil] carte intégrée · écran 60 Hz · rendu 2256 × 1249 px · dpr 1,3',
+  );
+  assert.match(
+    profileContextLine({ ...snapshot, refreshHz: undefined }),
+    /écran fréquence non mesurée \(vue jamais immobile\)/,
+  );
 });
 
 test('diag prints the report once and report returns it for copying', () => {
