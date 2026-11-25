@@ -1,4 +1,3 @@
-import { openPartitionMove } from './movePartition';
 import { userMessage } from '../errorMessage';
 import { isImmersiveSupported, preloadImmersive } from '../scene/headsetSession';
 import type { ViewMode } from '../scene/viewer';
@@ -205,7 +204,6 @@ export function wireProjectControls() {
   });
   el('#export-image').addEventListener('click', openImageExport);
   el('#tool-openings').addEventListener('click', openPlanOpenings);
-  el('#move-wall').addEventListener('click', openPartitionMove);
   wirePlanSelection();
   watchPlanHistory(syncPlanEditBar);
   el('#tool-plan-edit').addEventListener('click', togglePlanEditBar);

@@ -57,7 +57,6 @@ export function syncPlanEditBar() {
   if (!project) return;
   const { walls } = app.viewer.level;
   const history = planHistory(project);
-  el<HTMLButtonElement>('#move-wall').disabled = !walls.some((w) => !w.exterior);
   el<HTMLButtonElement>('#tool-openings').disabled = !walls.length;
   el<HTMLButtonElement>('#undo-plan').disabled = !history.undo.length;
   el<HTMLButtonElement>('#redo-plan').disabled = !history.redo.length;

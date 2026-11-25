@@ -28,10 +28,11 @@ effect cost more than the run-to-run noise; only half the resolution held 75 fps
 
 ## Plan editing responsiveness
 
-Partition drag (#343, measured alongside #322): the move dialog writes the last pointer event's
-timestamp-to-preview-DOM-update time, in ms, to `data-preview-latency-ms` on its diagram. It
-covers dispatch and preview work, not paint. Record browser, machine and project with each
-sample; no target is set yet.
+Wall and corner drags on the Plan (#359, measured alongside #322): `#plan-selection` carries
+the last pointer event's timestamp-to-preview-DOM-update time, in ms, in
+`data-preview-latency-ms`; `e2e/plan-design.spec.ts` logs it for the partition drag. It covers
+dispatch, room derivation and the SVG write, not paint. Record browser, machine and project with
+each sample; no target is set yet.
 
 ## Tried and rejected
 

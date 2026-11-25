@@ -1,4 +1,5 @@
 import { userMessage } from '../errorMessage';
+import type { PlanPointerKind } from '../scene/viewer';
 import type { Point2 } from '../model/types';
 import { nextCorner } from '../model/wallChain';
 import { addWallChain, emptyHouse, snapDraftPoint, type DraftSnap } from '../model/wallDraft';
@@ -99,8 +100,8 @@ function snap(at: Point2): DraftSnap {
   });
 }
 
-export function wallPointer(type: 'move' | 'tap', at: Point2, event: PointerEvent) {
-  if (!wallToolLive()) return false;
+export function wallPointer(type: PlanPointerKind, at: Point2, event: PointerEvent) {
+  if (!wallToolLive() || type === 'down' || type === 'up') return false;
   pointer = at;
   free = event.shiftKey;
   cursor = snap(at);

@@ -74,24 +74,13 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   await page.locator('#opening-form [type=submit]').click();
   await expect(page.getByRole('dialog')).toHaveCount(0);
 
-  await page.locator('#move-wall').click();
-  // Drawn right to left, the partition's positive side points away from the start (−z).
-  await page.locator('#move-partition [name=delta]').fill('-0.2');
-  await page.getByRole('button', { name: 'Appliquer le déplacement' }).click();
-  await expect(page.getByRole('dialog')).toHaveCount(0);
-  const moved = await exportedLevel(page);
-  expect(partition(moved).start[1]).toBeCloseTo(z0 + 2.1, 6);
-
-  await page.getByRole('button', { name: 'Annuler la modification du plan' }).click();
-  expect(partition(await exportedLevel(page)).start[1]).toBeCloseTo(z0 + 1.9, 6);
-  await page.getByRole('button', { name: 'Rétablir la modification du plan' }).click();
-  expect(await exportedLevel(page)).toEqual(moved);
-
-  // Inspector: page points are read from the wall tool's corners before it is turned off.
-  const [onPartition, inStart, onDoor] = await Promise.all(
+  // Page points are read from the wall tool's corners before it is turned off.
+  const [onPartitionBefore, onPartition, tooNarrow, inStart, onDoor] = await Promise.all(
     (
       [
+        [x0 + 3.5, z0 + 1.9],
         [x0 + 3.5, z0 + 2.1],
+        [x0 + 3.5, z0 + 2.9],
         [x0 + 3.5, z0 + 1],
         [x0 + 2.1, z0 + 2.1],
       ] as Point[]
@@ -99,6 +88,38 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   );
   await page.locator('#wall-tool').click();
   const inspector = page.locator('#plan-inspector');
+  const layer = page.locator('#plan-selection');
+
+  // Select the partition, then drag it 0.20 m away from the start: the 5 cm grid keeps it exact.
+  await page.mouse.click(...onPartitionBefore);
+  await expect(inspector.getByLabel('Épaisseur')).toHaveValue('0.1');
+  await page.mouse.move(...onPartitionBefore);
+  await page.mouse.down();
+  await page.mouse.move(...onPartition, { steps: 8 });
+  await expect(layer).toHaveAttribute('data-drag-state', 'valid');
+  await expect(layer.locator('.plan-drag-area')).toHaveCount(2);
+  console.log(
+    `Partition drag, pointer to preview: ${await layer.getAttribute('data-preview-latency-ms')} ms`,
+  );
+  await page.mouse.up();
+  const moved = await exportedLevel(page);
+  expect(partition(moved).start[1]).toBeCloseTo(z0 + 2.1, 6);
+  expect(partition(moved).openings![0].offset).toBeCloseTo(1.65, 6);
+
+  await page.getByRole('button', { name: 'Annuler la modification du plan' }).click();
+  expect(partition(await exportedLevel(page)).start[1]).toBeCloseTo(z0 + 1.9, 6);
+  await page.getByRole('button', { name: 'Rétablir la modification du plan' }).click();
+  expect(await exportedLevel(page)).toEqual(moved);
+
+  // Too close to the far wall to walk: red while dragging, back to the last house on release.
+  await page.mouse.move(...onPartition);
+  await page.mouse.down();
+  await page.mouse.move(...tooNarrow, { steps: 8 });
+  await expect(layer).toHaveAttribute('data-drag-state', 'invalid');
+  await expect(page.locator('#plan-drag-message')).not.toBeEmpty();
+  await page.mouse.up();
+  expect(await exportedLevel(page)).toEqual(moved);
+
   await page.mouse.click(...onPartition);
   await expect(inspector.getByLabel('Épaisseur')).toHaveValue('0.1');
   await inspector.getByLabel('Épaisseur').fill('0.15');
