@@ -132,6 +132,29 @@ function assertProjectsUnchanged() {
   }
 }
 
+/** Saves a geometry edit while leaving independently stored layouts and finishes intact. */
+export function savePlanProject(before: HouseProject, after: HouseProject) {
+  assertProjectsUnchanged();
+  if (app.readOnlyLink || before.id !== app.current.id || !imported.includes(before))
+    throw new Error('Le projet a changé. Rouvrez le plan.');
+  validateProject(after);
+  const previous = imported;
+  const next = imported.map((project) => (project === before ? after : project));
+  const levelId = app.viewer.level.id;
+  writeProjects(next);
+  imported = next;
+  try {
+    renderProjectOptions();
+    loadProject(after.id, levelId, undefined, { mode: 'plan', exterior: false });
+  } catch (error) {
+    writeProjects(previous);
+    imported = previous;
+    renderProjectOptions();
+    loadProject(before.id, levelId, undefined, { mode: 'plan', exterior: false });
+    throw error;
+  }
+}
+
 function writeProjects(list: HouseProject[]) {
   const text = JSON.stringify(list);
   localStorage.setItem(STORAGE, text);
