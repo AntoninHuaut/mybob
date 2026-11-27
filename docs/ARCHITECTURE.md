@@ -730,6 +730,9 @@ is what Babylon's Frame Graph provides, not the pipelines this app uses.
   valid placements. Use the projected triangles.
 - Plan sets a horizontal section plane; the walk must reset it to `null`, otherwise walls stay
   truncated.
+- Plan selection and « Porte » / « Fenêtre » placement read a click from press and release
+  (`selectionPointer`), not from Babylon's `POINTERTAP`, whose double-click and long-press
+  rules are suspected of losing a click on CI (#374). The « Murs » tool still uses taps.
 - Shadows are turned off when walls are lowered: a truncated façade must not cast the shadow
   of its full volume.
 - The automatic cutaway is at 0.85 m, below the window sills (0.90 m): that is what makes them

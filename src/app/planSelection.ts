@@ -25,7 +25,7 @@ import { stopWallTool, wallGridOn, wallToolActive } from './wallDrawing';
 
 /** Pointer distance, in CSS pixels, within which a click still lands on a wall. */
 const PICK_PIXELS = 6;
-/** Pointer travel, in CSS pixels, beyond which a press is a pan rather than a click. */
+/** Pointer travel, in CSS pixels, beyond which a press is a pan: Babylon's own drag threshold. */
 const CLICK_PIXELS = 10;
 
 let selection: PlanSelection | undefined;
@@ -125,11 +125,10 @@ function removeSelection() {
   }
 }
 
-// A click is a left press released within CLICK_PIXELS, read here rather than from Babylon's
-// tap, whose timing rules once seemed to lose one on CI (#374).
+// A click is a left press released within CLICK_PIXELS, not Babylon's tap (see ARCHITECTURE).
 export function selectionPointer(type: PlanPointerKind, at: Point2, event: PointerEvent) {
   const tolerance = PICK_PIXELS * app.viewer.planMetresPerPixel();
-  if (type === 'down') pressed = [event.clientX, event.clientY];
+  if (type === 'down') pressed = event.button === 0 ? [event.clientX, event.clientY] : undefined;
   if (type === 'up') {
     const from = pressed;
     pressed = undefined;
