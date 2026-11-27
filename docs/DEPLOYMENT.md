@@ -37,7 +37,7 @@ That job uses the Python version pinned in `.python-version` (also honoured by `
 After the public check, GitHub shares the build with three runners that run the E2E tests
 in desktop Chromium. Chromium headless shell is cached per version. The required check
 « Tests, types, build et confidentialité » aggregates the build, plan scripts and the
-three shards: any failure or skipped job blocks it and blocks auto-merge. Failure reports
+six shards: any failure or skipped job blocks it and blocks auto-merge. Failure reports
 and traces are archived for seven days. Shard scheduling and test verification are described
 in [E2E](E2E.md). Browser and Python checks are not part of `npm run ci` on the Cloudflare
 side: the two pipelines stay independent.
