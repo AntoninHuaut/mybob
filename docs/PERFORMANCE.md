@@ -48,6 +48,9 @@ Measured 2026-11-25 at CPU ×4, larger private house: a repeat Vue 3D switch pai
 from 586 to 341 ms (#371). Two causes of every material rebuilding its defines were removed: cut
 walls keep their cutaway clone under a section plane, and ceiling fixtures stay enabled at zero
 intensity in Plan. Plan captures are bit-identical; Vue 3D differs only by temporal noise.
+Measured again on 2026-11-27 (CPU ×4, headed Chromium, dedicated GPU): a repeat Vue 3D switch
+paints in 32–40 ms on the studio demo and 56–72 ms on the larger private house, within the
+targets of 50 and 100 ms.
 
 ## Tried and rejected
 
