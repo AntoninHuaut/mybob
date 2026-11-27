@@ -356,11 +356,15 @@ export class FurniturePanel {
       <div class="furniture-dialog-footer"><div class="furniture-footer-actions">${item.kind === 'tv-stand' ? '<button type="button" data-furniture-action="add-tv">Ajouter une TV dessus</button>' : ''}<button type="button" data-furniture-action="duplicate">Dupliquer</button><button type="button" data-furniture-action="delete" class="furniture-delete">Retirer le meuble</button></div><div class="furniture-footer-submit"><button type="button" class="furniture-cancel" data-edit-close>Annuler</button><button class="primary-button" type="submit" form="furniture-edit-form">Enregistrer</button></div></div></section>`;
   }
 
-  focusDimensions() {
-    const input = this.editDialog.querySelector<HTMLInputElement>(
+  private dimensionsInput() {
+    return this.editDialog.querySelector<HTMLInputElement>(
       '[data-tv-fields]:not([hidden]) input:not(:disabled), input[name="width"]:not(:disabled), input[name="locked"]',
     );
-    input?.focus({ preventScroll: true });
+  }
+
+  focusDimensions() {
+    const input = this.dimensionsInput();
+    if (input && input !== document.activeElement) input.focus({ preventScroll: true });
     if (input?.type === 'number') input.select();
   }
 
@@ -378,7 +382,11 @@ export class FurniturePanel {
       this.opener ??= captureFocus(this.container);
       if (this.dialog.open) this.dialog.close();
       this.renderDraft();
-      if (!this.editDialog.open) this.editDialog.showModal();
+      if (!this.editDialog.open) {
+        // showModal then focuses this field itself, sparing a second style and layout pass.
+        this.dimensionsInput()?.setAttribute('autofocus', '');
+        this.editDialog.showModal();
+      }
       this.adapter.onDialogState?.(true);
       this.focusDimensions();
     } catch (error) {
