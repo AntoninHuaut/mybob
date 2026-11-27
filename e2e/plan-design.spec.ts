@@ -221,3 +221,38 @@ test('every Plan click selects, however quick or long it is', async ({ page }) =
   await page.mouse.up();
   await expect(heading).toHaveText('Mur extérieur');
 });
+
+test('a newcomer draws a room with the mouse, guided at each click, then undoes it', async ({
+  page,
+}) => {
+  const menu = page.locator('#toggle-sidebar');
+  if ((await menu.getAttribute('aria-expanded')) !== 'true') await menu.click();
+  await page.getByRole('button', { name: 'Nouvelle maison' }).click();
+  const hint = page.locator('#plan-hint');
+  await expect(hint).toContainText('premier angle');
+  await expect(page.locator('#wall-tool')).toHaveAttribute('aria-pressed', 'true');
+  const box = (await page.locator('#scene').boundingBox())!;
+  const [x, y] = [box.x + box.width * 0.45, box.y + box.height * 0.4];
+  const corners: Point[] = [
+    [x, y],
+    [x + 160, y],
+    [x + 160, y + 120],
+    [x, y + 120],
+  ];
+  await clickPlan(page, corners[0]);
+  await page.mouse.move(...corners[1], { steps: 4 });
+  // The wall to be drawn shows with its thickness and its length.
+  await expect(page.locator('#wall-draft .wall-draft-band')).toHaveCount(1);
+  await expect(page.locator('#wall-draft-length')).toHaveText(/^\d+,\d{2} m$/);
+  for (const corner of corners.slice(1)) await clickPlan(page, corner);
+  await page.mouse.move(...corners[0], { steps: 4 });
+  await expect(page.locator('#wall-draft-target')).toHaveText('Fermer la pièce');
+  await expect(hint).toContainText('fermer la pièce');
+  await clickPlan(page, corners[0]);
+  await expect(hint).toContainText('Pièce fermée');
+  await expect(page.locator('#room-list')).toContainText('Pièce 1');
+
+  await page.getByRole('button', { name: 'Annuler la modification du plan' }).click();
+  await expect(hint).toContainText('Modification annulée');
+  await expect(page.locator('#room-list')).not.toContainText('Pièce 1');
+});

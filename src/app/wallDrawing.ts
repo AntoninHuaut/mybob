@@ -249,11 +249,33 @@ export function render() {
   }
   const last = points.at(-1);
   const preview = last && cursor ? previewEnd(last) : undefined;
-  if (points.length > 1)
-    html += `<polyline class="wall-draft-chain" points="${points.map(pair).join(' ')}"/>`;
+  const thickness = el<HTMLInputElement>('#wall-thickness').valueAsNumber || 0.1;
+  // Walls show with their real thickness, centred on the axis being drawn.
+  const band = (a: Point2, b: Point2) => {
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (!(length > 0)) return '';
+    const [nx, ny] = [
+      ((a[1] - b[1]) / length) * (thickness / 2),
+      ((b[0] - a[0]) / length) * (thickness / 2),
+    ];
+    return [
+      [a[0] + nx, a[1] + ny],
+      [b[0] + nx, b[1] + ny],
+      [b[0] - nx, b[1] - ny],
+      [a[0] - nx, a[1] - ny],
+    ]
+      .map((p) => pair(p as Point2))
+      .join(' ');
+  };
+  const { target } = wallDraftState();
+  if (target === 'close')
+    html += `<polygon class="wall-draft-fill" points="${points.map(pair).join(' ')}"/>`;
+  for (let i = 1; i < points.length; i++)
+    html += `<polygon class="wall-draft-chain" points="${band(points[i - 1], points[i])}"/>`;
   if (last && preview) {
+    html += `<polygon class="wall-draft-band" points="${band(last, preview)}"/>`;
     const [a, b] = [at(last), at(preview)];
-    html += `<line class="wall-draft-band" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`;
+    html += `<line class="wall-draft-axis" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`;
   }
   for (const p of points) {
     const { x, y } = at(p);
@@ -261,7 +283,18 @@ export function render() {
   }
   if (cursor && !typed) {
     const { x, y } = at(cursor.point);
-    html += `<circle class="wall-draft-snap ${cursor.kind}" cx="${x}" cy="${y}" r="7"/>`;
+    html += `<circle class="wall-draft-snap ${target ?? cursor.kind}" cx="${x}" cy="${y}" r="7"/>`;
+    // What the click will do, by the pointer: a newcomer reads it where they look.
+    const label =
+      target === 'close'
+        ? 'Fermer la pièce'
+        : target === 'join'
+          ? 'Terminer ici'
+          : !points.length && (cursor.kind === 'wall' || cursor.kind === 'corner')
+            ? 'Commencer une cloison ici'
+            : '';
+    if (label)
+      html += `<text id="wall-draft-target" class="wall-draft-target" x="${(Number(x) + 12).toFixed(1)}" y="${(Number(y) - 12).toFixed(1)}">${label}</text>`;
   }
   if (last && preview) {
     const length = Math.hypot(preview[0] - last[0], preview[1] - last[1]);

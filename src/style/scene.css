@@ -894,16 +894,27 @@
   stroke: #6e8c6833;
   stroke-width: 1;
 }
-.wall-draft-chain,
-.wall-draft-band {
-  fill: none;
+.wall-draft-chain {
+  fill: #87533599;
   stroke: #875335;
-  stroke-width: 3;
-  stroke-linecap: round;
+  stroke-width: 1.5;
   stroke-linejoin: round;
 }
 .wall-draft-band {
-  stroke-dasharray: 7 5;
+  fill: #87533540;
+  stroke: #875335;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  stroke-linejoin: round;
+}
+.wall-draft-axis {
+  stroke: #875335;
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+.wall-draft-fill {
+  fill: #3a7d4a26;
+  stroke: none;
 }
 .wall-draft-joint {
   fill: #fcfef7;
@@ -921,6 +932,19 @@
 .wall-draft-snap.grid,
 .wall-draft-snap.free {
   stroke-opacity: 0.5;
+}
+.wall-draft-snap.close,
+.wall-draft-snap.join {
+  fill: #315e4333;
+  stroke-width: 3;
+}
+.wall-draft-target {
+  fill: #2f5a3a;
+  stroke: #fcfef7;
+  stroke-width: 4px;
+  paint-order: stroke;
+  font-size: 13px;
+  font-weight: 700;
 }
 .wall-draft-length {
   fill: #36523a;
