@@ -25,6 +25,8 @@ import { stopWallTool, wallGridOn, wallToolActive } from './wallDrawing';
 
 /** Pointer distance, in CSS pixels, within which a click still lands on a wall. */
 const PICK_PIXELS = 6;
+/** Pointer travel, in CSS pixels, beyond which a press is a pan: Babylon's own drag threshold. */
+const CLICK_PIXELS = 10;
 
 let selection: PlanSelection | undefined;
 /** Where the selected wall was clicked, in metres from its start: « Couper » cuts there. */
@@ -32,6 +34,8 @@ let cutOffset: number | undefined;
 let inspector: PlanInspector | undefined;
 /** « Porte » or « Fenêtre » armed: the next click on a wall places one there. */
 let placing: 'door' | 'window' | undefined;
+/** Where the left button went down, in client pixels. */
+let pressed: [number, number] | undefined;
 
 export const placingOpening = () => placing;
 
@@ -121,27 +125,39 @@ function removeSelection() {
   }
 }
 
+// A click is a left press released within CLICK_PIXELS, not Babylon's tap (see ARCHITECTURE).
 export function selectionPointer(type: PlanPointerKind, at: Point2, event: PointerEvent) {
   const tolerance = PICK_PIXELS * app.viewer.planMetresPerPixel();
+  if (type === 'down') pressed = event.button === 0 ? [event.clientX, event.clientY] : undefined;
   if (type === 'up') {
+    const from = pressed;
+    pressed = undefined;
     const apply = endDrag();
-    if (!apply) return false;
-    try {
-      edit(apply);
-    } catch (error) {
-      toast(userMessage(error, 'Déplacement impossible.'));
+    if (apply) {
+      try {
+        edit(apply);
+      } catch (error) {
+        toast(userMessage(error, 'Déplacement impossible.'));
+      }
+      syncPlanSelection();
+      return true;
     }
-    syncPlanSelection();
-    return true;
+    const clicked =
+      event.button === 0 &&
+      !!from &&
+      Math.hypot(event.clientX - from[0], event.clientY - from[1]) <= CLICK_PIXELS;
+    if (!clicked) return false;
   }
   if (type === 'move') {
     moveDrag(at, event, tolerance);
     return false;
   }
   if (!planSelectionLive()) return false;
+  // The click was handled on up: its tap must not reach the viewer's own handling.
+  if (type === 'tap') return true;
   if (placing) {
-    if (type === 'tap') place(placing, at, tolerance);
-    return type === 'tap';
+    if (type === 'up') place(placing, at, tolerance);
+    return type === 'up';
   }
   if (type === 'down') return startDrag(at, selection, tolerance);
   selection = pickPlan(app.viewer.level, at, tolerance);
