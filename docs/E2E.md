@@ -40,7 +40,7 @@ adoption, silence for the owner, old link, corrupted hash), `e2e/first-steps.spe
 `e2e/view-state.spec.ts` (accepted view chrome, project/level resets and touch-only walk refusal),
 `e2e/plan-design.spec.ts` (room drawn and divided on the Plan with « Murs », the wall tool marks existing corners with `data-point` for `e2e/planDrawing.ts`; door placed by click and dragged, partition selected and dragged on the Plan, undone and
 redone, a too-narrow drag refused, inspector edits, a window dragged onto the door refused, then walked through in Visite; `#viewport[data-walk-room]` names the room the visitor
-stands in; every Plan click selects, quick successive clicks and a long press included).
+stands in; every Plan click selects, quick successive clicks and a long press included; a newcomer draws a room with the mouse, guided by `#plan-hint` and the pointer label, then undoes it).
 `pnpm run test:e2e` builds and checks the public output before running all scenarios in CI.
 `pnpm run test:e2e:built` runs scenarios on the already verified build. Browser HTML reports,
 screenshots, test-results and traces are not uploaded by CI. The public-build artifact is
