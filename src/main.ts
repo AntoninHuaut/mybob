@@ -53,6 +53,7 @@ import {
 } from './app/projectLibrary';
 import { handleStairLevelChange, loadLevel, loadProject, selectRoom } from './app/projectView';
 import { readOnboarding, showStartCard } from './app/preferences';
+import { adviseChromium } from './ui/browserAdvice';
 import { openSharedLink, wireLinkHashFlush } from './app/shareLinkSync';
 import { canChangeMode, setSidebar, syncViewChrome } from './app/viewChrome';
 import { render as renderWallDraft, wallToolActive } from './app/wallDrawing';
@@ -224,6 +225,8 @@ async function start() {
   // The panel shows its real state before any wait: a control read during the start-up
   // (the template says closed) must not be toggled once the start-up opens it.
   setSidebar(matchMedia('(min-width: 761px)').matches);
+  // Before loading: a visitor who switches browser doesn't wait for a load they'll leave.
+  await adviseChromium(navigator.userAgent, globalThis.localStorage);
   // The procedural maps are generated meanwhile, while the projects download and the engine starts.
   const maps = generateMapsInWorker(() => new SurfaceMapsWorker());
   try {
@@ -357,7 +360,7 @@ async function start() {
     el('#loading').classList.remove('loading-startup');
     el('#fatal-error').hidden = false;
     el('#fatal-error').innerHTML =
-      `${icon('info', 30)}<h2>La vue 3D n’a pas pu démarrer.</h2><p>${esc(userMessage(error, 'Erreur de chargement.'))}</p><p>Utilisez une version récente de Chrome, Firefox ou Edge, avec l’accélération graphique activée.</p><button class="primary-button" id="reload">Réessayer</button>`;
+      `${icon('info', 30)}<h2>La vue 3D n’a pas pu démarrer.</h2><p>${esc(userMessage(error, 'Erreur de chargement.'))}</p><p>Utilisez une version récente de Chrome ou Edge, avec l’accélération graphique activée.</p><button class="primary-button" id="reload">Réessayer</button>`;
     el('#reload').addEventListener('click', () => location.reload());
     console.error(error);
   }

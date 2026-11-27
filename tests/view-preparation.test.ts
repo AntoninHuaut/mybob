@@ -7,7 +7,10 @@ import { Effect } from '@babylonjs/core/Materials/effect';
 import { ArcRotateCamera } from '@babylonjs/core/Cameras/arcRotateCamera';
 import { validateProject } from '../src/model/validate';
 
-async function setup(t: test.TestContext) {
+async function setup(
+  t: test.TestContext,
+  { beforeLoad, wait = true }: { beforeLoad?: (engine: NullEngine) => void; wait?: boolean } = {},
+) {
   const window = new Window({ url: 'http://localhost' });
   const globals = {
     window,
@@ -60,9 +63,10 @@ async function setup(t: test.TestContext) {
       await readFile(new URL('../public/projects/studio-demo.json', import.meta.url), 'utf8'),
     ),
   );
+  beforeLoad?.(engine);
   viewer.load(project);
   loop();
-  await viewer.whenReady();
+  if (wait) await viewer.whenReady();
   return { viewer, engine, loop };
 }
 
@@ -184,4 +188,25 @@ test('materials carry the Visite jitter plugin, disabled, before and after a vis
   loop();
   assert.ok(jitter(later)?.isEnabled === false, 'a material made after the visit gets it too');
   assert.ok(armed());
+});
+
+test('the overview asks for every cutaway state’s programs before the first one is linked', async (t) => {
+  let linked = false;
+  const { viewer, engine } = await setup(t, {
+    beforeLoad: (engine) => {
+      const ready = engine.areAllEffectsReady.bind(engine);
+      t.mock.method(engine, 'areAllEffectsReady', () => linked && ready());
+    },
+    wait: false,
+  });
+  for (let frame = 0; frame < 6; frame++) await new Promise((resolve) => setTimeout(resolve, 0));
+  const requested = Object.keys(
+    (engine as unknown as { _compiledEffects: object })._compiledEffects,
+  );
+  assert.ok(
+    requested.some((key) => key.includes('CLIPPLANE')),
+    'the lowered walls compile alongside the full ones',
+  );
+  linked = true;
+  await viewer.whenReady();
 });

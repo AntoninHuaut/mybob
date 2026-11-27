@@ -21,7 +21,7 @@ pnpm install --frozen-lockfile
 pnpm run dev
 ```
 
-Open the address printed by Vite. By default only the demonstration studio is bundled; import your house locally. `pnpm run dev:private` loads a local personal plan. The application renders with WebGL 2; browser graphics acceleration is required. No account nor data server is needed locally.
+Open the address printed by Vite. By default only the demonstration studio is bundled; import your house locally. `pnpm run dev:private` loads a local personal plan. The application renders with WebGL 2; browser graphics acceleration is required. Chrome or Edge render it best; Firefox is told so once. No account nor data server is needed locally.
 
 ```sh
 pnpm test
