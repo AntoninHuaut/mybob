@@ -247,10 +247,12 @@ let scope = '';
 export function syncPlanSelection() {
   if (!inspector) return;
   // A plan edit reloads the project, passing through states where editing is off: the
-  // selection survives as long as its level does.
+  // selection and an armed « Porte » / « Fenêtre » survive as long as their level does.
   const current = `${app.current?.id}/${app.viewer.level.id}`;
-  if (current !== scope || !planEditBarOpen() || wallToolActive()) selection = undefined;
-  if (!planEditBarOpen() || wallToolActive() || !editableProject()) placing = undefined;
+  if (current !== scope || !planEditBarOpen() || wallToolActive()) {
+    selection = undefined;
+    placing = undefined;
+  }
   scope = current;
   const live = planSelectionLive();
   inspector.show(live ? app.viewer.level : undefined, live ? selection : undefined);
