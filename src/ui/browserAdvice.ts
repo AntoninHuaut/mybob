@@ -12,8 +12,8 @@ export function adviseChromium(userAgent: string, storage: Storage | undefined):
   }
   const dialog = document.createElement('dialog');
   dialog.setAttribute('aria-labelledby', 'browser-advice-title');
-  dialog.innerHTML = `<h2 id="browser-advice-title">Pour une 3D plus fluide, ouvrez Maison dans Chrome ou Edge</h2>
-    <p>Firefox fonctionne, mais la vue 3D et la Visite y sont nettement moins fluides. Google Chrome ou Microsoft Edge tirent mieux parti de la carte graphique.</p>
+  dialog.innerHTML = `<h2 id="browser-advice-title">MyBob est plus fluide dans Chrome ou Edge</h2>
+    <p>Vous êtes sur Firefox : MyBob y fonctionne, mais la 3D risque d’être saccadée. Pour une navigation fluide, ouvrez cette page dans Google Chrome ou Microsoft Edge.</p>
     <p>Vos projets sont enregistrés dans ce navigateur : exportez-les avec le bouton Exporter pour les retrouver dans l’autre.</p>
     <form method="dialog" class="dialog-actions"><button type="submit" class="primary-button" autofocus>Continuer avec Firefox</button></form>`;
   document.body.append(dialog);
