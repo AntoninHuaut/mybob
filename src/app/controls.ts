@@ -12,7 +12,13 @@ import { setFurnitureCirculation } from './furnitureController';
 import { restorePlan, setPlanTool, syncPlanEditBar, togglePlanEditBar } from './planEditBar';
 import { watchPlanHistory } from './planHistory';
 import { wirePlanSelection } from './planSelection';
-import { startNewHouse, toggleWallGrid, wallToolKey } from './wallDrawing';
+import {
+  render as renderWallDraft,
+  setWallType,
+  startNewHouse,
+  toggleWallGrid,
+  wallToolKey,
+} from './wallDrawing';
 import { downloadProject, importProject, openRemoveProject } from './projectLibrary';
 import { loadLevel, loadProject } from './projectView';
 import { chooseQuality, dismissStartCard, updateNavigationPreferences } from './preferences';
@@ -213,6 +219,9 @@ export function wireProjectControls() {
   el('#redo-plan').addEventListener('click', () => restorePlan('redo'));
   el('#new-house').addEventListener('click', () => void startNewHouse());
   el('#wall-grid').addEventListener('click', toggleWallGrid);
+  for (const id of ['#wall-exterior', '#wall-partition'])
+    el(id).addEventListener('click', () => setWallType(Number(el(id).dataset.thickness)));
+  el('#wall-thickness').addEventListener('input', renderWallDraft);
   el('#import-project').addEventListener('click', () =>
     el<HTMLInputElement>('#import-file').click(),
   );

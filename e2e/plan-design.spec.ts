@@ -243,6 +243,8 @@ test('a newcomer draws a room with the mouse, guided at each click, then undoes 
   const hint = page.locator('#plan-hint');
   await expect(hint).toContainText('premier angle');
   await expect(page.locator('#wall-tool')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#wall-exterior')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#wall-thickness')).toHaveValue('20');
   // Choosing to draw answers « Premiers pas »: the card no longer covers the plan.
   await expect(page.locator('#start-card')).toBeHidden();
   const box = (await page.locator('#scene').boundingBox())!;
@@ -264,6 +266,8 @@ test('a newcomer draws a room with the mouse, guided at each click, then undoes 
   await expect(hint).toContainText('fermer la pièce');
   await clickPlan(page, corners[0]);
   await expect(hint).toContainText('Pièce fermée');
+  await expect(hint).toContainText('Cloison 10 cm');
+  await expect(page.locator('#wall-partition')).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('#room-list')).toContainText('Pièce 1');
 
   await page.getByRole('button', { name: 'Annuler la modification du plan' }).click();

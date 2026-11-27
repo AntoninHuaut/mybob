@@ -4,7 +4,7 @@ import type { Point2 } from '../model/types';
 import { nextCorner } from '../model/wallChain';
 import { addWallChain, emptyHouse, snapDraftPoint, type DraftSnap } from '../model/wallDraft';
 import { number } from '../ui/format';
-import { el, toast } from './dom';
+import { activeButton, el, toast } from './dom';
 import {
   editableProject,
   openPlanEditBar,
@@ -53,6 +53,21 @@ export const wallToolActive = () => active;
 export const wallToolLive = () => active && !el('#plan-edit-bar').hidden && !app.viewer.measureMode;
 export const wallGridOn = () => grid;
 
+/** The thickness of the next walls, in metres; the field is in centimetres. */
+const wallThickness = () => el<HTMLInputElement>('#wall-thickness').valueAsNumber / 100;
+
+/** « Mur extérieur 20 cm » or « Cloison 10 cm » sets the thickness; any other value is custom. */
+export function setWallType(centimetres: number) {
+  el<HTMLInputElement>('#wall-thickness').value = String(centimetres);
+  render();
+}
+
+function syncWallType() {
+  const value = el<HTMLInputElement>('#wall-thickness').valueAsNumber;
+  activeButton('#wall-exterior', value === 20);
+  activeButton('#wall-partition', value === 10);
+}
+
 /** What the hint needs: corners drawn, and what a click at the pointer would do. */
 export function wallDraftState(): { corners: number; target?: 'close' | 'join' } {
   if (!wallToolLive() || !points.length || !cursor || typed) return { corners: points.length };
@@ -72,7 +87,7 @@ export function startWallTool() {
   active = true;
   points = [];
   typed = '';
-  el<HTMLInputElement>('#wall-thickness').value = app.viewer.level.walls.length ? '0.10' : '0.20';
+  el<HTMLInputElement>('#wall-thickness').value = app.viewer.level.walls.length ? '10' : '20';
   syncDisplayControls();
   render();
 }
@@ -162,16 +177,23 @@ function commit(closed: boolean) {
   if (!project) return;
   try {
     const levelId = app.viewer.level.id;
-    const thickness = el<HTMLInputElement>('#wall-thickness').valueAsNumber;
+    const thickness = wallThickness();
     const levels = project.levels.map((level) =>
       level.id === levelId ? addWallChain(level, chain, closed, thickness) : level,
     );
     applyPlanEdit(project, { ...project, levels });
-    el<HTMLInputElement>('#wall-thickness').value = '0.10';
+    const field = el<HTMLInputElement>('#wall-thickness');
+    // After the outline come the partitions: the switch is announced, never silent.
+    const switched = field.value !== '10';
+    field.value = '10';
     planNotice(
-      closed
-        ? 'Pièce fermée. Tracez les cloisons en partant d’un mur, puis placez portes et fenêtres.'
-        : 'Murs ajoutés.',
+      closed && switched
+        ? 'Pièce fermée. Type de mur : Cloison 10 cm. Tracez les cloisons en partant d’un mur.'
+        : closed
+          ? 'Pièce fermée. Tracez les cloisons en partant d’un mur, puis placez portes et fenêtres.'
+          : switched
+            ? 'Murs ajoutés. Type de mur : Cloison 10 cm.'
+            : 'Murs ajoutés.',
     );
   } catch (error) {
     planNotice(userMessage(error, 'Ces murs ne peuvent pas être ajoutés.'), 'error');
@@ -234,6 +256,7 @@ export function render() {
   const svg = document.querySelector<SVGSVGElement>('#wall-draft')!;
   const live = wallToolLive();
   svg.toggleAttribute('hidden', !live);
+  syncWallType();
   renderPlanHint();
   if (!live) return;
   const viewer = app.viewer;
@@ -254,7 +277,7 @@ export function render() {
   }
   const last = points.at(-1);
   const preview = last && cursor ? previewEnd(last) : undefined;
-  const thickness = el<HTMLInputElement>('#wall-thickness').valueAsNumber || 0.1;
+  const thickness = wallThickness() || 0.1;
   // Walls show with their real thickness, centred on the axis being drawn.
   const band = (a: Point2, b: Point2) => {
     const length = Math.hypot(b[0] - a[0], b[1] - a[1]);

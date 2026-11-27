@@ -689,6 +689,11 @@
   background: transparent;
   color: #dcebd5;
 }
+.plan-wall-types {
+  display: inline-flex;
+  gap: 2px;
+}
+.plan-edit-bar .plan-wall-types button[aria-pressed='true'],
 #wall-grid[aria-pressed='true'] {
   background: #e2eed6;
   color: #396b30;
@@ -993,6 +998,11 @@
 }
 .plan-edit-label {
   white-space: nowrap;
+}
+.plan-edit-unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .plan-edit-divider {
   flex: 0 0 1px;
