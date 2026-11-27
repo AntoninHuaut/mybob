@@ -15,9 +15,27 @@ async function joints(page: Page) {
   );
 }
 
+/** Corners once two readings 250 ms apart agree: the Plan may still be framing the house. */
+async function settledJoints(page: Page) {
+  let last = '';
+  let corners: Awaited<ReturnType<typeof joints>> = [];
+  await expect
+    .poll(
+      async () => {
+        corners = await joints(page);
+        const same = JSON.stringify(corners) === last;
+        last = JSON.stringify(corners);
+        return same;
+      },
+      { message: 'Plan corners stop moving', intervals: [250] },
+    )
+    .toBe(true);
+  return corners;
+}
+
 /** Page position of a plan point, interpolated from three wall corners (Plan is orthographic). */
 export async function pagePoint(page: Page, target: Point): Promise<Point> {
-  const [a, b, c] = await joints(page);
+  const [a, b, c] = await settledJoints(page);
   // Solve target = a + s (b − a) + t (c − a) in plan, then apply it on the page.
   const [ux, uz, vx, vz] = [
     b.plan[0] - a.plan[0],

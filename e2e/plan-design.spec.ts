@@ -202,7 +202,7 @@ test('every Plan click selects, however quick or long it is', async ({ page }) =
   const [onWall, inRoom] = await Promise.all(
     (
       [
-        [x0 + 2, z0],
+        [x0 + 2, z0 + 3.2],
         [x0 + 3.5, z0 + 1],
       ] as Point[]
     ).map((p) => pagePoint(page, p)),
