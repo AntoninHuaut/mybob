@@ -196,3 +196,28 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   await expect(viewport).toHaveAttribute('data-walk-room', beyond.id, { timeout: 15_000 });
   await page.keyboard.up('KeyW');
 });
+
+test('every Plan click selects, however quick or long it is', async ({ page }) => {
+  const [x0, z0] = await drawClearRoom(page);
+  const [onWall, inRoom] = await Promise.all(
+    (
+      [
+        [x0 + 2, z0],
+        [x0 + 1, z0 + 1],
+      ] as Point[]
+    ).map((p) => pagePoint(page, p)),
+  );
+  await page.locator('#wall-tool').click();
+  const heading = page.locator('#plan-inspector').getByRole('heading');
+
+  // Quick clicks, some within Babylon's double-click delay (#374).
+  for (const at of [onWall, inRoom, onWall, inRoom]) await page.mouse.click(...at);
+  await expect(heading).toHaveText('Pièce');
+
+  // A press longer than Babylon's long-press delay.
+  await page.mouse.move(...onWall);
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+  await expect(heading).toHaveText('Mur extérieur');
+});
