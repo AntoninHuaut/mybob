@@ -15,6 +15,7 @@ import {
   syncPlanEditBar,
 } from './planEditBar';
 import { applyPlanEdit } from './planHistory';
+import { dismissStartCard } from './preferences';
 import { installProjectDocument } from './projectLibrary';
 import { app } from './state';
 import { setMode, setSidebar, syncDisplayControls } from './viewChrome';
@@ -102,6 +103,8 @@ export async function startNewHouse() {
     if (!matchMedia('(min-width: 761px)').matches) setSidebar(false);
     setMode('plan');
     setPlanTool('wall');
+    // Drawing is an answer to « Premiers pas »; the card would cover half the plan.
+    dismissStartCard();
   } catch (error) {
     toast(userMessage(error, 'Création impossible.'));
   }

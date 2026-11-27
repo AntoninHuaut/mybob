@@ -237,6 +237,8 @@ test('a newcomer draws a room with the mouse, guided at each click, then undoes 
   const hint = page.locator('#plan-hint');
   await expect(hint).toContainText('premier angle');
   await expect(page.locator('#wall-tool')).toHaveAttribute('aria-pressed', 'true');
+  // Choosing to draw answers « Premiers pas »: the card no longer covers the plan.
+  await expect(page.locator('#start-card')).toBeHidden();
   const box = (await page.locator('#scene').boundingBox())!;
   const [x, y] = [box.x + box.width * 0.45, box.y + box.height * 0.4];
   const corners: Point[] = [
