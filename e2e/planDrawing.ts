@@ -35,6 +35,17 @@ export async function pagePoint(page: Page, target: Point): Promise<Point> {
   ];
 }
 
+/** Clicks the Plan at a page point, first failing with whatever covers the canvas there (#374). */
+export async function clickPlan(page: Page, at: Point) {
+  const cover = await page.evaluate(([x, y]) => {
+    const top = document.elementFromPoint(x, y);
+    if (top?.id === 'scene') return '';
+    return top ? `${top.tagName.toLowerCase()}#${top.id}.${[...top.classList].join('.')}` : 'none';
+  }, at);
+  expect(cover, 'element over the Plan canvas at the click').toBe('');
+  await page.mouse.click(...at);
+}
+
 /**
  * « Nouvelle maison », then a 4 × 3 m clear room with 0.20 m walls drawn on the Plan: a first
  * corner on the 5 cm grid, then axis lengths 4.20 / 3.20 typed with arrow keys. Returns that

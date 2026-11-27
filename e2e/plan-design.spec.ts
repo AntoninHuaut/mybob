@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
-import { drawClearRoom, pagePoint } from './planDrawing';
+import { clickPlan, drawClearRoom, pagePoint } from './planDrawing';
 import { startupDone } from './startup';
 
 type Point = [number, number];
@@ -83,7 +83,7 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   // A door placed by click, centred 1.2 m along the partition, then dragged to 1.65 m.
   await page.locator('#place-door').click();
   await expect(page.locator('#wall-hint')).toBeHidden();
-  await page.mouse.click(...doorClick);
+  await clickPlan(page, doorClick);
   await expect(inspector.getByLabel('Largeur')).toHaveValue('0.9');
   await expect(inspector.getByLabel('Distance au jambage')).toHaveValue('0.75');
   await page.mouse.move(...doorClick);
@@ -100,7 +100,7 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   });
 
   // Select the partition, then drag it 0.20 m away from the start: the 5 cm grid keeps it exact.
-  await page.mouse.click(...onPartitionBefore);
+  await clickPlan(page, onPartitionBefore);
   await expect(inspector.getByLabel('Épaisseur')).toHaveValue('0.1');
   await page.mouse.move(...onPartitionBefore);
   await page.mouse.down();
@@ -129,7 +129,7 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   await page.mouse.up();
   expect(await exportedLevel(page)).toEqual(moved);
 
-  await page.mouse.click(...onPartition);
+  await clickPlan(page, onPartition);
   await expect(inspector.getByLabel('Épaisseur')).toHaveValue('0.1');
   await inspector.getByLabel('Épaisseur').fill('0.15');
   await inspector.getByLabel('Épaisseur').press('Enter');
@@ -143,13 +143,13 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   await expect(inspector.getByLabel('Épaisseur')).toHaveValue('0.1');
   expect(await exportedLevel(page)).toEqual(moved);
 
-  await page.mouse.click(...onDoor);
+  await clickPlan(page, onDoor);
   await inspector.getByLabel('Largeur').fill('5');
   await inspector.getByLabel('Largeur').press('Enter');
   await expect(inspector.getByRole('alert')).toHaveText('L’ouverture dépasse le bout du mur.');
   expect(await exportedLevel(page)).toEqual(moved);
 
-  await page.mouse.click(...inStart);
+  await clickPlan(page, inStart);
   // A lost click once hung here until the test timeout (#374): fail fast, naming what is shown.
   await expect(inspector.getByRole('heading')).toHaveText('Pièce');
   await inspector.getByLabel('Nom').fill('Entrée');
@@ -160,7 +160,7 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
 
   // A window dragged onto the door turns red and goes back to where it was placed.
   await page.locator('#place-window').click();
-  await page.mouse.click(...onPartition);
+  await clickPlan(page, onPartition);
   await expect(inspector.getByLabel('Hauteur d’allège')).toHaveValue('0.9');
   const windowed = await exportedLevel(page);
   await page.mouse.move(...onPartition);
@@ -203,7 +203,7 @@ test('every Plan click selects, however quick or long it is', async ({ page }) =
     (
       [
         [x0 + 2, z0],
-        [x0 + 1, z0 + 1],
+        [x0 + 3.5, z0 + 1],
       ] as Point[]
     ).map((p) => pagePoint(page, p)),
   );
@@ -211,7 +211,7 @@ test('every Plan click selects, however quick or long it is', async ({ page }) =
   const heading = page.locator('#plan-inspector').getByRole('heading');
 
   // Quick clicks, some within Babylon's double-click delay (#374).
-  for (const at of [onWall, inRoom, onWall, inRoom]) await page.mouse.click(...at);
+  for (const at of [onWall, inRoom, onWall, inRoom]) await clickPlan(page, at);
   await expect(heading).toHaveText('Pièce');
 
   // A press longer than Babylon's long-press delay.
