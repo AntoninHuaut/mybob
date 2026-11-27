@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
-  "packageManager": "pnpm@12.21.0",
+  "packageManager": "pnpm@12.23.0",
   "scripts": {
     "dev": "vite --host 0.0.0.0",
     "dev:private": "vite --host 0.0.0.0 --mode private",
@@ -20,21 +20,21 @@
     "backup:private": "node scripts/backup-private.mjs"
   },
   "dependencies": {
-    "@babylonjs/core": "^9.37.1",
+    "@babylonjs/core": "^9.38.0",
     "earcut": "^3.2.4"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",
-    "@types/node": "26.6.6",
-    "fast-check": "4.10.3",
+    "@types/node": "26.6.11",
+    "fast-check": "4.11.0",
     "happy-dom": "21.0.4",
     "prettier": "3.10.1",
     "tsx": "4.23.15",
     "typescript": "7.0.2",
-    "vite": "8.3.8"
+    "vite": "8.4.0"
   },
   "engines": {
     "node": ">=26.13.1",
-    "pnpm": ">=12.21.0"
+    "pnpm": ">=12.23.0"
   }
 }
