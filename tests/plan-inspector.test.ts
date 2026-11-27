@@ -87,9 +87,9 @@ test('a wall shows its exact values and commits one edit per changed field', (t)
   const { root, inspector, calls, field, change } = setup(t);
   inspector.show(level, { kind: 'wall', id: 'wall-5' });
   assert.equal(root.hidden, false);
-  assert.equal(field('length').value, '3');
-  assert.equal(field('thickness').value, '0.1');
-  change('thickness', '0.15');
+  assert.equal(field('length').value, '300');
+  assert.equal(field('thickness').value, '10');
+  change('thickness', '15');
   assert.deepEqual(calls, [['wall', 'wall-5', { thickness: 0.15 }]]);
   (root.querySelector('[data-action=split]') as unknown as HTMLButtonElement).click();
   assert.deepEqual(calls.at(-1), ['split']);
@@ -102,12 +102,12 @@ test('refreshing keeps the field being typed in and shows refusals in French', (
   inspector.show(level, { kind: 'wall', id: 'wall-5' });
   const input = field('length');
   input.focus();
-  input.value = '2.';
+  input.value = '25';
   inspector.show(level, { kind: 'wall', id: 'wall-5' });
   assert.equal(field('length'), input);
-  assert.equal(input.value, '2.');
+  assert.equal(input.value, '25');
   failWith('L’ouverture dépasse le bout du mur.');
-  change('length', '1');
+  change('length', '100');
   assert.equal(
     root.querySelector('[role=alert]')!.textContent,
     'L’ouverture dépasse le bout du mur.',
@@ -128,15 +128,31 @@ test('a room shows its name, kind and areas and is renamed on change', (t) => {
 test('an opening is measured from either end of its wall', (t) => {
   const { inspector, calls, field, change, root } = setup(t);
   inspector.show(level, { kind: 'opening', wallId: 'wall-5', id: 'door' });
-  assert.equal(field('distance').value, '1');
+  assert.equal(field('distance').value, '100');
   assert.equal(field('sill'), null);
   change('reference', 'end');
-  assert.equal(field('distance').value, '1.1');
+  assert.equal(field('distance').value, '110');
   assert.deepEqual(calls, []);
-  change('distance', '0.5');
+  change('distance', '50');
   assert.deepEqual(calls, [['opening', 'wall-5', 'door', { reference: 'end', distance: 0.5 }]]);
   (root.querySelector('[data-action=delete]') as unknown as HTMLButtonElement).click();
   assert.deepEqual(calls.at(-1), ['delete']);
+});
+
+test('fields are in centimetres and an unedited value keeps its exact metres', (t) => {
+  const { inspector, calls, field, change, root } = setup(t);
+  const odd: Level = {
+    ...level,
+    walls: [{ ...level.walls[0], thickness: 0.1234, openings: [] }],
+  };
+  inspector.show(odd, { kind: 'wall', id: 'wall-5' });
+  assert.equal(field('thickness').value, '12.3');
+  assert.match(root.textContent!, /cm/);
+  // Rewriting the panel with the same values commits nothing.
+  inspector.show(odd, { kind: 'wall', id: 'wall-5' });
+  assert.deepEqual(calls, []);
+  change('length', '305');
+  assert.deepEqual(calls, [['wall', 'wall-5', { length: 3.05 }]]);
 });
 
 test('a door flips its swing or its hinge with one button each', (t) => {

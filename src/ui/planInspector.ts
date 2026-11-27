@@ -29,10 +29,10 @@ const OPENING_KINDS: Record<Opening['kind'], string> = {
   garage: 'Porte de garage',
 };
 
-/** Millimetre display; the stored value keeps its precision until the field is edited. */
-const metres = (value: number) => String(Number(value.toFixed(3)));
-const metreField = (name: string, label: string, value: number) =>
-  `<label>${label}<span class="plan-inspector-unit"><input name="${name}" type="number" min="0" step="0.01" value="${metres(value)}"><span>m</span></span></label>`;
+/** Centimetres to the millimetre, as in furniture; the stored metres stay exact until edited. */
+const centimetres = (metres: number) => String(Number((metres * 100).toFixed(1)));
+const cmField = (name: string, label: string, metres: number) =>
+  `<label>${label}<span class="plan-inspector-unit"><input name="${name}" type="number" min="0" step="1" value="${centimetres(metres)}"><span>cm</span></span></label>`;
 const options = (entries: [string, string][], current: string) =>
   entries
     .map(
@@ -111,8 +111,8 @@ export class PlanInspector {
     if (target.kind === 'wall') {
       title = target.wall.exterior ? 'Mur extérieur' : 'Mur';
       body =
-        metreField('length', 'Longueur', wallLength(target.wall)) +
-        metreField('thickness', 'Épaisseur', target.wall.thickness) +
+        cmField('length', 'Longueur', wallLength(target.wall)) +
+        cmField('thickness', 'Épaisseur', target.wall.thickness) +
         `<button type="button" class="text-button" data-action="split" title="Coupe le mur en deux au trait marqué sur le plan, pour en déplacer une partie.">Couper le mur au trait marqué</button>`;
       remove = 'Supprimer le mur (Suppr)';
     } else if (target.kind === 'room') {
@@ -129,10 +129,10 @@ export class PlanInspector {
       const { opening } = target;
       title = OPENING_KINDS[opening.kind];
       body =
-        metreField('width', 'Largeur', opening.width) +
-        metreField('height', 'Hauteur', opening.height) +
+        cmField('width', 'Largeur', opening.width) +
+        cmField('height', 'Hauteur', opening.height) +
         (opening.kind === 'window' || opening.kind === 'sliding'
-          ? metreField('sill', 'Hauteur d’allège', opening.sill ?? 0)
+          ? cmField('sill', 'Hauteur d’allège', opening.sill ?? 0)
           : '') +
         (opening.kind === 'door'
           ? `<div class="plan-inspector-actions"><button type="button" class="text-button" data-action="swing">Ouvrir de l’autre côté du mur</button><button type="button" class="text-button" data-action="hinge">Changer la charnière de côté</button></div>`
@@ -144,7 +144,7 @@ export class PlanInspector {
           ],
           'start',
         )}</select></label>` +
-        metreField('distance', 'Distance au jambage', this.distance(target.wall, opening));
+        cmField('distance', 'Distance au jambage', this.distance(target.wall, opening));
       remove = 'Supprimer l’ouverture (Suppr)';
     }
     return `<form class="plan-inspector-form"><h2>${escapeHtml(title)}</h2>${body}<p role="alert" class="plan-inspector-error"></p>${
@@ -161,8 +161,8 @@ export class PlanInspector {
       if (field && field !== document.activeElement && field.value !== value) field.value = value;
     };
     if (target.kind === 'wall') {
-      set('length', metres(wallLength(target.wall)));
-      set('thickness', metres(target.wall.thickness));
+      set('length', centimetres(wallLength(target.wall)));
+      set('thickness', centimetres(target.wall.thickness));
     } else if (target.kind === 'room') {
       set('name', target.room.name);
       set('kind', target.room.kind);
@@ -174,10 +174,10 @@ export class PlanInspector {
       if (target.room.planArea !== undefined) write('plan-area', area(target.room.planArea));
     } else {
       const { opening } = target;
-      set('width', metres(opening.width));
-      set('height', metres(opening.height));
-      set('sill', metres(opening.sill ?? 0));
-      set('distance', metres(this.distance(target.wall, opening)));
+      set('width', centimetres(opening.width));
+      set('height', centimetres(opening.height));
+      set('sill', centimetres(opening.sill ?? 0));
+      set('distance', centimetres(this.distance(target.wall, opening)));
     }
   }
 
@@ -215,7 +215,8 @@ export class PlanInspector {
       this.refresh(target);
       return;
     }
-    const value = Number(field.value);
+    // Dividing keeps 15 cm as the nearest double to 0.15 m.
+    const value = Number(field.value) / 100;
     if (field.type === 'number' && field.value === '') return;
     try {
       if (selection.kind === 'wall') this.host.onWall(selection.id, { [name]: value });
