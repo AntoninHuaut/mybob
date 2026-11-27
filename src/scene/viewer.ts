@@ -787,6 +787,13 @@ export class HouseViewer {
         else this.updateCutaway();
         this.shadowRefresh?.invalidate();
       };
+      // Ask for every state's programs at once: the driver links them side by side rather
+      // than one state after the other (#383).
+      for (variant = 1; variant < variants.length; variant++) {
+        selectVariant();
+        scene.render();
+      }
+      variant = 0;
       selectVariant();
       await warmFrames({
         renderFrame: () => {
