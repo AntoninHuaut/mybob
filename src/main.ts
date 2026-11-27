@@ -225,6 +225,8 @@ async function start() {
   // The panel shows its real state before any wait: a control read during the start-up
   // (the template says closed) must not be toggled once the start-up opens it.
   setSidebar(matchMedia('(min-width: 761px)').matches);
+  // Before loading: a visitor who switches browser doesn't wait for a load they'll leave.
+  await adviseChromium(navigator.userAgent, globalThis.localStorage);
   // The procedural maps are generated meanwhile, while the projects download and the engine starts.
   const maps = generateMapsInWorker(() => new SurfaceMapsWorker());
   try {
@@ -353,7 +355,6 @@ async function start() {
     showStartCard();
     if (unreadableProjects > 0) showQuarantineBanner(unreadableProjects);
     if (diagnosticSession) void measureForReport();
-    void adviseChromium(navigator.userAgent, globalThis.localStorage);
   } catch (error) {
     el('#loading').hidden = true;
     el('#loading').classList.remove('loading-startup');
