@@ -53,6 +53,7 @@ import {
 } from './app/projectLibrary';
 import { handleStairLevelChange, loadLevel, loadProject, selectRoom } from './app/projectView';
 import { readOnboarding, showStartCard } from './app/preferences';
+import { adviseChromium } from './ui/browserAdvice';
 import { openSharedLink, wireLinkHashFlush } from './app/shareLinkSync';
 import { canChangeMode, setSidebar, syncViewChrome } from './app/viewChrome';
 import { render as renderWallDraft, wallToolActive } from './app/wallDrawing';
@@ -352,12 +353,13 @@ async function start() {
     showStartCard();
     if (unreadableProjects > 0) showQuarantineBanner(unreadableProjects);
     if (diagnosticSession) void measureForReport();
+    void adviseChromium(navigator.userAgent, globalThis.localStorage);
   } catch (error) {
     el('#loading').hidden = true;
     el('#loading').classList.remove('loading-startup');
     el('#fatal-error').hidden = false;
     el('#fatal-error').innerHTML =
-      `${icon('info', 30)}<h2>La vue 3D n’a pas pu démarrer.</h2><p>${esc(userMessage(error, 'Erreur de chargement.'))}</p><p>Utilisez une version récente de Chrome, Firefox ou Edge, avec l’accélération graphique activée.</p><button class="primary-button" id="reload">Réessayer</button>`;
+      `${icon('info', 30)}<h2>La vue 3D n’a pas pu démarrer.</h2><p>${esc(userMessage(error, 'Erreur de chargement.'))}</p><p>Utilisez une version récente de Chrome ou Edge, avec l’accélération graphique activée.</p><button class="primary-button" id="reload">Réessayer</button>`;
     el('#reload').addEventListener('click', () => location.reload());
     console.error(error);
   }

@@ -117,7 +117,7 @@ reports back through callbacks (`onViewChange`, `onFrame`, `onRendered`, `onSele
 | Plans and precision     | `src/ui/sourcePanel.ts`                                                      | « Plans et précision » dialog: gap to the stated areas                                                                                                                                                                                      |
 | Link divergence         | `src/ui/confirmLinkDivergence.ts`                                            | Three outcomes when a link and the local state differ                                                                                                                                                                                       |
 | Import and limit        | `src/ui/confirmImport.ts`, `chooseProjectToReplace.ts`                       | Confirm a replacing import; pick a project to replace at the limit                                                                                                                                                                          |
-| Help and welcome        | `src/ui/firstSteps.ts`, `onboarding.ts`                                      | "Premiers pas" card, short and full help                                                                                                                                                                                                    |
+| Help and welcome        | `src/ui/firstSteps.ts`, `onboarding.ts`, `browserAdvice.ts`                  | "Premiers pas" card, short and full help; Firefox told once to prefer Chrome or Edge                                                                                                                                                        |
 | Image export            | `src/ui/imageExport.ts`                                                      | PNG of the camera, title block, options                                                                                                                                                                                                     |
 | UI helpers              | `src/ui/format.ts`, `icons.ts`                                               | HTML escaping, number/area formatting, inline icons                                                                                                                                                                                         |
 | Test bench (dev)        | `src/ui/fxLab.ts`                                                            | Unsettled rendering questions — never in a build                                                                                                                                                                                            |
@@ -140,7 +140,7 @@ public/projects/*.json
 
 Storage keys, all prefixed `maison-atelier:` — `projects:v1` (imported projects),
 `layout:v1:<project>:<level>` (arrangement), `variants:v1:<project>`, `navigation:v1`,
-`onboarding`, `solar:<project>`, `paint:<project>`, `last-project`. Changing a key breaks local data: only do it
+`onboarding`, `browser-advice:v1`, `solar:<project>`, `paint:<project>`, `last-project`. Changing a key breaks local data: only do it
 with a migration.
 
 `src/projectStorage.ts` owns the reading of `projects:v1`:
