@@ -69,9 +69,9 @@ export function planHint(state: PlanHintState): PlanHint {
     return {
       text:
         state.tool === 'door'
-          ? 'Cliquez sur un mur pour y placer une porte.'
-          : 'Cliquez sur un mur pour y placer une fenêtre.',
-      keys: [['Échap', 'Arrêter']],
+          ? 'Cliquez sur un mur pour y placer une porte. Placez-en plusieurs à la suite.'
+          : 'Cliquez sur un mur pour y placer une fenêtre. Placez-en plusieurs à la suite.',
+      keys: [['Échap', 'Sélection']],
     };
   if (!state.walls)
     return {

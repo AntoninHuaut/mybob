@@ -21,8 +21,11 @@ test('the wall tool says how to start, continue, close and stop', () => {
   assert.match(planHint({ tool: 'wall', walls: 4, corners: 1, target: 'join' }).text, /terminer/i);
 });
 
-test('door and window tools ask for a wall', () => {
-  assert.match(planHint({ tool: 'door', walls: 4, corners: 0 }).text, /porte/);
+test('door and window tools ask for a wall and stay armed until Échap', () => {
+  const door = planHint({ tool: 'door', walls: 4, corners: 0 });
+  assert.match(door.text, /porte/);
+  assert.match(door.text, /à la suite/);
+  assert.deepEqual(door.keys, [['Échap', 'Sélection']]);
   assert.match(planHint({ tool: 'window', walls: 4, corners: 0 }).text, /fenêtre/);
 });
 

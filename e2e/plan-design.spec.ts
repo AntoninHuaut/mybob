@@ -89,6 +89,11 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   await clickPlan(page, doorClick);
   await expect(inspector.getByLabel('Largeur')).toHaveValue('0.9');
   await expect(inspector.getByLabel('Distance au jambage')).toHaveValue('0.75');
+  // « Porte » stays armed for the next door; Échap goes back to Sélection, door still selected.
+  await expect(page.locator('#place-door')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('#plan-hint')).toContainText('Porte placée');
+  await page.keyboard.press('Escape');
+  await expect(page.locator('#select-tool')).toHaveAttribute('aria-pressed', 'true');
   const sizes = layer.locator('.plan-dimension-label');
   await expect(sizes.nth(0)).toHaveText('0,75 m');
   await expect(sizes.nth(1)).toHaveText('0,90 m');
@@ -168,6 +173,7 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   await page.locator('#place-window').click();
   await clickPlan(page, onPartition);
   await expect(inspector.getByLabel('Hauteur d’allège')).toHaveValue('0.9');
+  await page.keyboard.press('Escape');
   const windowed = await exportedLevel(page);
   await page.mouse.move(...onPartition);
   await page.mouse.down();

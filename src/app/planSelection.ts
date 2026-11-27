@@ -73,12 +73,12 @@ function place(kind: 'door' | 'window', at: Point2, tolerance: number) {
       wallId = placed.wallId;
       return placed.level;
     });
-    placing = undefined;
+    // The tool stays armed to place several in a row; its panel shows the last one.
     selection = { kind: 'opening', wallId, id };
     planNotice(
       kind === 'door'
-        ? 'Porte placée. Glissez-la pour l’ajuster, ou réglez-la dans le panneau.'
-        : 'Fenêtre placée. Glissez-la pour l’ajuster, ou réglez-la dans le panneau.',
+        ? 'Porte placée. Cliquez un autre mur pour en placer une autre, ou Échap pour la déplacer.'
+        : 'Fenêtre placée. Cliquez un autre mur pour en placer une autre, ou Échap pour la déplacer.',
     );
   } catch (error) {
     planNotice(userMessage(error, 'Ouverture impossible ici.'), 'error');
