@@ -16,7 +16,7 @@ import {
 import type { Level, Opening, Point2, Wall } from '../model/types';
 import { GRID_STEPS_PER_METRE } from '../model/wallDraft';
 import type { PlanPointerKind } from '../scene/viewer';
-import { escapeHtml, number } from '../ui/format';
+import { centimetres, escapeHtml } from '../ui/format';
 import { planToolForKey } from '../ui/planHint';
 import { PlanInspector } from '../ui/planInspector';
 import { el } from './dom';
@@ -370,7 +370,7 @@ function dimensions(
     const at = anchor === 'middle' ? label : [Number(mid[0]) + Math.sign(dx) * 6, Number(mid[1])];
     html +=
       `<path class="plan-dimension" d="M${a.join(',')}L${b.join(',')}M${ta.join(',')}L${a.join(',')}M${tb.join(',')}L${b.join(',')}"/>` +
-      `<text class="plan-dimension-label" text-anchor="${anchor}" x="${at[0]}" y="${at[1]}">${number(to - from)} m</text>`;
+      `<text class="plan-dimension-label" text-anchor="${anchor}" x="${at[0]}" y="${at[1]}">${centimetres(to - from)}</text>`;
   }
   return html;
 }

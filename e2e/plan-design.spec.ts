@@ -52,7 +52,7 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   // on the right wall (« Premiers pas » may cover the left one) and its length is typed.
   const [x, y] = await pagePoint(page, [x0 + 4.2, z0 + 1.9]);
   await page.mouse.click(x, y);
-  await page.keyboard.type('4.2');
+  await page.keyboard.type('420');
   await page.keyboard.press('ArrowLeft');
   await expect(page.locator('#wall-draft .wall-draft-joint')).toHaveCount(6);
   const divided = await exportedLevel(page);
@@ -95,12 +95,12 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   await page.keyboard.press('Escape');
   await expect(page.locator('#select-tool')).toHaveAttribute('aria-pressed', 'true');
   const sizes = layer.locator('.plan-dimension-label');
-  await expect(sizes.nth(0)).toHaveText('0,75 m');
-  await expect(sizes.nth(1)).toHaveText('0,90 m');
+  await expect(sizes.nth(0)).toHaveText('75 cm');
+  await expect(sizes.nth(1)).toHaveText('90 cm');
   await page.mouse.move(...doorClick);
   await page.mouse.down();
   await page.mouse.move(...doorTarget, { steps: 8 });
-  await expect(page.locator('#plan-drag-distances')).toHaveText('1,65 m · 1,65 m');
+  await expect(page.locator('#plan-drag-distances')).toHaveText('165 cm · 165 cm');
   await page.mouse.up();
   await expect(inspector.getByLabel('Distance au jambage')).toHaveValue('165');
   expect(partition(await exportedLevel(page)).openings![0]).toMatchObject({
@@ -259,7 +259,7 @@ test('a newcomer draws a room with the mouse, guided at each click, then undoes 
   await page.mouse.move(...corners[1], { steps: 4 });
   // The wall to be drawn shows with its thickness and its length.
   await expect(page.locator('#wall-draft .wall-draft-band')).toHaveCount(1);
-  await expect(page.locator('#wall-draft-length')).toHaveText(/^\d+,\d{2} m$/);
+  await expect(page.locator('#wall-draft-length')).toHaveText(/^\d+(,\d)? cm$/);
   for (const corner of corners.slice(1)) await clickPlan(page, corner);
   await page.mouse.move(...corners[0], { steps: 4 });
   await expect(page.locator('#wall-draft-target')).toHaveText('Fermer la pièce');

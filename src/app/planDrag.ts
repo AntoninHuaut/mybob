@@ -5,7 +5,7 @@ import { alongWall, polygonArea, wallLength } from '../model/geometry';
 import { moveCorner, moveOpening, moveWall, pickPlan, type PlanSelection } from '../model/planEdit';
 import type { Level, Point2, Wall } from '../model/types';
 import { GRID_STEPS_PER_METRE, snapDraftPoint } from '../model/wallDraft';
-import { area, escapeHtml, number } from '../ui/format';
+import { area, centimetres, escapeHtml } from '../ui/format';
 import { committedFurniture } from './furnitureController';
 import { app } from './state';
 import { wallGridOn } from './wallDrawing';
@@ -218,7 +218,7 @@ function dragSvg() {
     html += `<polygon class="plan-drag-wall${valid ? '' : ' invalid'}" points="${points(outline)}"/>`;
     const q = project(alongWall(wall, offset + width / 2, half + 0.25), 0);
     const rest = wallLength(wall) - offset - width;
-    html += `<text id="plan-drag-distances" class="plan-drag-area" x="${q.x.toFixed(1)}" y="${q.y.toFixed(1)}">${number(offset)} m · ${number(rest)} m</text>`;
+    html += `<text id="plan-drag-distances" class="plan-drag-area" x="${q.x.toFixed(1)}" y="${q.y.toFixed(1)}">${centimetres(offset)} · ${centimetres(rest)}</text>`;
   }
   const message =
     preview.error ??

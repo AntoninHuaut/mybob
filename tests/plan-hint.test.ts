@@ -12,7 +12,7 @@ test('the wall tool says how to start, continue, close and stop', () => {
   assert.match(planHint({ tool: 'wall', walls: 0, corners: 0 }).text, /premier angle/);
   assert.match(planHint({ tool: 'wall', walls: 4, corners: 0 }).text, /cloison/);
   const drawing = planHint({ tool: 'wall', walls: 0, corners: 2 });
-  assert.match(drawing.text, /longueur/);
+  assert.match(drawing.text, /longueur en centimètres/);
   assert.deepEqual(
     drawing.keys.map(([key]) => key),
     ['Entrée', 'Maj', '⌫', 'Échap'],

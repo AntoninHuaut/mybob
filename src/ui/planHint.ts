@@ -56,7 +56,7 @@ export function planHint(state: PlanHintState): PlanHint {
             ? 'Terminez sur un mur.'
             : 'Revenez au premier angle pour fermer la pièce.';
     return {
-      text: `Cliquez l’angle suivant ou tapez une longueur en mètres. ${ending}`,
+      text: `Cliquez l’angle suivant ou tapez une longueur en centimètres. ${ending}`,
       keys: [
         ['Entrée', 'Valider'],
         ['Maj', 'Angle libre'],

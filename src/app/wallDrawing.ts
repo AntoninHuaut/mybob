@@ -3,7 +3,7 @@ import type { PlanPointerKind } from '../scene/viewer';
 import type { Point2 } from '../model/types';
 import { nextCorner } from '../model/wallChain';
 import { addWallChain, emptyHouse, snapDraftPoint, type DraftSnap } from '../model/wallDraft';
-import { number } from '../ui/format';
+import { centimetres } from '../ui/format';
 import { activeButton, el, toast } from './dom';
 import {
   editableProject,
@@ -47,6 +47,8 @@ let cursor: DraftSnap | undefined;
 let pointer: Point2 | undefined;
 let free = false;
 let typed = '';
+/** The typed length, entered in centimetres like every plan field, in metres. */
+const typedLength = () => Number(typed) / 100;
 
 export const wallToolActive = () => active;
 /** Armed and on screen: Plan, a local project, the edit bar open, « Mesurer » off. */
@@ -201,7 +203,7 @@ function commit(closed: boolean) {
   render();
 }
 
-/** Typed digits fix the next length; Enter follows the pointer, an arrow key its direction. */
+/** Typed digits fix the next length in cm; Enter follows the pointer, an arrow key its direction. */
 export function wallToolKey(event: KeyboardEvent): boolean {
   if (!wallToolLive()) return false;
   const key = event.key;
@@ -227,7 +229,7 @@ export function wallToolKey(event: KeyboardEvent): boolean {
 
 function placeTyped(direction?: Point2) {
   const last = points.at(-1);
-  const length = Number(typed);
+  const length = typedLength();
   if (!last || !(length > 0)) return;
   const toward = direction ? [last[0] + direction[0], last[1] + direction[1]] : pointer;
   if (!toward) return;
@@ -327,7 +329,7 @@ export function render() {
   if (last && preview) {
     const length = Math.hypot(preview[0] - last[0], preview[1] - last[1]);
     const middle = project([(last[0] + preview[0]) / 2, (last[1] + preview[1]) / 2], 0);
-    const text = typed ? `${typed.replace('.', ',')} m` : `${number(length)} m`;
+    const text = typed ? `${typed.replace('.', ',')} cm` : centimetres(length);
     html += `<text id="wall-draft-length" class="wall-draft-length${typed ? ' typed' : ''}" x="${middle.x.toFixed(1)}" y="${(middle.y - 10).toFixed(1)}">${text}</text>`;
   }
   svg.innerHTML = html;
@@ -350,7 +352,7 @@ function gridPath(pair: (p: Point2) => string) {
 
 function previewEnd(last: Point2): Point2 | undefined {
   if (!typed) return cursor?.point;
-  const length = Number(typed);
+  const length = typedLength();
   if (!pointer || !(length > 0)) return cursor?.point;
   return nextCorner(last, pointer, length, !free) ?? cursor?.point;
 }

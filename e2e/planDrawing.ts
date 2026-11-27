@@ -66,7 +66,7 @@ export async function clickPlan(page: Page, at: Point) {
 
 /**
  * « Nouvelle maison », then a 4 × 3 m clear room with 0.20 m walls drawn on the Plan: a first
- * corner on the 5 cm grid, then axis lengths 4.20 / 3.20 typed with arrow keys. Returns that
+ * corner on the 5 cm grid, then axis lengths 420 / 320 cm typed with arrow keys. Returns that
  * first corner, in plan metres.
  */
 export async function drawClearRoom(page: Page): Promise<Point> {
@@ -78,10 +78,10 @@ export async function drawClearRoom(page: Page): Promise<Point> {
   const box = (await page.locator('#scene').boundingBox())!;
   await page.mouse.click(box.x + box.width * 0.45, box.y + box.height * 0.45);
   for (const [length, arrow] of [
-    ['4.2', 'ArrowRight'],
-    ['3.2', 'ArrowDown'],
-    ['4.2', 'ArrowLeft'],
-    ['3.2', 'ArrowUp'],
+    ['420', 'ArrowRight'],
+    ['320', 'ArrowDown'],
+    ['420', 'ArrowLeft'],
+    ['320', 'ArrowUp'],
   ]) {
     await page.keyboard.type(length);
     await page.keyboard.press(arrow);
