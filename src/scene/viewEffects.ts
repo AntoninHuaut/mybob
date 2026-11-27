@@ -6,6 +6,7 @@ import type { BaseTexture } from '@babylonjs/core/Materials/Textures/baseTexture
 import type { DefaultRenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/defaultRenderingPipeline';
 import type { SSAO2RenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/ssao2RenderingPipeline';
 import type { TAARenderingPipeline } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/taaRenderingPipeline';
+import { TAAMaterialManager } from '@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/taaMaterialManager';
 import type { OcclusionState } from './diagnostics';
 import {
   createInteriorBloom,
@@ -82,6 +83,8 @@ export class ViewEffects {
   private orbitOcclusionUnavailable = false;
   private camera?: Camera;
   private disposed = false;
+  private idleJitter?: TAAMaterialManager;
+  private armedMaterials = 0;
 
   constructor(
     private readonly scene: Scene,
@@ -93,6 +96,24 @@ export class ViewEffects {
     private readonly invalidate: () => void = () => {},
   ) {
     scene.onDisposeObservable.addOnce(() => this.dispose());
+    this.armJitter();
+    // Babylon attaches the plugin only to the materials present (cutaway clones come later);
+    // during the walk, its own manager holds them.
+    scene.onBeforeRenderObservable.add(() => {
+      if (!this.taa && scene.materials.length !== this.armedMaterials) this.armJitter();
+    });
+  }
+
+  /**
+   * The walk's temporal pass adds a jitter plugin to every material, and its marker define
+   * stays after the visit. Every material carries it disabled from the start, so the other
+   * views keep the programs they prepared (#383).
+   */
+  private armJitter(): void {
+    this.idleJitter?.dispose();
+    this.idleJitter = new TAAMaterialManager(this.scene);
+    this.idleJitter.isEnabled = false;
+    this.armedMaterials = this.scene.materials.length;
   }
 
   updateWalk(state: {
@@ -331,6 +352,8 @@ export class ViewEffects {
       if ('reprojectHistory' in this.taa) this.taa.reprojectHistory = false;
       this.taa.dispose();
     }
+    // The walk's manager took the plugins over and unregistered them on disposal.
+    if (!this.disposed) this.armJitter();
     this.taa = undefined;
     this.bloom?.dispose();
     this.bloom = undefined;
@@ -373,6 +396,7 @@ export class ViewEffects {
     this.disposed = true;
     this.restoreEnvironment();
     this.releaseWalkPipelines();
+    this.idleJitter?.dispose();
     this.cancelExteriorRebuild();
     if (this.scene.environmentTexture === this.exteriorEnvironment)
       this.scene.environmentTexture = null;
