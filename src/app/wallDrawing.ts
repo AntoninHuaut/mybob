@@ -10,6 +10,7 @@ import {
   openPlanEditBar,
   planNotice,
   renderPlanHint,
+  setPlanCursor,
   setPlanTool,
   syncPlanEditBar,
 } from './planEditBar';
@@ -120,6 +121,7 @@ export function wallPointer(type: PlanPointerKind, at: Point2, event: PointerEve
   if (!wallToolLive() || type === 'down' || type === 'up') return false;
   pointer = at;
   free = event.shiftKey;
+  setPlanCursor('crosshair');
   cursor = snap(at);
   if (type === 'tap') addCorner(cursor);
   render();

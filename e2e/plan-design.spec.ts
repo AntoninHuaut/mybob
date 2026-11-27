@@ -83,9 +83,15 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
   // A door placed by click, centred 1.2 m along the partition, then dragged to 1.65 m.
   await page.locator('#place-door').click();
   await expect(page.locator('#plan-hint')).toContainText('placer une porte');
+  // The door shows under the pointer, with its distances, before the click places it.
+  await page.mouse.move(...doorClick, { steps: 4 });
+  await expect(layer.locator('.plan-ghost')).toHaveCount(1);
   await clickPlan(page, doorClick);
   await expect(inspector.getByLabel('Largeur')).toHaveValue('0.9');
   await expect(inspector.getByLabel('Distance au jambage')).toHaveValue('0.75');
+  const sizes = layer.locator('.plan-dimension-label');
+  await expect(sizes.nth(0)).toHaveText('0,75 m');
+  await expect(sizes.nth(1)).toHaveText('0,90 m');
   await page.mouse.move(...doorClick);
   await page.mouse.down();
   await page.mouse.move(...doorTarget, { steps: 8 });

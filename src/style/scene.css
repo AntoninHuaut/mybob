@@ -838,6 +838,31 @@
   fill: #3a7d4a14;
   stroke-dasharray: 6 4;
 }
+.plan-handle {
+  fill: #fcfef7;
+  stroke: #2f6b3d;
+  stroke-width: 1.5;
+}
+.plan-ghost {
+  fill: #3a7d4a55;
+  stroke: #2f6b3d;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+.plan-dimension {
+  fill: none;
+  stroke: #36523a;
+  stroke-width: 1;
+}
+.plan-dimension-label {
+  fill: #36523a;
+  stroke: #fcfef7;
+  stroke-width: 4px;
+  paint-order: stroke;
+  font-size: 12px;
+  font-weight: 600;
+  dominant-baseline: middle;
+}
 .plan-selection-cut {
   stroke: #875335;
   stroke-width: 2;

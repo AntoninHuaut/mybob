@@ -9,6 +9,7 @@ import {
   moveOpening,
   moveWall,
   pickPlan,
+  placeOpening,
   setWallLength,
   setWallThickness,
   splitWall,
@@ -197,6 +198,21 @@ test('a door or a window is placed centred on the clicked point, inside its wall
   assert.throws(() => addOpening(level, 'wall-5', 'window', 1.4, 'w'), /chevauche/);
   const snapped = addOpening(level, 'wall-1', 'door', 2.01, 's', 0.05);
   assert.ok(close(wall(snapped, 'wall-1').openings!.at(-1)!.offset, 1.55));
+});
+
+test('a door or a window is placed where the pointer is, or says why it cannot be', () => {
+  const level = house();
+  const placed = placeOpening(level, 'window', [2, -0.12], 0.05, 'win', 0.05);
+  assert.ok('opening' in placed);
+  assert.equal(placed.wallId, 'wall-1');
+  assert.ok(close(placed.opening.offset, 2 - 0.6 + 0.1));
+  assert.deepEqual(wall(placed.level, 'wall-1').openings!.at(-1), placed.opening);
+  assert.deepEqual(placeOpening(level, 'door', [3, 1.5], 0.05, 'd'), {
+    error: 'Ici, il n’y a pas de mur. Cliquez sur un mur pour y placer la porte.',
+  });
+  const refused = placeOpening(level, 'window', [1.55, 1.4], 0.05, 'w');
+  assert.equal(refused.wallId, 'wall-5');
+  assert.match('error' in refused ? refused.error : '', /chevauche/);
 });
 
 test('an opening moves along its wall and is refused over another one', () => {

@@ -69,6 +69,15 @@ export function setPlanTool(tool: PlanTool) {
   syncPlanEditBar();
 }
 
+let cursorSet = false;
+
+/** The Plan pointer's cursor while editing; cleared only when this module set it. */
+export function setPlanCursor(cursor: string) {
+  if (!cursor && !cursorSet) return;
+  cursorSet = !!cursor;
+  if (app.viewer.canvas.style.cursor !== cursor) app.viewer.canvas.style.cursor = cursor;
+}
+
 /** A short confirmation or refusal shown in place of the hint, near where the visitor looks. */
 export function planNotice(text: string, tone: PlanNotice['tone'] = 'success') {
   notice = { text, tone };
@@ -132,6 +141,7 @@ export function syncPlanEditBar() {
   activeButton('#wall-grid', wallGridOn());
   app.viewer.planPointer =
     !project || !open ? undefined : tool === 'wall' ? wallPointer : selectionPointer;
+  if (!project || !open) setPlanCursor('');
   renderWallDraft();
   syncPlanSelection();
   renderPlanHint();

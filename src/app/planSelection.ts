@@ -1,20 +1,22 @@
 import { userMessage } from '../errorMessage';
-import { alongWall, wallLength } from '../model/geometry';
+import { alongWall, pointInPolygon, wallLength } from '../model/geometry';
 import {
-  addOpening,
   deleteOpening,
   deleteWall,
   pickPlan,
+  placeOpening,
   setWallLength,
   setWallThickness,
   splitWall,
   updateOpening,
   updateRoom,
+  type OpeningPlacement,
   type PlanSelection,
 } from '../model/planEdit';
-import type { Level, Point2 } from '../model/types';
+import type { Level, Opening, Point2, Wall } from '../model/types';
 import { GRID_STEPS_PER_METRE } from '../model/wallDraft';
 import type { PlanPointerKind } from '../scene/viewer';
+import { escapeHtml, number } from '../ui/format';
 import { planToolForKey } from '../ui/planHint';
 import { PlanInspector } from '../ui/planInspector';
 import { el } from './dom';
@@ -25,6 +27,7 @@ import {
   planNotice,
   renderPlanHint,
   restorePlan,
+  setPlanCursor,
   setPlanTool,
   syncPlanEditBar,
 } from './planEditBar';
@@ -45,6 +48,9 @@ let inspector: PlanInspector | undefined;
 let placing: 'door' | 'window' | undefined;
 /** Where the left button went down, in client pixels. */
 let pressed: [number, number] | undefined;
+/** What « Porte » / « Fenêtre » would do at the pointer, drawn before the click. */
+let hover: OpeningPlacement | undefined;
+let hoverPoint: Point2 | undefined;
 
 export const placingOpening = () => placing;
 export const selectedKind = () => (planSelectionLive() ? selection?.kind : undefined);
@@ -54,29 +60,21 @@ export function setPlacing(kind: 'door' | 'window' | undefined) {
   placing = kind;
 }
 
+const openingStep = () => (wallGridOn() ? 1 / GRID_STEPS_PER_METRE : undefined);
+
 function place(kind: 'door' | 'window', at: Point2, tolerance: number) {
-  const hit = pickPlan(app.viewer.level, at, tolerance);
-  const wallId = hit?.kind === 'wall' ? hit.id : hit?.kind === 'opening' ? hit.wallId : undefined;
-  const wall = app.viewer.level.walls.find((w) => w.id === wallId);
-  if (!wall) {
-    planNotice(
-      kind === 'door'
-        ? 'Ici, il n’y a pas de mur. Cliquez sur un mur pour y placer la porte.'
-        : 'Ici, il n’y a pas de mur. Cliquez sur un mur pour y placer la fenêtre.',
-      'error',
-    );
-    return;
-  }
-  const along =
-    ((at[0] - wall.start[0]) * (wall.end[0] - wall.start[0]) +
-      (at[1] - wall.start[1]) * (wall.end[1] - wall.start[1])) /
-    wallLength(wall);
   const id = crypto.randomUUID();
+  hover = undefined;
   try {
-    const step = wallGridOn() ? 1 / GRID_STEPS_PER_METRE : undefined;
-    edit((level) => addOpening(level, wall.id, kind, along, id, step));
+    let wallId = '';
+    edit((level) => {
+      const placed = placeOpening(level, kind, at, tolerance, id, openingStep());
+      if ('error' in placed) throw new Error(placed.error);
+      wallId = placed.wallId;
+      return placed.level;
+    });
     placing = undefined;
-    selection = { kind: 'opening', wallId: wall.id, id };
+    selection = { kind: 'opening', wallId, id };
     planNotice(
       kind === 'door'
         ? 'Porte placée. Glissez-la pour l’ajuster, ou réglez-la dans le panneau.'
@@ -86,6 +84,31 @@ function place(kind: 'door' | 'window', at: Point2, tolerance: number) {
     planNotice(userMessage(error, 'Ouverture impossible ici.'), 'error');
   }
   syncPlanEditBar();
+}
+
+/** Previews « Porte » / « Fenêtre » under the pointer and shows what can be dragged. */
+function hoverAt(at: Point2, tolerance: number) {
+  const level = app.viewer.level;
+  hoverPoint = at;
+  hover = placing
+    ? placeOpening(level, placing, at, tolerance, 'apercu', openingStep())
+    : undefined;
+  let cursor = '';
+  if (placing) cursor = hover && 'error' in hover && hover.wallId ? 'not-allowed' : 'crosshair';
+  else {
+    const hit = pickPlan(level, at, tolerance);
+    const corner = level.walls
+      .flatMap((w) => [w.start, w.end])
+      .some((p) => Math.hypot(p[0] - at[0], p[1] - at[1]) <= tolerance);
+    const onSelection =
+      !!hit &&
+      !!selection &&
+      hit.kind !== 'room' &&
+      JSON.stringify(hit) === JSON.stringify(selection);
+    cursor = corner || onSelection ? 'move' : hit ? 'pointer' : '';
+  }
+  setPlanCursor(cursor);
+  renderPlanSelection();
 }
 
 /** Selecting is on in Plan with the edit bar open, unless a drawing tool takes the clicks. */
@@ -165,6 +188,7 @@ export function selectionPointer(type: PlanPointerKind, at: Point2, event: Point
   }
   if (type === 'move') {
     moveDrag(at, event, tolerance);
+    if (planSelectionLive()) hoverAt(at, tolerance);
     return false;
   }
   if (!planSelectionLive()) return false;
@@ -246,30 +270,107 @@ export function renderPlanSelection() {
     return;
   }
   delete svg.dataset.dragState;
-  const outline = selection && planSelectionLive() && selectionOutline(app.viewer.level, selection);
-  svg.toggleAttribute('hidden', !outline);
-  if (!outline) {
+  const live = planSelectionLive();
+  svg.toggleAttribute('hidden', !live);
+  if (!live) {
     if (svg.innerHTML) svg.innerHTML = '';
     return;
   }
+  const level = app.viewer.level;
   const project = app.viewer.projector();
-  const points = outline
-    .map((p) => {
-      const q = project(p, 0);
-      return `${q.x.toFixed(1)},${q.y.toFixed(1)}`;
-    })
-    .join(' ');
-  let html = `<polygon class="plan-selection-outline ${selection!.kind}" points="${points}"/>`;
-  const wall =
-    selection!.kind === 'wall' && app.viewer.level.walls.find((w) => w.id === selection!.id);
-  if (wall && cutOffset !== undefined) {
-    const half = wall.thickness / 2 + 0.05;
-    const [a, b] = [alongWall(wall, cutOffset, -half), alongWall(wall, cutOffset, half)].map((p) =>
-      project(p, 0),
-    );
-    html += `<line class="plan-selection-cut" x1="${a.x.toFixed(1)}" y1="${a.y.toFixed(1)}" x2="${b.x.toFixed(1)}" y2="${b.y.toFixed(1)}"/>`;
+  const xy = (p: Point2) => {
+    const q = project(p, 0);
+    return [q.x.toFixed(1), q.y.toFixed(1)] as const;
+  };
+  const points = (polygon: Point2[]) => polygon.map((p) => xy(p).join(',')).join(' ');
+  let html = '';
+  // Every corner can be dragged with Sélection: it shows as a handle.
+  if (!placing) {
+    const corners = new Map<string, Point2>();
+    for (const w of level.walls) for (const p of [w.start, w.end]) corners.set(p.join(','), p);
+    for (const p of corners.values()) {
+      const [x, y] = xy(p);
+      html += `<rect class="plan-handle" x="${(Number(x) - 4).toFixed(1)}" y="${(Number(y) - 4).toFixed(1)}" width="8" height="8"/>`;
+    }
   }
-  svg.innerHTML = html;
+  const target = selection;
+  const outline = target && selectionOutline(level, target);
+  if (target && outline) {
+    html += `<polygon class="plan-selection-outline ${target.kind}" points="${points(outline)}"/>`;
+    const wallId =
+      target.kind === 'wall' ? target.id : target.kind === 'opening' ? target.wallId : '';
+    const wall = level.walls.find((w) => w.id === wallId);
+    if (wall && target.kind === 'wall') {
+      html += dimensions(level, wall, [], xy);
+      if (cutOffset !== undefined) {
+        const half = wall.thickness / 2 + 0.05;
+        const [a, b] = [alongWall(wall, cutOffset, -half), alongWall(wall, cutOffset, half)].map(
+          xy,
+        );
+        html += `<line class="plan-selection-cut" x1="${a[0]}" y1="${a[1]}" x2="${b[0]}" y2="${b[1]}"/>`;
+      }
+    }
+    const opening =
+      wall && target.kind === 'opening'
+        ? wall.openings?.find((o) => o.id === target.id)
+        : undefined;
+    if (wall && opening) html += dimensions(level, wall, [opening], xy);
+  }
+  if (placing && hover && hoverPoint) {
+    if ('opening' in hover) {
+      const wall = hover.level.walls.find((w) => w.id === hover!.wallId)!;
+      const { offset, width } = hover.opening;
+      const half = wall.thickness / 2 + 0.03;
+      const ghost = [
+        alongWall(wall, offset, -half),
+        alongWall(wall, offset + width, -half),
+        alongWall(wall, offset + width, half),
+        alongWall(wall, offset, half),
+      ];
+      html += `<polygon class="plan-ghost" points="${points(ghost)}"/>`;
+      html += dimensions(level, wall, [hover.opening], xy);
+    } else if (hover.wallId) {
+      const [x, y] = xy(hoverPoint);
+      html += `<text id="plan-ghost-message" class="plan-drag-message" x="${(Number(x) + 14).toFixed(1)}" y="${(Number(y) - 14).toFixed(1)}">${escapeHtml(hover.error)}</text>`;
+    }
+  }
+  if (svg.innerHTML !== html) svg.innerHTML = html;
+}
+
+/**
+ * Chain of dimensions along a wall, on its side away from the rooms when it has one: the
+ * whole length, or the gaps around an opening and its width.
+ */
+function dimensions(
+  level: Level,
+  wall: Wall,
+  openings: Opening[],
+  xy: (p: Point2) => readonly [string, string],
+) {
+  const length = wallLength(wall);
+  const gap = wall.thickness / 2 + 0.3;
+  const middle = alongWall(wall, length / 2, gap);
+  const side = level.rooms.some((r) => pointInPolygon(middle, r.polygon)) ? -gap : gap;
+  const stops = [0];
+  for (const o of openings) stops.push(o.offset, o.offset + o.width);
+  stops.push(length);
+  let html = '';
+  for (let i = 1; i < stops.length; i++) {
+    const [from, to] = [stops[i - 1], stops[i]];
+    if (to - from < 0.01) continue;
+    const [a, b] = [alongWall(wall, from, side), alongWall(wall, to, side)].map(xy);
+    const [ta, tb] = [alongWall(wall, from, side * 0.6), alongWall(wall, to, side * 0.6)].map(xy);
+    const mid = xy(alongWall(wall, (from + to) / 2, side));
+    const label = xy(alongWall(wall, (from + to) / 2, side * 1.45));
+    // Beside a vertical line the text starts at the line instead of straddling it.
+    const [dx, dy] = [Number(label[0]) - Number(mid[0]), Number(label[1]) - Number(mid[1])];
+    const anchor = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'start' : 'end') : 'middle';
+    const at = anchor === 'middle' ? label : [Number(mid[0]) + Math.sign(dx) * 6, Number(mid[1])];
+    html +=
+      `<path class="plan-dimension" d="M${a.join(',')}L${b.join(',')}M${ta.join(',')}L${a.join(',')}M${tb.join(',')}L${b.join(',')}"/>` +
+      `<text class="plan-dimension-label" text-anchor="${anchor}" x="${at[0]}" y="${at[1]}">${number(to - from)} m</text>`;
+  }
+  return html;
 }
 
 function selectionOutline(level: Level, target: PlanSelection): Point2[] | undefined {
