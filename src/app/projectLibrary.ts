@@ -141,11 +141,13 @@ export function savePlanProject(before: HouseProject, after: HouseProject) {
   const previous = imported;
   const next = imported.map((project) => (project === before ? after : project));
   const levelId = app.viewer.level.id;
+  const view = app.viewer.planView();
   writeProjects(next);
   imported = next;
   try {
     renderProjectOptions();
     loadProject(after.id, levelId, undefined, { mode: 'plan', exterior: false });
+    if (view) app.viewer.restorePlanView(view);
   } catch (error) {
     writeProjects(previous);
     imported = previous;

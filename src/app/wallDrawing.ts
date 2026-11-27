@@ -3,10 +3,19 @@ import type { PlanPointerKind } from '../scene/viewer';
 import type { Point2 } from '../model/types';
 import { nextCorner } from '../model/wallChain';
 import { addWallChain, emptyHouse, snapDraftPoint, type DraftSnap } from '../model/wallDraft';
-import { number } from '../ui/format';
-import { el, toast } from './dom';
-import { editableProject, openPlanEditBar, syncPlanEditBar } from './planEditBar';
+import { centimetres } from '../ui/format';
+import { activeButton, el, toast } from './dom';
+import {
+  editableProject,
+  openPlanEditBar,
+  planNotice,
+  renderPlanHint,
+  setPlanCursor,
+  setPlanTool,
+  syncPlanEditBar,
+} from './planEditBar';
 import { applyPlanEdit } from './planHistory';
+import { dismissStartCard } from './preferences';
 import { installProjectDocument } from './projectLibrary';
 import { app } from './state';
 import { setMode, setSidebar, syncDisplayControls } from './viewChrome';
@@ -38,23 +47,49 @@ let cursor: DraftSnap | undefined;
 let pointer: Point2 | undefined;
 let free = false;
 let typed = '';
+/** The typed length, entered in centimetres like every plan field, in metres. */
+const typedLength = () => Number(typed) / 100;
 
 export const wallToolActive = () => active;
 /** Armed and on screen: Plan, a local project, the edit bar open, « Mesurer » off. */
 export const wallToolLive = () => active && !el('#plan-edit-bar').hidden && !app.viewer.measureMode;
 export const wallGridOn = () => grid;
 
-export function toggleWallTool() {
-  if (active) stopWallTool();
-  else startWallTool();
+/** The thickness of the next walls, in metres; the field is in centimetres. */
+const wallThickness = () => el<HTMLInputElement>('#wall-thickness').valueAsNumber / 100;
+
+/** « Mur extérieur 20 cm » or « Cloison 10 cm » sets the thickness; any other value is custom. */
+export function setWallType(centimetres: number) {
+  el<HTMLInputElement>('#wall-thickness').value = String(centimetres);
+  render();
 }
+
+function syncWallType() {
+  const value = el<HTMLInputElement>('#wall-thickness').valueAsNumber;
+  activeButton('#wall-exterior', value === 20);
+  activeButton('#wall-partition', value === 10);
+}
+
+/** What the hint needs: corners drawn, and what a click at the pointer would do. */
+export function wallDraftState(): { corners: number; target?: 'close' | 'join' } {
+  if (!wallToolLive() || !points.length || !cursor || typed) return { corners: points.length };
+  if (closes(cursor.point)) return { corners: points.length, target: 'close' };
+  if (cursor.kind === 'corner' || cursor.kind === 'wall')
+    return { corners: points.length, target: 'join' };
+  return { corners: points.length };
+}
+
+const closes = (p: Point2) => {
+  const first = points[0];
+  return points.length >= 3 && !!first && Math.hypot(p[0] - first[0], p[1] - first[1]) < 1e-9;
+};
 
 export function startWallTool() {
   if (!editableProject()) return;
   active = true;
   points = [];
   typed = '';
-  el<HTMLInputElement>('#wall-thickness').value = app.viewer.level.walls.length ? '0.10' : '0.20';
+  el<HTMLInputElement>('#wall-thickness').value = app.viewer.level.walls.length ? '10' : '20';
   syncDisplayControls();
   render();
 }
@@ -84,7 +119,9 @@ export async function startNewHouse() {
     // On a narrow screen the project drawer covers the plan to draw on.
     if (!matchMedia('(min-width: 761px)').matches) setSidebar(false);
     setMode('plan');
-    startWallTool();
+    setPlanTool('wall');
+    // Drawing is an answer to « Premiers pas »; the card would cover half the plan.
+    dismissStartCard();
   } catch (error) {
     toast(userMessage(error, 'Création impossible.'));
   }
@@ -104,6 +141,7 @@ export function wallPointer(type: PlanPointerKind, at: Point2, event: PointerEve
   if (!wallToolLive() || type === 'down' || type === 'up') return false;
   pointer = at;
   free = event.shiftKey;
+  setPlanCursor('crosshair');
   cursor = snap(at);
   if (type === 'tap') addCorner(cursor);
   render();
@@ -112,8 +150,7 @@ export function wallPointer(type: PlanPointerKind, at: Point2, event: PointerEve
 
 function addCorner(target: DraftSnap) {
   const p = target.point;
-  const first = points[0];
-  if (points.length >= 3 && first && Math.hypot(p[0] - first[0], p[1] - first[1]) < 1e-9) {
+  if (closes(p)) {
     commit(true);
     return;
   }
@@ -142,25 +179,37 @@ function commit(closed: boolean) {
   if (!project) return;
   try {
     const levelId = app.viewer.level.id;
-    const thickness = el<HTMLInputElement>('#wall-thickness').valueAsNumber;
+    const thickness = wallThickness();
     const levels = project.levels.map((level) =>
       level.id === levelId ? addWallChain(level, chain, closed, thickness) : level,
     );
     applyPlanEdit(project, { ...project, levels });
-    el<HTMLInputElement>('#wall-thickness').value = '0.10';
+    const field = el<HTMLInputElement>('#wall-thickness');
+    // After the outline come the partitions: the switch is announced, never silent.
+    const switched = field.value !== '10';
+    field.value = '10';
+    planNotice(
+      closed && switched
+        ? 'Pièce fermée. Type de mur : Cloison 10 cm. Tracez les cloisons en partant d’un mur.'
+        : closed
+          ? 'Pièce fermée. Tracez les cloisons en partant d’un mur, puis placez portes et fenêtres.'
+          : switched
+            ? 'Murs ajoutés. Type de mur : Cloison 10 cm.'
+            : 'Murs ajoutés.',
+    );
   } catch (error) {
-    toast(userMessage(error, 'Ces murs ne peuvent pas être ajoutés.'));
+    planNotice(userMessage(error, 'Ces murs ne peuvent pas être ajoutés.'), 'error');
   }
   render();
 }
 
-/** Typed digits fix the next length; Enter follows the pointer, an arrow key its direction. */
+/** Typed digits fix the next length in cm; Enter follows the pointer, an arrow key its direction. */
 export function wallToolKey(event: KeyboardEvent): boolean {
   if (!wallToolLive()) return false;
   const key = event.key;
   if (key === 'Escape') {
     if (points.length) points = [];
-    else stopWallTool();
+    else setPlanTool('select');
   } else if (/^[0-9]$/.test(key) || ((key === '.' || key === ',') && !typed.includes('.'))) {
     if (!points.length) return false;
     typed += key === ',' ? '.' : key;
@@ -180,7 +229,7 @@ export function wallToolKey(event: KeyboardEvent): boolean {
 
 function placeTyped(direction?: Point2) {
   const last = points.at(-1);
-  const length = Number(typed);
+  const length = typedLength();
   if (!last || !(length > 0)) return;
   const toward = direction ? [last[0] + direction[0], last[1] + direction[1]] : pointer;
   if (!toward) return;
@@ -207,14 +256,11 @@ function screenDirection([sx, sy]: Point2): Point2 {
 /** Draws the grid, the chain, the rubber band and its length over the canvas. */
 export function render() {
   const svg = document.querySelector<SVGSVGElement>('#wall-draft')!;
-  const hint = el('#wall-hint');
   const live = wallToolLive();
   svg.toggleAttribute('hidden', !live);
-  hint.hidden = !live;
+  syncWallType();
+  renderPlanHint();
   if (!live) return;
-  hint.textContent = points.length
-    ? 'Cliquez l’angle suivant ou saisissez une longueur, puis Entrée ou une flèche. Cliquez le premier angle ou un mur pour terminer. Maj : angle libre · Échap : annuler.'
-    : 'Cliquez le premier angle, ou un mur existant pour y raccorder une cloison.';
   const viewer = app.viewer;
   const project = viewer.projector();
   const at = (p: Point2) => {
@@ -233,11 +279,33 @@ export function render() {
   }
   const last = points.at(-1);
   const preview = last && cursor ? previewEnd(last) : undefined;
-  if (points.length > 1)
-    html += `<polyline class="wall-draft-chain" points="${points.map(pair).join(' ')}"/>`;
+  const thickness = wallThickness() || 0.1;
+  // Walls show with their real thickness, centred on the axis being drawn.
+  const band = (a: Point2, b: Point2) => {
+    const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (!(length > 0)) return '';
+    const [nx, ny] = [
+      ((a[1] - b[1]) / length) * (thickness / 2),
+      ((b[0] - a[0]) / length) * (thickness / 2),
+    ];
+    return [
+      [a[0] + nx, a[1] + ny],
+      [b[0] + nx, b[1] + ny],
+      [b[0] - nx, b[1] - ny],
+      [a[0] - nx, a[1] - ny],
+    ]
+      .map((p) => pair(p as Point2))
+      .join(' ');
+  };
+  const { target } = wallDraftState();
+  if (target === 'close')
+    html += `<polygon class="wall-draft-fill" points="${points.map(pair).join(' ')}"/>`;
+  for (let i = 1; i < points.length; i++)
+    html += `<polygon class="wall-draft-chain" points="${band(points[i - 1], points[i])}"/>`;
   if (last && preview) {
+    html += `<polygon class="wall-draft-band" points="${band(last, preview)}"/>`;
     const [a, b] = [at(last), at(preview)];
-    html += `<line class="wall-draft-band" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`;
+    html += `<line class="wall-draft-axis" x1="${a.x}" y1="${a.y}" x2="${b.x}" y2="${b.y}"/>`;
   }
   for (const p of points) {
     const { x, y } = at(p);
@@ -245,12 +313,23 @@ export function render() {
   }
   if (cursor && !typed) {
     const { x, y } = at(cursor.point);
-    html += `<circle class="wall-draft-snap ${cursor.kind}" cx="${x}" cy="${y}" r="7"/>`;
+    html += `<circle class="wall-draft-snap ${target ?? cursor.kind}" cx="${x}" cy="${y}" r="7"/>`;
+    // What the click will do, by the pointer: a newcomer reads it where they look.
+    const label =
+      target === 'close'
+        ? 'Fermer la pièce'
+        : target === 'join'
+          ? 'Terminer ici'
+          : !points.length && (cursor.kind === 'wall' || cursor.kind === 'corner')
+            ? 'Commencer une cloison ici'
+            : '';
+    if (label)
+      html += `<text id="wall-draft-target" class="wall-draft-target" x="${(Number(x) + 12).toFixed(1)}" y="${(Number(y) - 12).toFixed(1)}">${label}</text>`;
   }
   if (last && preview) {
     const length = Math.hypot(preview[0] - last[0], preview[1] - last[1]);
     const middle = project([(last[0] + preview[0]) / 2, (last[1] + preview[1]) / 2], 0);
-    const text = typed ? `${typed.replace('.', ',')} m` : `${number(length)} m`;
+    const text = typed ? `${typed.replace('.', ',')} cm` : centimetres(length);
     html += `<text id="wall-draft-length" class="wall-draft-length${typed ? ' typed' : ''}" x="${middle.x.toFixed(1)}" y="${(middle.y - 10).toFixed(1)}">${text}</text>`;
   }
   svg.innerHTML = html;
@@ -273,7 +352,7 @@ function gridPath(pair: (p: Point2) => string) {
 
 function previewEnd(last: Point2): Point2 | undefined {
   if (!typed) return cursor?.point;
-  const length = Number(typed);
+  const length = typedLength();
   if (!pointer || !(length > 0)) return cursor?.point;
   return nextCorner(last, pointer, length, !free) ?? cursor?.point;
 }

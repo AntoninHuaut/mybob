@@ -618,16 +618,33 @@
 #delete-selected-furniture {
   color: #a34d39;
 }
-/* Sits beside the tool column, level with its top, as the extension of « Modifier le plan ». */
-.plan-edit-bar {
+/* Beside the tool column, level with its top: the bar, its hint, then the selected element. */
+/* The plan is on screen in full: the mini-map would only cover the selected element's panel. */
+.plan-editing .mini-card {
+  display: none;
+}
+.plan-edit-stack {
   position: absolute;
   z-index: 4;
   top: 88px;
   right: 80px;
+  bottom: 90px;
   display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+  max-width: calc(100% - 110px);
+  pointer-events: none;
+}
+.plan-edit-stack > * {
+  pointer-events: auto;
+}
+.plan-edit-bar {
+  display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 3px;
-  max-width: calc(100% - 110px);
+  max-width: 100%;
   padding: 5px;
   border: 1px solid #d2ddc7;
   border-radius: 8px;
@@ -659,6 +676,25 @@
   cursor: default;
 }
 .plan-edit-bar button[aria-pressed='true'] {
+  background: #2f5a3a;
+  color: #f4faed;
+}
+.plan-edit-bar button kbd {
+  padding: 0 4px;
+  font-size: 10px;
+  line-height: 1.5;
+}
+.plan-edit-bar button[aria-pressed='true'] kbd {
+  border-color: #6f9877;
+  background: transparent;
+  color: #dcebd5;
+}
+.plan-wall-types {
+  display: inline-flex;
+  gap: 2px;
+}
+.plan-edit-bar .plan-wall-types button[aria-pressed='true'],
+#wall-grid[aria-pressed='true'] {
   background: #e2eed6;
   color: #396b30;
 }
@@ -690,29 +726,57 @@
   background: white;
   font: inherit;
 }
-.plan-edit-hint {
-  position: absolute;
-  z-index: 4;
-  top: 144px;
-  right: 80px;
-  max-width: min(460px, calc(100% - 110px));
-  margin: 0;
-  padding: 8px 11px;
-  border-radius: 6px;
-  background: #36523aee;
-  color: white;
-  font-size: 12px;
-  line-height: 1.5;
+/* What a click, a drag or a key does now, right under the tool that decides it. */
+.plan-edit-stack > .plan-hint {
   pointer-events: none;
 }
-/* Same place as the wall hint: the inspector only shows while the wall tool is off. */
+.plan-hint {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  max-width: min(560px, 100%);
+  margin: 0;
+  padding: 9px 13px;
+  border: 1px solid #cdddc1;
+  border-radius: 7px;
+  background: #fcfff5f2;
+  box-shadow: 0 4px 16px #3c512d16;
+  color: #36523a;
+  font-size: 13px;
+  line-height: 1.45;
+}
+.plan-hint[hidden] {
+  display: none;
+}
+.plan-hint[data-tone='success'] {
+  border-color: #9cc39a;
+  background: #ecf6e6f5;
+  color: #2f5a3a;
+  font-weight: 600;
+}
+.plan-hint[data-tone='error'] {
+  border-color: #e0a796;
+  background: #fbefeaf5;
+  color: #a34d39;
+  font-weight: 600;
+}
+.plan-hint-keys {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+}
+.plan-hint-keys small {
+  margin-right: 6px;
+  color: #5d7a5a;
+  font-size: 12px;
+}
 .plan-inspector {
-  position: absolute;
-  z-index: 4;
-  top: 144px;
-  right: 80px;
-  width: min(260px, calc(100% - 110px));
-  max-height: calc(100% - 160px);
+  flex: 0 1 auto;
+  width: min(260px, 100%);
+  min-height: 0;
   padding: 12px;
   border: 1px solid #d2ddc7;
   border-radius: 8px;
@@ -765,6 +829,14 @@
 .plan-inspector-error:empty {
   display: none;
 }
+.plan-inspector-actions {
+  display: grid;
+}
+.plan-inspector-form .text-button {
+  min-height: 34px;
+  padding: 6px 8px;
+  justify-self: start;
+}
 .plan-inspector-form [data-action='delete'] {
   justify-self: start;
   color: #a34d39;
@@ -778,6 +850,31 @@
 .plan-selection-outline.room {
   fill: #3a7d4a14;
   stroke-dasharray: 6 4;
+}
+.plan-handle {
+  fill: #fcfef7;
+  stroke: #2f6b3d;
+  stroke-width: 1.5;
+}
+.plan-ghost {
+  fill: #3a7d4a55;
+  stroke: #2f6b3d;
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+.plan-dimension {
+  fill: none;
+  stroke: #36523a;
+  stroke-width: 1;
+}
+.plan-dimension-label {
+  fill: #36523a;
+  stroke: #fcfef7;
+  stroke-width: 4px;
+  paint-order: stroke;
+  font-size: 12px;
+  font-weight: 600;
+  dominant-baseline: middle;
 }
 .plan-selection-cut {
   stroke: #875335;
@@ -835,16 +932,27 @@
   stroke: #6e8c6833;
   stroke-width: 1;
 }
-.wall-draft-chain,
-.wall-draft-band {
-  fill: none;
+.wall-draft-chain {
+  fill: #87533599;
   stroke: #875335;
-  stroke-width: 3;
-  stroke-linecap: round;
+  stroke-width: 1.5;
   stroke-linejoin: round;
 }
 .wall-draft-band {
-  stroke-dasharray: 7 5;
+  fill: #87533540;
+  stroke: #875335;
+  stroke-width: 1.5;
+  stroke-dasharray: 6 4;
+  stroke-linejoin: round;
+}
+.wall-draft-axis {
+  stroke: #875335;
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+}
+.wall-draft-fill {
+  fill: #3a7d4a26;
+  stroke: none;
 }
 .wall-draft-joint {
   fill: #fcfef7;
@@ -863,6 +971,19 @@
 .wall-draft-snap.free {
   stroke-opacity: 0.5;
 }
+.wall-draft-snap.close,
+.wall-draft-snap.join {
+  fill: #315e4333;
+  stroke-width: 3;
+}
+.wall-draft-target {
+  fill: #2f5a3a;
+  stroke: #fcfef7;
+  stroke-width: 4px;
+  paint-order: stroke;
+  font-size: 13px;
+  font-weight: 700;
+}
 .wall-draft-length {
   fill: #36523a;
   stroke: #fcfef7;
@@ -874,6 +995,14 @@
 }
 .wall-draft-length.typed {
   fill: #875335;
+}
+.plan-edit-label {
+  white-space: nowrap;
+}
+.plan-edit-unit {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 .plan-edit-divider {
   flex: 0 0 1px;

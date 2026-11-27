@@ -2,7 +2,7 @@ import { pointInPolygon, wallLength } from './geometry';
 import { editOpening, type OpeningMeasurements } from './openingEdit';
 import { deriveRooms, exteriorOutline } from './roomDerivation';
 import { checkJunctionOpening } from './roomPartition';
-import type { Level, Point2, Room, Wall } from './types';
+import type { Level, Opening, Point2, Room, Wall } from './types';
 import { simplePolygon } from './validate';
 
 export type PlanSelection =
@@ -354,6 +354,47 @@ export function addOpening(
       w.id === wallId ? { ...w, openings: [...(w.openings ?? []), opening] } : w,
     ),
   };
+}
+
+export type OpeningPlacement =
+  { wallId: string; level: Level; opening: Opening } | { wallId?: string; error: string };
+
+/**
+ * « Porte » / « Fenêtre » at a Plan point: the level with the opening centred there, or the
+ * French reason it cannot go there. The same answer previews the pointer and places on click.
+ */
+export function placeOpening(
+  level: Level,
+  kind: 'door' | 'window',
+  at: Point2,
+  tolerance: number,
+  id: string,
+  step?: number,
+): OpeningPlacement {
+  const hit = pickPlan(level, at, tolerance);
+  const wallId = hit?.kind === 'wall' ? hit.id : hit?.kind === 'opening' ? hit.wallId : undefined;
+  const wall = level.walls.find((w) => w.id === wallId);
+  if (!wall)
+    return {
+      error:
+        kind === 'door'
+          ? 'Ici, il n’y a pas de mur. Cliquez sur un mur pour y placer la porte.'
+          : 'Ici, il n’y a pas de mur. Cliquez sur un mur pour y placer la fenêtre.',
+    };
+  try {
+    const next = addOpening(level, wall.id, kind, project(wall, at).along, id, step);
+    const opening = findWall(next, wall.id).openings!.find((o) => o.id === id)!;
+    return { wallId: wall.id, level: next, opening };
+  } catch (error) {
+    return {
+      wallId: wall.id,
+      // Only our own refusals carry a French message; anything else is a bug, not a reason.
+      error:
+        error instanceof Error && !(error instanceof TypeError)
+          ? error.message
+          : 'Ouverture impossible ici.',
+    };
+  }
 }
 
 /** Slides an opening along its wall to `offset` metres from the wall start. */

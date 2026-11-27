@@ -9,10 +9,16 @@ import { number } from '../ui/format';
 import { activeButton, closeDialog, el, openDialog, toast } from './dom';
 import { app } from './state';
 import { setFurnitureCirculation } from './furnitureController';
-import { restorePlan, syncPlanEditBar, togglePlanEditBar } from './planEditBar';
+import { restorePlan, setPlanTool, syncPlanEditBar, togglePlanEditBar } from './planEditBar';
 import { watchPlanHistory } from './planHistory';
-import { togglePlacing, wirePlanSelection } from './planSelection';
-import { startNewHouse, toggleWallGrid, toggleWallTool, wallToolKey } from './wallDrawing';
+import { wirePlanSelection } from './planSelection';
+import {
+  render as renderWallDraft,
+  setWallType,
+  startNewHouse,
+  toggleWallGrid,
+  wallToolKey,
+} from './wallDrawing';
 import { downloadProject, importProject, openRemoveProject } from './projectLibrary';
 import { loadLevel, loadProject } from './projectView';
 import { chooseQuality, dismissStartCard, updateNavigationPreferences } from './preferences';
@@ -202,16 +208,20 @@ export function wireProjectControls() {
     if (app.receivedShare) void adoptReceived(app.receivedShare.document);
   });
   el('#export-image').addEventListener('click', openImageExport);
-  el('#place-door').addEventListener('click', () => togglePlacing('door'));
-  el('#place-window').addEventListener('click', () => togglePlacing('window'));
+  el('#select-tool').addEventListener('click', () => setPlanTool('select'));
+  el('#wall-tool').addEventListener('click', () => setPlanTool('wall'));
+  el('#place-door').addEventListener('click', () => setPlanTool('door'));
+  el('#place-window').addEventListener('click', () => setPlanTool('window'));
   wirePlanSelection();
   watchPlanHistory(syncPlanEditBar);
   el('#tool-plan-edit').addEventListener('click', togglePlanEditBar);
   el('#undo-plan').addEventListener('click', () => restorePlan('undo'));
   el('#redo-plan').addEventListener('click', () => restorePlan('redo'));
   el('#new-house').addEventListener('click', () => void startNewHouse());
-  el('#wall-tool').addEventListener('click', toggleWallTool);
   el('#wall-grid').addEventListener('click', toggleWallGrid);
+  for (const id of ['#wall-exterior', '#wall-partition'])
+    el(id).addEventListener('click', () => setWallType(Number(el(id).dataset.thickness)));
+  el('#wall-thickness').addEventListener('input', renderWallDraft);
   el('#import-project').addEventListener('click', () =>
     el<HTMLInputElement>('#import-file').click(),
   );
