@@ -162,3 +162,26 @@ test('« Qualité » sets the scale, the effect tier and the shadow filtering, b
   assert.equal(viewer.currentEffectTier, 0);
   assert.equal(shadow.filteringQuality, ShadowGenerator.QUALITY_MEDIUM);
 });
+
+test('materials carry the Visite jitter plugin, disabled, before and after a visit', async (t) => {
+  const { viewer, loop } = await setup(t);
+  const { TAAMaterialManager } =
+    await import('@babylonjs/core/PostProcesses/RenderPipeline/Pipelines/taaMaterialManager');
+  const { PBRMaterial } = await import('@babylonjs/core/Materials/PBR/pbrMaterial');
+  const scene = viewer.scene;
+  const jitter = (material: { pluginManager?: { getPlugin(name: string): unknown } }) =>
+    material.pluginManager?.getPlugin('TAAJitter') as { isEnabled: boolean } | undefined;
+  const armed = () =>
+    scene.materials.filter((m) => m.pluginManager).every((m) => jitter(m)?.isEnabled === false);
+  assert.ok(armed(), 'the start-up programs already have the plugin marker');
+  // A walk's temporal pass brings its own manager, and its disposal unregisters the plugin.
+  new TAAMaterialManager(scene).dispose();
+  (
+    viewer as unknown as { viewEffects: { releaseWalkPipelines(): void } }
+  ).viewEffects.releaseWalkPipelines();
+  const later = new PBRMaterial('later', scene);
+  viewer.requestRender();
+  loop();
+  assert.ok(jitter(later)?.isEnabled === false, 'a material made after the visit gets it too');
+  assert.ok(armed());
+});

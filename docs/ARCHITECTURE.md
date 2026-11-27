@@ -653,6 +653,11 @@ last call, and read back at start-up.
   before the pipeline is disposed, `ViewEffects.releaseWalkPipelines`): Babylon leaves that plugin
   attached and enabled on every material, which changes their defines and made the plan, the
   overview and the exterior relink all their programs after a visit.
+  Even disabled, the plugin leaves its `MATERIALPLUGIN_n` marker in the defines (Babylon
+  9.37.2+), so `ViewEffects` gives every material the plugin, disabled, from the start: an idle
+  `TAAMaterialManager`, created again whenever the material count changes outside the walk
+  (Babylon only attaches it to the materials present) and after each visit. Without it, the
+  RTX 3060 laptop linked 20 programs after leaving Visite (#383).
 - The sun shadow map is only redrawn when its casters change (`shadowRefresh.ts`): mode,
   cutaway, roof, sun, animated door and furniture changes. A new moving shadow caster calls `invalidate()`.
 - The sun shadow map is not read where a PBR surface faces away from the sun
