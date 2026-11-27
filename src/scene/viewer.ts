@@ -105,6 +105,10 @@ import { roofWindowWells } from '../model/ceiling';
 export type ViewMode = 'overview' | 'plan' | 'walk';
 /** Plan pointer events offered to an edit tool before the camera and the default click. */
 export type PlanPointerKind = 'down' | 'move' | 'up' | 'tap';
+export interface PlanView {
+  target: [number, number, number];
+  halfHeight: number;
+}
 
 export interface FrameInfo {
   cameraMoved?: boolean;
@@ -1971,6 +1975,24 @@ export class HouseViewer {
     event.preventDefault();
     this.zoomPlan(Math.exp(event.deltaY * 0.001));
   };
+
+  /** The Plan framing, so that a plan edit, which reloads the project, does not reframe it. */
+  planView(): PlanView | undefined {
+    if (this.mode !== 'plan') return;
+    const { x, y, z } = this.orbit.target;
+    return { target: [x, y, z], halfHeight: this.orbit.orthoTop ?? 0 };
+  }
+
+  restorePlanView(view: PlanView) {
+    if (this.mode !== 'plan' || !(view.halfHeight > 0)) return;
+    this.orbit.setTarget(new Vector3(...view.target), false, true, true);
+    // The zoom is relative to the outline's own framing, which the edit may have changed.
+    this.planZoom = 1;
+    this.setOrthoSize();
+    this.planZoom = view.halfHeight / this.orbit.orthoTop!;
+    this.setOrthoSize();
+    this.requestRender();
+  }
 
   private zoomPlan(factor: number) {
     if (this.mode !== 'plan' || !Number.isFinite(factor) || factor <= 0) return;
