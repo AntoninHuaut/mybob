@@ -531,21 +531,21 @@ dialog p {
     right: 11px;
     padding: 4px;
   }
-  .plan-edit-bar {
+  .plan-edit-stack {
     top: 13px;
     right: 64px;
+    bottom: 80px;
     max-width: calc(100% - 76px);
+  }
+  .plan-edit-bar {
     padding: 4px;
   }
-  .plan-edit-hint {
-    top: 66px;
-    right: 64px;
-    max-width: calc(100% - 76px);
+  .plan-hint {
+    font-size: 12px;
   }
-  .plan-inspector {
-    top: 66px;
-    right: 64px;
-    width: min(260px, calc(100% - 76px));
+  .plan-edit-bar kbd,
+  .plan-edit-label {
+    display: none;
   }
   .tool-button {
     width: 40px;
@@ -643,7 +643,7 @@ dialog p {
   }
 }
 @media (max-height: 600px) {
-  .plan-edit-bar {
+  .plan-edit-stack {
     top: 79px;
   }
   .mini-card {
@@ -669,12 +669,18 @@ dialog p {
     top: 13px;
     max-height: calc(100% - 80px);
   }
-  .plan-edit-bar {
+  .plan-edit-stack {
     top: 13px;
   }
   .tool-button {
     width: 36px;
     height: 33px;
+  }
+}
+/* Beside an open sidebar, the tool names stay and their keys move to the tooltips. */
+@media (max-width: 1180px) {
+  .plan-edit-bar button kbd {
+    display: none;
   }
 }
 @media (prefers-reduced-motion: reduce) {

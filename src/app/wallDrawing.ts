@@ -5,7 +5,14 @@ import { nextCorner } from '../model/wallChain';
 import { addWallChain, emptyHouse, snapDraftPoint, type DraftSnap } from '../model/wallDraft';
 import { number } from '../ui/format';
 import { el, toast } from './dom';
-import { editableProject, openPlanEditBar, syncPlanEditBar } from './planEditBar';
+import {
+  editableProject,
+  openPlanEditBar,
+  planNotice,
+  renderPlanHint,
+  setPlanTool,
+  syncPlanEditBar,
+} from './planEditBar';
 import { applyPlanEdit } from './planHistory';
 import { installProjectDocument } from './projectLibrary';
 import { app } from './state';
@@ -44,10 +51,19 @@ export const wallToolActive = () => active;
 export const wallToolLive = () => active && !el('#plan-edit-bar').hidden && !app.viewer.measureMode;
 export const wallGridOn = () => grid;
 
-export function toggleWallTool() {
-  if (active) stopWallTool();
-  else startWallTool();
+/** What the hint needs: corners drawn, and what a click at the pointer would do. */
+export function wallDraftState(): { corners: number; target?: 'close' | 'join' } {
+  if (!wallToolLive() || !points.length || !cursor || typed) return { corners: points.length };
+  if (closes(cursor.point)) return { corners: points.length, target: 'close' };
+  if (cursor.kind === 'corner' || cursor.kind === 'wall')
+    return { corners: points.length, target: 'join' };
+  return { corners: points.length };
 }
+
+const closes = (p: Point2) => {
+  const first = points[0];
+  return points.length >= 3 && !!first && Math.hypot(p[0] - first[0], p[1] - first[1]) < 1e-9;
+};
 
 export function startWallTool() {
   if (!editableProject()) return;
@@ -84,7 +100,7 @@ export async function startNewHouse() {
     // On a narrow screen the project drawer covers the plan to draw on.
     if (!matchMedia('(min-width: 761px)').matches) setSidebar(false);
     setMode('plan');
-    startWallTool();
+    setPlanTool('wall');
   } catch (error) {
     toast(userMessage(error, 'Création impossible.'));
   }
@@ -112,8 +128,7 @@ export function wallPointer(type: PlanPointerKind, at: Point2, event: PointerEve
 
 function addCorner(target: DraftSnap) {
   const p = target.point;
-  const first = points[0];
-  if (points.length >= 3 && first && Math.hypot(p[0] - first[0], p[1] - first[1]) < 1e-9) {
+  if (closes(p)) {
     commit(true);
     return;
   }
@@ -148,8 +163,13 @@ function commit(closed: boolean) {
     );
     applyPlanEdit(project, { ...project, levels });
     el<HTMLInputElement>('#wall-thickness').value = '0.10';
+    planNotice(
+      closed
+        ? 'Pièce fermée. Tracez les cloisons en partant d’un mur, puis placez portes et fenêtres.'
+        : 'Murs ajoutés.',
+    );
   } catch (error) {
-    toast(userMessage(error, 'Ces murs ne peuvent pas être ajoutés.'));
+    planNotice(userMessage(error, 'Ces murs ne peuvent pas être ajoutés.'), 'error');
   }
   render();
 }
@@ -160,7 +180,7 @@ export function wallToolKey(event: KeyboardEvent): boolean {
   const key = event.key;
   if (key === 'Escape') {
     if (points.length) points = [];
-    else stopWallTool();
+    else setPlanTool('select');
   } else if (/^[0-9]$/.test(key) || ((key === '.' || key === ',') && !typed.includes('.'))) {
     if (!points.length) return false;
     typed += key === ',' ? '.' : key;
@@ -207,14 +227,10 @@ function screenDirection([sx, sy]: Point2): Point2 {
 /** Draws the grid, the chain, the rubber band and its length over the canvas. */
 export function render() {
   const svg = document.querySelector<SVGSVGElement>('#wall-draft')!;
-  const hint = el('#wall-hint');
   const live = wallToolLive();
   svg.toggleAttribute('hidden', !live);
-  hint.hidden = !live;
+  renderPlanHint();
   if (!live) return;
-  hint.textContent = points.length
-    ? 'Cliquez l’angle suivant ou saisissez une longueur, puis Entrée ou une flèche. Cliquez le premier angle ou un mur pour terminer. Maj : angle libre · Échap : annuler.'
-    : 'Cliquez le premier angle, ou un mur existant pour y raccorder une cloison.';
   const viewer = app.viewer;
   const project = viewer.projector();
   const at = (p: Point2) => {

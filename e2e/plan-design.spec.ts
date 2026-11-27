@@ -82,7 +82,7 @@ test('design two rooms in Plan, then walk through their door in Visite', async (
 
   // A door placed by click, centred 1.2 m along the partition, then dragged to 1.65 m.
   await page.locator('#place-door').click();
-  await expect(page.locator('#wall-hint')).toBeHidden();
+  await expect(page.locator('#plan-hint')).toContainText('placer une porte');
   await clickPlan(page, doorClick);
   await expect(inspector.getByLabel('Largeur')).toHaveValue('0.9');
   await expect(inspector.getByLabel('Distance au jambage')).toHaveValue('0.75');
@@ -207,7 +207,7 @@ test('every Plan click selects, however quick or long it is', async ({ page }) =
       ] as Point[]
     ).map((p) => pagePoint(page, p)),
   );
-  await page.locator('#wall-tool').click();
+  await page.getByRole('button', { name: 'Sélection' }).click();
   const heading = page.locator('#plan-inspector').getByRole('heading');
 
   // Quick clicks, some within Babylon's double-click delay (#374).

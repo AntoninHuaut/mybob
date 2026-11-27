@@ -45,6 +45,10 @@ const paths: Record<string, string> = {
   divide: '<path d="M3 3h18v18H3Zm9 0v18"/>',
   window: '<path d="M4 4h16v16H4Zm8 0v16M4 12h16"/>',
   trash: '<path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7m4-7v7"/>',
+  pointer: '<path d="M5 3 19 12l-6 1.5L10 20Z"/>',
+  wall: '<path d="M3 5h18v5H3Zm0 9h18v5H3Z"/>',
+  undo: '<path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/>',
+  redo: '<path d="m15 14 5-5-5-5"/><path d="M20 9H9a5 5 0 0 0 0 10h3"/>',
 };
 export function icon(name: string, size = 20) {
   return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.65" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] ?? paths.cube}</svg>`;

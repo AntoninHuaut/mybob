@@ -74,7 +74,7 @@ export async function drawClearRoom(page: Page): Promise<Point> {
   if ((await menu.getAttribute('aria-expanded')) !== 'true') await menu.click();
   await page.getByRole('button', { name: 'Nouvelle maison' }).click();
   await expect(page.locator('#header-project')).toHaveText('Nouvelle maison');
-  await expect(page.locator('#wall-hint')).toBeVisible();
+  await expect(page.locator('#plan-hint')).toContainText('premier angle');
   const box = (await page.locator('#scene').boundingBox())!;
   await page.mouse.click(box.x + box.width * 0.45, box.y + box.height * 0.45);
   for (const [length, arrow] of [

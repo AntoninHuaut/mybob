@@ -15,13 +15,22 @@ import {
 import type { Level, Point2 } from '../model/types';
 import { GRID_STEPS_PER_METRE } from '../model/wallDraft';
 import type { PlanPointerKind } from '../scene/viewer';
+import { planToolForKey } from '../ui/planHint';
 import { PlanInspector } from '../ui/planInspector';
-import { el, toast } from './dom';
+import { el } from './dom';
 import { endDrag, moveDrag, renderDrag, startDrag } from './planDrag';
-import { editableProject, planEditBarOpen, restorePlan, syncPlanEditBar } from './planEditBar';
+import {
+  editableProject,
+  planEditBarOpen,
+  planNotice,
+  renderPlanHint,
+  restorePlan,
+  setPlanTool,
+  syncPlanEditBar,
+} from './planEditBar';
 import { applyPlanEdit } from './planHistory';
 import { app } from './state';
-import { stopWallTool, wallGridOn, wallToolActive } from './wallDrawing';
+import { wallGridOn, wallToolActive } from './wallDrawing';
 
 /** Pointer distance, in CSS pixels, within which a click still lands on a wall. */
 const PICK_PIXELS = 6;
@@ -38,12 +47,11 @@ let placing: 'door' | 'window' | undefined;
 let pressed: [number, number] | undefined;
 
 export const placingOpening = () => placing;
+export const selectedKind = () => (planSelectionLive() ? selection?.kind : undefined);
 
-export function togglePlacing(kind: 'door' | 'window') {
-  if (!editableProject()) return;
-  placing = placing === kind ? undefined : kind;
-  if (placing) stopWallTool();
-  syncPlanEditBar();
+/** Arms « Porte » or « Fenêtre »; the edit bar stops the wall tool first. */
+export function setPlacing(kind: 'door' | 'window' | undefined) {
+  placing = kind;
 }
 
 function place(kind: 'door' | 'window', at: Point2, tolerance: number) {
@@ -51,10 +59,11 @@ function place(kind: 'door' | 'window', at: Point2, tolerance: number) {
   const wallId = hit?.kind === 'wall' ? hit.id : hit?.kind === 'opening' ? hit.wallId : undefined;
   const wall = app.viewer.level.walls.find((w) => w.id === wallId);
   if (!wall) {
-    toast(
+    planNotice(
       kind === 'door'
-        ? 'Cliquez sur un mur pour y placer la porte.'
-        : 'Cliquez sur un mur pour y placer la fenêtre.',
+        ? 'Ici, il n’y a pas de mur. Cliquez sur un mur pour y placer la porte.'
+        : 'Ici, il n’y a pas de mur. Cliquez sur un mur pour y placer la fenêtre.',
+      'error',
     );
     return;
   }
@@ -68,8 +77,13 @@ function place(kind: 'door' | 'window', at: Point2, tolerance: number) {
     edit((level) => addOpening(level, wall.id, kind, along, id, step));
     placing = undefined;
     selection = { kind: 'opening', wallId: wall.id, id };
+    planNotice(
+      kind === 'door'
+        ? 'Porte placée. Glissez-la pour l’ajuster, ou réglez-la dans le panneau.'
+        : 'Fenêtre placée. Glissez-la pour l’ajuster, ou réglez-la dans le panneau.',
+    );
   } catch (error) {
-    toast(userMessage(error, 'Ouverture impossible ici.'));
+    planNotice(userMessage(error, 'Ouverture impossible ici.'), 'error');
   }
   syncPlanEditBar();
 }
@@ -120,8 +134,9 @@ function removeSelection() {
     );
     selection = undefined;
     syncPlanSelection();
+    planNotice(target.kind === 'wall' ? 'Mur supprimé.' : 'Ouverture supprimée.');
   } catch (error) {
-    toast(userMessage(error, 'Suppression impossible.'));
+    planNotice(userMessage(error, 'Suppression impossible.'), 'error');
   }
 }
 
@@ -137,7 +152,7 @@ export function selectionPointer(type: PlanPointerKind, at: Point2, event: Point
       try {
         edit(apply);
       } catch (error) {
-        toast(userMessage(error, 'Déplacement impossible.'));
+        planNotice(userMessage(error, 'Déplacement impossible.'), 'error');
       }
       syncPlanSelection();
       return true;
@@ -173,7 +188,7 @@ export function selectionPointer(type: PlanPointerKind, at: Point2, event: Point
   return !!selection;
 }
 
-/** Delete, Esc and plan undo/redo while the edit bar is open; true when the key was used. */
+/** Tool keys, Delete, Esc and plan undo/redo while the edit bar is open; true when used. */
 export function planSelectionKey(event: KeyboardEvent): boolean {
   if (!editableProject() || !planEditBarOpen()) return false;
   const shortcut = event.key.toLowerCase();
@@ -181,9 +196,13 @@ export function planSelectionKey(event: KeyboardEvent): boolean {
     restorePlan(shortcut === 'y' || event.shiftKey ? 'redo' : 'undo');
     return true;
   }
+  const tool = planToolForKey(event);
+  if (tool && !app.viewer.measureMode) {
+    if (!event.repeat) setPlanTool(tool);
+    return true;
+  }
   if (placing && event.key === 'Escape') {
-    placing = undefined;
-    syncPlanEditBar();
+    setPlanTool('select');
     return true;
   }
   if (!selection || !planSelectionLive()) return false;
@@ -214,6 +233,7 @@ export function syncPlanSelection() {
   // The selected element may have gone with an undo.
   if (live && selection && el('#plan-inspector').hidden) selection = undefined;
   renderPlanSelection();
+  renderPlanHint();
 }
 
 /** Outlines the selection over the canvas; called again whenever the camera moves. */
