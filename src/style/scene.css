@@ -824,6 +824,14 @@
 .plan-inspector-error:empty {
   display: none;
 }
+.plan-inspector-actions {
+  display: grid;
+}
+.plan-inspector-form .text-button {
+  min-height: 34px;
+  padding: 6px 8px;
+  justify-self: start;
+}
 .plan-inspector-form [data-action='delete'] {
   justify-self: start;
   color: #a34d39;

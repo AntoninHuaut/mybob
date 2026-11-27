@@ -63,6 +63,7 @@ export class PlanInspector {
       try {
         if (action.dataset.action === 'delete') host.onDelete();
         else if (action.dataset.action === 'split') host.onSplit();
+        else this.flip(action.dataset.action);
       } catch (failure) {
         if (error) error.textContent = userMessage(failure, 'Modification impossible.');
       }
@@ -112,8 +113,8 @@ export class PlanInspector {
       body =
         metreField('length', 'Longueur', wallLength(target.wall)) +
         metreField('thickness', 'Épaisseur', target.wall.thickness) +
-        `<button type="button" class="text-button" data-action="split">Couper le mur au point cliqué</button>`;
-      remove = 'Supprimer le mur';
+        `<button type="button" class="text-button" data-action="split" title="Coupe le mur en deux au trait marqué sur le plan, pour en déplacer une partie.">Couper le mur au trait marqué</button>`;
+      remove = 'Supprimer le mur (Suppr)';
     } else if (target.kind === 'room') {
       const { room } = target;
       title = 'Pièce';
@@ -134,21 +135,9 @@ export class PlanInspector {
           ? metreField('sill', 'Hauteur d’allège', opening.sill ?? 0)
           : '') +
         (opening.kind === 'door'
-          ? `<label>Charnière<select name="hinge">${options(
-              [
-                ['start', 'Côté début du mur'],
-                ['end', 'Côté fin du mur'],
-              ],
-              opening.hinge ?? 'start',
-            )}</select></label><label>Sens d’ouverture<select name="swing">${options(
-              [
-                ['1', 'Positif'],
-                ['-1', 'Négatif'],
-              ],
-              String(opening.swing ?? 1),
-            )}</select></label>`
+          ? `<div class="plan-inspector-actions"><button type="button" class="text-button" data-action="swing">Ouvrir de l’autre côté du mur</button><button type="button" class="text-button" data-action="hinge">Changer la charnière de côté</button></div>`
           : '') +
-        `<label>Distance depuis<select name="reference">${options(
+        `<label>Mesurer depuis<select name="reference">${options(
           [
             ['start', 'Le début du mur'],
             ['end', 'La fin du mur'],
@@ -156,7 +145,7 @@ export class PlanInspector {
           'start',
         )}</select></label>` +
         metreField('distance', 'Distance au jambage', this.distance(target.wall, opening));
-      remove = 'Supprimer l’ouverture';
+      remove = 'Supprimer l’ouverture (Suppr)';
     }
     return `<form class="plan-inspector-form"><h2>${escapeHtml(title)}</h2>${body}<p role="alert" class="plan-inspector-error"></p>${
       remove
@@ -188,10 +177,24 @@ export class PlanInspector {
       set('width', metres(opening.width));
       set('height', metres(opening.height));
       set('sill', metres(opening.sill ?? 0));
-      set('hinge', opening.hinge ?? 'start');
-      set('swing', String(opening.swing ?? 1));
       set('distance', metres(this.distance(target.wall, opening)));
     }
+  }
+
+  /** A door's swing or hinge, each turned to its other side as one edit. */
+  private flip(action: string | undefined) {
+    const { level, selection } = this;
+    const target = level && selection && this.find(level, selection);
+    if (target?.kind !== 'opening' || selection?.kind !== 'opening') return;
+    const { opening } = target;
+    if (action === 'swing')
+      this.host.onOpening(selection.wallId, selection.id, {
+        swing: (opening.swing ?? 1) === 1 ? -1 : 1,
+      });
+    else if (action === 'hinge')
+      this.host.onOpening(selection.wallId, selection.id, {
+        hinge: (opening.hinge ?? 'start') === 'start' ? 'end' : 'start',
+      });
   }
 
   private distance(wall: Wall, opening: Opening) {
@@ -224,7 +227,7 @@ export class PlanInspector {
         });
       else
         this.host.onOpening(selection.wallId, selection.id, {
-          [name]: name === 'hinge' ? field.value : value,
+          [name]: value,
         });
     } catch (failure) {
       error.textContent = userMessage(failure, 'Modification impossible.');

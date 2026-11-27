@@ -138,3 +138,19 @@ test('an opening is measured from either end of its wall', (t) => {
   (root.querySelector('[data-action=delete]') as unknown as HTMLButtonElement).click();
   assert.deepEqual(calls.at(-1), ['delete']);
 });
+
+test('a door flips its swing or its hinge with one button each', (t) => {
+  const { inspector, calls, field, root } = setup(t);
+  inspector.show(level, { kind: 'opening', wallId: 'wall-5', id: 'door' });
+  assert.equal(field('hinge'), null);
+  assert.equal(field('swing'), null);
+  const button = (action: string) =>
+    root.querySelector(`[data-action=${action}]`) as unknown as HTMLButtonElement;
+  assert.equal(button('swing').textContent, 'Ouvrir de l’autre côté du mur');
+  button('swing').click();
+  button('hinge').click();
+  assert.deepEqual(calls, [
+    ['opening', 'wall-5', 'door', { swing: -1 }],
+    ['opening', 'wall-5', 'door', { hinge: 'end' }],
+  ]);
+});
