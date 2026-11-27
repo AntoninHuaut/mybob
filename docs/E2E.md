@@ -17,12 +17,12 @@ loaded yet.
 
 [AGENTS.md: Local browser verification policy](../AGENTS.md#local-browser-verification-policy)
 is the single source of truth for local runs and permitted evidence. CI runs the browser
-workflows sharded in three; the same commands work locally:
+workflows sharded in six; the same commands work locally:
 
 ```sh
 pnpm run build
 pnpm run check:public
-node scripts/e2e-shard.mjs n/3
+node scripts/e2e-shard.mjs n/6
 ```
 
 To run a single test on an already-built `dist/`:
@@ -69,7 +69,7 @@ renamed scenarios default to 30 seconds. Single-run timings vary up to 2× per t
 the shared runners, so refresh from several runs when scenario durations change: save each
 shard log with `gh run view <run> --log --job <job> > <file>`, then
 `node scripts/e2e-shard.mjs --refresh <file>...` rewrites the estimates.
-`node scripts/e2e-shard.mjs n/3 --list` checks membership without running browsers.
+`node scripts/e2e-shard.mjs n/6 --list` checks membership without running browsers.
 The static estimates balance expected work, not runner load; confirm the slowest shard
 stays within 25% of the fastest over three consecutive successful `main` runs.
 
